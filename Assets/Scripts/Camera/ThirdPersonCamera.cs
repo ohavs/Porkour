@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 namespace Porkour
 {
     /// <summary>
-    /// Orbit camera behind the local player's pig. Mouse / right stick rotates it,
+    /// Orbit camera behind the local player's pig (target set by the local NetPlayer). Mouse / right stick rotates it,
     /// it pulls in when a wall is between it and the pig. Esc frees the cursor, click locks it again.
     /// </summary>
     public class ThirdPersonCamera : MonoBehaviour
@@ -25,8 +25,9 @@ namespace Porkour
         float yaw, pitch = 20f;
         Vector2 lookInput;
         bool lookFromMouse;
+        bool hadTarget;
 
-        /// <summary>Called every frame by the local PigPlayer.</summary>
+        /// <summary>Called every frame by the local NetPlayer.</summary>
         public void SetLookInput(Vector2 look, bool fromMouse)
         {
             lookInput = look;
@@ -35,16 +36,23 @@ namespace Porkour
 
         public void SetTarget(Transform newTarget)
         {
+            bool first = target == null;
             target = newTarget;
-            if (target != null) yaw = target.eulerAngles.y;
+            if (target == null) { LockCursor(false); return; }
+            if (first) yaw = target.eulerAngles.y;
+            LockCursor(true);
         }
-
-        void Start() => LockCursor(true);
 
         void LateUpdate()
         {
+            if (target == null) // menu / pig gone: give the cursor back once
+            {
+                if (hadTarget) LockCursor(false);
+                hadTarget = false;
+                return;
+            }
+            hadTarget = true;
             UpdateCursorLock();
-            if (target == null) return;
 
             Vector2 delta = lookFromMouse ? lookInput * mouseSensitivity : lookInput * (stickSpeed * Time.deltaTime);
             if (Cursor.lockState != CursorLockMode.Locked && lookFromMouse) delta = Vector2.zero;

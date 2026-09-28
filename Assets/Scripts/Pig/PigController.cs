@@ -6,7 +6,7 @@ namespace Porkour
     /// <summary>
     /// Physics-based pig movement: run, sprint, jump with coyote time and jump buffer.
     /// Driven only through SetInput/PressJump (world-space move + aim direction), never reads the
-    /// camera itself - so AI, Bob or the network can drive a pig the same way a local player does.
+    /// camera itself - the server applies each player's input (NetPlayer), AI/Bob can do the same.
     /// Tuning values live here as defaults - the builder recreates the prefab, so tweak in code.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
@@ -49,7 +49,9 @@ namespace Porkour
         public float killHeight = -10f;
 
         public bool IsGrounded { get; private set; }
-        public PigPlayer Owner { get; internal set; }
+        public NetPlayer Owner { get; internal set; }
+        /// <summary>False on network clients: the server simulates, clients only show the synced result.</summary>
+        public bool Simulate { get; set; } = true;
         public Rigidbody Body => rb;
         public PigGrabber Grabber { get; private set; }
         /// <summary>The pig carrying this pig (null when free).</summary>
@@ -120,6 +122,7 @@ namespace Porkour
 
         void FixedUpdate()
         {
+            if (!Simulate) return;
             if (rb.position.y < killHeight) { Respawn(); return; }
             if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 

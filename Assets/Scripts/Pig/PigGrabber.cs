@@ -42,14 +42,12 @@ namespace Porkour
         public float fullLoadThrow = 0.7f;
 
         public Rigidbody Held { get; private set; }
+        /// <summary>False on network clients (see PigController.Simulate).</summary>
+        public bool Simulate { get; set; } = true;
         public bool IsHolding => Held != null;
         public bool IsCharging => charging;
         /// <summary>0..1 while charging a throw. Reaching 1 throws automatically.</summary>
         public float Charge => charging ? Mathf.Clamp01((Time.time - chargeStart) / fullChargeTime) : 0f;
-        /// <summary>Gravity multiplier the load gets while falling (pigs fall faster) - for the throw preview.</summary>
-        public float HeldFallGravityMultiplier => heldPig != null ? heldPig.fallGravityMultiplier : 1f;
-        /// <summary>Horizontal air drag the load gets after the throw - for the throw preview.</summary>
-        public float HeldAirDrag => heldPig != null ? heldPig.airDrag : 0f;
 
         PigController pig;
         Collider[] ownColliders;
@@ -70,6 +68,7 @@ namespace Porkour
         /// <summary>Called every frame by the owner with the Grab button state.</summary>
         public void SetGrabButton(bool pressed)
         {
+            if (!Simulate) return;
             bool down = pressed && !buttonHeld;
             bool up = !pressed && buttonHeld;
             buttonHeld = pressed;
@@ -125,7 +124,8 @@ namespace Porkour
 
         bool CanGrab(Rigidbody rb)
         {
-            if (rb == null || rb == pig.Body || rb.isKinematic || rb.mass > maxLiftMass) return false;
+            if (rb == null || rb == pig.Body || rb.mass > maxLiftMass) return false;
+            if (rb.isKinematic && Simulate) return false; // on clients every synced body is kinematic
             if (rb.TryGetComponent(out PigController other))
             {
                 if (other.IsHeld) return false;
@@ -159,23 +159,23 @@ namespace Porkour
         {
             if (!IsHolding) return;
             var rb = Held;
-            Vector3 velocity = PredictThrowVelocity(power);
+            Vector3 velocity = PredictThrowVelocity(power, rb);
             pig.FaceDirection(new Vector3(velocity.x, 0f, velocity.z));
             Drop();
             rb.linearVelocity = velocity;
         }
 
-        /// <summary>Launch velocity a throw with this power (0..1) would give the held load right now.</summary>
-        public Vector3 PredictThrowVelocity(float power)
+        /// <summary>Launch velocity a throw with this power (0..1) would give this load right now.</summary>
+        public Vector3 PredictThrowVelocity(float power, Rigidbody load)
         {
-            if (!IsHolding) return Vector3.zero;
+            if (load == null) return Vector3.zero;
             Vector3 aim = pig.Aim.sqrMagnitude > 0.01f ? pig.Aim.normalized : transform.forward;
             Vector3 flat = Vector3.ProjectOnPlane(aim, Vector3.up);
             flat = flat.sqrMagnitude > 0.001f ? flat.normalized : transform.forward;
             float lookUp = Mathf.Asin(Mathf.Clamp(aim.y, -1f, 1f)) * Mathf.Rad2Deg;
             float angle = Mathf.Clamp(baseThrowAngle + lookUp, minThrowAngle, maxThrowAngle) * Mathf.Deg2Rad;
             Vector3 direction = flat * Mathf.Cos(angle) + Vector3.up * Mathf.Sin(angle);
-            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, power) * Mathf.Lerp(1f, fullLoadThrow, LoadFactor(Held.mass));
+            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, power) * Mathf.Lerp(1f, fullLoadThrow, LoadFactor(load.mass));
             return pig.Body.linearVelocity + direction * speed;
         }
 
@@ -197,7 +197,7 @@ namespace Porkour
 
         void FixedUpdate()
         {
-            if (!IsHolding) return;
+            if (!Simulate || !IsHolding) return;
             if (!Held.gameObject.activeInHierarchy) { Drop(); return; }
 
             Vector3 target = pig.Body.position + Vector3.up * heldLift;
