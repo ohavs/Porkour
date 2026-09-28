@@ -16,19 +16,19 @@ namespace Porkour.EditorTools
         const string PhysicsDir = "Assets/Art/Physics";
         const string PrefabDir = "Assets/Prefabs";
         const string PigPrefabPath = PrefabDir + "/Pig.prefab";
+        const string PlayerPrefabPath = PrefabDir + "/Player.prefab";
         const string ScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
 
-        [MenuItem("Porkour/Build Pig Prefab")]
+        [MenuItem("Porkour/Build Prefabs (Pig + Player)")]
+        static void BuildPrefabsMenu()
+        {
+            BuildPigPrefab();
+            BuildPlayerPrefab();
+        }
+
         public static GameObject BuildPigPrefab()
         {
-            var controls = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputPath);
-            if (controls == null)
-            {
-                Debug.LogError($"Porkour: input asset not found at {InputPath}");
-                return null;
-            }
-
             EnsureFolder(PrefabDir);
             var pink = Mat("Pig", new Color(1f, 0.62f, 0.68f));
             var darkPink = Mat("PigSnout", new Color(0.9f, 0.42f, 0.5f));
@@ -48,18 +48,17 @@ namespace Porkour.EditorTools
             col.center = new Vector3(0f, 0f, 0.1f);
             col.sharedMaterial = SlipperyMaterial();
 
-            var input = root.AddComponent<PlayerInput>();
-            input.actions = controls;
-            input.defaultActionMap = "Player";
-            input.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
-
             root.AddComponent<PigController>();
+            var look = root.AddComponent<PigLook>();
 
             // Placeholder look - primitives only, no colliders.
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.85f, 0.65f, 0.7f), pink, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.2f, 0.62f), Vector3.one * 0.6f, pink);
+            var skin = new List<Renderer>
+            {
+                Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.85f, 0.65f, 0.7f), pink, new Vector3(90f, 0f, 0f)).GetComponent<Renderer>(),
+                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.2f, 0.62f), Vector3.one * 0.6f, pink).GetComponent<Renderer>(),
+            };
             Part(PrimitiveType.Cylinder, "Snout", v, new Vector3(0f, 0.15f, 0.93f), new Vector3(0.28f, 0.05f, 0.28f), darkPink, new Vector3(90f, 0f, 0f));
             Part(PrimitiveType.Sphere, "EyeL", v, new Vector3(-0.12f, 0.3f, 0.87f), Vector3.one * 0.07f, black);
             Part(PrimitiveType.Sphere, "EyeR", v, new Vector3(0.12f, 0.3f, 0.87f), Vector3.one * 0.07f, black);
@@ -67,9 +66,33 @@ namespace Porkour.EditorTools
             Part(PrimitiveType.Cube, "EarR", v, new Vector3(0.16f, 0.48f, 0.58f), new Vector3(0.14f, 0.18f, 0.04f), darkPink, new Vector3(0f, 0f, -20f));
             Part(PrimitiveType.Sphere, "Tail", v, new Vector3(0f, 0.2f, -0.68f), Vector3.one * 0.12f, darkPink);
             foreach (var (x, z) in new[] { (-0.22f, 0.38f), (0.22f, 0.38f), (-0.22f, -0.38f), (0.22f, -0.38f) })
-                Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.16f, 0.1f, 0.16f), pink);
+                skin.Add(Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.16f, 0.1f, 0.16f), pink).GetComponent<Renderer>());
+            look.skin = skin.ToArray();
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PigPrefabPath);
+            Object.DestroyImmediate(root);
+            return prefab;
+        }
+
+        public static GameObject BuildPlayerPrefab()
+        {
+            var controls = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputPath);
+            if (controls == null)
+            {
+                Debug.LogError($"Porkour: input asset not found at {InputPath}");
+                return null;
+            }
+            EnsureFolder(PrefabDir);
+
+            var root = new GameObject("Player");
+            var input = root.AddComponent<PlayerInput>();
+            input.actions = controls;
+            input.defaultActionMap = "Player";
+            input.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
+            input.neverAutoSwitchControlSchemes = true; // two players may share one keyboard
+            root.AddComponent<PigPlayer>();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);
             return prefab;
         }
@@ -79,7 +102,8 @@ namespace Porkour.EditorTools
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             var pigPrefab = BuildPigPrefab();
-            if (pigPrefab == null) return;
+            var playerPrefab = BuildPlayerPrefab();
+            if (pigPrefab == null || playerPrefab == null) return;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
@@ -91,8 +115,19 @@ namespace Porkour.EditorTools
 
             BuildRoom();
 
-            var pig = (GameObject)PrefabUtility.InstantiatePrefab(pigPrefab);
-            pig.transform.position = new Vector3(0f, 1f, -10f);
+            // Players join at runtime (press jump) - pigs spawn at these points.
+            var spawnRoot = new GameObject("SpawnPoints").transform;
+            var spawns = new Transform[4];
+            for (int i = 0; i < spawns.Length; i++)
+            {
+                spawns[i] = new GameObject($"Spawn P{i + 1}").transform;
+                spawns[i].SetParent(spawnRoot, false);
+                spawns[i].position = new Vector3(-3f + i * 2f, 1f, -10f);
+            }
+            var join = new GameObject("PlayerJoinManager").AddComponent<PlayerJoinManager>();
+            join.playerPrefab = playerPrefab;
+            join.pigPrefab = pigPrefab.GetComponent<PigController>();
+            join.spawnPoints = spawns;
 
             EnsureFolder("Assets/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -101,7 +136,7 @@ namespace Porkour.EditorTools
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
-            Debug.Log("Porkour: Test barn built. Press Play!");
+            Debug.Log("Porkour: Test barn built. Press Play, then Space / Right Ctrl / gamepad A to join.");
         }
 
         static void BuildRoom()
