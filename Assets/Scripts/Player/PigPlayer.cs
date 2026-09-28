@@ -19,7 +19,7 @@ namespace Porkour
 
         public PigController Pig { get; private set; }
 
-        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, throwAction, switchAction;
+        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, switchAction;
         ThirdPersonCamera cam;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -37,7 +37,6 @@ namespace Porkour
             jumpAction = actions["Jump"];
             sprintAction = actions["Sprint"];
             grabAction = actions["Grab"];
-            throwAction = actions["Throw"];
             switchAction = actions["SwitchPig"];
             if (Camera.main != null) cam = Camera.main.GetComponent<ThirdPersonCamera>();
             if (Pig == null && startPig != null) Possess(startPig);
@@ -48,7 +47,7 @@ namespace Porkour
             if (Pig != null)
             {
                 Pig.ClearInput();
-                if (Pig.Grabber != null) Pig.Grabber.SetGrab(false);
+                if (Pig.Grabber != null) Pig.Grabber.CancelInput();
                 Pig.Owner = null;
             }
             Pig = pig;
@@ -63,13 +62,17 @@ namespace Porkour
                 cam.SetLookInput(lookAction.ReadValue<Vector2>(), lookAction.activeControl?.device is Pointer);
             if (switchAction.WasPressedThisFrame()) SwitchToNextFreePig();
             if (Pig == null) return;
-            Pig.SetInput(moveAction.ReadValue<Vector2>(), jumpAction.IsPressed(), sprintAction.IsPressed());
+
+            // Camera-relative input → world direction + aim; the pig never looks at the camera itself.
+            Vector3 aim = cam != null ? cam.transform.forward : Pig.transform.forward;
+            Vector3 forward = Vector3.ProjectOnPlane(aim, Vector3.up);
+            forward = forward.sqrMagnitude > 0.001f ? forward.normalized : Pig.transform.forward;
+            Vector3 right = Vector3.Cross(Vector3.up, forward);
+            Vector2 move = moveAction.ReadValue<Vector2>();
+            Pig.SetInput(forward * move.y + right * move.x, aim, jumpAction.IsPressed(), sprintAction.IsPressed());
+
             if (jumpAction.WasPressedThisFrame()) Pig.PressJump();
-            if (Pig.Grabber != null)
-            {
-                Pig.Grabber.SetGrab(grabAction.IsPressed());
-                if (throwAction.WasPressedThisFrame()) Pig.Grabber.Throw();
-            }
+            if (Pig.Grabber != null) Pig.Grabber.SetGrabButton(grabAction.IsPressed());
         }
 
         /// <summary>Take control of the next pig nobody controls (solo testing now; maybe a feature later).</summary>
