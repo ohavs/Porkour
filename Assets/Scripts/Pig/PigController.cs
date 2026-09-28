@@ -4,8 +4,9 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Physics-based pig movement: camera-relative run, sprint, jump with coyote time and jump buffer.
-    /// Driven by whoever owns it (a PigPlayer now; later AI/farmer states) via SetInput/PressJump.
+    /// Physics-based pig movement: run, sprint, jump with coyote time and jump buffer.
+    /// Driven only through SetInput/PressJump (world-space move + aim direction), never reads the
+    /// camera itself - so AI, Bob or the network can drive a pig the same way a local player does.
     /// Tuning values live here as defaults - the builder recreates the prefab, so tweak in code.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
@@ -17,15 +18,19 @@ namespace Porkour
         [Header("Move")]
         public float walkSpeed = 6f;
         public float sprintSpeed = 9f;
-        public float groundAcceleration = 60f;
-        public float airAcceleration = 20f;
+        public float groundAcceleration = 30f;
+        public float groundDeceleration = 40f;
+        public float airAcceleration = 15f;
         [Tooltip("Horizontal slow-down in the air with no input.")]
         public float airDrag = 5f;
-        public float turnSpeed = 720f;
+        public float turnSpeed = 480f;
+        [Tooltip("Face where the camera looks (A/D strafe sideways). Off = turn toward movement.")]
+        public bool faceAimDirection = true;
 
         [Header("Jump")]
         public float jumpHeight = 1.6f;
         public float fallGravityMultiplier = 2f;
+        [Tooltip("Extra gravity while rising after releasing jump early (short hop). Only for own jumps.")]
         public float shortJumpGravityMultiplier = 2.5f;
         public float coyoteTime = 0.12f;
         public float jumpBufferTime = 0.15f;
@@ -52,13 +57,14 @@ namespace Porkour
         public bool IsHeld => HeldBy != null;
         /// <summary>Set by the grabber: carrying heavy things slows you down.</summary>
         public float SpeedMultiplier { get; set; } = 1f;
+        /// <summary>Where the controller is looking (camera forward for players). Zero = no aim.</summary>
+        public Vector3 Aim { get; private set; }
 
         Rigidbody rb;
         CapsuleCollider body;
-        Transform cam;
 
-        Vector2 moveInput;
-        bool jumpHeld, sprintHeld;
+        Vector3 moveInput;
+        bool jumpHeld, sprintHeld, jumpedThisAir;
         float lastGroundedTime = float.NegativeInfinity;
         float lastJumpPressedTime = float.NegativeInfinity;
         float groundLockUntil;
@@ -81,18 +87,16 @@ namespace Porkour
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
 
-        void Start()
+        /// <summary>Continuous input, called every frame by the owner. Move is world-space (length ≤ 1).</summary>
+        public void SetInput(Vector3 worldMove, Vector3 aim, bool jumpIsHeld, bool sprintIsHeld)
         {
-            if (Camera.main != null) cam = Camera.main.transform;
-        }
-
-        /// <summary>Continuous input, called every frame by the owner.</summary>
-        public void SetInput(Vector2 move, bool jumpIsHeld, bool sprintIsHeld)
-        {
-            moveInput = move;
+            moveInput = Vector3.ClampMagnitude(new Vector3(worldMove.x, 0f, worldMove.z), 1f);
+            Aim = aim;
             jumpHeld = jumpIsHeld;
             sprintHeld = sprintIsHeld;
         }
+
+        public void ClearInput() => SetInput(Vector3.zero, Vector3.zero, false, false);
 
         /// <summary>Jump press (buffered, so it may fire slightly before landing).</summary>
         public void PressJump()
@@ -109,11 +113,10 @@ namespace Porkour
         {
             HeldBy = grabber;
             struggleCount = 0;
+            jumpedThisAir = false;
             rb.useGravity = grabber == null;
             if (grabber != null && Grabber != null) Grabber.Drop(); // can't carry while being carried
         }
-
-        public void ClearInput() => SetInput(Vector2.zero, false, false);
 
         void FixedUpdate()
         {
@@ -121,9 +124,8 @@ namespace Porkour
             if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 
             CheckGround();
-            Vector3 moveDir = GetMoveDirection();
-            Move(moveDir);
-            Turn(moveDir);
+            Move();
+            Turn();
             TryJump();
             ApplyExtraGravity();
         }
@@ -141,45 +143,46 @@ namespace Porkour
                 && Vector3.Angle(hit.normal, Vector3.up) <= maxGroundAngle)
             {
                 IsGrounded = true;
+                jumpedThisAir = false;
                 lastGroundedTime = Time.time;
             }
         }
 
-        Vector3 GetMoveDirection()
-        {
-            Vector3 forward = Vector3.forward;
-            if (cam != null)
-            {
-                forward = Vector3.ProjectOnPlane(cam.forward, Vector3.up);
-                if (forward.sqrMagnitude < 0.01f) forward = Vector3.ProjectOnPlane(cam.up, Vector3.up);
-                forward.Normalize();
-            }
-            Vector3 right = Vector3.Cross(Vector3.up, forward);
-            return Vector3.ClampMagnitude(forward * moveInput.y + right * moveInput.x, 1f);
-        }
-
-        void Move(Vector3 moveDir)
+        void Move()
         {
             Vector3 velocity = rb.linearVelocity;
             Vector3 horizontal = new(velocity.x, 0f, velocity.z);
-            Vector3 target = moveDir * ((sprintHeld ? sprintSpeed : walkSpeed) * SpeedMultiplier);
-            float accel = IsGrounded ? groundAcceleration : airAcceleration;
+            Vector3 target = moveInput * ((sprintHeld ? sprintSpeed : walkSpeed) * SpeedMultiplier);
+            bool hasInput = moveInput.sqrMagnitude > 0.01f;
+            float dt = Time.fixedDeltaTime;
             Vector3 newHorizontal;
-            if (IsGrounded || horizontal.magnitude <= target.magnitude)
-                newHorizontal = Vector3.MoveTowards(horizontal, target, accel * Time.fixedDeltaTime);
-            else if (moveDir.sqrMagnitude > 0.01f) // flying faster than we can run (thrown): steer, don't brake
-                newHorizontal = Vector3.MoveTowards(horizontal, moveDir.normalized * horizontal.magnitude, accel * Time.fixedDeltaTime);
-            else // no input in the air: only light drag, so throws/knockbacks carry
-                newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, airDrag * Time.fixedDeltaTime);
+            if (IsGrounded)
+                newHorizontal = Vector3.MoveTowards(horizontal, target, (hasInput ? groundAcceleration : groundDeceleration) * dt);
+            else if (!hasInput) // no input in the air: only light drag, so throws/knockbacks carry
+                newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, airDrag * dt);
+            else if (horizontal.magnitude <= target.magnitude)
+                newHorizontal = Vector3.MoveTowards(horizontal, target, airAcceleration * dt);
+            else // flying faster than we can run (thrown): steer, don't brake
+                newHorizontal = Vector3.MoveTowards(horizontal, moveInput.normalized * horizontal.magnitude, airAcceleration * dt);
             rb.AddForce(newHorizontal - horizontal, ForceMode.VelocityChange);
         }
 
-        void Turn(Vector3 moveDir)
+        void Turn()
         {
             rb.angularVelocity = Vector3.zero;
-            if (moveDir.sqrMagnitude < 0.01f) return;
-            Quaternion target = Quaternion.LookRotation(moveDir, Vector3.up);
+            if (moveInput.sqrMagnitude < 0.01f) return; // standing still: let the camera orbit freely
+            Vector3 facing = faceAimDirection ? Vector3.ProjectOnPlane(Aim, Vector3.up) : moveInput;
+            if (facing.sqrMagnitude < 0.001f) facing = moveInput;
+            Quaternion target = Quaternion.LookRotation(facing.normalized, Vector3.up);
             rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, target, turnSpeed * Time.fixedDeltaTime));
+        }
+
+        /// <summary>Instantly face a direction (e.g. when throwing).</summary>
+        public void FaceDirection(Vector3 direction)
+        {
+            direction = Vector3.ProjectOnPlane(direction, Vector3.up);
+            if (direction.sqrMagnitude < 0.001f) return;
+            rb.MoveRotation(Quaternion.LookRotation(direction.normalized, Vector3.up));
         }
 
         void TryJump()
@@ -196,13 +199,14 @@ namespace Porkour
             lastGroundedTime = float.NegativeInfinity;
             groundLockUntil = Time.time + 0.15f;
             IsGrounded = false;
+            jumpedThisAir = true;
         }
 
         void ApplyExtraGravity()
         {
             if (IsGrounded) return;
             float multiplier = rb.linearVelocity.y < 0f ? fallGravityMultiplier
-                : !jumpHeld ? shortJumpGravityMultiplier
+                : jumpedThisAir && !jumpHeld ? shortJumpGravityMultiplier
                 : 1f;
             if (multiplier > 1f) rb.AddForce(Physics.gravity * (multiplier - 1f), ForceMode.Acceleration);
         }

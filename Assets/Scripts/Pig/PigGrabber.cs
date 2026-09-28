@@ -4,9 +4,11 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Grab / carry / throw. Hold Grab to pick up the nearest loose object or pig in front of the snout
-    /// and carry it on your back; release to drop, press Throw to launch it.
-    /// Held things follow by velocity (they still collide with walls), heavy loads slow you down,
+    /// One-button grab / carry / throw.
+    /// Press Grab near a loose object or pig → it goes onto your back (no need to hold).
+    /// Press Grab again → throw where you aim; hold longer before releasing = stronger throw
+    /// (a quick tap just tosses it down in front of you).
+    /// Held things follow by velocity (still collide with walls), heavy loads slow you down,
     /// and a carried pig can wriggle free by mashing jump.
     /// </summary>
     [RequireComponent(typeof(PigController))]
@@ -14,26 +16,35 @@ namespace Porkour
     {
         [Header("Grab")]
         public float reach = 0.9f;
-        public float grabRadius = 0.7f;
+        public float grabRadius = 0.8f;
         [Tooltip("Heaviest thing this pig can lift (a pig is 30).")]
         public float maxLiftMass = 35f;
         [Tooltip("Speed multiplier when carrying something at max lift mass.")]
-        public float fullLoadSpeed = 0.55f;
+        public float fullLoadSpeed = 0.6f;
 
         [Header("Carry")]
-        public float followStrength = 18f;
-        public float maxFollowSpeed = 25f;
-        [Tooltip("Drop if the load gets stuck this far from the carry point.")]
-        public float breakDistance = 1.8f;
+        public float followStrength = 12f;
+        [Tooltip("Max correction speed toward the carry point (on top of the carrier's own speed).")]
+        public float maxCorrectionSpeed = 6f;
+        [Tooltip("Drop if the load stays stuck this far from the carry point.")]
+        public float breakDistance = 2.5f;
 
         [Header("Throw")]
-        public float throwSpeed = 11f;
-        public float throwUpSpeed = 5f;
+        public float minThrowSpeed = 3f;
+        public float maxThrowSpeed = 14f;
+        [Tooltip("Seconds of holding the button for a full-power throw.")]
+        public float fullChargeTime = 0.6f;
+        [Tooltip("Throw angle when aiming straight ahead; looking up/down adds/subtracts.")]
+        public float baseThrowAngle = 40f;
+        public float minThrowAngle = 5f;
+        public float maxThrowAngle = 70f;
         [Tooltip("Throw speed multiplier at max lift mass.")]
-        public float fullLoadThrow = 0.6f;
+        public float fullLoadThrow = 0.7f;
 
         public Rigidbody Held { get; private set; }
         public bool IsHolding => Held != null;
+        /// <summary>0..1 while charging a throw (for UI later).</summary>
+        public float Charge => charging ? Mathf.Clamp01((Time.time - chargeStart) / fullChargeTime) : 0f;
 
         PigController pig;
         Collider[] ownColliders;
@@ -41,7 +52,9 @@ namespace Porkour
         PigController heldPig;
         Quaternion heldRelativeRotation;
         float heldLift; // carry point height above our centre
-        bool grabHeld;
+        float stuckTime;
+        bool buttonHeld, charging;
+        float chargeStart;
 
         void Awake()
         {
@@ -50,22 +63,30 @@ namespace Porkour
         }
 
         /// <summary>Called every frame by the owner with the Grab button state.</summary>
-        public void SetGrab(bool held)
+        public void SetGrabButton(bool pressed)
         {
-            if (held && !grabHeld && !IsHolding && !pig.IsHeld) TryGrab();
-            else if (!held && grabHeld && IsHolding) Drop();
-            grabHeld = held;
+            bool down = pressed && !buttonHeld;
+            bool up = !pressed && buttonHeld;
+            buttonHeld = pressed;
+
+            if (down)
+            {
+                if (!IsHolding) { if (!pig.IsHeld) TryGrab(); } // this press only picks up
+                else { charging = true; chargeStart = Time.time; }
+            }
+            else if (up && charging)
+            {
+                float power = Charge;
+                charging = false;
+                Throw(power);
+            }
         }
 
-        public void Throw()
+        /// <summary>Forget button state (e.g. when the player switches to another pig). Keeps holding.</summary>
+        public void CancelInput()
         {
-            if (!IsHolding) return;
-            var rb = Held;
-            float load = LoadFactor(rb.mass);
-            Vector3 forward = transform.forward;
-            Drop();
-            Vector3 throwVelocity = forward * throwSpeed + Vector3.up * throwUpSpeed;
-            rb.linearVelocity = pig.Body.linearVelocity + throwVelocity * Mathf.Lerp(1f, fullLoadThrow, load);
+            buttonHeld = false;
+            charging = false;
         }
 
         void TryGrab()
@@ -97,11 +118,12 @@ namespace Porkour
         void Grab(Rigidbody rb)
         {
             Held = rb;
+            stuckTime = 0f;
             heldColliders.Clear();
             rb.GetComponentsInChildren(heldColliders);
             SetIgnoreCollisions(true);
 
-            // Carry on the back: centre of load sits just above our top.
+            // Carry on the back: bottom of the load sits just above our top.
             var bounds = new Bounds(rb.position, Vector3.zero);
             foreach (var c in heldColliders) bounds.Encapsulate(c.bounds);
             float bottomBelowPivot = rb.position.y - bounds.min.y;
@@ -114,6 +136,26 @@ namespace Porkour
             pig.SpeedMultiplier = Mathf.Lerp(1f, fullLoadSpeed, LoadFactor(rb.mass));
         }
 
+        void Throw(float power)
+        {
+            if (!IsHolding) return;
+            var rb = Held;
+            float load = LoadFactor(rb.mass);
+
+            Vector3 aim = pig.Aim.sqrMagnitude > 0.01f ? pig.Aim.normalized : transform.forward;
+            Vector3 flat = Vector3.ProjectOnPlane(aim, Vector3.up);
+            flat = flat.sqrMagnitude > 0.001f ? flat.normalized : transform.forward;
+            float lookUp = Mathf.Asin(Mathf.Clamp(aim.y, -1f, 1f)) * Mathf.Rad2Deg;
+            float angle = Mathf.Clamp(baseThrowAngle + lookUp, minThrowAngle, maxThrowAngle) * Mathf.Deg2Rad;
+            Vector3 direction = flat * Mathf.Cos(angle) + Vector3.up * Mathf.Sin(angle);
+            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, power) * Mathf.Lerp(1f, fullLoadThrow, load);
+
+            pig.FaceDirection(flat);
+            Drop();
+            rb.linearVelocity = pig.Body.linearVelocity + direction * speed;
+        }
+
+        /// <summary>Let go without throwing (struggle, respawn, switching roles...).</summary>
         public void Drop()
         {
             if (!IsHolding) return;
@@ -121,23 +163,30 @@ namespace Porkour
             SetIgnoreCollisions(false);
             if (heldPig != null) heldPig.SetHeldBy(null);
             else rb.useGravity = true;
+            rb.linearVelocity = pig.Body.linearVelocity; // no leftover pull-up speed
             Held = null;
             heldPig = null;
             heldColliders.Clear();
+            charging = false;
             pig.SpeedMultiplier = 1f;
         }
 
         void FixedUpdate()
         {
             if (!IsHolding) return;
-            if (Held == null || !Held.gameObject.activeInHierarchy) { Drop(); return; }
+            if (!Held.gameObject.activeInHierarchy) { Drop(); return; }
 
             Vector3 target = pig.Body.position + Vector3.up * heldLift;
             Vector3 toTarget = target - Held.position;
-            if (toTarget.magnitude > breakDistance) { Drop(); return; }
+            if (toTarget.magnitude > breakDistance)
+            {
+                stuckTime += Time.fixedDeltaTime;
+                if (stuckTime > 0.3f) { Drop(); return; }
+            }
+            else stuckTime = 0f;
 
-            Vector3 velocity = pig.Body.linearVelocity + toTarget * followStrength;
-            Held.linearVelocity = Vector3.ClampMagnitude(velocity, maxFollowSpeed);
+            Vector3 correction = Vector3.ClampMagnitude(toTarget * followStrength, maxCorrectionSpeed);
+            Held.linearVelocity = pig.Body.linearVelocity + correction;
             Held.angularVelocity = Vector3.zero;
             Held.MoveRotation(Quaternion.Slerp(Held.rotation, transform.rotation * heldRelativeRotation, 0.3f));
         }
