@@ -19,7 +19,7 @@ namespace Porkour
 
         public PigController Pig { get; private set; }
 
-        InputAction moveAction, lookAction, jumpAction, sprintAction;
+        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, throwAction, switchAction;
         ThirdPersonCamera cam;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -36,6 +36,9 @@ namespace Porkour
             lookAction = actions["Look"];
             jumpAction = actions["Jump"];
             sprintAction = actions["Sprint"];
+            grabAction = actions["Grab"];
+            throwAction = actions["Throw"];
+            switchAction = actions["SwitchPig"];
             if (Camera.main != null) cam = Camera.main.GetComponent<ThirdPersonCamera>();
             if (Pig == null && startPig != null) Possess(startPig);
         }
@@ -45,6 +48,7 @@ namespace Porkour
             if (Pig != null)
             {
                 Pig.ClearInput();
+                if (Pig.Grabber != null) Pig.Grabber.SetGrab(false);
                 Pig.Owner = null;
             }
             Pig = pig;
@@ -57,9 +61,28 @@ namespace Porkour
             if (moveAction == null) return;
             if (cam != null)
                 cam.SetLookInput(lookAction.ReadValue<Vector2>(), lookAction.activeControl?.device is Pointer);
+            if (switchAction.WasPressedThisFrame()) SwitchToNextFreePig();
             if (Pig == null) return;
             Pig.SetInput(moveAction.ReadValue<Vector2>(), jumpAction.IsPressed(), sprintAction.IsPressed());
             if (jumpAction.WasPressedThisFrame()) Pig.PressJump();
+            if (Pig.Grabber != null)
+            {
+                Pig.Grabber.SetGrab(grabAction.IsPressed());
+                if (throwAction.WasPressedThisFrame()) Pig.Grabber.Throw();
+            }
+        }
+
+        /// <summary>Take control of the next pig nobody controls (solo testing now; maybe a feature later).</summary>
+        void SwitchToNextFreePig()
+        {
+            var pigs = PigController.All;
+            if (pigs.Count == 0) return;
+            int start = Pig != null ? pigs.IndexOf(Pig) : -1;
+            for (int i = 1; i <= pigs.Count; i++)
+            {
+                var next = pigs[(start + i + pigs.Count) % pigs.Count];
+                if (next.Owner == null) { Possess(next); return; }
+            }
         }
     }
 }
