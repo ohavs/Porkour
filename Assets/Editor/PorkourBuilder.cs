@@ -84,6 +84,7 @@ namespace Porkour.EditorTools
             input.defaultActionMap = "Player";
             input.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
             root.AddComponent<PigPlayer>();
+            root.AddComponent<PlayerHud>().arcMaterial = UnlitMat("ThrowArc", new Color(1f, 0.85f, 0.2f));
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);
@@ -251,6 +252,21 @@ namespace Porkour.EditorTools
             }
             mat.SetColor("_BaseColor", color);
             mat.SetFloat("_Smoothness", 0.15f);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        static Material UnlitMat(string name, Color color)
+        {
+            EnsureFolder(MaterialDir);
+            string path = $"{MaterialDir}/{name}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                mat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.SetColor("_BaseColor", color);
             EditorUtility.SetDirty(mat);
             return mat;
         }

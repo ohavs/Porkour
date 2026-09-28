@@ -38,9 +38,10 @@
 | Path | What |
 |---|---|
 | `Assets/Scripts/Pig/PigController.cs` | Pig body. Rigidbody movement: run, sprint, jump (coyote + buffer, heavier fall, short hop only for own jumps), faces aim direction (strafe), respawn below `killHeight`. Input only via `SetInput(worldMove, aim, jump, sprint)`/`PressJump` — never reads the camera. Static `PigController.All`. |
-| `Assets/Scripts/Pig/PigGrabber.cs` | One button: press = pick up nearest loose Rigidbody/pig in front (≤ `maxLiftMass`) onto back (velocity-follow, still collides); press again = throw toward aim, hold = charge (tap = gentle toss). Load slows carrier. Carried pig mashes jump to escape. |
+| `Assets/Scripts/Pig/PigGrabber.cs` | One button: press = pick up nearest loose Rigidbody/pig in front (≤ `maxLiftMass`) onto back (velocity-follow, still collides); press again = throw toward aim, hold = charge (tap = gentle toss, full charge auto-throws). `FindGrabTarget`, `PredictThrowVelocity` for HUD. Load slows carrier. Carried pig mashes jump to escape. |
 | `Assets/Scripts/Pig/PigLook.cs` | Skin renderers + `skinColor` (applied on Start) / `SetSkinColor`. |
 | `Assets/Scripts/Player/PigPlayer.cs` | Local human player (Player prefab w/ PlayerInput). Reads input, converts camera-relative move → world move + aim, drives possessed pig + camera look. `Possess(pig)`, `startPig`, Tab = switch to next free pig (solo testing). |
+| `Assets/Scripts/UI/PlayerHud.cs` | On Player prefab. Code-built uGUI (legacy Text, English strings — no RTL): grab-target marker, button prompt, throw charge bar, throw-arc LineRenderer (`arcMaterial` = URP Unlit, set by builder). |
 | `Assets/Scripts/Camera/ThirdPersonCamera.cs` | Orbit camera (mouse / right stick), pulls in on walls, Esc unlocks cursor, click relocks. |
 | `Assets/Input/PigControls.inputactions` | Map `Player`: Move / Look / Jump / Sprint / Grab / SwitchPig — **one binding per action per device** (user wants that). Schemes: `Keyboard&Mouse`, `Gamepad`. |
 | `Assets/Editor/PorkourBuilder.cs` | Menu `Porkour/Rebuild Test Barn` (prefabs + scene; refuses in Play mode; shows a success/error dialog). |
@@ -79,7 +80,7 @@
 - Fewer than 4 players → how to compensate for missing pig types/abilities? Ideas: collectible power-ups giving a missing ability (e.g. bean can = fart jump), alternative puzzle solutions per ability, AI helper pigs, or let a player switch pig at stations. User: "need to think how to compensate".
 
 ## Status / next step
-- 2026-09-28: Stages 1–2 approved. Stage 3 first test: throw felt broken (thrown pigs got short-hop gravity), quick grab flung objects, carried things fell, movement too snappy, A/D turned the pig. Fixed: one-button grab/charge-throw, gentler carry follow, strafe facing, softer accel. **Next:** user retests (Rebuild Test Barn needed — input asset changed), then stage 4 online.
+- 2026-09-28: Stages 1–2 approved. Stage 3 retest: "feels better". User asked for grab/throw indicators → added PlayerHud (marker, prompt, charge bar with auto-throw at full, throw arc). **Next:** user retests (Rebuild needed — Player prefab changed), then stage 4 online.
 
 ## Known issues / TODO
 - Stage 3 scripts not yet compiled in Unity — expect possible first-run fixes.
