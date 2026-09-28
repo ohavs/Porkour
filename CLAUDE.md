@@ -8,7 +8,7 @@ Physics co-op party game. Pigs escape a barn before farmer **Bob** puts them on 
 2 local players (gamepads or a shared keyboard), online via **Steam Remote Play Together** (streams host screen → single shared screen, no split-screen).
 
 ## Working with the user
-- **All** messages in **Hebrew** (incl. short progress updates). User has **no Unity experience**: Claude writes all code and gives editor steps (step-by-step, detailed only where needed).
+- **Every reply to the user MUST be in Hebrew** — never English prose, incl. short progress updates between tool calls (only code, file paths and UI button names stay in English). This CLAUDE.md itself is written in English. User has **no Unity experience**: Claude writes all code and gives editor steps (step-by-step, detailed only where needed).
 - **Save credits**: short answers, don't explain code line by line — only what matters for development/gameplay.
 - Prefer **editor automation** (menu `Porkour/...` in `Assets/Editor/PorkourBuilder.cs`) over manual editor steps.
 - Claude cannot run Unity here → write carefully against the Unity 6 API; the user reports Console errors/feel.
