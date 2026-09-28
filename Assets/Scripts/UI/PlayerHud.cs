@@ -69,6 +69,15 @@ namespace Porkour
             PlaceBottom(prompt.rectTransform, 105f);
             textGo.AddComponent<Outline>().effectDistance = new Vector2(2f, -2f);
 
+            if (arcMaterial == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader != null)
+                {
+                    arcMaterial = new Material(shader);
+                    arcMaterial.SetColor("_BaseColor", markerColor);
+                }
+            }
             if (arcMaterial != null)
             {
                 arc = new GameObject("ThrowArc").AddComponent<LineRenderer>();

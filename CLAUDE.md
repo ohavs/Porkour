@@ -41,7 +41,7 @@
 | `Assets/Scripts/Pig/PigGrabber.cs` | One button: press = pick up nearest loose Rigidbody/pig in front (≤ `maxLiftMass`) onto back (velocity-follow, still collides); press again = throw toward aim, hold = charge (tap = gentle toss, full charge auto-throws). `FindGrabTarget`, `PredictThrowVelocity` for HUD. Load slows carrier. Carried pig mashes jump to escape. |
 | `Assets/Scripts/Pig/PigLook.cs` | Skin renderers + `skinColor` (applied on Start) / `SetSkinColor`. |
 | `Assets/Scripts/Player/PigPlayer.cs` | Local human player (Player prefab w/ PlayerInput). Reads input, converts camera-relative move → world move + aim, drives possessed pig + camera look. `Possess(pig)`, `startPig`, Tab = switch to next free pig (solo testing). |
-| `Assets/Scripts/UI/PlayerHud.cs` | On Player prefab. Code-built uGUI (legacy Text, English strings — no RTL): grab-target marker, button prompt, throw charge bar, throw-arc LineRenderer (`arcMaterial` = URP Unlit, set by builder). |
+| `Assets/Scripts/UI/PlayerHud.cs` | On Player prefab (PigPlayer auto-adds it if missing — self-heal, no rebuild needed). Code-built uGUI (legacy Text, English strings — no RTL): grab-target marker, button prompt, throw charge bar, throw-arc LineRenderer (`arcMaterial` = URP Unlit, set by builder). |
 | `Assets/Scripts/Camera/ThirdPersonCamera.cs` | Orbit camera (mouse / right stick), pulls in on walls, Esc unlocks cursor, click relocks. |
 | `Assets/Input/PigControls.inputactions` | Map `Player`: Move / Look / Jump / Sprint / Grab / SwitchPig — **one binding per action per device** (user wants that). Schemes: `Keyboard&Mouse`, `Gamepad`. |
 | `Assets/Editor/PorkourBuilder.cs` | Menu `Porkour/Rebuild Test Barn` (prefabs + scene; refuses in Play mode; shows a success/error dialog). |
@@ -80,7 +80,8 @@
 - Fewer than 4 players → how to compensate for missing pig types/abilities? Ideas: collectible power-ups giving a missing ability (e.g. bean can = fart jump), alternative puzzle solutions per ability, AI helper pigs, or let a player switch pig at stations. User: "need to think how to compensate".
 
 ## Status / next step
-- 2026-09-28: Stages 1–2 approved. Stage 3 retest: "feels better". User asked for grab/throw indicators → added PlayerHud (marker, prompt, charge bar with auto-throw at full, throw arc). **Next:** user retests (Rebuild needed — Player prefab changed), then stage 4 online.
+- 2026-09-28: Stages 1–2 approved. Stage 3: grab/throw feels better. HUD first try: nothing showed (auto-throw worked) → likely scene/prefab not rebuilt. Added self-heal (PigPlayer adds PlayerHud; HUD makes its own arc material if missing). **Next:** user pulls + Play (no rebuild needed), confirms HUD, then stage 4 online.
+- Lesson: prefer runtime self-healing over "rebuild required" — the user easily misses rebuild steps.
 
 ## Known issues / TODO
 - Stage 3 scripts not yet compiled in Unity — expect possible first-run fixes.
