@@ -89,7 +89,6 @@ namespace Porkour.EditorTools
             input.actions = controls;
             input.defaultActionMap = "Player";
             input.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
-            input.neverAutoSwitchControlSchemes = true; // two players may share one keyboard
             root.AddComponent<PigPlayer>();
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
@@ -108,26 +107,21 @@ namespace Porkour.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
             var cam = Camera.main;
-            cam.gameObject.AddComponent<PartyCamera>();
-            cam.transform.SetPositionAndRotation(new Vector3(0f, 11f, -18f), Quaternion.Euler(55f, 0f, 0f));
+            cam.gameObject.AddComponent<ThirdPersonCamera>();
+            cam.transform.SetPositionAndRotation(new Vector3(0f, 3f, -15f), Quaternion.Euler(20f, 0f, 0f));
             var sun = GameObject.Find("Directional Light");
             if (sun != null) sun.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
             BuildRoom();
 
-            // Players join at runtime (press jump) - pigs spawn at these points.
-            var spawnRoot = new GameObject("SpawnPoints").transform;
-            var spawns = new Transform[4];
-            for (int i = 0; i < spawns.Length; i++)
-            {
-                spawns[i] = new GameObject($"Spawn P{i + 1}").transform;
-                spawns[i].SetParent(spawnRoot, false);
-                spawns[i].position = new Vector3(-3f + i * 2f, 1f, -10f);
-            }
-            var join = new GameObject("PlayerJoinManager").AddComponent<PlayerJoinManager>();
-            join.playerPrefab = playerPrefab;
-            join.pigPrefab = pigPrefab.GetComponent<PigController>();
-            join.spawnPoints = spawns;
+            // Local player + its pig (online multiplayer will spawn these per client later).
+            var pig = (GameObject)PrefabUtility.InstantiatePrefab(pigPrefab);
+            pig.transform.position = new Vector3(0f, 1f, -10f);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(pig.transform);
+            var player = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab);
+            var pigPlayer = player.GetComponent<PigPlayer>();
+            pigPlayer.startPig = pig.GetComponent<PigController>();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(pigPlayer);
 
             EnsureFolder("Assets/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -136,7 +130,7 @@ namespace Porkour.EditorTools
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
-            Debug.Log("Porkour: Test barn built. Press Play, then Space / Right Ctrl / gamepad A to join.");
+            Debug.Log("Porkour: Test barn built. Press Play!");
         }
 
         static void BuildRoom()
@@ -150,14 +144,12 @@ namespace Porkour.EditorTools
             var r = new GameObject("Barn").transform;
             const float half = 15f, wallH = 4f;
 
-            // Floor + walls. The south wall faces the camera, so it is an invisible collider.
+            // Floor + walls.
             Block("Floor", r, new Vector3(0f, -0.5f, 0f), new Vector3(half * 2f, 1f, half * 2f), floor);
             Block("WallN", r, new Vector3(0f, wallH / 2f, half + 0.5f), new Vector3(half * 2f + 2f, wallH, 1f), wall);
+            Block("WallS", r, new Vector3(0f, wallH / 2f, -half - 0.5f), new Vector3(half * 2f + 2f, wallH, 1f), wall);
             Block("WallE", r, new Vector3(half + 0.5f, wallH / 2f, 0f), new Vector3(1f, wallH, half * 2f), wall);
             Block("WallW", r, new Vector3(-half - 0.5f, wallH / 2f, 0f), new Vector3(1f, wallH, half * 2f), wall);
-            var south = Block("WallS_Invisible", r, new Vector3(0f, wallH / 2f, -half - 0.5f), new Vector3(half * 2f + 2f, wallH, 1f), wall);
-            south.GetComponent<Renderer>().enabled = false;
-            Block("FenceS", r, new Vector3(0f, 0.3f, -half - 0.5f), new Vector3(half * 2f + 2f, 0.6f, 0.3f), wall);
 
             // Staircase of crates (0.6 / 1.2 / 1.8 / 2.4) - tests jump height.
             Block("Step1", r, new Vector3(-6f, 0.3f, -6f), new Vector3(2f, 0.6f, 2f), wood);

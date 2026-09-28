@@ -11,7 +11,7 @@ namespace Porkour
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class PigController : MonoBehaviour
     {
-        /// <summary>All active pigs (used by the camera, later by the farmer).</summary>
+        /// <summary>All active pigs (used later by Bob, objectives, etc.).</summary>
         public static readonly List<PigController> All = new();
 
         [Header("Move")]
