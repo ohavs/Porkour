@@ -20,13 +20,6 @@ namespace Porkour.EditorTools
         const string ScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
 
-        [MenuItem("Porkour/Build Prefabs (Pig + Player)")]
-        static void BuildPrefabsMenu()
-        {
-            BuildPigPrefab();
-            BuildPlayerPrefab();
-        }
-
         public static GameObject BuildPigPrefab()
         {
             EnsureFolder(PrefabDir);
@@ -49,6 +42,7 @@ namespace Porkour.EditorTools
             col.sharedMaterial = SlipperyMaterial();
 
             root.AddComponent<PigController>();
+            root.AddComponent<PigGrabber>();
             var look = root.AddComponent<PigLook>();
 
             // Placeholder look - primitives only, no colliders.
@@ -96,13 +90,32 @@ namespace Porkour.EditorTools
             return prefab;
         }
 
-        [MenuItem("Porkour/Build Test Barn Scene")]
-        public static void BuildTestBarn()
+        [MenuItem("Porkour/Rebuild Test Barn")]
+        static void RebuildTestBarnMenu()
         {
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            if (EditorApplication.isPlaying)
+            {
+                EditorUtility.DisplayDialog("Porkour", "Stop Play mode first (click the Play button again), then run Porkour > Rebuild Test Barn.", "OK");
+                return;
+            }
+            try
+            {
+                if (BuildTestBarn())
+                    EditorUtility.DisplayDialog("Porkour", "Test barn rebuilt!\n\nHierarchy should now show: Main Camera, Directional Light, Barn, Pig, Player.\nPress Play.", "OK");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                EditorUtility.DisplayDialog("Porkour - error", e.Message + "\n\nCopy the red error from the Console to Claude.", "OK");
+            }
+        }
+
+        public static bool BuildTestBarn()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
             var pigPrefab = BuildPigPrefab();
             var playerPrefab = BuildPlayerPrefab();
-            if (pigPrefab == null || playerPrefab == null) return;
+            if (pigPrefab == null || playerPrefab == null) return false;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
 
@@ -114,13 +127,27 @@ namespace Porkour.EditorTools
 
             BuildRoom();
 
-            // Local player + its pig (online multiplayer will spawn these per client later).
-            var pig = (GameObject)PrefabUtility.InstantiatePrefab(pigPrefab);
-            pig.transform.position = new Vector3(0f, 1f, -10f);
-            PrefabUtility.RecordPrefabInstancePropertyModifications(pig.transform);
+            // 4 pigs (Tab switches between them for solo co-op testing) + the local player.
+            Color[] colors =
+            {
+                new(1f, 0.62f, 0.68f), new(0.85f, 0.6f, 0.42f), new(0.5f, 0.5f, 0.55f), new(1f, 0.92f, 0.82f),
+            };
+            PigController firstPig = null;
+            for (int i = 0; i < colors.Length; i++)
+            {
+                var pig = (GameObject)PrefabUtility.InstantiatePrefab(pigPrefab);
+                pig.name = $"Pig {i + 1}";
+                pig.transform.position = new Vector3(-3f + i * 2f, 1f, -10f);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(pig.transform);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(pig);
+                var look = pig.GetComponent<PigLook>();
+                look.skinColor = colors[i];
+                PrefabUtility.RecordPrefabInstancePropertyModifications(look);
+                if (firstPig == null) firstPig = pig.GetComponent<PigController>();
+            }
             var player = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab);
             var pigPlayer = player.GetComponent<PigPlayer>();
-            pigPlayer.startPig = pig.GetComponent<PigController>();
+            pigPlayer.startPig = firstPig;
             PrefabUtility.RecordPrefabInstancePropertyModifications(pigPlayer);
 
             EnsureFolder("Assets/Scenes");
@@ -131,6 +158,7 @@ namespace Porkour.EditorTools
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
             Debug.Log("Porkour: Test barn built. Press Play!");
+            return true;
         }
 
         static void BuildRoom()
@@ -178,6 +206,16 @@ namespace Porkour.EditorTools
                 var crate = Block("PushCrate", r, new Vector3(-1.5f + i * 1.3f, 0.5f, -6f), Vector3.one, wood);
                 crate.AddComponent<Rigidbody>().mass = 8f;
             }
+
+            // Grab test: barrels to carry/stack, and a key on top of the tall pillar
+            // (reach it by stacking crates, or carry a pig, jump and throw it up).
+            for (int i = 0; i < 3; i++)
+            {
+                var barrel = Block("Barrel", r, new Vector3(9f + i * 1.2f, 0.6f, -10f), new Vector3(0.8f, 0.6f, 0.8f), wood, default, PrimitiveType.Cylinder);
+                barrel.AddComponent<Rigidbody>().mass = 15f;
+            }
+            var key = Block("Key", r, new Vector3(5f, 3.2f, -6f), new Vector3(0.5f, 0.2f, 0.25f), Mat("Gold", new Color(1f, 0.8f, 0.1f)));
+            key.AddComponent<Rigidbody>().mass = 1f;
         }
 
         // ---------- helpers ----------

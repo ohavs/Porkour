@@ -19,6 +19,8 @@ namespace Porkour
         public float sprintSpeed = 9f;
         public float groundAcceleration = 60f;
         public float airAcceleration = 20f;
+        [Tooltip("Horizontal slow-down in the air with no input.")]
+        public float airDrag = 5f;
         public float turnSpeed = 720f;
 
         [Header("Jump")]
@@ -34,11 +36,22 @@ namespace Porkour
         public float maxGroundAngle = 50f;
         public LayerMask groundLayers = ~0;
 
+        [Header("Held")]
+        [Tooltip("Jump presses needed to wriggle free when another pig carries you.")]
+        public int struggleToEscape = 6;
+
         [Header("Respawn")]
         public float killHeight = -10f;
 
         public bool IsGrounded { get; private set; }
         public PigPlayer Owner { get; internal set; }
+        public Rigidbody Body => rb;
+        public PigGrabber Grabber { get; private set; }
+        /// <summary>The pig carrying this pig (null when free).</summary>
+        public PigGrabber HeldBy { get; private set; }
+        public bool IsHeld => HeldBy != null;
+        /// <summary>Set by the grabber: carrying heavy things slows you down.</summary>
+        public float SpeedMultiplier { get; set; } = 1f;
 
         Rigidbody rb;
         CapsuleCollider body;
@@ -51,6 +64,7 @@ namespace Porkour
         float groundLockUntil;
         Vector3 spawnPosition;
         Quaternion spawnRotation;
+        int struggleCount;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
@@ -59,6 +73,7 @@ namespace Porkour
         {
             rb = GetComponent<Rigidbody>();
             body = GetComponent<CapsuleCollider>();
+            Grabber = GetComponent<PigGrabber>();
             spawnPosition = transform.position;
             spawnRotation = transform.rotation;
         }
@@ -80,13 +95,30 @@ namespace Porkour
         }
 
         /// <summary>Jump press (buffered, so it may fire slightly before landing).</summary>
-        public void PressJump() => lastJumpPressedTime = Time.time;
+        public void PressJump()
+        {
+            if (IsHeld)
+            {
+                if (++struggleCount >= struggleToEscape) HeldBy.Drop();
+                return;
+            }
+            lastJumpPressedTime = Time.time;
+        }
+
+        internal void SetHeldBy(PigGrabber grabber)
+        {
+            HeldBy = grabber;
+            struggleCount = 0;
+            rb.useGravity = grabber == null;
+            if (grabber != null && Grabber != null) Grabber.Drop(); // can't carry while being carried
+        }
 
         public void ClearInput() => SetInput(Vector2.zero, false, false);
 
         void FixedUpdate()
         {
             if (rb.position.y < killHeight) { Respawn(); return; }
+            if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 
             CheckGround();
             Vector3 moveDir = GetMoveDirection();
@@ -130,9 +162,15 @@ namespace Porkour
         {
             Vector3 velocity = rb.linearVelocity;
             Vector3 horizontal = new(velocity.x, 0f, velocity.z);
-            Vector3 target = moveDir * (sprintHeld ? sprintSpeed : walkSpeed);
+            Vector3 target = moveDir * ((sprintHeld ? sprintSpeed : walkSpeed) * SpeedMultiplier);
             float accel = IsGrounded ? groundAcceleration : airAcceleration;
-            Vector3 newHorizontal = Vector3.MoveTowards(horizontal, target, accel * Time.fixedDeltaTime);
+            Vector3 newHorizontal;
+            if (IsGrounded || horizontal.magnitude <= target.magnitude)
+                newHorizontal = Vector3.MoveTowards(horizontal, target, accel * Time.fixedDeltaTime);
+            else if (moveDir.sqrMagnitude > 0.01f) // flying faster than we can run (thrown): steer, don't brake
+                newHorizontal = Vector3.MoveTowards(horizontal, moveDir.normalized * horizontal.magnitude, accel * Time.fixedDeltaTime);
+            else // no input in the air: only light drag, so throws/knockbacks carry
+                newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, airDrag * Time.fixedDeltaTime);
             rb.AddForce(newHorizontal - horizontal, ForceMode.VelocityChange);
         }
 
@@ -171,6 +209,8 @@ namespace Porkour
 
         public void Respawn()
         {
+            if (IsHeld) HeldBy.Drop();
+            if (Grabber != null) Grabber.Drop();
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             rb.position = spawnPosition;

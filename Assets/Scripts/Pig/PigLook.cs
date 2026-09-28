@@ -6,6 +6,9 @@ namespace Porkour
     public class PigLook : MonoBehaviour
     {
         public Renderer[] skin;
+        public Color skinColor = new(1f, 0.62f, 0.68f);
+
+        void Start() => SetSkinColor(skinColor);
 
         public void SetSkinColor(Color color)
         {
