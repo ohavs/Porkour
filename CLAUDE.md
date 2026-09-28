@@ -8,11 +8,11 @@ Physics co-op party game. Pigs escape a barn before farmer **Bob** puts them on 
 2 local players (gamepads or a shared keyboard), online via **Steam Remote Play Together** (streams host screen → single shared screen, no split-screen).
 
 ## Working with the user
-- Reply in **Hebrew**. User has **no Unity experience**: Claude writes all code and gives editor steps (step-by-step, detailed only where needed).
+- **All** messages in **Hebrew** (incl. short progress updates). User has **no Unity experience**: Claude writes all code and gives editor steps (step-by-step, detailed only where needed).
 - **Save credits**: short answers, don't explain code line by line — only what matters for development/gameplay.
 - Prefer **editor automation** (menu `Porkour/...` in `Assets/Editor/PorkourBuilder.cs`) over manual editor steps.
 - Claude cannot run Unity here → write carefully against the Unity 6 API; the user reports Console errors/feel.
-- Git: Claude pushes to the session branch; user pulls, opens Unity, then commits & pushes back **including `.meta` files**, generated prefabs/scenes/materials.
+- Git flow: Claude pushes to the session branch → user opens PR on GitHub → Merge into `main` → pulls `main` locally → works in Unity → commits & pushes to `main` **including `.meta` files** and generated prefabs/scenes/materials. Claude starts each new round from latest `main`.
 - When a `/clear` or new chat is needed: update this file first, then tell the user.
 
 ## Tech
