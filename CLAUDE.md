@@ -60,8 +60,8 @@
 
 ## Roadmap (co-op mode first)
 1. ✅ **One pig moves & jumps** in a test barn.
-2. **Third-person pig** ← *current* — orbit camera, mouse/gamepad look, single local player.
-3. **Online foundation** — Netcode for GameObjects, host/join, each client own pig + camera, Multiplayer Play Mode to test 4 pigs on one PC.
+2. ✅ **Third-person pig** — orbit camera, mouse/gamepad look, single local player.
+3. **Online foundation** ← *next* — Netcode for GameObjects, host/join, each client own pig + camera, Multiplayer Play Mode to test 4 pigs on one PC.
 4. **Physics interaction core** (networked) — grab / carry / throw pigs & objects, stacking, pushing.
 5. **4 pig types + abilities** — Gassy / Jumpy / Heavy / Armed, random assignment per round.
 6. **Farmer Bob** — Grill Call cycle, hiding (hay/bucket/freeze), grab & carry, 20 s rescue (hit/stun/bait animals). NavMesh AI (server).
@@ -75,9 +75,8 @@
 - Networking stack confirmation (proposal above).
 
 ## Status / next step
-- 2026-09-28: Stage 1 approved. Local join (old stage 2) built then dropped after pivot to online.
-- Stage 2 (third-person) merged to main but **never rebuilt** on user's PC (scene still stage-1: pig without Player → can't move; Play mode was on during "build"). Builder now has one menu `Porkour/Rebuild Test Barn` with play-mode guard + dialogs. **Next:** user stops Play, rebuilds, tests camera/feel. Then stage 3 (online).
+- 2026-09-28: Stages 1–2 approved by user (third-person works after stopping Play + rebuild). Builder menu renamed to `Porkour/Rebuild Test Barn` (+ dialogs) on session branch, not yet merged — rides with next PR.
+- **Next:** stage 3 (online) once user confirms. User will need to install packages (Netcode for GameObjects, Multiplayer Play Mode) via Package Manager.
 
 ## Known issues / TODO
-- Third-person scripts not yet compiled in Unity — expect possible first-run fixes.
 - Template leftovers (`SampleScene`, `TutorialInfo`, `Readme.asset`) can be deleted later.
