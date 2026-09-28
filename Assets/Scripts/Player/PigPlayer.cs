@@ -25,6 +25,12 @@ namespace Porkour
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
 
+        void Awake()
+        {
+            // Self-heal: older scenes/prefabs may lack the HUD - add it so no rebuild is needed.
+            if (GetComponent<PlayerHud>() == null) gameObject.AddComponent<PlayerHud>();
+        }
+
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
 
