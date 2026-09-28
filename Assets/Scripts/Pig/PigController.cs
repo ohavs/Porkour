@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Porkour
 {
     /// <summary>
     /// Physics-based pig movement: camera-relative run, sprint, jump with coyote time and jump buffer.
+    /// Driven by whoever owns it (a PigPlayer now; later AI/farmer states) via SetInput/PressJump.
     /// Tuning values live here as defaults - the builder recreates the prefab, so tweak in code.
     /// </summary>
-    [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider), typeof(PlayerInput))]
+    [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class PigController : MonoBehaviour
     {
         /// <summary>All active pigs (used by the camera, later by the farmer).</summary>
@@ -38,10 +38,10 @@ namespace Porkour
         public float killHeight = -10f;
 
         public bool IsGrounded { get; private set; }
+        public PigPlayer Owner { get; internal set; }
 
         Rigidbody rb;
         CapsuleCollider body;
-        InputAction moveAction, jumpAction, sprintAction;
         Transform cam;
 
         Vector2 moveInput;
@@ -68,22 +68,21 @@ namespace Porkour
 
         void Start()
         {
-            // Read actions in Start: PlayerInput clones the asset per player during its OnEnable.
-            var actions = GetComponent<PlayerInput>().actions;
-            moveAction = actions["Move"];
-            jumpAction = actions["Jump"];
-            sprintAction = actions.FindAction("Sprint");
             if (Camera.main != null) cam = Camera.main.transform;
         }
 
-        void Update()
+        /// <summary>Continuous input, called every frame by the owner.</summary>
+        public void SetInput(Vector2 move, bool jumpIsHeld, bool sprintIsHeld)
         {
-            if (moveAction == null) return;
-            moveInput = moveAction.ReadValue<Vector2>();
-            jumpHeld = jumpAction.IsPressed();
-            sprintHeld = sprintAction != null && sprintAction.IsPressed();
-            if (jumpAction.WasPressedThisFrame()) lastJumpPressedTime = Time.time;
+            moveInput = move;
+            jumpHeld = jumpIsHeld;
+            sprintHeld = sprintIsHeld;
         }
+
+        /// <summary>Jump press (buffered, so it may fire slightly before landing).</summary>
+        public void PressJump() => lastJumpPressedTime = Time.time;
+
+        public void ClearInput() => SetInput(Vector2.zero, false, false);
 
         void FixedUpdate()
         {
