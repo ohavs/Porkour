@@ -9,9 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 247731922770744382}
-  - component: {fileID: 1947500651782071914}
-  - component: {fileID: 5065017939562321321}
-  - component: {fileID: 5199362614359040186}
+  - component: {fileID: 4083047659384981514}
+  - component: {fileID: 4153633681834054583}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -34,7 +33,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1947500651782071914
+--- !u!114 &4083047659384981514
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -43,28 +42,25 @@ MonoBehaviour:
   m_GameObject: {fileID: 9182162202047525639}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.PlayerInput
-  m_Actions: {fileID: -944628639613478452, guid: 7a0985e5e32db894bb8930bf43cf79ba, type: 3}
-  m_NotificationBehavior: 3
-  m_UIInputModule: {fileID: 0}
-  m_DeviceLostEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_DeviceRegainedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ControlsChangedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_ActionEvents: []
-  m_NeverAutoSwitchControlSchemes: 0
-  m_DefaultControlScheme: 
-  m_DefaultActionMap: Player
-  m_SplitScreenIndex: -1
-  m_Camera: {fileID: 0}
---- !u!114 &5065017939562321321
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 219093618
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  m_InScenePlacedDisabledByDefault: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  m_InScenePlaced: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &4153633681834054583
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -73,23 +69,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 9182162202047525639}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a0d82789576e5544a8db1f708e90d224, type: 3}
+  m_Script: {fileID: 11500000, guid: a080aa7a8dd1c504fac7678599cea76e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Porkour.PigPlayer
-  startPig: {fileID: 0}
---- !u!114 &5199362614359040186
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9182162202047525639}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3352bad1772365e4bbb8bcaba1ca4e41, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Porkour.PlayerHud
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.NetPlayer
+  ShowTopMostFoldoutHeaderGroup: 1
+  controls: {fileID: -944628639613478452, guid: 7a0985e5e32db894bb8930bf43cf79ba, type: 3}
   arcMaterial: {fileID: 2100000, guid: c8dfdeb1fc41962478e8ecb0812d1c20, type: 2}
-  markerColor: {r: 1, g: 0.85, b: 0.2, a: 1}
-  chargeLowColor: {r: 1, g: 0.9, b: 0.2, a: 1}
-  chargeHighColor: {r: 1, g: 0.25, b: 0.15, a: 1}
+  sendRate: 30
