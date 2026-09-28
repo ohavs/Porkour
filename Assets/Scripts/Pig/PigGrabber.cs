@@ -43,8 +43,13 @@ namespace Porkour
 
         public Rigidbody Held { get; private set; }
         public bool IsHolding => Held != null;
-        /// <summary>0..1 while charging a throw (for UI later).</summary>
+        public bool IsCharging => charging;
+        /// <summary>0..1 while charging a throw. Reaching 1 throws automatically.</summary>
         public float Charge => charging ? Mathf.Clamp01((Time.time - chargeStart) / fullChargeTime) : 0f;
+        /// <summary>Gravity multiplier the load gets while falling (pigs fall faster) - for the throw preview.</summary>
+        public float HeldFallGravityMultiplier => heldPig != null ? heldPig.fallGravityMultiplier : 1f;
+        /// <summary>Horizontal air drag the load gets after the throw - for the throw preview.</summary>
+        public float HeldAirDrag => heldPig != null ? heldPig.airDrag : 0f;
 
         PigController pig;
         Collider[] ownColliders;
@@ -80,6 +85,12 @@ namespace Porkour
                 charging = false;
                 Throw(power);
             }
+
+            if (charging && Charge >= 1f)
+            {
+                charging = false;
+                Throw(1f);
+            }
         }
 
         /// <summary>Forget button state (e.g. when the player switches to another pig). Keeps holding.</summary>
@@ -91,6 +102,14 @@ namespace Porkour
 
         void TryGrab()
         {
+            var target = FindGrabTarget();
+            if (target != null) Grab(target);
+        }
+
+        /// <summary>What a grab press would pick up right now (null if nothing).</summary>
+        public Rigidbody FindGrabTarget()
+        {
+            if (IsHolding || pig.IsHeld) return null;
             Vector3 center = pig.Body.position + transform.forward * reach + Vector3.up * 0.1f;
             Rigidbody best = null;
             float bestDist = float.MaxValue;
@@ -101,7 +120,7 @@ namespace Porkour
                 float d = (rb.worldCenterOfMass - center).sqrMagnitude;
                 if (d < bestDist) { bestDist = d; best = rb; }
             }
-            if (best != null) Grab(best);
+            return best;
         }
 
         bool CanGrab(Rigidbody rb)
@@ -140,19 +159,24 @@ namespace Porkour
         {
             if (!IsHolding) return;
             var rb = Held;
-            float load = LoadFactor(rb.mass);
+            Vector3 velocity = PredictThrowVelocity(power);
+            pig.FaceDirection(new Vector3(velocity.x, 0f, velocity.z));
+            Drop();
+            rb.linearVelocity = velocity;
+        }
 
+        /// <summary>Launch velocity a throw with this power (0..1) would give the held load right now.</summary>
+        public Vector3 PredictThrowVelocity(float power)
+        {
+            if (!IsHolding) return Vector3.zero;
             Vector3 aim = pig.Aim.sqrMagnitude > 0.01f ? pig.Aim.normalized : transform.forward;
             Vector3 flat = Vector3.ProjectOnPlane(aim, Vector3.up);
             flat = flat.sqrMagnitude > 0.001f ? flat.normalized : transform.forward;
             float lookUp = Mathf.Asin(Mathf.Clamp(aim.y, -1f, 1f)) * Mathf.Rad2Deg;
             float angle = Mathf.Clamp(baseThrowAngle + lookUp, minThrowAngle, maxThrowAngle) * Mathf.Deg2Rad;
             Vector3 direction = flat * Mathf.Cos(angle) + Vector3.up * Mathf.Sin(angle);
-            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, power) * Mathf.Lerp(1f, fullLoadThrow, load);
-
-            pig.FaceDirection(flat);
-            Drop();
-            rb.linearVelocity = pig.Body.linearVelocity + direction * speed;
+            float speed = Mathf.Lerp(minThrowSpeed, maxThrowSpeed, power) * Mathf.Lerp(1f, fullLoadThrow, LoadFactor(Held.mass));
+            return pig.Body.linearVelocity + direction * speed;
         }
 
         /// <summary>Let go without throwing (struggle, respawn, switching roles...).</summary>
