@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 247731922770744382}
   - component: {fileID: 1947500651782071914}
   - component: {fileID: 5065017939562321321}
+  - component: {fileID: 5199362614359040186}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -76,3 +77,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Porkour.PigPlayer
   startPig: {fileID: 0}
+--- !u!114 &5199362614359040186
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9182162202047525639}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3352bad1772365e4bbb8bcaba1ca4e41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.PlayerHud
+  arcMaterial: {fileID: 2100000, guid: c8dfdeb1fc41962478e8ecb0812d1c20, type: 2}
+  markerColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  chargeLowColor: {r: 1, g: 0.9, b: 0.2, a: 1}
+  chargeHighColor: {r: 1, g: 0.25, b: 0.15, a: 1}
