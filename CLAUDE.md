@@ -30,7 +30,7 @@
 ## Tech
 - Unity **6000.6.3f1**, URP (PC_RPAsset), 3D physics, **Input System only** (activeInputHandler=1).
 - Installed: AI Navigation (NavMesh — for Bob), Input System, URP, Timeline, uGUI. No Cinemachine (own camera).
-- **Required packages installed by user via Package Manager (by name)**: `com.unity.netcode.gameobjects` (NGO), `com.unity.multiplayer.playmode` (MPPM). Code does not reference the MPPM API.
+- **Installed by user via Package Manager**: `com.unity.netcode.gameobjects` **2.13.3** (NGO), `com.unity.multiplayer.playmode` **3.0.0** (MPPM). Code does not reference the MPPM API.
 - Unity 6 API: `rb.linearVelocity` / `linearDamping` (not `velocity`/`drag`), `PhysicsMaterial` (not `PhysicMaterial`), avoid `FindObjectOfType`.
 - Code: namespace `Porkour`; runtime in `Assets/Scripts/`, editor tools in `Assets/Editor/`.
 - **Networking (stage 4)**: NGO, **server-authoritative host** (solo = host too; one code path). Clients send `PigInputFrame` (move/aim/held buttons + press counters) via `SubmitInputRpc` at 30 Hz; server applies to the pig. Physics, grab, abilities, Bob = **server only** (`Simulate` flag false on clients). Props/pigs: NetworkObject + NetworkTransform (no scale) + NetworkRigidbody, all **spawned at runtime** from `NetSpawnPoint`s (no in-scene NetworkObjects → no GlobalObjectIdHash issues). Scene management off. Prefabs registered via builder-made `Assets/Prefabs/PorkourNetworkPrefabs.asset`. Editor: main editor auto-Host (falls back to Client if port busy), MPPM virtual players (path contains `/Library/VP/`) auto-Client 127.0.0.1:7777. Builds: OnGUI Host/Join(IP) menu. Internet play later via Relay or Steam transport.
@@ -73,8 +73,8 @@
 1. ✅ **One pig moves & jumps** in a test barn.
 2. ✅ **Third-person pig** — orbit camera, mouse/gamepad look.
 3. ✅ **Grab / carry / throw** — one-button grab/throw with charge bar, arc preview, Tab pig switching.
-4. **Online foundation** ← *current* — Netcode for GameObjects (server-authoritative), host/join, Multiplayer Play Mode so the user can test alone. Done early so later features are built networked.
-5. **4 pig types + abilities** — Gassy / Jumpy / Heavy / Armed, random assignment per round.
+4. ✅ **Online foundation** — Netcode for GameObjects (server-authoritative), host/join, Multiplayer Play Mode so the user can test alone. Done early so later features are built networked.
+5. **4 pig types + abilities** ← *next* — Gassy / Jumpy / Heavy / Armed, random assignment per round.
 6. **Farmer Bob** — Grill Call cycle, hiding (hay/bucket/freeze), grab & carry, 20 s rescue (hit/stun/bait animals). NavMesh AI (server).
 7. **Barn map + escape puzzle + full loop (MVP)** — real level, 10-min timer, multi-step escape, win/lose, menu, restart.
 8. **Art & polish** — import free asset packs (pig/farmer/animals/barn), animation, partial ragdoll, mud, sound, VFX, UI.
@@ -85,11 +85,10 @@
 - Fewer than 4 players → how to compensate for missing pig types/abilities? Ideas: collectible power-ups giving a missing ability (e.g. bean can = fart jump), alternative puzzle solutions per ability, AI helper pigs, or let a player switch pig at stations. User: "need to think how to compensate".
 
 ## Status / next step
-- 2026-09-28: Stages 1–3 approved (HUD works after self-heal).
-- Stage 4 (online) code written, untested. **User steps:** (1) install NGO + MPPM packages by name, commit+push; (2) merge PR + pull; (3) stop Play → `Porkour → Rebuild Test Barn` (required: scene is now networked); (4) Play = auto host; (5) Window → Multiplayer → Multiplayer Play Mode → enable Player 2 → Play → second window auto-joins.
+- 2026-09-28 (end of day 1): Stages 1–4 done. Online compiled & ran on user's PC (packages installed, rebuilt, "Online test barn" pushed; user: "great").
+- **Next session:** start stage 5 (pig types + abilities). First ask the user to confirm the MPPM 2-player test worked (both pigs visible, grab/throw across windows) and report any lag/glitches; fix those first if any.
 - Lesson: prefer runtime self-healing over "rebuild required" — the user easily misses rebuild steps.
 
 ## Known issues / TODO
-- Stage 4 network code not yet compiled — NGO version unknown until user installs (check `Packages/packages-lock.json`); expect first-run fixes.
 - Host latency only for remote clients (no client prediction yet) — revisit if movement feels laggy online.
 - Template leftovers (`SampleScene`, `TutorialInfo`, `Readme.asset`) can be deleted later.
