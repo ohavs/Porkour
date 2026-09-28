@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
@@ -9,7 +8,7 @@ namespace Porkour
     /// Local player's on-screen hints (built from code, placeholder look):
     /// marker over the thing you can grab, button prompt, throw charge bar and a throw-arc preview.
     /// </summary>
-    [RequireComponent(typeof(PigPlayer))]
+    [RequireComponent(typeof(NetPlayer))]
     public class PlayerHud : MonoBehaviour
     {
         [Tooltip("Material for the throw-arc line (set by the builder).")]
@@ -22,17 +21,16 @@ namespace Porkour
         const int ArcSteps = 60;
         const float ArcStepTime = 0.03f;
 
-        PigPlayer player;
-        PlayerInput input;
+        NetPlayer player;
         Image marker, barBack, barFill;
         Text prompt;
         LineRenderer arc;
         readonly Vector3[] arcPoints = new Vector3[ArcSteps + 1];
 
-        void Awake()
+        // Added at runtime by the owning NetPlayer only; Start (not Awake) so arcMaterial is already set.
+        void Start()
         {
-            player = GetComponent<PigPlayer>();
-            input = GetComponent<PlayerInput>();
+            player = GetComponent<NetPlayer>();
             BuildUi();
         }
 
@@ -93,33 +91,39 @@ namespace Porkour
 
         void LateUpdate()
         {
+            if (prompt == null) return;
             var pig = player.Pig;
+            var net = pig != null ? pig.GetComponent<PigNet>() : null;
             var grabber = pig != null ? pig.Grabber : null;
             var cam = Camera.main;
-            string grabKey = input.currentControlScheme == "Gamepad" ? "RT" : "Left Click";
-            string jumpKey = input.currentControlScheme == "Gamepad" ? "A" : "Space";
+            string grabKey = player.UsingGamepad ? "RT" : "Left Click";
+            string jumpKey = player.UsingGamepad ? "A" : "Space";
 
-            Rigidbody target = null;
+            Rigidbody target = null, held = null;
             string text = "";
-            bool charging = false;
+            float charge = -1f;
 
-            if (pig != null && pig.IsHeld)
-                text = $"Mash {jumpKey} to break free!";
-            else if (grabber != null && grabber.IsHolding)
+            if (net != null && grabber != null)
             {
-                charging = grabber.IsCharging;
-                text = charging ? "Release to throw" : $"{grabKey}: throw  (hold = stronger)";
-            }
-            else if (grabber != null)
-            {
-                target = grabber.FindGrabTarget();
-                if (target != null) text = $"{grabKey}: grab";
+                held = net.Held;
+                if (net.IsHeld)
+                    text = $"Mash {jumpKey} to break free!";
+                else if (held != null)
+                {
+                    if (net.IsCharging) charge = net.Charge;
+                    text = charge >= 0f ? "Release to throw" : $"{grabKey}: throw  (hold = stronger)";
+                }
+                else
+                {
+                    target = grabber.FindGrabTarget();
+                    if (target != null) text = $"{grabKey}: grab";
+                }
             }
 
             prompt.text = text;
             UpdateMarker(target, cam);
-            UpdateChargeBar(charging ? grabber.Charge : -1f);
-            UpdateArc(charging ? grabber : null, pig);
+            UpdateChargeBar(charge);
+            UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
         }
 
         void UpdateMarker(Rigidbody target, Camera cam)
@@ -147,16 +151,16 @@ namespace Porkour
         }
 
         /// <summary>Simulate the throw (same gravity rules as the load) and draw it until it hits something.</summary>
-        void UpdateArc(PigGrabber grabber, PigController carrier)
+        void UpdateArc(PigGrabber grabber, PigController carrier, Rigidbody held, float charge)
         {
             if (arc == null) return;
-            if (grabber == null) { arc.positionCount = 0; return; }
+            if (grabber == null || held == null) { arc.positionCount = 0; return; }
 
-            var held = grabber.Held;
             Vector3 pos = held.position;
-            Vector3 vel = grabber.PredictThrowVelocity(grabber.Charge);
-            float fallMul = grabber.HeldFallGravityMultiplier;
-            float drag = grabber.HeldAirDrag;
+            Vector3 vel = grabber.PredictThrowVelocity(charge, held);
+            bool heldIsPig = held.TryGetComponent(out PigController heldPig);
+            float fallMul = heldIsPig ? heldPig.fallGravityMultiplier : 1f;
+            float drag = heldIsPig ? heldPig.airDrag : 0f;
             int count = 0;
             arcPoints[count++] = pos;
             for (int i = 0; i < ArcSteps; i++)

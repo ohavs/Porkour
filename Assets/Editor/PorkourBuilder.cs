@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using Unity.Netcode;
+using Unity.Netcode.Components;
+using Unity.Netcode.Transports.UTP;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -7,8 +10,8 @@ using UnityEngine.InputSystem;
 namespace Porkour.EditorTools
 {
     /// <summary>
-    /// Menu "Porkour/..." - builds the placeholder pig prefab and the test barn scene from code,
-    /// so no manual editor setup is needed. Re-running overwrites the prefab and the scene.
+    /// Menu "Porkour/..." - builds the placeholder prefabs (pig, player, props - all networked) and the
+    /// test barn scene from code, so no manual editor setup is needed. Re-running overwrites them.
     /// </summary>
     public static class PorkourBuilder
     {
@@ -17,6 +20,7 @@ namespace Porkour.EditorTools
         const string PrefabDir = "Assets/Prefabs";
         const string PigPrefabPath = PrefabDir + "/Pig.prefab";
         const string PlayerPrefabPath = PrefabDir + "/Player.prefab";
+        const string PropDir = PrefabDir + "/Props";
         const string ScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
 
@@ -44,6 +48,8 @@ namespace Porkour.EditorTools
             root.AddComponent<PigController>();
             root.AddComponent<PigGrabber>();
             var look = root.AddComponent<PigLook>();
+            AddNetworkSync(root);
+            root.AddComponent<PigNet>();
 
             // Placeholder look - primitives only, no colliders.
             var v = new GameObject("Visual").transform;
@@ -63,9 +69,7 @@ namespace Porkour.EditorTools
                 skin.Add(Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.16f, 0.1f, 0.16f), pink).GetComponent<Renderer>());
             look.skin = skin.ToArray();
 
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, PigPrefabPath);
-            Object.DestroyImmediate(root);
-            return prefab;
+            return SavePrefab(root, PigPrefabPath);
         }
 
         public static GameObject BuildPlayerPrefab()
@@ -79,16 +83,12 @@ namespace Porkour.EditorTools
             EnsureFolder(PrefabDir);
 
             var root = new GameObject("Player");
-            var input = root.AddComponent<PlayerInput>();
-            input.actions = controls;
-            input.defaultActionMap = "Player";
-            input.notificationBehavior = PlayerNotifications.InvokeCSharpEvents;
-            root.AddComponent<PigPlayer>();
-            root.AddComponent<PlayerHud>().arcMaterial = UnlitMat("ThrowArc", new Color(1f, 0.85f, 0.2f));
+            root.AddComponent<NetworkObject>();
+            var player = root.AddComponent<NetPlayer>();
+            player.controls = controls;
+            player.arcMaterial = UnlitMat("ThrowArc", new Color(1f, 0.85f, 0.2f));
 
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
-            Object.DestroyImmediate(root);
-            return prefab;
+            return SavePrefab(root, PlayerPrefabPath);
         }
 
         [MenuItem("Porkour/Rebuild Test Barn")]
@@ -102,7 +102,7 @@ namespace Porkour.EditorTools
             try
             {
                 if (BuildTestBarn())
-                    EditorUtility.DisplayDialog("Porkour", "Test barn rebuilt!\n\nHierarchy should now show: Main Camera, Directional Light, Barn, Pig, Player.\nPress Play.", "OK");
+                    EditorUtility.DisplayDialog("Porkour", "Test barn rebuilt!\n\nHierarchy should now show: Main Camera, Directional Light, Barn, NetworkManager, SpawnPoints.\nPress Play (pigs appear when the game starts).", "OK");
             }
             catch (System.Exception e)
             {
@@ -128,28 +128,40 @@ namespace Porkour.EditorTools
 
             BuildRoom();
 
-            // 4 pigs (Tab switches between them for solo co-op testing) + the local player.
-            Color[] colors =
+            // Networked things are spawned by the server when a game starts, at these points.
+            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
+            var crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f);
+            var barrel = BuildPropPrefab("Barrel", PrimitiveType.Cylinder, new Vector3(0.8f, 0.6f, 0.8f), wood, 15f);
+            var key = BuildPropPrefab("Key", PrimitiveType.Cube, new Vector3(0.5f, 0.2f, 0.25f), Mat("Gold", new Color(1f, 0.8f, 0.1f)), 1f);
+
+            var spawnRoot = new GameObject("SpawnPoints").transform;
+            var points = new List<NetSpawnPoint>();
+            Color[] pigColors =
             {
                 new(1f, 0.62f, 0.68f), new(0.85f, 0.6f, 0.42f), new(0.5f, 0.5f, 0.55f), new(1f, 0.92f, 0.82f),
             };
-            PigController firstPig = null;
-            for (int i = 0; i < colors.Length; i++)
+            for (int i = 0; i < pigColors.Length; i++)
+                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", pigPrefab, new Vector3(-3f + i * 2f, 1f, -10f), pigColors[i]));
+            for (int i = 0; i < 4; i++)
+                points.Add(SpawnPoint(spawnRoot, "Crate", crate, new Vector3(-1.5f + i * 1.3f, 0.5f, -6f)));
+            for (int i = 0; i < 3; i++)
+                points.Add(SpawnPoint(spawnRoot, "Barrel", barrel, new Vector3(9f + i * 1.2f, 0.6f, -10f)));
+            // Key on top of the tall pillar: stack crates, or carry a pig, jump and throw it up.
+            points.Add(SpawnPoint(spawnRoot, "Key", key, new Vector3(5f, 3.2f, -6f)));
+
+            var netGo = new GameObject("NetworkManager");
+            var nm = netGo.AddComponent<NetworkManager>();
+            var transport = netGo.AddComponent<UnityTransport>();
+            if (nm.NetworkConfig == null) nm.NetworkConfig = new NetworkConfig();
+            nm.NetworkConfig.NetworkTransport = transport;
+            nm.NetworkConfig.EnableSceneManagement = false; // everyone loads the same scene; all networked objects are spawned at runtime
+            nm.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList>
             {
-                var pig = (GameObject)PrefabUtility.InstantiatePrefab(pigPrefab);
-                pig.name = $"Pig {i + 1}";
-                pig.transform.position = new Vector3(-3f + i * 2f, 1f, -10f);
-                PrefabUtility.RecordPrefabInstancePropertyModifications(pig.transform);
-                PrefabUtility.RecordPrefabInstancePropertyModifications(pig);
-                var look = pig.GetComponent<PigLook>();
-                look.skinColor = colors[i];
-                PrefabUtility.RecordPrefabInstancePropertyModifications(look);
-                if (firstPig == null) firstPig = pig.GetComponent<PigController>();
-            }
-            var player = (GameObject)PrefabUtility.InstantiatePrefab(playerPrefab);
-            var pigPlayer = player.GetComponent<PigPlayer>();
-            pigPlayer.startPig = firstPig;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(pigPlayer);
+                BuildNetworkPrefabsList(pigPrefab, playerPrefab, crate, barrel, key),
+            };
+            var game = netGo.AddComponent<NetworkGame>();
+            game.playerPrefab = playerPrefab;
+            game.spawnPoints = points.ToArray();
 
             EnsureFolder("Assets/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -199,27 +211,60 @@ namespace Porkour.EditorTools
             Block("Gap2", r, new Vector3(0f, 1.75f, 8f), new Vector3(2f, 0.5f, 2f), wood);
             Block("Gap3", r, new Vector3(-4f, 2.15f, 5.5f), new Vector3(2f, 0.5f, 2f), wood);
 
-            // Hay bales (round) and pushable crates.
+            // Hay bales (round). Pushable crates, barrels and the key are network-spawned (see BuildTestBarn).
             Block("HayBale1", r, new Vector3(-11f, 0.8f, 10f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
             Block("HayBale2", r, new Vector3(-11f, 0.8f, 6f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 30f, 90f), PrimitiveType.Cylinder);
-            for (int i = 0; i < 4; i++)
-            {
-                var crate = Block("PushCrate", r, new Vector3(-1.5f + i * 1.3f, 0.5f, -6f), Vector3.one, wood);
-                crate.AddComponent<Rigidbody>().mass = 8f;
-            }
-
-            // Grab test: barrels to carry/stack, and a key on top of the tall pillar
-            // (reach it by stacking crates, or carry a pig, jump and throw it up).
-            for (int i = 0; i < 3; i++)
-            {
-                var barrel = Block("Barrel", r, new Vector3(9f + i * 1.2f, 0.6f, -10f), new Vector3(0.8f, 0.6f, 0.8f), wood, default, PrimitiveType.Cylinder);
-                barrel.AddComponent<Rigidbody>().mass = 15f;
-            }
-            var key = Block("Key", r, new Vector3(5f, 3.2f, -6f), new Vector3(0.5f, 0.2f, 0.25f), Mat("Gold", new Color(1f, 0.8f, 0.1f)));
-            key.AddComponent<Rigidbody>().mass = 1f;
         }
 
         // ---------- helpers ----------
+
+        /// <summary>Our own list of spawnable network prefabs (replaces Netcode's auto-generated default list).</summary>
+        static NetworkPrefabsList BuildNetworkPrefabsList(params GameObject[] prefabs)
+        {
+            const string path = PrefabDir + "/PorkourNetworkPrefabs.asset";
+            AssetDatabase.DeleteAsset(path);
+            var list = ScriptableObject.CreateInstance<NetworkPrefabsList>();
+            foreach (var prefab in prefabs) list.Add(new NetworkPrefab { Prefab = prefab });
+            AssetDatabase.CreateAsset(list, path);
+            return list;
+        }
+
+        static GameObject SavePrefab(GameObject go, string path)
+        {
+            PrefabUtility.SaveAsPrefabAsset(go, path);
+            Object.DestroyImmediate(go);
+            // Re-import so Netcode regenerates the prefab's network id (GlobalObjectIdHash) from the saved asset.
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            return AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        }
+
+        static GameObject BuildPropPrefab(string name, PrimitiveType type, Vector3 scale, Material mat, float mass)
+        {
+            EnsureFolder(PropDir);
+            var go = Part(type, name, null, Vector3.zero, scale, mat, default, keepCollider: true);
+            go.AddComponent<Rigidbody>().mass = mass;
+            AddNetworkSync(go);
+            return SavePrefab(go, $"{PropDir}/{name}.prefab");
+        }
+
+        /// <summary>Server-authoritative physics object: clients just follow the synced transform.</summary>
+        static void AddNetworkSync(GameObject go)
+        {
+            go.AddComponent<NetworkObject>();
+            var nt = go.AddComponent<NetworkTransform>();
+            nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = false;
+            go.AddComponent<NetworkRigidbody>();
+        }
+
+        static NetSpawnPoint SpawnPoint(Transform parent, string name, GameObject prefab, Vector3 position, Color? pigColor = null)
+        {
+            var point = new GameObject(name).AddComponent<NetSpawnPoint>();
+            point.transform.SetParent(parent, false);
+            point.transform.position = position;
+            point.prefab = prefab;
+            if (pigColor.HasValue) point.pigColor = pigColor.Value;
+            return point;
+        }
 
         static GameObject Block(string name, Transform parent, Vector3 pos, Vector3 scale, Material mat,
             Vector3 euler = default, PrimitiveType type = PrimitiveType.Cube)
