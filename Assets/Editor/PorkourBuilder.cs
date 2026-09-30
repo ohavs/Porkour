@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using Unity.Netcode.Transports.UTP;
@@ -12,6 +14,8 @@ namespace Porkour.EditorTools
     /// <summary>
     /// Menu "Porkour/..." - builds the placeholder prefabs (pig, player, props - all networked) and the
     /// test barn scene from code, so no manual editor setup is needed. Re-running overwrites them.
+    /// After every compile the editor checks the scene's SceneBuildInfo stamp and rebuilds by itself when
+    /// BuildVersion is newer - so the user never has to remember "Rebuild Test Barn".
     /// </summary>
     public static class PorkourBuilder
     {
@@ -23,6 +27,53 @@ namespace Porkour.EditorTools
         const string PropDir = PrefabDir + "/Props";
         const string ScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
+        /// <summary>Bump whenever BuildTestBarn generates something new → auto-rebuild after the next compile.</summary>
+        const int BuildVersion = 2;
+
+        static bool autoRebuildFailed;
+
+        [InitializeOnLoadMethod]
+        static void ScheduleAutoRebuildCheck()
+        {
+            // Multiplayer Play Mode virtual players share our Assets folder - only the main editor may write.
+            if (Application.dataPath.Replace('\\', '/').Contains("/Library/VP/")) return;
+            EditorApplication.delayCall += AutoRebuildIfOutdated;
+        }
+
+        static void AutoRebuildIfOutdated()
+        {
+            if (autoRebuildFailed || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                EditorApplication.delayCall += AutoRebuildIfOutdated; // try again when the editor is idle
+                return;
+            }
+            if (SceneBuildVersion() >= BuildVersion) return;
+
+            Debug.Log($"Porkour: test barn is older than the builder (v{BuildVersion}) - rebuilding automatically.");
+            try
+            {
+                if (BuildTestBarn())
+                    EditorUtility.DisplayDialog("Porkour",
+                        "The test barn was updated automatically with the newest objects.\n\n" +
+                        "Press Play to try it. Later, commit the changed files in GitHub Desktop.", "OK");
+            }
+            catch (System.Exception e)
+            {
+                autoRebuildFailed = true;
+                Debug.LogException(e);
+                EditorUtility.DisplayDialog("Porkour - error", "Automatic test barn rebuild failed:\n" + e.Message +
+                    "\n\nCopy the red error from the Console to Claude.", "OK");
+            }
+        }
+
+        /// <summary>builderVersion stamped in the saved scene file (0 = no scene / made by an older builder).</summary>
+        static int SceneBuildVersion()
+        {
+            if (!File.Exists(ScenePath)) return 0;
+            var match = Regex.Match(File.ReadAllText(ScenePath), @"builderVersion: (\d+)");
+            return match.Success ? int.Parse(match.Groups[1].Value) : 0;
+        }
 
         public static GameObject BuildPigPrefab()
         {
@@ -192,6 +243,7 @@ namespace Porkour.EditorTools
             var stone = Mat("Stone", new Color(0.55f, 0.55f, 0.58f));
 
             var r = new GameObject("Barn").transform;
+            r.gameObject.AddComponent<SceneBuildInfo>().builderVersion = BuildVersion;
             const float half = 15f, wallH = 4f;
 
             // Floor + walls.
