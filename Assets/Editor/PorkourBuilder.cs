@@ -136,12 +136,9 @@ namespace Porkour.EditorTools
 
             var spawnRoot = new GameObject("SpawnPoints").transform;
             var points = new List<NetSpawnPoint>();
-            Color[] pigColors =
-            {
-                new(1f, 0.62f, 0.68f), new(0.85f, 0.6f, 0.42f), new(0.5f, 0.5f, 0.55f), new(1f, 0.92f, 0.82f),
-            };
-            for (int i = 0; i < pigColors.Length; i++)
-                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", pigPrefab, new Vector3(-3f + i * 2f, 1f, -10f), pigColors[i]));
+            // One pig per type; the server gives them random types (colour = type) when the game starts.
+            for (int i = 0; i < PigTypes.All.Length; i++)
+                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", pigPrefab, new Vector3(-3f + i * 2f, 1f, -10f)));
             for (int i = 0; i < 4; i++)
                 points.Add(SpawnPoint(spawnRoot, "Crate", crate, new Vector3(-1.5f + i * 1.3f, 0.5f, -6f)));
             for (int i = 0; i < 3; i++)
@@ -256,13 +253,12 @@ namespace Porkour.EditorTools
             go.AddComponent<NetworkRigidbody>();
         }
 
-        static NetSpawnPoint SpawnPoint(Transform parent, string name, GameObject prefab, Vector3 position, Color? pigColor = null)
+        static NetSpawnPoint SpawnPoint(Transform parent, string name, GameObject prefab, Vector3 position)
         {
             var point = new GameObject(name).AddComponent<NetSpawnPoint>();
             point.transform.SetParent(parent, false);
             point.transform.position = position;
             point.prefab = prefab;
-            if (pigColor.HasValue) point.pigColor = pigColor.Value;
             return point;
         }
 

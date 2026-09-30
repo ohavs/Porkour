@@ -6,7 +6,8 @@ namespace Porkour
 {
     /// <summary>
     /// Local player's on-screen hints (built from code, placeholder look):
-    /// marker over the thing you can grab, button prompt, throw charge bar and a throw-arc preview.
+    /// marker over the thing you can grab, button prompt, throw charge bar, throw-arc preview,
+    /// and bottom-left: your pig type + its ability (key / cooldown).
     /// </summary>
     [RequireComponent(typeof(NetPlayer))]
     public class PlayerHud : MonoBehaviour
@@ -18,12 +19,13 @@ namespace Porkour
         public Color chargeHighColor = new(1f, 0.25f, 0.15f);
 
         const float BarWidth = 320f, BarHeight = 18f;
+        const float CooldownWidth = 260f, CooldownHeight = 10f;
         const int ArcSteps = 60;
         const float ArcStepTime = 0.03f;
 
         NetPlayer player;
-        Image marker, barBack, barFill;
-        Text prompt;
+        Image marker, barBack, barFill, cooldownBack, cooldownFill;
+        Text prompt, typeTitle, abilityLine;
         LineRenderer arc;
         readonly Vector3[] arcPoints = new Vector3[ArcSteps + 1];
 
@@ -55,17 +57,20 @@ namespace Porkour
             fillRect.anchorMin = fillRect.anchorMax = fillRect.pivot = new Vector2(0f, 0.5f);
             fillRect.anchoredPosition = new Vector2(3f, 0f);
 
-            var textGo = new GameObject("Prompt", typeof(RectTransform));
-            textGo.transform.SetParent(root, false);
-            prompt = textGo.AddComponent<Text>();
-            prompt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            prompt.fontSize = 30;
-            prompt.fontStyle = FontStyle.Bold;
-            prompt.alignment = TextAnchor.MiddleCenter;
-            prompt.color = Color.white;
-            prompt.rectTransform.sizeDelta = new Vector2(900f, 50f);
+            prompt = NewText(root, "Prompt", 30, TextAnchor.MiddleCenter, new Vector2(900f, 50f));
             PlaceBottom(prompt.rectTransform, 105f);
-            textGo.AddComponent<Outline>().effectDistance = new Vector2(2f, -2f);
+
+            // Pig type panel (bottom-left).
+            typeTitle = NewText(root, "PigType", 40, TextAnchor.MiddleLeft, new Vector2(600f, 46f));
+            PlaceBottomLeft(typeTitle.rectTransform, 40f, 96f);
+            abilityLine = NewText(root, "Ability", 26, TextAnchor.MiddleLeft, new Vector2(600f, 32f));
+            PlaceBottomLeft(abilityLine.rectTransform, 40f, 58f);
+            cooldownBack = NewImage(root, "AbilityCooldown", new Color(0f, 0f, 0f, 0.6f), new Vector2(CooldownWidth + 4f, CooldownHeight + 4f));
+            PlaceBottomLeft(cooldownBack.rectTransform, 40f, 32f);
+            cooldownFill = NewImage(cooldownBack.transform, "Fill", Color.white, new Vector2(0f, CooldownHeight));
+            var cdRect = cooldownFill.rectTransform;
+            cdRect.anchorMin = cdRect.anchorMax = cdRect.pivot = new Vector2(0f, 0.5f);
+            cdRect.anchoredPosition = new Vector2(2f, 0f);
 
             if (arcMaterial == null)
             {
@@ -98,6 +103,7 @@ namespace Porkour
             var cam = Camera.main;
             string grabKey = player.UsingGamepad ? "RT" : "Left Click";
             string jumpKey = player.UsingGamepad ? "A" : "Space";
+            string abilityKey = player.UsingGamepad ? "LT" : "Right Click";
 
             Rigidbody target = null, held = null;
             string text = "";
@@ -107,7 +113,9 @@ namespace Porkour
             {
                 held = net.Held;
                 if (net.IsHeld)
-                    text = $"Mash {jumpKey} to break free!";
+                    text = net.Type == PigType.Gassy && net.Ability != null && net.AbilityCooldownLeft <= 0f
+                        ? $"Mash {jumpKey} to break free!  or  {abilityKey}: fart out!"
+                        : $"Mash {jumpKey} to break free!";
                 else if (held != null)
                 {
                     if (net.IsCharging) charge = net.Charge;
@@ -124,6 +132,28 @@ namespace Porkour
             UpdateMarker(target, cam);
             UpdateChargeBar(charge);
             UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
+            UpdateTypePanel(net, abilityKey);
+        }
+
+        void UpdateTypePanel(PigNet net, string abilityKey)
+        {
+            bool show = net != null;
+            typeTitle.enabled = abilityLine.enabled = show;
+            float left = show && net.Ability != null ? net.AbilityCooldownLeft : 0f;
+            cooldownBack.enabled = cooldownFill.enabled = left > 0f;
+            if (!show) return;
+
+            var info = PigTypes.Info(net.Type);
+            typeTitle.text = $"{info.Name.ToUpperInvariant()} PIG";
+            typeTitle.color = info.Color;
+            if (net.Ability == null) abilityLine.text = $"{info.AbilityName} - coming soon";
+            else if (left > 0f) abilityLine.text = $"{info.AbilityName}  {left:0.0}s";
+            else abilityLine.text = $"{abilityKey}: {info.AbilityName}";
+
+            if (left <= 0f) return;
+            float ready = 1f - Mathf.Clamp01(left / Mathf.Max(0.01f, net.Ability.cooldown));
+            cooldownFill.rectTransform.sizeDelta = new Vector2(CooldownWidth * ready, CooldownHeight);
+            cooldownFill.color = info.Color;
         }
 
         void UpdateMarker(Rigidbody target, Camera cam)
@@ -186,6 +216,23 @@ namespace Porkour
             for (int i = 0; i < count; i++) arc.SetPosition(i, arcPoints[i]);
         }
 
+        static Text NewText(Transform parent, string name, int fontSize, TextAnchor alignment, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var text = go.AddComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = fontSize;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = alignment;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.rectTransform.sizeDelta = size;
+            go.AddComponent<Outline>().effectDistance = new Vector2(2f, -2f);
+            return text;
+        }
+
         static Image NewImage(Transform parent, string name, Color color, Vector2 size)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -202,6 +249,13 @@ namespace Porkour
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = new Vector2(0f, y);
+        }
+
+        static void PlaceBottomLeft(RectTransform rect, float x, float y)
+        {
+            rect.anchorMin = rect.anchorMax = Vector2.zero;
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = new Vector2(x, y);
         }
     }
 }

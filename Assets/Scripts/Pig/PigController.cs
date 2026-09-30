@@ -8,6 +8,7 @@ namespace Porkour
     /// Driven only through SetInput/PressJump (world-space move + aim direction), never reads the
     /// camera itself - the server applies each player's input (NetPlayer), AI/Bob can do the same.
     /// Tuning values live here as defaults - the builder recreates the prefab, so tweak in code.
+    /// Pig type (SetType) scales speed/jump/braking/mass and picks the ability (see PigTypes).
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class PigController : MonoBehaviour
@@ -61,6 +62,11 @@ namespace Porkour
         public float SpeedMultiplier { get; set; } = 1f;
         /// <summary>Where the controller is looking (camera forward for players). Zero = no aim.</summary>
         public Vector3 Aim { get; private set; }
+        /// <summary>World-space move input (length ≤ 1).</summary>
+        public Vector3 MoveInput => moveInput;
+        public PigType Type { get; private set; }
+        /// <summary>This type's special ability (null if not built yet).</summary>
+        public PigAbility Ability { get; private set; }
 
         Rigidbody rb;
         CapsuleCollider body;
@@ -73,6 +79,7 @@ namespace Porkour
         Vector3 spawnPosition;
         Quaternion spawnRotation;
         int struggleCount;
+        float speedFactor = 1f, jumpFactor = 1f, brakeFactor = 1f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
@@ -99,6 +106,26 @@ namespace Porkour
         }
 
         public void ClearInput() => SetInput(Vector3.zero, Vector3.zero, false, false);
+
+        /// <summary>Apply a pig type (on every PC): body stats + enable its ability (added on first use).</summary>
+        public void SetType(PigType type)
+        {
+            Type = type;
+            var info = PigTypes.Info(type);
+            speedFactor = info.Speed;
+            jumpFactor = info.Jump;
+            brakeFactor = info.Brake;
+            rb.mass = info.Mass;
+
+            Ability = null;
+            foreach (var ability in GetComponents<PigAbility>())
+            {
+                ability.CancelInput();
+                ability.enabled = ability.Type == type;
+                if (ability.enabled) Ability = ability;
+            }
+            if (Ability == null) Ability = PigTypes.AddAbility(gameObject, type);
+        }
 
         /// <summary>Jump press (buffered, so it may fire slightly before landing).</summary>
         public void PressJump()
@@ -155,12 +182,12 @@ namespace Porkour
         {
             Vector3 velocity = rb.linearVelocity;
             Vector3 horizontal = new(velocity.x, 0f, velocity.z);
-            Vector3 target = moveInput * ((sprintHeld ? sprintSpeed : walkSpeed) * SpeedMultiplier);
+            Vector3 target = moveInput * ((sprintHeld ? sprintSpeed : walkSpeed) * speedFactor * SpeedMultiplier);
             bool hasInput = moveInput.sqrMagnitude > 0.01f;
             float dt = Time.fixedDeltaTime;
             Vector3 newHorizontal;
             if (IsGrounded)
-                newHorizontal = Vector3.MoveTowards(horizontal, target, (hasInput ? groundAcceleration : groundDeceleration) * dt);
+                newHorizontal = Vector3.MoveTowards(horizontal, target, (hasInput ? groundAcceleration : groundDeceleration * brakeFactor) * dt);
             else if (!hasInput) // no input in the air: only light drag, so throws/knockbacks carry
                 newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, airDrag * dt);
             else if (horizontal.magnitude <= target.magnitude)
@@ -195,7 +222,7 @@ namespace Porkour
             if (!buffered || !canJump) return;
 
             Vector3 velocity = rb.linearVelocity;
-            velocity.y = Mathf.Sqrt(2f * -Physics.gravity.y * jumpHeight);
+            velocity.y = Mathf.Sqrt(2f * -Physics.gravity.y * jumpHeight * jumpFactor);
             rb.linearVelocity = velocity;
 
             lastJumpPressedTime = float.NegativeInfinity;
@@ -203,6 +230,18 @@ namespace Porkour
             groundLockUntil = Time.time + 0.15f;
             IsGrounded = false;
             jumpedThisAir = true;
+        }
+
+        /// <summary>Ability launch (e.g. Rocket Fart): sets upward speed, adds a horizontal push, no short-hop braking.</summary>
+        public void Launch(float upSpeed, Vector3 horizontalPush)
+        {
+            Vector3 velocity = rb.linearVelocity + new Vector3(horizontalPush.x, 0f, horizontalPush.z);
+            velocity.y = upSpeed;
+            rb.linearVelocity = velocity;
+            lastGroundedTime = float.NegativeInfinity; // no coyote jump stacked on top
+            groundLockUntil = Time.time + 0.15f;
+            IsGrounded = false;
+            jumpedThisAir = false;
         }
 
         void ApplyExtraGravity()

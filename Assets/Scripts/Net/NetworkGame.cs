@@ -7,7 +7,8 @@ namespace Porkour
 {
     /// <summary>
     /// Starts/joins a game and runs the server side of the session:
-    /// spawns the level's networked objects, a NetPlayer per connected PC, and gives each a free pig.
+    /// spawns the level's networked objects (pigs get random, different types), a NetPlayer per connected PC,
+    /// and gives each a free pig.
     /// In the editor it starts automatically: main editor = Host, Multiplayer Play Mode virtual players = Client
     /// (and if the port is already taken it falls back to Client). In builds it shows a Host / Join menu.
     /// </summary>
@@ -99,11 +100,13 @@ namespace Porkour
         {
             if (levelSpawned || !nm.IsServer) return;
             levelSpawned = true;
+            var types = PigTypes.Shuffled();
+            int pigCount = 0;
             foreach (var point in spawnPoints)
             {
                 if (point == null || point.prefab == null) continue;
                 var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
-                if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialColor = point.pigColor;
+                if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
                 go.GetComponent<NetworkObject>().Spawn();
             }
         }
