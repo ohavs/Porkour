@@ -48,6 +48,9 @@ namespace Porkour
 
         protected virtual bool CanUse() => true;
 
+        /// <summary>Server: jump pressed in the air. Return true if the ability used it (e.g. wall bounce).</summary>
+        public virtual bool TryAirJump() => false;
+
         /// <summary>Server: do the ability.</summary>
         protected abstract void Use();
 

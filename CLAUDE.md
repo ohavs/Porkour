@@ -39,13 +39,14 @@
 ## Structure
 | Path | What |
 |---|---|
-| `Assets/Scripts/Pig/PigController.cs` | Pig body (`Simulate` false on clients). Rigidbody movement: run, sprint, jump (coyote + buffer, heavier fall, short hop only for own jumps), faces aim direction (strafe), respawn below `killHeight`. Input only via `SetInput(worldMove, aim, jump, sprint)`/`PressJump` — never reads the camera. `SetType` = type stats (speed/jump/brake/mass) + enables/adds the ability component. `Launch` + `MovementLocked` for abilities. Static `PigController.All`. |
+| `Assets/Scripts/Pig/PigController.cs` | Pig body (`Simulate` false on clients). Rigidbody movement: run, sprint, jump (coyote + buffer, heavier fall, short hop only for own jumps), faces aim direction (strafe), respawn below `killHeight`. Input only via `SetInput(worldMove, aim, jump, sprint)`/`PressJump` — never reads the camera. `SetType` = type stats (speed/jump/brake/mass) + enables/adds the ability component. `Launch` + `MovementLocked` for abilities, `GetCapsule`, `TryJump` → `Ability.TryAirJump()` when airborne. **Climbing**: inside a `Climbable` zone + pushing toward it or holding jump → climb up, hop over the edge at the top (any pig). Static `PigController.All`. |
 | `Assets/Scripts/Pig/PigType.cs` | `PigType` enum + `PigTypes` table (name, ability name, colour, mass, speed/jump/brake multipliers — **tune types here**), `Shuffled()`, `AddAbility` (type → component). |
 | `Assets/Scripts/Pig/PigAbility.cs` | Abstract ability base (MonoBehaviour, **added at runtime** — no prefab/rebuild needed): `SetButton` (server), cooldown/`ReadyTime`, `Hint` (HUD), `Use()` (server), `TriggerEffect(kind, pos, dir)` → PigNet RPC → `PlayEffect` on every PC. |
 | `Assets/Scripts/Pig/GassyAbility.cs` | Rocket Fart: launch up 3.5 m (+ push toward move dir), works mid-air and breaks free when carried; blast pushes rigidbodies (speed = impulse/mass, capped); green smoke screen + trail. |
 | `Assets/Scripts/Pig/HeavyAbility.cs` | Belly Slam: grounded = dash along aim (locks movement, breaks `Breakable`s, knocks bodies, stops at walls); airborne = belly flop down + landing shockwave. Passive trampoline: pigs falling on Heavy's back bounce 3.2 m (`OnCollisionEnter`, server). Cooldown 2.5 s. |
+| `Assets/Scripts/Pig/JumpyAbility.cs` | Passive **wall bounce** (jump in air at a wall; not the same wall twice in a row → corners/chimneys) + **ledge grab** (airborne, pushing into a ledge ≤ 1.1 m above centre → boosted up onto it). Ability **Rope Ladder**: at an edge (looking at it) drop a rope any pig can climb (40 s; press again = pull up). Rope = local `RopeLadder` on every PC via FxRopeDrop (direction encodes outward × length). |
 | `Assets/Scripts/Fx/` | Local placeholder VFX, no colliders: `SmokeCloud` (fart smoke screens in static `Active` + `InSmoke` → for Bob; dust puffs), `Debris` (smash pieces, fake floor), `FxUtil` (primitive meshes, runtime URP materials). |
-| `Assets/Scripts/Level/` | Networked level parts (spawned from NetSpawnPoints): `Breakable` (server `Break()` → hidden on all PCs via NetworkVariable, debris, spawns `contents`), `PressurePlate` (on while load ≥ 40 kg incl. carried things; weight label), `Gate` (sinks into floor while its channel is on), `PuzzleSignals` + `IPuzzleChannel` (server-side channel wiring), `SceneBuildInfo` (builder version stamp on the scene's `Barn` root). |
+| `Assets/Scripts/Level/` | Networked level parts (spawned from NetSpawnPoints): `Breakable` (server `Break()` → hidden on all PCs via NetworkVariable, debris, spawns `contents`), `PressurePlate` (on while load ≥ 40 kg incl. carried things; weight label), `Gate` (sinks into floor while its channel is on), `PuzzleSignals` + `IPuzzleChannel` (server-side channel wiring), `SceneBuildInfo` (builder version stamp on the scene's `Barn` root), `Climbable` (math-only climb zone, static `All`/`Find`; for ropes now, fixed ladders later), `RopeLadder` (local visual + Climbable + lifetime). |
 | `Assets/Scripts/Pig/PigGrabber.cs` | One button: press = pick up nearest loose Rigidbody/pig in front (≤ `maxLiftMass`) onto back (velocity-follow, still collides); press again = throw toward aim, hold = charge (tap = gentle toss, full charge auto-throws). `FindGrabTarget`, `PredictThrowVelocity` for HUD. Load slows carrier. Carried pig mashes jump to escape. |
 | `Assets/Scripts/Pig/PigLook.cs` | Skin renderers + `skinColor` (applied on Start) / `SetSkinColor`. |
 | `Assets/Scripts/Player/NetPlayer.cs` | Player prefab (NetworkObject), one per PC. Owner: own InputActionAsset instance, camera, adds PlayerHud, sends input RPC. Server: applies input to its pig, `AssignPig`, Tab = next free pig. `pigId` NetworkVariable. |
@@ -78,13 +79,15 @@
 - Abilities & type stats are applied at runtime (components added on demand) → no rebuild needed when they change. New level props DO need a rebuild.
 - Puzzle wiring = numbered channels (`NetSpawnPoint.channel`), server-only `PuzzleSignals`. Pressure plate needs 40 kg: Heavy alone or any two pigs (built-in "fewer players" alternative).
 - Test barn SW corner = side room: rotten boards (north) + gate (east) opened by the plate outside; breakable crate with a key inside.
+- Jumpy: GDD "Wall Bounce" = passive on the jump button; the ability button = Rope Ladder (co-op: Jumpy gets up high, others climb). "Grab roof beams" not built yet (needs beams in a real level — stage 7).
+- Short-lived ability objects (rope) are created locally on every PC from an RPC, not as NetworkObjects (no rebuild, no prefab); late joiners won't see them — acceptable.
 
 ## Roadmap (co-op mode first)
 1. ✅ **One pig moves & jumps** in a test barn.
 2. ✅ **Third-person pig** — orbit camera, mouse/gamepad look.
 3. ✅ **Grab / carry / throw** — one-button grab/throw with charge bar, arc preview, Tab pig switching.
 4. ✅ **Online foundation** — Netcode for GameObjects (server-authoritative), host/join, Multiplayer Play Mode so the user can test alone. Done early so later features are built networked.
-5. **4 pig types + abilities** ← *in progress* — random types + stats + HUD + ability button done (5a). Abilities: ✅ Gassy Rocket Fart (5a) → ✅ Heavy Belly Slam + breakables/plate/gate (5b, awaiting test) → Jumpy Wall Bounce (5c) → Armed Slingshot Snout (5d).
+5. **4 pig types + abilities** ← *in progress* — random types + stats + HUD + ability button done (5a). Abilities: ✅ Gassy Rocket Fart (5a) → ✅ Heavy Belly Slam + breakables/plate/gate (5b) → ✅ Jumpy wall bounce / ledge grab / rope ladder (5c, awaiting test) → Armed Slingshot Snout (5d).
 6. **Farmer Bob** — Grill Call cycle, hiding (hay/bucket/freeze), grab & carry, 20 s rescue (hit/stun/bait animals). NavMesh AI (server).
 7. **Barn map + escape puzzle + full loop (MVP)** — real level, 10-min timer, multi-step escape, win/lose, menu, restart.
 8. **Art & polish** — import free asset packs (pig/farmer/animals/barn), animation, partial ragdoll, mud, sound, VFX, UI.
@@ -97,8 +100,9 @@
 ## Status / next step
 - 2026-09-28 (end of day 1): Stages 1–4 done. Online compiled & ran on user's PC (packages installed, rebuilt, "Online test barn" pushed; user: "great").
 - 2026-09-30: user confirmed the MPPM 2-player test worked. Stage 5a (types, stats, ability button, HUD, Gassy Rocket Fart) merged — user: "works great".
-- 2026-09-30: Stage 5b merged (Heavy Belly Slam dash/flop, trampoline, Breakable, PressurePlate, Gate, side room). User: Heavy "works great" but no side room → the manual rebuild was skipped. Added builder auto-rebuild (BuildVersion 2); waiting for the user to see the side room.
-- **Next:** fix what the user reports on 5b, then 5c Jumpy (wall bounce/wall jump, grab roof beams, drop ladders/ropes for others).
+- 2026-09-30: Stage 5b merged (Heavy Belly Slam dash/flop, trampoline, Breakable, PressurePlate, Gate, side room). Manual rebuild was skipped once → added builder auto-rebuild (BuildVersion 2); it worked, user pushed "Test barn with side room" — all "works great".
+- 2026-09-30: Stage 5c pushed (Jumpy wall bounce, ledge grab, rope ladder + generic climbing) — no rebuild needed; waiting for the user's test.
+- **Next:** fix what the user reports on 5c, then 5d Armed Slingshot Snout (suck up small items, shoot them: hit bells/switches, stun Bob later) → needs small ammo props + a shootable switch/bell (builder, bump BuildVersion).
 - Lesson: prefer runtime self-healing over "rebuild required" — the user easily misses rebuild steps (now automated via BuildVersion).
 
 ## Known issues / TODO
