@@ -1,4 +1,5 @@
 using System.Collections;
+using Unity.AI.Navigation;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -18,6 +19,8 @@ namespace Porkour
         [Tooltip("Spawned once per connected PC. All networked prefabs are registered in the NetworkManager's prefab list (set by the builder).")]
         public GameObject playerPrefab;
         public NetSpawnPoint[] spawnPoints;
+        [Tooltip("Baked on the server when a game starts (Farmer Bob walks on it). Set by the builder.")]
+        public NavMeshSurface navMesh;
         public ushort port = 7777;
         public bool autoStartInEditor = true;
 
@@ -100,6 +103,7 @@ namespace Porkour
         {
             if (levelSpawned || !nm.IsServer) return;
             levelSpawned = true;
+            if (navMesh != null) navMesh.BuildNavMesh(); // only static level geometry (children of the surface)
             var types = PigTypes.Shuffled();
             int pigCount = 0;
             foreach (var point in spawnPoints)
@@ -140,7 +144,8 @@ namespace Porkour
             if (running)
             {
                 string players = nm.IsServer ? $"  |  players {nm.ConnectedClientsIds.Count}/4" : "";
-                GUI.Label(new Rect(12, 8, 700, 24), $"{status}{players}  |  Tab / Y: switch pig");
+                string debug = nm.IsHost ? "  |  G: Grill Call now" : "";
+                GUI.Label(new Rect(12, 8, 900, 24), $"{status}{players}  |  Tab / Y: switch pig{debug}");
                 return;
             }
 

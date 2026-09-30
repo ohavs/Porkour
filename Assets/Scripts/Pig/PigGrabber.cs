@@ -12,7 +12,7 @@ namespace Porkour
     /// and a carried pig can wriggle free by mashing jump.
     /// </summary>
     [RequireComponent(typeof(PigController))]
-    public class PigGrabber : MonoBehaviour
+    public class PigGrabber : MonoBehaviour, IPigCarrier
     {
         [Header("Grab")]
         public float reach = 0.9f;
@@ -45,6 +45,8 @@ namespace Porkour
         /// <summary>False on network clients (see PigController.Simulate).</summary>
         public bool Simulate { get; set; } = true;
         public bool IsHolding => Held != null;
+        /// <summary>A carried pig escapes with its own struggleToEscape presses.</summary>
+        public int EscapePresses => 0;
         public bool IsCharging => charging;
         /// <summary>0..1 while charging a throw. Reaching 1 throws automatically.</summary>
         public float Charge => charging ? Mathf.Clamp01((Time.time - chargeStart) / fullChargeTime) : 0f;

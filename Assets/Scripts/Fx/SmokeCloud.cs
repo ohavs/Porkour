@@ -20,6 +20,7 @@ namespace Porkour
 
         float lifetime, age;
         bool listed;
+        Vector3 drift;
         Color color;
         Material material;
         Transform[] parts;
@@ -33,6 +34,14 @@ namespace Porkour
             var cloud = new GameObject(smokeScreen ? "SmokeScreen" : "Puff").AddComponent<SmokeCloud>();
             cloud.transform.position = position;
             cloud.Init(radius, lifetime, color, smokeScreen);
+            return cloud;
+        }
+
+        /// <summary>A small puff that flies with a velocity (e.g. sucked toward a snout).</summary>
+        public static SmokeCloud SpawnMoving(Vector3 position, Vector3 velocity, float radius, float lifetime, Color color)
+        {
+            var cloud = Spawn(position, radius, lifetime, color);
+            cloud.drift = velocity;
             return cloud;
         }
 
@@ -71,7 +80,7 @@ namespace Porkour
 
             float grow = 1f - Mathf.Pow(1f - Mathf.Clamp01(age / GrowTime), 3f);
             for (int i = 0; i < parts.Length; i++) parts[i].localScale = partScales[i] * Mathf.Lerp(0.2f, 1f, grow);
-            transform.position += Vector3.up * (RiseSpeed * Time.deltaTime);
+            transform.position += (Vector3.up * RiseSpeed + drift) * Time.deltaTime;
 
             if (material == null) return;
             var c = color;

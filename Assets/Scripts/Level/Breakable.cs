@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace Porkour
 {
@@ -61,6 +62,7 @@ namespace Porkour
 
             foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
             foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
+            foreach (var o in GetComponentsInChildren<NavMeshObstacle>()) o.enabled = false; // Bob may walk through now
             if (IsServer && TryGetComponent(out Rigidbody rb) && !rb.isKinematic)
             {
                 rb.linearVelocity = Vector3.zero;

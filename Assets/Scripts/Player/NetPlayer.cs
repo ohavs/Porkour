@@ -46,13 +46,15 @@ namespace Porkour
 
         public PigController Pig { get; private set; }
         public bool UsingGamepad { get; private set; }
+        /// <summary>Owner: seconds since this player last touched a control (HUD "frozen" hint).</summary>
+        public float IdleTime => Time.time - lastInputTime;
 
         // Owner side
         InputActionAsset actions;
         InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, abilityAction, switchAction;
         ThirdPersonCamera cam;
         PigInputFrame pending;
-        float nextSendTime;
+        float nextSendTime, lastInputTime;
 
         // Server side
         PigInputFrame latest;
@@ -142,6 +144,8 @@ namespace Porkour
             pending.SprintHeld = sprintAction.IsPressed();
             pending.GrabHeld = grabAction.IsPressed();
             pending.AbilityHeld = abilityAction.IsPressed();
+            if (move.sqrMagnitude > 0.01f || pending.JumpHeld || pending.SprintHeld || pending.GrabHeld || pending.AbilityHeld)
+                lastInputTime = Time.time;
 
             if (IsServer)
             {

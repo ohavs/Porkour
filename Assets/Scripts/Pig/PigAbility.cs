@@ -21,6 +21,9 @@ namespace Porkour
         public float ReadyTime { get; private set; }
         public float CooldownLeft => Mathf.Max(0f, ReadyTime - Time.time);
         public bool IsReady => CooldownLeft <= 0f;
+        /// <summary>Stored uses shown on the HUD (e.g. Armed's ammo). -1 = this ability has none.</summary>
+        public virtual int Charges => -1;
+        public virtual int MaxCharges => 0;
 
         /// <summary>Raised on the server for visuals (kind, position, direction); PigNet sends it to every PC. Unhooked = play locally.</summary>
         public event Action<byte, Vector3, Vector3> EffectTriggered;
@@ -36,12 +39,20 @@ namespace Porkour
             if (!pig.Simulate || !enabled) return;
             bool down = pressed && !buttonHeld;
             buttonHeld = pressed;
-            if (down && IsReady && CanUse())
+            if (!down) return;
+            if (IsReady && CanUse())
             {
                 ReadyTime = Time.time + cooldown;
                 Use();
             }
+            else PressedWhileUnavailable();
         }
+
+        /// <summary>Server: pressed while cooling down / not usable (e.g. Jumpy pulls its rope back up).</summary>
+        protected virtual void PressedWhileUnavailable() { }
+
+        /// <summary>Server: (re)start the cooldown with a custom length.</summary>
+        protected void StartCooldown(float seconds) => ReadyTime = Time.time + seconds;
 
         /// <summary>Forget button state (player switched pig, type changed...).</summary>
         public virtual void CancelInput() => buttonHeld = false;
