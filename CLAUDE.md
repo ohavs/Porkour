@@ -93,8 +93,8 @@
 2. ✅ **Third-person pig** — orbit camera, mouse/gamepad look.
 3. ✅ **Grab / carry / throw** — one-button grab/throw with charge bar, arc preview, Tab pig switching.
 4. ✅ **Online foundation** — Netcode for GameObjects (server-authoritative), host/join, Multiplayer Play Mode so the user can test alone. Done early so later features are built networked.
-5. **4 pig types + abilities** ← *in progress* — random types + stats + HUD + ability button done (5a). Abilities: ✅ Gassy Rocket Fart (5a) → ✅ Heavy Belly Slam + breakables/plate/gate (5b) → ✅ Jumpy wall bounce / ledge grab / rope ladder (5c) → ✅ Armed Slingshot Snout (5d, awaiting test).
-6. **Farmer Bob** ← *v1 pushed, awaiting test* — Grill Call cycle, hiding (hay/smoke/freeze), grab & carry, 20 s rescue (hit/stun/chicken bait), bell lure. NavMesh AI (server). TODO: hide under bucket, sheep bait, sound, animation, difficulty tuning.
+5. **4 pig types + abilities** ← *in progress* — random types + stats + HUD + ability button done (5a). Abilities: ✅ Gassy Rocket Fart (5a) → ✅ Heavy Belly Slam + breakables/plate/gate (5b) → ✅ Jumpy wall bounce / ledge grab / rope ladder (5c) → ✅ Armed Slingshot Snout (5d). **Stage 5 done.**
+6. **Farmer Bob** ← *v1 works (user tested)* — Grill Call cycle, hiding (hay/smoke/freeze), grab & carry, 20 s rescue (hit/stun/chicken bait), bell lure. NavMesh AI (server). TODO: hide under bucket, sheep bait, sound, animation, difficulty tuning.
 7. **Barn map + escape puzzle + full loop (MVP)** — real level, 10-min timer, multi-step escape, win/lose, menu, restart.
 8. **Art & polish** — import free asset packs (pig/farmer/animals/barn), animation, partial ragdoll, mud, sound, VFX, UI.
 9. **Steam** — Steamworks lobbies/invites, Steam transport, build & release.
@@ -108,9 +108,10 @@
 - 2026-09-30: user confirmed the MPPM 2-player test worked. Stage 5a (types, stats, ability button, HUD, Gassy Rocket Fart) merged — user: "works great".
 - 2026-09-30: Stage 5b merged (Heavy Belly Slam dash/flop, trampoline, Breakable, PressurePlate, Gate, side room). Manual rebuild was skipped once → added builder auto-rebuild (BuildVersion 2); it worked, user pushed "Test barn with side room" — all "works great".
 - 2026-09-30: Stage 5c merged — user: "works great"; asked rope 20 s + 90 s cooldown, and bigger updates ("more work per round").
-- 2026-09-30: Big update pushed: rope tweak, Armed (5d), Farmer Bob v1 (stage 6) + yard/door/haystacks/bell/target/chickens/ammo (BuildVersion 3 → auto-rebuild). Waiting for the user's test.
-- **Next:** fix what the user reports; then finish stage 6 (bucket hiding, tuning) or start stage 7 (real barn map + escape puzzle + round loop/timer/win-lose). User likes bigger batches.
+- 2026-09-30 (end of day 2): Big update merged (rope tweak, Armed 5d, Farmer Bob v1, yard/door/haystacks/bell/target/chickens/ammo; BuildVersion 3 auto-rebuild worked). User: "works well". One Console error (DestroyImmediate inside a physics callback, from FxUtil.PrimitiveMesh) → fixed (deferred Destroy + prewarm); fix pushed on the session branch.
+- **Next session:** first ask whether the DestroyImmediate error is gone and how Bob feels (difficulty, timings, speeds) — tune. Then, as one big batch (user likes bigger updates): finish stage 6 (hide under a bucket, sheep/other bait, polish) and start stage 7 — round loop (10-min timer, types shuffled per round, win = escape, lose = e.g. 3 grilled pigs or time up, restart), a first real barn map with a multi-step escape puzzle using all four abilities (see GDD "Escape"), incl. roof beams for Jumpy.
 - Lesson: prefer runtime self-healing over "rebuild required" — the user easily misses rebuild steps (now automated via BuildVersion).
+- Lesson: never `DestroyImmediate` at runtime — effects can be created inside physics callbacks (OnCollisionEnter → RPC → PlayEffect).
 
 ## Known issues / TODO
 - Host latency only for remote clients (no client prediction yet) — revisit if movement feels laggy online.
