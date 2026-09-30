@@ -6,12 +6,10 @@ namespace Porkour
     public class NetSpawnPoint : MonoBehaviour
     {
         public GameObject prefab;
-        [Tooltip("Pigs only: skin colour.")]
-        public Color pigColor = new(1f, 0.62f, 0.68f);
 
         void OnDrawGizmos()
         {
-            Gizmos.color = pigColor;
+            Gizmos.color = new Color(1f, 0.62f, 0.68f);
             Gizmos.DrawWireSphere(transform.position, 0.3f);
         }
     }

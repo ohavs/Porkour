@@ -4,32 +4,41 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Network side of a pig. The server simulates (PigController/PigGrabber); clients only receive
+    /// Network side of a pig. The server simulates (PigController/PigGrabber/ability); clients only receive
     /// position via NetworkTransform/NetworkRigidbody plus the few states the HUD needs, synced here.
-    /// HUD code reads IsHeld/Held/IsCharging/Charge from this class on every PC.
+    /// Type is synced and applied on every PC (stats, ability component, skin colour).
+    /// HUD code reads Type/IsHeld/Held/IsCharging/Charge/AbilityCooldownLeft from this class on every PC.
     /// </summary>
     [RequireComponent(typeof(PigController), typeof(PigGrabber))]
     public class PigNet : NetworkBehaviour
     {
-        [Tooltip("Skin colour, set by the server before spawning.")]
-        public Color initialColor = new(1f, 0.62f, 0.68f);
+        [Tooltip("Pig type, set by the server before spawning (random per game).")]
+        public PigType initialType;
 
-        readonly NetworkVariable<Color> skin = new(new Color(1f, 0.62f, 0.68f));
+        readonly NetworkVariable<PigType> type = new();
         readonly NetworkVariable<ulong> heldId = new(ulong.MaxValue);
         readonly NetworkVariable<bool> isHeld = new();
         readonly NetworkVariable<bool> charging = new();
         readonly NetworkVariable<double> chargeStart = new();
+        readonly NetworkVariable<double> abilityReadyAt = new();
 
         PigController controller;
         PigGrabber grabber;
         PigLook look;
+        PigAbility hookedAbility;
+        float syncedReadyTime = -1f;
 
         bool Authority => !IsSpawned || IsServer;
 
+        public PigType Type => controller.Type;
+        public PigAbility Ability => controller.Ability;
         public bool IsHeld => Authority ? controller.IsHeld : isHeld.Value;
         public bool IsCharging => Authority ? grabber.IsCharging : charging.Value;
         public float Charge => Authority ? grabber.Charge
             : charging.Value ? Mathf.Clamp01((float)(NetworkManager.ServerTime.Time - chargeStart.Value) / grabber.fullChargeTime) : 0f;
+        public float AbilityCooldownLeft => Ability == null ? 0f
+            : Authority ? Ability.CooldownLeft
+            : Mathf.Max(0f, (float)(abilityReadyAt.Value - NetworkManager.ServerTime.Time));
 
         public Rigidbody Held
         {
@@ -55,12 +64,22 @@ namespace Porkour
         public override void OnNetworkSpawn()
         {
             SetSimulate(IsServer);
-            if (IsServer) skin.Value = initialColor;
-            ApplyColor(skin.Value);
-            skin.OnValueChanged += OnSkinChanged;
+            if (IsServer) type.Value = initialType;
+            ApplyType(type.Value);
+            type.OnValueChanged += OnTypeChanged;
         }
 
-        public override void OnNetworkDespawn() => skin.OnValueChanged -= OnSkinChanged;
+        public override void OnNetworkDespawn()
+        {
+            type.OnValueChanged -= OnTypeChanged;
+            HookAbility(null);
+        }
+
+        /// <summary>Server: change this pig's type (e.g. a new round).</summary>
+        public void SetType(PigType newType)
+        {
+            if (IsServer) type.Value = newType;
+        }
 
         void SetSimulate(bool simulate)
         {
@@ -68,13 +87,36 @@ namespace Porkour
             grabber.Simulate = simulate;
         }
 
-        void OnSkinChanged(Color previous, Color current) => ApplyColor(current);
+        void OnTypeChanged(PigType previous, PigType current) => ApplyType(current);
 
-        void ApplyColor(Color color)
+        void ApplyType(PigType pigType)
         {
+            controller.SetType(pigType);
+            HookAbility(controller.Ability);
             if (look == null) return;
-            look.skinColor = color;
+            var color = PigTypes.Info(pigType).Color;
+            look.skinColor = color; // PigLook.Start re-applies this
             look.SetSkinColor(color);
+        }
+
+        // ---------- ability visuals: server → every PC ----------
+
+        void HookAbility(PigAbility ability)
+        {
+            if (hookedAbility != null) hookedAbility.EffectTriggered -= OnAbilityEffect;
+            hookedAbility = ability;
+            if (ability != null) ability.EffectTriggered += OnAbilityEffect;
+        }
+
+        void OnAbilityEffect(Vector3 position, Vector3 direction)
+        {
+            if (IsServer) AbilityEffectRpc(position, direction);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void AbilityEffectRpc(Vector3 position, Vector3 direction)
+        {
+            if (Ability != null) Ability.PlayEffect(position, direction);
         }
 
         void FixedUpdate()
@@ -93,6 +135,14 @@ namespace Porkour
                 if (grabber.IsCharging)
                     chargeStart.Value = NetworkManager.ServerTime.Time - grabber.Charge * grabber.fullChargeTime;
                 charging.Value = grabber.IsCharging;
+            }
+
+            // Cooldown: send only when the ability is used (the end time, not a ticking value).
+            var ability = Ability;
+            if (ability != null && ability.ReadyTime != syncedReadyTime)
+            {
+                syncedReadyTime = ability.ReadyTime;
+                abilityReadyAt.Value = NetworkManager.ServerTime.Time + ability.CooldownLeft;
             }
         }
     }

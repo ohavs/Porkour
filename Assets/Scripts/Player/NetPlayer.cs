@@ -9,9 +9,9 @@ namespace Porkour
     public struct PigInputFrame : INetworkSerializable
     {
         public Vector3 Move, Aim;
-        public bool JumpHeld, SprintHeld, GrabHeld;
+        public bool JumpHeld, SprintHeld, GrabHeld, AbilityHeld;
         // Press counters (wrap around) so quick taps are never lost between sends.
-        public byte JumpPresses, GrabPresses, SwitchPresses;
+        public byte JumpPresses, GrabPresses, AbilityPresses, SwitchPresses;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
@@ -20,8 +20,10 @@ namespace Porkour
             serializer.SerializeValue(ref JumpHeld);
             serializer.SerializeValue(ref SprintHeld);
             serializer.SerializeValue(ref GrabHeld);
+            serializer.SerializeValue(ref AbilityHeld);
             serializer.SerializeValue(ref JumpPresses);
             serializer.SerializeValue(ref GrabPresses);
+            serializer.SerializeValue(ref AbilityPresses);
             serializer.SerializeValue(ref SwitchPresses);
         }
     }
@@ -47,14 +49,14 @@ namespace Porkour
 
         // Owner side
         InputActionAsset actions;
-        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, switchAction;
+        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, abilityAction, switchAction;
         ThirdPersonCamera cam;
         PigInputFrame pending;
         float nextSendTime;
 
         // Server side
         PigInputFrame latest;
-        byte lastJump, lastGrab, lastSwitch;
+        byte lastJump, lastGrab, lastAbility, lastSwitch;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
@@ -71,6 +73,7 @@ namespace Porkour
                 jumpAction = actions["Jump"];
                 sprintAction = actions["Sprint"];
                 grabAction = actions["Grab"];
+                abilityAction = actions["Ability"];
                 switchAction = actions["SwitchPig"];
                 actions.Enable();
                 if (Camera.main != null) cam = Camera.main.GetComponent<ThirdPersonCamera>();
@@ -124,6 +127,7 @@ namespace Porkour
 
             if (jumpAction.WasPressedThisFrame()) pending.JumpPresses++;
             if (grabAction.WasPressedThisFrame()) pending.GrabPresses++;
+            if (abilityAction.WasPressedThisFrame()) pending.AbilityPresses++;
             if (switchAction.WasPressedThisFrame()) pending.SwitchPresses++;
 
             // Camera-relative stick → world direction; aim = where the camera looks.
@@ -137,6 +141,7 @@ namespace Porkour
             pending.JumpHeld = jumpAction.IsPressed();
             pending.SprintHeld = sprintAction.IsPressed();
             pending.GrabHeld = grabAction.IsPressed();
+            pending.AbilityHeld = abilityAction.IsPressed();
 
             if (IsServer)
             {
@@ -162,9 +167,11 @@ namespace Porkour
             latest = frame;
             int jumps = (byte)(frame.JumpPresses - lastJump);
             int grabs = (byte)(frame.GrabPresses - lastGrab);
+            int abilities = (byte)(frame.AbilityPresses - lastAbility);
             int switches = (byte)(frame.SwitchPresses - lastSwitch);
             lastJump = frame.JumpPresses;
             lastGrab = frame.GrabPresses;
+            lastAbility = frame.AbilityPresses;
             lastSwitch = frame.SwitchPresses;
 
             if (switches > 0) SwitchToNextFreePig();
@@ -176,6 +183,11 @@ namespace Porkour
                 Pig.Grabber.SetGrabButton(false);
                 Pig.Grabber.SetGrabButton(true);
             }
+            if (abilities > 0 && Pig.Ability != null)
+            {
+                Pig.Ability.SetButton(false);
+                Pig.Ability.SetButton(true);
+            }
         }
 
         void ApplyToPig()
@@ -183,6 +195,7 @@ namespace Porkour
             if (Pig == null) return;
             Pig.SetInput(latest.Move, latest.Aim, latest.JumpHeld, latest.SprintHeld);
             if (Pig.Grabber != null) Pig.Grabber.SetGrabButton(latest.GrabHeld);
+            if (Pig.Ability != null) Pig.Ability.SetButton(latest.AbilityHeld);
         }
 
         /// <summary>Server: give this player control of a pig (null = none).</summary>
@@ -199,6 +212,7 @@ namespace Porkour
         {
             Pig.ClearInput();
             if (Pig.Grabber != null) Pig.Grabber.CancelInput();
+            if (Pig.Ability != null) Pig.Ability.CancelInput();
             Pig.Owner = null;
             Pig = null;
         }

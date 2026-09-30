@@ -17,7 +17,7 @@ namespace Porkour
         [Header("Grab")]
         public float reach = 0.9f;
         public float grabRadius = 0.8f;
-        [Tooltip("Heaviest thing this pig can lift (a pig is 30).")]
+        [Tooltip("Heaviest thing this pig can lift (pigs weigh 22-30, Heavy 45 - see PigTypes).")]
         public float maxLiftMass = 35f;
         [Tooltip("Speed multiplier when carrying something at max lift mass.")]
         public float fullLoadSpeed = 0.6f;
