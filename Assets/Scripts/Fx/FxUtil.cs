@@ -16,9 +16,22 @@ namespace Porkour
             if (Meshes.TryGetValue(type, out var mesh) && mesh != null) return mesh;
             var temp = GameObject.CreatePrimitive(type);
             mesh = temp.GetComponent<MeshFilter>().sharedMesh;
-            Object.DestroyImmediate(temp);
+            // Effects can be created inside physics callbacks, where DestroyImmediate is not allowed:
+            // switch the temp object off now and let Destroy remove it at the end of the frame.
+            temp.SetActive(false);
+            Object.Destroy(temp);
             Meshes[type] = mesh;
             return mesh;
+        }
+
+        /// <summary>Grab the meshes once at start, so effects never need to create them mid-game.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void Prewarm()
+        {
+            Meshes.Clear();
+            PrimitiveMesh(PrimitiveType.Sphere);
+            PrimitiveMesh(PrimitiveType.Cube);
+            PrimitiveMesh(PrimitiveType.Cylinder);
         }
 
         /// <summary>Renderer-only object (no collider) with a primitive mesh.</summary>
