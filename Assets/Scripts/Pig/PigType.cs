@@ -57,6 +57,7 @@ namespace Porkour
         public static PigAbility AddAbility(GameObject pig, PigType type) => type switch
         {
             PigType.Gassy => pig.AddComponent<GassyAbility>(),
+            PigType.Heavy => pig.AddComponent<HeavyAbility>(),
             _ => null,
         };
     }

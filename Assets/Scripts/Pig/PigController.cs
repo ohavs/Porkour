@@ -60,6 +60,8 @@ namespace Porkour
         public bool IsHeld => HeldBy != null;
         /// <summary>Set by the grabber: carrying heavy things slows you down.</summary>
         public float SpeedMultiplier { get; set; } = 1f;
+        /// <summary>Set by abilities (dash, belly flop) that drive the body themselves: no run/turn/jump.</summary>
+        public bool MovementLocked { get; set; }
         /// <summary>Where the controller is looking (camera forward for players). Zero = no aim.</summary>
         public Vector3 Aim { get; private set; }
         /// <summary>World-space move input (length ≤ 1).</summary>
@@ -154,9 +156,12 @@ namespace Porkour
             if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 
             CheckGround();
-            Move();
-            Turn();
-            TryJump();
+            if (!MovementLocked)
+            {
+                Move();
+                Turn();
+                TryJump();
+            }
             ApplyExtraGravity();
         }
 

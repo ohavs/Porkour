@@ -108,15 +108,15 @@ namespace Porkour
             if (ability != null) ability.EffectTriggered += OnAbilityEffect;
         }
 
-        void OnAbilityEffect(Vector3 position, Vector3 direction)
+        void OnAbilityEffect(byte kind, Vector3 position, Vector3 direction)
         {
-            if (IsServer) AbilityEffectRpc(position, direction);
+            if (IsServer) AbilityEffectRpc(kind, position, direction);
         }
 
         [Rpc(SendTo.Everyone)]
-        void AbilityEffectRpc(Vector3 position, Vector3 direction)
+        void AbilityEffectRpc(byte kind, Vector3 position, Vector3 direction)
         {
-            if (Ability != null) Ability.PlayEffect(position, direction);
+            if (Ability != null) Ability.PlayEffect(kind, position, direction);
         }
 
         void FixedUpdate()

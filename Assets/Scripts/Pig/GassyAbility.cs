@@ -6,8 +6,8 @@ namespace Porkour
 {
     /// <summary>
     /// Gassy's Rocket Fart: launches the pig up (plus a push where it runs) - also mid-air, and it breaks
-    /// free if someone carries it - blasts nearby objects and pigs away and leaves a green smoke cloud
-    /// (FartCloud; later blinds/slows Bob).
+    /// free if someone carries it - blasts nearby objects and pigs away and leaves a green smoke screen
+    /// (SmokeCloud; later blinds/slows Bob).
     /// </summary>
     public class GassyAbility : PigAbility
     {
@@ -40,7 +40,7 @@ namespace Porkour
             Vector3 rear = RearPoint;
             pig.Launch(Mathf.Sqrt(2f * -Physics.gravity.y * launchHeight), pig.MoveInput * forwardBoost);
             Blast(rear);
-            TriggerEffect(rear, -transform.forward);
+            TriggerEffect(0, rear, -transform.forward);
         }
 
         void Blast(Vector3 center)
@@ -62,9 +62,9 @@ namespace Porkour
             }
         }
 
-        public override void PlayEffect(Vector3 position, Vector3 direction)
+        public override void PlayEffect(byte kind, Vector3 position, Vector3 direction)
         {
-            FartCloud.Spawn(position, cloudRadius, cloudLifetime, smokeScreen: true);
+            SmokeCloud.Spawn(position, cloudRadius, cloudLifetime, SmokeCloud.FartColor, smokeScreen: true);
             StartCoroutine(Trail());
         }
 
@@ -73,7 +73,7 @@ namespace Porkour
             var wait = new WaitForSeconds(0.05f);
             for (float t = 0f; t < trailTime; t += 0.05f)
             {
-                FartCloud.Spawn(RearPoint, 0.35f, 1.2f, smokeScreen: false);
+                SmokeCloud.Spawn(RearPoint, 0.35f, 1.2f, SmokeCloud.FartColor);
                 yield return wait;
             }
         }

@@ -15,13 +15,15 @@ namespace Porkour
         public float cooldown = 4f;
 
         public abstract PigType Type { get; }
+        /// <summary>Extra HUD hint shown next to the ability name (null = none).</summary>
+        public virtual string Hint => null;
         /// <summary>Time.time when the ability is usable again (server).</summary>
         public float ReadyTime { get; private set; }
         public float CooldownLeft => Mathf.Max(0f, ReadyTime - Time.time);
         public bool IsReady => CooldownLeft <= 0f;
 
-        /// <summary>Raised on the server for visuals; PigNet sends it to every PC. Unhooked = play locally.</summary>
-        public event Action<Vector3, Vector3> EffectTriggered;
+        /// <summary>Raised on the server for visuals (kind, position, direction); PigNet sends it to every PC. Unhooked = play locally.</summary>
+        public event Action<byte, Vector3, Vector3> EffectTriggered;
 
         protected PigController pig;
         bool buttonHeld;
@@ -49,13 +51,13 @@ namespace Porkour
         /// <summary>Server: do the ability.</summary>
         protected abstract void Use();
 
-        /// <summary>Every PC: show the ability's visuals.</summary>
-        public virtual void PlayEffect(Vector3 position, Vector3 direction) { }
+        /// <summary>Every PC: show the ability's visuals. Kind = which effect (ability-specific).</summary>
+        public virtual void PlayEffect(byte kind, Vector3 position, Vector3 direction) { }
 
-        protected void TriggerEffect(Vector3 position, Vector3 direction)
+        protected void TriggerEffect(byte kind, Vector3 position, Vector3 direction)
         {
-            if (EffectTriggered != null) EffectTriggered(position, direction);
-            else PlayEffect(position, direction);
+            if (EffectTriggered != null) EffectTriggered(kind, position, direction);
+            else PlayEffect(kind, position, direction);
         }
     }
 }
