@@ -107,6 +107,8 @@ namespace Porkour
                 if (point == null || point.prefab == null) continue;
                 var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
                 if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
+                if (go.TryGetComponent(out Breakable breakable)) breakable.contents = point.contents;
+                foreach (var part in go.GetComponents<IPuzzleChannel>()) part.Channel = point.channel;
                 go.GetComponent<NetworkObject>().Spawn();
             }
         }

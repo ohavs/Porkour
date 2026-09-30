@@ -148,7 +148,9 @@ namespace Porkour
             typeTitle.color = info.Color;
             if (net.Ability == null) abilityLine.text = $"{info.AbilityName} - coming soon";
             else if (left > 0f) abilityLine.text = $"{info.AbilityName}  {left:0.0}s";
-            else abilityLine.text = $"{abilityKey}: {info.AbilityName}";
+            else abilityLine.text = string.IsNullOrEmpty(net.Ability.Hint)
+                ? $"{abilityKey}: {info.AbilityName}"
+                : $"{abilityKey}: {info.AbilityName}  ({net.Ability.Hint})";
 
             if (left <= 0f) return;
             float ready = 1f - Mathf.Clamp01(left / Mathf.Max(0.01f, net.Ability.cooldown));

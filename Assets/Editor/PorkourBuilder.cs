@@ -133,6 +133,10 @@ namespace Porkour.EditorTools
             var crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f);
             var barrel = BuildPropPrefab("Barrel", PrimitiveType.Cylinder, new Vector3(0.8f, 0.6f, 0.8f), wood, 15f);
             var key = BuildPropPrefab("Key", PrimitiveType.Cube, new Vector3(0.5f, 0.2f, 0.25f), Mat("Gold", new Color(1f, 0.8f, 0.1f)), 1f);
+            var weakCrate = BuildBreakableCratePrefab();
+            var boards = BuildRottenBoardsPrefab();
+            var plate = BuildPressurePlatePrefab();
+            var gate = BuildGatePrefab();
 
             var spawnRoot = new GameObject("SpawnPoints").transform;
             var points = new List<NetSpawnPoint>();
@@ -146,6 +150,14 @@ namespace Porkour.EditorTools
             // Key on top of the tall pillar: stack crates, or carry a pig, jump and throw it up.
             points.Add(SpawnPoint(spawnRoot, "Key", key, new Vector3(5f, 3.2f, -6f)));
 
+            // Heavy's toys: weak crates to smash, and the side room (see BuildRoom) with a key crate inside.
+            for (int i = 0; i < 3; i++)
+                points.Add(SpawnPoint(spawnRoot, "BreakableCrate", weakCrate, new Vector3(-1f + i * 1.5f, 0.45f, -2.5f)));
+            points.Add(SpawnPoint(spawnRoot, "RottenBoards", boards, new Vector3(-12f, 1.5f, -9f)));
+            points.Add(SpawnPoint(spawnRoot, "Gate", gate, new Vector3(-9f, 1.5f, -12f), channel: 1));
+            points.Add(SpawnPoint(spawnRoot, "PressurePlate", plate, new Vector3(-6f, 0f, -12.5f), channel: 1));
+            points.Add(SpawnPoint(spawnRoot, "KeyCrate", weakCrate, new Vector3(-12.5f, 0.45f, -12.5f), contents: key));
+
             var netGo = new GameObject("NetworkManager");
             var nm = netGo.AddComponent<NetworkManager>();
             var transport = netGo.AddComponent<UnityTransport>();
@@ -154,7 +166,7 @@ namespace Porkour.EditorTools
             nm.NetworkConfig.EnableSceneManagement = false; // everyone loads the same scene; all networked objects are spawned at runtime
             nm.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList>
             {
-                BuildNetworkPrefabsList(pigPrefab, playerPrefab, crate, barrel, key),
+                BuildNetworkPrefabsList(pigPrefab, playerPrefab, crate, barrel, key, weakCrate, boards, plate, gate),
             };
             var game = netGo.AddComponent<NetworkGame>();
             game.playerPrefab = playerPrefab;
@@ -208,6 +220,15 @@ namespace Porkour.EditorTools
             Block("Gap2", r, new Vector3(0f, 1.75f, 8f), new Vector3(2f, 0.5f, 2f), wood);
             Block("Gap3", r, new Vector3(-4f, 2.15f, 5.5f), new Vector3(2f, 0.5f, 2f), wood);
 
+            // Side room (south-west corner). Two ways in: rotten boards (Heavy smashes them) and a gate
+            // opened by the pressure plate outside (Heavy alone, or two pigs). Boards/gate/plate are network-spawned.
+            Block("RoomWallN1", r, new Vector3(-14f, wallH / 2f, -9f), new Vector3(2f, wallH, 0.5f), wall);
+            Block("RoomWallN2", r, new Vector3(-9.875f, wallH / 2f, -9f), new Vector3(2.25f, wallH, 0.5f), wall);
+            Block("RoomLintelN", r, new Vector3(-12f, 3.5f, -9f), new Vector3(2f, 1f, 0.5f), wall);
+            Block("RoomWallE1", r, new Vector3(-9f, wallH / 2f, -14f), new Vector3(0.5f, wallH, 2f), wall);
+            Block("RoomWallE2", r, new Vector3(-9f, wallH / 2f, -10f), new Vector3(0.5f, wallH, 2f), wall);
+            Block("RoomLintelE", r, new Vector3(-9f, 3.5f, -12f), new Vector3(0.5f, 1f, 2f), wall);
+
             // Hay bales (round). Pushable crates, barrels and the key are network-spawned (see BuildTestBarn).
             Block("HayBale1", r, new Vector3(-11f, 0.8f, 10f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
             Block("HayBale2", r, new Vector3(-11f, 0.8f, 6f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 30f, 90f), PrimitiveType.Cylinder);
@@ -253,13 +274,88 @@ namespace Porkour.EditorTools
             go.AddComponent<NetworkRigidbody>();
         }
 
-        static NetSpawnPoint SpawnPoint(Transform parent, string name, GameObject prefab, Vector3 position)
+        static NetSpawnPoint SpawnPoint(Transform parent, string name, GameObject prefab, Vector3 position,
+            int channel = 0, GameObject contents = null)
         {
             var point = new GameObject(name).AddComponent<NetSpawnPoint>();
             point.transform.SetParent(parent, false);
             point.transform.position = position;
             point.prefab = prefab;
+            point.channel = channel;
+            point.contents = contents;
             return point;
+        }
+
+        /// <summary>Lighter crate with dark X planks: Heavy's Belly Slam smashes it.</summary>
+        static GameObject BuildBreakableCratePrefab()
+        {
+            EnsureFolder(PropDir);
+            var woodColor = new Color(0.78f, 0.52f, 0.26f);
+            var wood = Mat("WeakCrate", woodColor);
+            var cracks = Mat("WeakCrateCracks", new Color(0.3f, 0.2f, 0.12f));
+            var go = Part(PrimitiveType.Cube, "BreakableCrate", null, Vector3.zero, Vector3.one * 0.9f, wood, default, keepCollider: true);
+            go.AddComponent<Rigidbody>().mass = 6f;
+            AddNetworkSync(go);
+            go.AddComponent<Breakable>().debrisColor = woodColor;
+            foreach (float yaw in new[] { 0f, 90f, 180f, 270f })
+            foreach (float roll in new[] { 45f, -45f })
+            {
+                var rotation = Quaternion.Euler(0f, yaw, 0f);
+                Part(PrimitiveType.Cube, "Crack", go.transform, rotation * new Vector3(0f, 0f, 0.51f),
+                    new Vector3(1.2f, 0.09f, 0.02f), cracks, (rotation * Quaternion.Euler(0f, 0f, roll)).eulerAngles);
+            }
+            return SavePrefab(go, $"{PropDir}/BreakableCrate.prefab");
+        }
+
+        /// <summary>Rotten planks nailed over a doorway (static, breakable).</summary>
+        static GameObject BuildRottenBoardsPrefab()
+        {
+            EnsureFolder(PropDir);
+            var rottenColor = new Color(0.45f, 0.4f, 0.26f);
+            var rotten = Mat("RottenWood", rottenColor);
+            var root = new GameObject("RottenBoards");
+            root.AddComponent<BoxCollider>().size = new Vector3(2f, 3f, 0.3f);
+            root.AddComponent<NetworkObject>();
+            var breakable = root.AddComponent<Breakable>();
+            breakable.debrisColor = rottenColor;
+            breakable.debrisPieces = 14;
+            for (int i = 0; i < 4; i++)
+                Part(PrimitiveType.Cube, "Plank", root.transform, new Vector3(-0.75f + i * 0.5f, 0f, 0f),
+                    new Vector3(0.42f, 2.9f, 0.12f), rotten, new Vector3(0f, 0f, i % 2 == 0 ? 2f : -3f));
+            Part(PrimitiveType.Cube, "Cross", root.transform, new Vector3(0f, 0.6f, 0.1f), new Vector3(2f, 0.3f, 0.08f), rotten, new Vector3(0f, 0f, 8f));
+            Part(PrimitiveType.Cube, "Cross", root.transform, new Vector3(0f, -0.7f, 0.1f), new Vector3(2f, 0.3f, 0.08f), rotten, new Vector3(0f, 0f, -6f));
+            return SavePrefab(root, $"{PropDir}/RottenBoards.prefab");
+        }
+
+        /// <summary>Heavy floor switch (see PressurePlate): 2x2 plate, top turns green when pressed.</summary>
+        static GameObject BuildPressurePlatePrefab()
+        {
+            EnsureFolder(PropDir);
+            var root = new GameObject("PressurePlate");
+            var box = root.AddComponent<BoxCollider>();
+            box.size = new Vector3(2f, 0.1f, 2f);
+            box.center = new Vector3(0f, 0.05f, 0f);
+            root.AddComponent<NetworkObject>();
+            var plate = root.AddComponent<PressurePlate>();
+            Part(PrimitiveType.Cube, "Frame", root.transform, new Vector3(0f, 0.04f, 0f), new Vector3(2.2f, 0.08f, 2.2f), Mat("PlateFrame", new Color(0.3f, 0.3f, 0.32f)));
+            var top = Part(PrimitiveType.Cube, "Top", root.transform, new Vector3(0f, 0.08f, 0f), new Vector3(1.8f, 0.06f, 1.8f), Mat("PlateTop", Color.white));
+            plate.top = top.GetComponent<Renderer>();
+            return SavePrefab(root, $"{PropDir}/PressurePlate.prefab");
+        }
+
+        /// <summary>Metal gate that sinks into the floor while its channel is on (see Gate).</summary>
+        static GameObject BuildGatePrefab()
+        {
+            EnsureFolder(PropDir);
+            var go = Part(PrimitiveType.Cube, "Gate", null, Vector3.zero, new Vector3(0.4f, 3f, 2f), Mat("Gate", new Color(0.35f, 0.37f, 0.42f)), default, keepCollider: true);
+            var rb = go.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.mass = 1000f; // never grabbable
+            go.AddComponent<NetworkObject>();
+            var nt = go.AddComponent<NetworkTransform>();
+            nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = false;
+            go.AddComponent<Gate>();
+            return SavePrefab(go, $"{PropDir}/Gate.prefab");
         }
 
         static GameObject Block(string name, Transform parent, Vector3 pos, Vector3 scale, Material mat,
