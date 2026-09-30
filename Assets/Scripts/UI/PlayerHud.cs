@@ -7,7 +7,8 @@ namespace Porkour
     /// <summary>
     /// Local player's on-screen hints (built from code, placeholder look):
     /// marker over the thing you can grab, button prompt, throw charge bar, throw-arc preview,
-    /// and bottom-left: your pig type + its ability (key / cooldown).
+    /// bottom-left: your pig type + its ability (key / cooldown / ammo), Armed's crosshair,
+    /// and top: Farmer Bob's Grill Call banner + announcements ("... got grilled!").
     /// </summary>
     [RequireComponent(typeof(NetPlayer))]
     public class PlayerHud : MonoBehaviour
@@ -24,8 +25,9 @@ namespace Porkour
         const float ArcStepTime = 0.03f;
 
         NetPlayer player;
-        Image marker, barBack, barFill, cooldownBack, cooldownFill;
-        Text prompt, typeTitle, abilityLine;
+        Image marker, barBack, barFill, cooldownBack, cooldownFill, crosshair;
+        Text prompt, typeTitle, abilityLine, banner, message;
+        float messageUntil;
         LineRenderer arc;
         readonly Vector3[] arcPoints = new Vector3[ArcSteps + 1];
 
@@ -34,6 +36,16 @@ namespace Porkour
         {
             player = GetComponent<NetPlayer>();
             BuildUi();
+            FarmerBob.Announced += OnAnnounced;
+        }
+
+        void OnDestroy() => FarmerBob.Announced -= OnAnnounced;
+
+        void OnAnnounced(string text)
+        {
+            if (message == null) return;
+            message.text = text;
+            messageUntil = Time.time + 4f;
         }
 
         void BuildUi()
@@ -71,6 +83,14 @@ namespace Porkour
             var cdRect = cooldownFill.rectTransform;
             cdRect.anchorMin = cdRect.anchorMax = cdRect.pivot = new Vector2(0f, 0.5f);
             cdRect.anchoredPosition = new Vector2(2f, 0f);
+
+            // Grill Call banner + announcements (top), Armed's crosshair (centre).
+            banner = NewText(root, "Banner", 42, TextAnchor.MiddleCenter, new Vector2(1400f, 60f));
+            PlaceTop(banner.rectTransform, -70f);
+            message = NewText(root, "Message", 30, TextAnchor.MiddleCenter, new Vector2(1400f, 44f));
+            PlaceTop(message.rectTransform, -125f);
+            message.color = new Color(1f, 0.95f, 0.6f);
+            crosshair = NewImage(root, "Crosshair", new Color(1f, 1f, 1f, 0.9f), new Vector2(8f, 8f));
 
             if (arcMaterial == null)
             {
@@ -113,9 +133,14 @@ namespace Porkour
             {
                 held = net.Held;
                 if (net.IsHeld)
-                    text = net.Type == PigType.Gassy && net.Ability != null && net.AbilityCooldownLeft <= 0f
-                        ? $"Mash {jumpKey} to break free!  or  {abilityKey}: fart out!"
+                {
+                    var bob = FarmerBob.Instance;
+                    text = bob != null && bob.CarriedPigId == net.NetworkObjectId
+                        ? "Bob caught you! Wait for your friends to save you..."
                         : $"Mash {jumpKey} to break free!";
+                    if (net.Type == PigType.Gassy && net.Ability != null && net.AbilityCooldownLeft <= 0f)
+                        text += $"  or  {abilityKey}: fart out!";
+                }
                 else if (held != null)
                 {
                     if (net.IsCharging) charge = net.Charge;
@@ -132,6 +157,7 @@ namespace Porkour
                     if (climbable != null && pig.transform.position.y - 0.45f < climbable.Top - 0.3f)
                         text = $"Hold {jumpKey} (or walk into it): climb";
                 }
+                if (text == "" && !net.IsHeld) text = HiddenHint(pig);
             }
 
             prompt.text = text;
@@ -139,6 +165,77 @@ namespace Porkour
             UpdateChargeBar(charge);
             UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
             UpdateTypePanel(net, abilityKey);
+            UpdateBobBanner(net);
+            crosshair.enabled = net != null && net.Type == PigType.Armed && !net.IsHeld;
+            message.enabled = Time.time < messageUntil;
+        }
+
+        /// <summary>While Bob is in the barn: tell the player when he can't see them.</summary>
+        string HiddenHint(PigController pig)
+        {
+            var bob = FarmerBob.Instance;
+            if (bob == null || bob.State == BobState.Away || bob.State == BobState.Leaving) return "";
+            Vector3 p = pig.transform.position;
+            if (HideSpot.IsHidden(p)) return "Hidden in the hay";
+            if (SmokeCloud.InSmoke(p)) return "Hidden in the smoke";
+            if (player.IdleTime >= bob.freezeTime) return "Frozen - Bob won't notice you unless he's very close";
+            return "";
+        }
+
+        void UpdateBobBanner(PigNet net)
+        {
+            var bob = FarmerBob.Instance;
+            string text = "";
+            var color = new Color(1f, 0.35f, 0.2f);
+            int size = 42;
+            if (bob != null && bob.IsSpawned)
+            {
+                ulong me = net != null ? net.NetworkObjectId : ulong.MaxValue;
+                int left = Mathf.CeilToInt(bob.StateTimeLeft);
+                switch (bob.State)
+                {
+                    case BobState.Away:
+                        text = $"Next Grill Call in {FormatTime(bob.NextCallIn)}";
+                        color = new Color(1f, 1f, 1f, 0.85f);
+                        size = 26;
+                        break;
+                    case BobState.Coming:
+                        text = left > 0 ? $"GRILL CALL! HIDE!  {left}" : "GRILL CALL! Bob is here!";
+                        break;
+                    case BobState.Searching:
+                        text = $"Bob is searching the barn...  {left}";
+                        color = new Color(1f, 0.65f, 0.2f);
+                        break;
+                    case BobState.Investigating:
+                        text = "Bob is checking a noise...";
+                        color = new Color(1f, 0.85f, 0.2f);
+                        break;
+                    case BobState.Chasing:
+                        text = bob.TargetPigId == me ? "BOB SEES YOU! RUN!" : "Bob is chasing a pig!";
+                        break;
+                    case BobState.Carrying:
+                        text = bob.CarriedPigId == me ? $"Bob caught you!  {left}" : $"RESCUE! Hit Bob or throw a chicken at him!  {left}";
+                        break;
+                    case BobState.Stunned:
+                        text = "Bob is stunned!";
+                        color = new Color(1f, 0.9f, 0.2f);
+                        break;
+                    case BobState.Leaving:
+                        text = "Bob is going back to his grill";
+                        color = new Color(1f, 1f, 1f, 0.85f);
+                        size = 30;
+                        break;
+                }
+            }
+            banner.text = text;
+            banner.color = color;
+            banner.fontSize = size;
+        }
+
+        static string FormatTime(float seconds)
+        {
+            int s = Mathf.CeilToInt(seconds);
+            return s >= 60 ? $"{s / 60}:{s % 60:00}" : $"{s}s";
         }
 
         void UpdateTypePanel(PigNet net, string abilityKey)
@@ -152,11 +249,12 @@ namespace Porkour
             var info = PigTypes.Info(net.Type);
             typeTitle.text = $"{info.Name.ToUpperInvariant()} PIG";
             typeTitle.color = info.Color;
+            string charges = net.AbilityCharges >= 0 ? $"   Ammo {net.AbilityCharges}/{net.Ability.MaxCharges}" : "";
             if (net.Ability == null) abilityLine.text = $"{info.AbilityName} - coming soon";
-            else if (left > 0f) abilityLine.text = $"{info.AbilityName}  {left:0.0}s";
-            else abilityLine.text = string.IsNullOrEmpty(net.Ability.Hint)
+            else if (left > 0f && net.Ability.cooldown >= 1.5f) abilityLine.text = $"{info.AbilityName}  {FormatTime(left)}{charges}";
+            else abilityLine.text = (string.IsNullOrEmpty(net.Ability.Hint)
                 ? $"{abilityKey}: {info.AbilityName}"
-                : $"{abilityKey}: {info.AbilityName}  ({net.Ability.Hint})";
+                : $"{abilityKey}: {info.AbilityName}  ({net.Ability.Hint})") + charges;
 
             if (left <= 0f) return;
             float ready = 1f - Mathf.Clamp01(left / Mathf.Max(0.01f, net.Ability.cooldown));
@@ -255,6 +353,13 @@ namespace Porkour
         static void PlaceBottom(RectTransform rect, float y)
         {
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(0f, y);
+        }
+
+        static void PlaceTop(RectTransform rect, float y)
+        {
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = new Vector2(0f, y);
         }

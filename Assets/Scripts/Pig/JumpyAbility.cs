@@ -7,8 +7,8 @@ namespace Porkour
     /// Passive: Wall Bounce - jump in the air next to a wall to kick off it (not twice in a row off the same
     /// wall, so climb between two walls / in corners); ledge grab - pushing into a ledge within reach while
     /// airborne pulls Jumpy up onto it.
-    /// Ability: Rope Ladder - at a ledge's edge (looking at it), drop a rope ladder any pig can climb.
-    /// Press again to pull it back up.
+    /// Ability: Rope Ladder - at a ledge's edge (looking at it), drop a rope ladder any pig can climb
+    /// (20 s, then a long cooldown). Press again to pull it back up.
     /// </summary>
     public class JumpyAbility : PigAbility
     {
@@ -23,7 +23,7 @@ namespace Porkour
 
         [Header("Rope ladder")]
         public float maxRopeLength = 8f;
-        public float ropeLifetime = 40f;
+        public float ropeLifetime = 20f;
 
         public override PigType Type => PigType.Jumpy;
         public override string Hint => "at an edge  |  jump at walls: wall bounce";
@@ -40,7 +40,7 @@ namespace Porkour
         protected override void Awake()
         {
             base.Awake();
-            cooldown = 1f;
+            cooldown = 90f; // counts from the drop; pulling the rope up doesn't reset it
         }
 
         void OnDisable()
@@ -143,17 +143,14 @@ namespace Porkour
 
         // ---------- rope ladder ----------
 
-        protected override bool CanUse() => !pig.IsHeld && (rope != null || (pig.IsGrounded && FindEdge()));
+        protected override bool CanUse() => !pig.IsHeld && rope == null && pig.IsGrounded && FindEdge();
 
-        protected override void Use()
+        // Direction encodes the rope: outward * length.
+        protected override void Use() => TriggerEffect(FxRopeDrop, edgeTop, edgeOutward * edgeDrop);
+
+        protected override void PressedWhileUnavailable()
         {
-            if (rope != null)
-            {
-                TriggerEffect(FxRopeRemove, Vector3.zero, Vector3.zero);
-                return;
-            }
-            // Direction encodes the rope: outward * length.
-            TriggerEffect(FxRopeDrop, edgeTop, edgeOutward * edgeDrop);
+            if (rope != null) TriggerEffect(FxRopeRemove, Vector3.zero, Vector3.zero);
         }
 
         /// <summary>Is there a drop in front of Jumpy (where it looks)? Fills edgeTop / edgeOutward / edgeDrop.</summary>

@@ -59,6 +59,7 @@ namespace Porkour
             PigType.Gassy => pig.AddComponent<GassyAbility>(),
             PigType.Heavy => pig.AddComponent<HeavyAbility>(),
             PigType.Jumpy => pig.AddComponent<JumpyAbility>(),
+            PigType.Armed => pig.AddComponent<ArmedAbility>(),
             _ => null,
         };
     }

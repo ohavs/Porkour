@@ -21,6 +21,7 @@ namespace Porkour
         readonly NetworkVariable<bool> charging = new();
         readonly NetworkVariable<double> chargeStart = new();
         readonly NetworkVariable<double> abilityReadyAt = new();
+        readonly NetworkVariable<int> abilityCharges = new(-1);
 
         PigController controller;
         PigGrabber grabber;
@@ -36,6 +37,8 @@ namespace Porkour
         public bool IsCharging => Authority ? grabber.IsCharging : charging.Value;
         public float Charge => Authority ? grabber.Charge
             : charging.Value ? Mathf.Clamp01((float)(NetworkManager.ServerTime.Time - chargeStart.Value) / grabber.fullChargeTime) : 0f;
+        /// <summary>Ability's stored uses for the HUD (Armed's ammo); -1 = none.</summary>
+        public int AbilityCharges => Ability == null ? -1 : Authority ? Ability.Charges : abilityCharges.Value;
         public float AbilityCooldownLeft => Ability == null ? 0f
             : Authority ? Ability.CooldownLeft
             : Mathf.Max(0f, (float)(abilityReadyAt.Value - NetworkManager.ServerTime.Time));
@@ -110,7 +113,7 @@ namespace Porkour
 
         void OnAbilityEffect(byte kind, Vector3 position, Vector3 direction)
         {
-            if (IsServer) AbilityEffectRpc(kind, position, direction);
+            if (IsServer && IsSpawned) AbilityEffectRpc(kind, position, direction);
         }
 
         [Rpc(SendTo.Everyone)]
@@ -139,6 +142,8 @@ namespace Porkour
 
             // Cooldown: send only when the ability is used (the end time, not a ticking value).
             var ability = Ability;
+            int charges = ability != null ? ability.Charges : -1;
+            if (abilityCharges.Value != charges) abilityCharges.Value = charges;
             if (ability != null && ability.ReadyTime != syncedReadyTime)
             {
                 syncedReadyTime = ability.ReadyTime;

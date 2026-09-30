@@ -3,6 +3,15 @@ using UnityEngine;
 
 namespace Porkour
 {
+    /// <summary>Something that can carry a pig (another pig's PigGrabber, Farmer Bob).</summary>
+    public interface IPigCarrier
+    {
+        /// <summary>Let go of whatever is carried.</summary>
+        void Drop();
+        /// <summary>Jump presses a carried pig needs to wriggle free (int.MaxValue = impossible).</summary>
+        int EscapePresses { get; }
+    }
+
     /// <summary>
     /// Physics-based pig movement: run, sprint, jump with coyote time and jump buffer.
     /// Driven only through SetInput/PressJump (world-space move + aim direction), never reads the
@@ -58,8 +67,8 @@ namespace Porkour
         public bool Simulate { get; set; } = true;
         public Rigidbody Body => rb;
         public PigGrabber Grabber { get; private set; }
-        /// <summary>The pig carrying this pig (null when free).</summary>
-        public PigGrabber HeldBy { get; private set; }
+        /// <summary>Who carries this pig - another pig or Farmer Bob (null when free).</summary>
+        public IPigCarrier HeldBy { get; private set; }
         public bool IsHeld => HeldBy != null;
         /// <summary>Set by the grabber: carrying heavy things slows you down.</summary>
         public float SpeedMultiplier { get; set; } = 1f;
@@ -67,6 +76,8 @@ namespace Porkour
         public bool MovementLocked { get; set; }
         /// <summary>Going up a rope/ladder this physics step (server).</summary>
         public bool IsClimbing { get; private set; }
+        /// <summary>Seconds without input or movement (server). Bob can't see "frozen" pigs from afar.</summary>
+        public float StillTime => Time.time - lastActiveTime;
         /// <summary>Where the controller is looking (camera forward for players). Zero = no aim.</summary>
         public Vector3 Aim { get; private set; }
         /// <summary>World-space move input (length ≤ 1).</summary>
@@ -88,6 +99,7 @@ namespace Porkour
         int struggleCount;
         float speedFactor = 1f, jumpFactor = 1f, brakeFactor = 1f;
         float noClimbUntil;
+        float lastActiveTime;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
@@ -140,19 +152,20 @@ namespace Porkour
         {
             if (IsHeld)
             {
-                if (++struggleCount >= struggleToEscape) HeldBy.Drop();
+                if (++struggleCount >= Mathf.Max(struggleToEscape, HeldBy.EscapePresses)) HeldBy.Drop();
                 return;
             }
             lastJumpPressedTime = Time.time;
         }
 
-        internal void SetHeldBy(PigGrabber grabber)
+        /// <summary>Called by the carrier when it picks this pig up (or null when it lets go).</summary>
+        public void SetHeldBy(IPigCarrier carrier)
         {
-            HeldBy = grabber;
+            HeldBy = carrier;
             struggleCount = 0;
             jumpedThisAir = false;
-            rb.useGravity = grabber == null;
-            if (grabber != null && Grabber != null) Grabber.Drop(); // can't carry while being carried
+            rb.useGravity = carrier == null;
+            if (carrier != null && Grabber != null) Grabber.Drop(); // can't carry while being carried
         }
 
         void FixedUpdate()
@@ -161,6 +174,7 @@ namespace Porkour
             if (rb.position.y < killHeight) { Respawn(); return; }
             if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 
+            if (moveInput.sqrMagnitude > 0.01f || jumpHeld || rb.linearVelocity.sqrMagnitude > 0.25f) lastActiveTime = Time.time;
             CheckGround();
             IsClimbing = !MovementLocked && Climb();
             if (IsClimbing) return; // climbing replaces run / jump / gravity
