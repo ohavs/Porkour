@@ -42,6 +42,9 @@ namespace Porkour
         public float maxGroundAngle = 50f;
         public LayerMask groundLayers = ~0;
 
+        [Header("Climb (ropes / ladders)")]
+        public float climbSpeed = 3.5f;
+
         [Header("Held")]
         [Tooltip("Jump presses needed to wriggle free when another pig carries you.")]
         public int struggleToEscape = 6;
@@ -62,6 +65,8 @@ namespace Porkour
         public float SpeedMultiplier { get; set; } = 1f;
         /// <summary>Set by abilities (dash, belly flop) that drive the body themselves: no run/turn/jump.</summary>
         public bool MovementLocked { get; set; }
+        /// <summary>Going up a rope/ladder this physics step (server).</summary>
+        public bool IsClimbing { get; private set; }
         /// <summary>Where the controller is looking (camera forward for players). Zero = no aim.</summary>
         public Vector3 Aim { get; private set; }
         /// <summary>World-space move input (length ≤ 1).</summary>
@@ -82,6 +87,7 @@ namespace Porkour
         Quaternion spawnRotation;
         int struggleCount;
         float speedFactor = 1f, jumpFactor = 1f, brakeFactor = 1f;
+        float noClimbUntil;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => All.Clear();
@@ -156,6 +162,8 @@ namespace Porkour
             if (IsHeld) { IsGrounded = false; return; } // the carrier moves us
 
             CheckGround();
+            IsClimbing = !MovementLocked && Climb();
+            if (IsClimbing) return; // climbing replaces run / jump / gravity
             if (!MovementLocked)
             {
                 Move();
@@ -163,6 +171,43 @@ namespace Porkour
                 TryJump();
             }
             ApplyExtraGravity();
+        }
+
+        /// <summary>In a Climbable's zone and pushing toward it (or holding jump): go up; at the top, hop onto the ledge.</summary>
+        bool Climb()
+        {
+            if (Time.time < noClimbUntil) return false;
+            var climbable = Climbable.Find(rb.position);
+            if (climbable == null) return false;
+            float feet = rb.position.y - body.radius;
+            if (IsGrounded && feet > climbable.Top - 0.3f) return false; // standing on the ledge next to it
+            Vector3 toLedge = -climbable.Outward;
+            bool pushing = jumpHeld || (moveInput.sqrMagnitude > 0.01f && Vector3.Dot(moveInput.normalized, toLedge) > 0.3f);
+            if (!pushing) return false;
+
+            if (feet >= climbable.Top - 0.35f)
+            {
+                Launch(3.5f, toLedge * 3f); // over the edge
+                noClimbUntil = Time.time + 0.5f;
+                return false;
+            }
+            rb.linearVelocity = Vector3.up * climbSpeed + toLedge * 0.8f;
+            rb.AddForce(-Physics.gravity, ForceMode.Acceleration); // hang on: cancel gravity this step
+            rb.angularVelocity = Vector3.zero;
+            lastJumpPressedTime = float.NegativeInfinity; // holding jump to climb is not a jump
+            return true;
+        }
+
+        /// <summary>World-space ends of the body capsule's inner segment + radius (for ability checks).</summary>
+        public void GetCapsule(out Vector3 a, out Vector3 b, out float radius)
+        {
+            radius = body.radius;
+            float half = Mathf.Max(0f, body.height / 2f - body.radius);
+            Vector3 axis = body.direction == 0 ? Vector3.right : body.direction == 1 ? Vector3.up : Vector3.forward;
+            Vector3 center = rb.position + rb.rotation * body.center;
+            Vector3 offset = rb.rotation * axis * half;
+            a = center + offset;
+            b = center - offset;
         }
 
         void CheckGround()
@@ -223,8 +268,14 @@ namespace Porkour
         void TryJump()
         {
             bool buffered = Time.time - lastJumpPressedTime <= jumpBufferTime;
+            if (!buffered) return;
             bool canJump = Time.time - lastGroundedTime <= coyoteTime;
-            if (!buffered || !canJump) return;
+            if (!canJump)
+            {
+                // In the air: the type may have its own jump (Jumpy's wall bounce).
+                if (Ability != null && Ability.enabled && Ability.TryAirJump()) lastJumpPressedTime = float.NegativeInfinity;
+                return;
+            }
 
             Vector3 velocity = rb.linearVelocity;
             velocity.y = Mathf.Sqrt(2f * -Physics.gravity.y * jumpHeight * jumpFactor);

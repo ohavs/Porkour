@@ -34,7 +34,7 @@ namespace Porkour
         static readonly PigTypeInfo[] Infos =
         {
             new("Gassy", "Rocket Fart", new Color(0.62f, 0.86f, 0.42f), mass: 22f, speed: 1.1f, jump: 1f, brake: 0.3f),
-            new("Jumpy", "Wall Bounce", new Color(0.55f, 0.78f, 1f), mass: 24f, speed: 1.05f, jump: 1.3f, brake: 1f),
+            new("Jumpy", "Rope Ladder", new Color(0.55f, 0.78f, 1f), mass: 24f, speed: 1.05f, jump: 1.3f, brake: 1f),
             new("Heavy", "Belly Slam", new Color(0.62f, 0.52f, 0.5f), mass: 45f, speed: 0.85f, jump: 0.85f, brake: 1.2f),
             new("Armed", "Slingshot Snout", new Color(1f, 0.66f, 0.35f), mass: 30f, speed: 1f, jump: 1f, brake: 1f),
         };
@@ -58,6 +58,7 @@ namespace Porkour
         {
             PigType.Gassy => pig.AddComponent<GassyAbility>(),
             PigType.Heavy => pig.AddComponent<HeavyAbility>(),
+            PigType.Jumpy => pig.AddComponent<JumpyAbility>(),
             _ => null,
         };
     }

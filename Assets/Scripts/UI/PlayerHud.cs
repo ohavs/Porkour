@@ -126,6 +126,12 @@ namespace Porkour
                     target = grabber.FindGrabTarget();
                     if (target != null) text = $"{grabKey}: grab";
                 }
+                if (text == "" && !net.IsHeld)
+                {
+                    var climbable = Climbable.Find(pig.transform.position);
+                    if (climbable != null && pig.transform.position.y - 0.45f < climbable.Top - 0.3f)
+                        text = $"Hold {jumpKey} (or walk into it): climb";
+                }
             }
 
             prompt.text = text;
