@@ -37,6 +37,7 @@ namespace Porkour
         public virtual void SetButton(bool pressed)
         {
             if (!pig.Simulate || !enabled) return;
+            if (pig.HeldBy is PigCage.Hold) { buttonHeld = pressed; return; } // no powers inside Bob's cage
             bool down = pressed && !buttonHeld;
             buttonHeld = pressed;
             if (!down) return;

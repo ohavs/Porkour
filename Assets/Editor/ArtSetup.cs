@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -28,7 +29,34 @@ namespace Porkour.EditorTools
 
         static readonly string[] Animals = { "pig", "hog", "chick", "cow" };
 
+        public const string FarmBuildingsDir = "Assets/Art/Farm/Farm Buildings by Quaternius/FBX";
+        static readonly string[] SkippedPacks =
+            { "Farm Buildings by Quaternius", "Medieval Village MegaKit", "cube-pets", "Art/Characters", "Art/Generated", "/Blend/" };
+
         public static GameObject BobModel => AssetDatabase.LoadAssetAtPath<GameObject>(BobDir + "/Bob.fbx");
+
+        /// <summary>A Quaternius "Farm Buildings" model (Barn, Silo, Windmill, Fence...), or null.</summary>
+        public static GameObject FarmBuilding(string name) => AssetDatabase.LoadAssetAtPath<GameObject>($"{FarmBuildingsDir}/{name}.fbx");
+
+        /// <summary>
+        /// Models the user added later (any pack under Assets/Art, e.g. Kenney Nature / Car kits) whose file name contains one
+        /// of the words - trees, rocks, a truck... Packs this project already uses on purpose are skipped. Sorted by path.
+        /// </summary>
+        public static List<GameObject> FindModels(string[] words, string[] without = null)
+        {
+            var found = new List<GameObject>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Art" }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (SkippedPacks.Any(path.Contains)) continue;
+                string file = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+                if (!words.Any(file.Contains) || (without != null && without.Any(file.Contains))) continue;
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (model != null) found.Add(model);
+            }
+            found.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
+            return found;
+        }
 
         public static GameObject AnimalModel(string animal) => AssetDatabase.LoadAssetAtPath<GameObject>(AnimalPath(animal));
 
@@ -98,6 +126,68 @@ namespace Porkour.EditorTools
             if (clips.Length > 0) imp.clipAnimations = clips;
             imp.userData = Marker;
             imp.SaveAndReimport();
+        }
+
+        /// <summary>
+        /// Bob's skin: Mixamo embeds the textures in the FBX and Unity shows him white until they're extracted. Extracts
+        /// them once (Characters/Bob Textures) and returns a URP material with the diffuse (+ normal) map, or null.
+        /// </summary>
+        public static Material BobMaterial()
+        {
+            string path = BobDir + "/Bob.fbx";
+            if (!(AssetImporter.GetAtPath(path) is ModelImporter importer)) return null;
+            string folder = BobDir + "/Bob Textures";
+            var textures = TexturesIn(folder);
+            if (textures.Count == 0)
+            {
+                EnsureFolder(folder);
+                if (importer.ExtractTextures(folder)) AssetDatabase.Refresh();
+                textures = TexturesIn(folder);
+            }
+            if (textures.Count == 0) textures = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Texture2D>().ToList();
+            var diffuse = textures.FirstOrDefault(t => NameHas(t, "diffuse", "albedo", "basecolor", "base_color", "_color"))
+                          ?? textures.FirstOrDefault(t => !NameHas(t, "normal", "specular", "gloss", "rough", "metal", "occlusion", "emissi", "height"));
+            if (diffuse == null)
+            {
+                Debug.LogWarning("Porkour: no texture found for Bob (Characters/Bob.fbx) - he stays plain.");
+                return null;
+            }
+            var normal = textures.FirstOrDefault(t => NameHas(t, "normal"));
+            if (normal != null && AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(normal)) is TextureImporter ti
+                                && ti.textureType != TextureImporterType.NormalMap)
+            {
+                ti.textureType = TextureImporterType.NormalMap;
+                ti.SaveAndReimport();
+            }
+            EnsureFolder(GeneratedDir);
+            string matPath = GeneratedDir + "/Bob.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat == null)
+            {
+                mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(mat, matPath);
+            }
+            mat.SetTexture("_BaseMap", diffuse);
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_Smoothness", 0.2f);
+            if (normal != null)
+            {
+                mat.SetTexture("_BumpMap", normal);
+                mat.EnableKeyword("_NORMALMAP");
+            }
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        static List<Texture2D> TexturesIn(string folder) => !AssetDatabase.IsValidFolder(folder) ? new List<Texture2D>()
+            : AssetDatabase.FindAssets("t:Texture2D", new[] { folder })
+                .Select(guid => AssetDatabase.LoadAssetAtPath<Texture2D>(AssetDatabase.GUIDToAssetPath(guid)))
+                .Where(t => t != null).ToList();
+
+        static bool NameHas(Object asset, params string[] words)
+        {
+            string n = asset.name.ToLowerInvariant();
+            return words.Any(n.Contains);
         }
 
         /// <summary>First animation clip in a model file whose name contains the word (null if none).</summary>

@@ -17,6 +17,13 @@ namespace Porkour
         public const int Fence = 12;
         public const int Generator = 13;
         public const int Truck = 14;
+        public const int FarmGate = 15;
+        /// <summary>On while Bob's pie sits in the truck (RoundManager).</summary>
+        public const int PieInTruck = 16;
+        /// <summary>Bob's gas bottle at the BBQ smashed: the grill heats slowly.</summary>
+        public const int Sabotage = 41;
+        /// <summary>The two plates that open the farm gate together (ChannelLatch → FarmGate).</summary>
+        public const int GatePlateA = 51, GatePlateB = 52;
         public const int HouseWindow = 31;
         public const int HouseDoor = 33;
         public const int Target1 = 21, Target2 = 22, Target3 = 23;

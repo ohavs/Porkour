@@ -66,6 +66,7 @@ namespace Porkour
         public override void PlayEffect(byte kind, Vector3 position, Vector3 direction)
         {
             SmokeCloud.Spawn(position, cloudRadius, cloudLifetime, SmokeCloud.FartColor, smokeScreen: true);
+            if (TryGetComponent(out PigLook look)) look.Deflate(); // a little less Gassy now
             Sfx.Play(Sound.Fart, position, 1f, 0.15f);
             ThirdPersonCamera.Shake(position, 0.25f, 6f);
             StartCoroutine(Trail());
