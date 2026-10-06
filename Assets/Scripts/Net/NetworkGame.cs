@@ -137,11 +137,19 @@ namespace Porkour
             foreach (var point in spawnPoints)
             {
                 if (point == null || point.prefab == null) continue;
-                var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
-                if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
-                if (go.TryGetComponent(out Breakable breakable)) breakable.contents = point.contents;
-                foreach (var part in go.GetComponents<IPuzzleChannel>()) part.Channel = point.channel;
-                go.GetComponent<NetworkObject>().Spawn();
+                try // one broken prop must not stop the rest of the level from appearing
+                {
+                    var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
+                    if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
+                    if (go.TryGetComponent(out Breakable breakable)) breakable.contents = point.contents;
+                    foreach (var part in go.GetComponents<IPuzzleChannel>()) part.Channel = point.channel;
+                    go.GetComponent<NetworkObject>().Spawn();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"Porkour: could not spawn '{point.name}' - the rest of the level still spawns.");
+                }
             }
         }
 
@@ -175,7 +183,7 @@ namespace Porkour
             {
                 string players = nm.IsServer ? $"  |  players {nm.ConnectedClientsIds.Count}/4" : "";
                 string debug = nm.IsHost ? "  |  G: Grill Call now  |  R: restart round" : "";
-                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Tab / Y: switch pig  |  M: music{debug}", statusStyle);
+                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Q / Y: switch pig  |  Tab: missions  |  M: music{debug}", statusStyle);
                 return;
             }
 

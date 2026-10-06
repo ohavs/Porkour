@@ -24,6 +24,7 @@ namespace Porkour
 
         readonly NetworkVariable<bool> pressed = new();
         readonly NetworkVariable<int> load = new();
+        readonly NetworkVariable<int> netChannel = new(); // every PC knows which plate it is (HUD markers)
 
         public int Channel { get => channel; set => channel = value; }
         public bool IsPressed => pressed.Value;
@@ -40,7 +41,12 @@ namespace Porkour
             BuildLabel();
         }
 
-        public override void OnNetworkSpawn() => pressed.OnValueChanged += OnPressedChanged;
+        public override void OnNetworkSpawn()
+        {
+            pressed.OnValueChanged += OnPressedChanged;
+            if (IsServer) netChannel.Value = channel;
+            else channel = netChannel.Value;
+        }
 
         public override void OnNetworkDespawn()
         {

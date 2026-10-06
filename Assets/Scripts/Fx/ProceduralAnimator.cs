@@ -79,6 +79,9 @@ namespace Porkour
             if (a != null && animatorParams.Contains("Mode") && a.GetInteger(ModeId) != mode) a.SetInteger(ModeId, mode);
         }
 
+        /// <summary>A quick boing of the body (oink, hit...).</summary>
+        public void Pop(float strength = 3f) => squashVel += strength;
+
         /// <summary>Fire an animation trigger (e.g. "Throw") if the model has it.</summary>
         public void Trigger(string name)
         {

@@ -56,9 +56,12 @@ namespace Porkour
         void LateUpdate()
         {
             if (label == null) return;
-            label.transform.position = transform.position + Vector3.up * (0.55f + Mathf.Sin(Time.time * 4f) * 0.06f);
             var cam = Camera.main;
-            if (cam != null) label.transform.rotation = Quaternion.LookRotation(label.transform.position - cam.transform.position);
+            bool show = cam != null && (cam.transform.position - transform.position).sqrMagnitude < 16f * 16f; // only up close
+            if (label.gameObject.activeSelf != show) label.gameObject.SetActive(show);
+            if (!show) return;
+            label.transform.position = transform.position + Vector3.up * (0.55f + Mathf.Sin(Time.time * 4f) * 0.06f);
+            label.transform.rotation = Quaternion.LookRotation(label.transform.position - cam.transform.position);
         }
 
         void BuildLabel()

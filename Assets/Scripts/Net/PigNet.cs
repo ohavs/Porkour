@@ -112,6 +112,28 @@ namespace Porkour
             look.ApplyType(pigType, PigTypes.Info(pigType).Color); // model (pig / hog) + type colour
         }
 
+        // ---------- oink (F / B) ----------
+
+        float nextOink;
+
+        /// <summary>Server: the pig oinks - everyone hears it, and so does Bob if he's around and searching (he comes to look).</summary>
+        public void Oink()
+        {
+            if (!IsServer || !IsSpawned || Time.time < nextOink) return;
+            nextOink = Time.time + 0.7f;
+            OinkRpc(transform.position);
+            var bob = FarmerBob.Instance;
+            if (bob != null && controller.CagedIn == null && (bob.transform.position - transform.position).sqrMagnitude < 15f * 15f)
+                bob.HearNoise(transform.position);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void OinkRpc(Vector3 position)
+        {
+            Sfx.Play(Sound.Oink, position + Vector3.up * 0.4f, 1f, 0.15f);
+            if (TryGetComponent(out ProceduralAnimator anim)) anim.Pop();
+        }
+
         // ---------- ability visuals: server → every PC ----------
 
         void HookAbility(PigAbility ability)

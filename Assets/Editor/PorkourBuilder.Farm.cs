@@ -5,26 +5,32 @@ using UnityEngine;
 namespace Porkour.EditorTools
 {
     /// <summary>
-    /// The farmyard north of the barn (x -48..48, z 15.4..90): Bob's house with the truck keys (3 ways in: chimney,
-    /// boarded back door, shuttered window; the front door opens from inside), the getaway truck (ignition) by the farm's
-    /// road gate (two gate plates at once), Quaternius farm buildings (windmill, silo, water tower, well, coop, barns),
-    /// a cow pasture, chicken pen, apple trees, mud, hay, coins and loot. Kit / farm models for the look, invisible boxes
-    /// for the gameplay. Trees / truck / tractor / crops use extra packs when the user has added them (ArtSetup.FindModels).
+    /// Farm 1 around the barn (x -64..64, z -16..100), open from the start: the pigs begin in their sty east of the barn.
+    /// The exit is the GATEHOUSE in the north fence (electric fence + exit gate with padlock / motor / latch, lamps on it).
+    /// Bob's house holds the truck keys (chimney, boarded back door, shuttered window; the front door opens from inside),
+    /// the garage holds the fuel can (door opens once both garage plates are pressed together), the truck waits by the gate.
+    /// Quaternius farm buildings, medieval-kit houses (cottage, stable, workshop), pasture, coops, animals, coins and loot.
+    /// Kit / farm models for the look, invisible boxes for the gameplay. Trees / truck / tractor / crops use extra packs when
+    /// the user adds them (ArtSetup.FindModels).
     /// </summary>
     public static partial class PorkourBuilder
     {
-        /// <summary>The truck's origin: centre of its bed, on the ground. It faces +Z, tailgate ramp to the south.</summary>
-        static readonly Vector3 TruckPos = new(16f, 0f, 74f);
-        /// <summary>The farm's road gate (north fence, x 12..20) and its two plates.</summary>
-        static readonly Vector3 FarmGatePos = new(16f, 1.2f, 89.7f);
-        static readonly Vector3 GatePlateAPos = new(25f, 0f, 85f), GatePlateBPos = new(-30f, 0f, 72f);
-        const float FarmMinX = -48f, FarmMaxX = 48f, FarmMaxZ = 90f;
-        /// <summary>From TruckPos: the ignition post by the cab door, the exhaust under the back.</summary>
+        /// <summary>The truck's origin: centre of its bed, on the ground. It faces +Z (the gate), tailgate ramp to the south.</summary>
+        static readonly Vector3 TruckPos = new(16f, 0f, 86f);
+        const float FarmMinX = -64f, FarmMaxX = 64f, FarmMinZ = -16f, FarmMaxZ = 100f;
+        /// <summary>Gatehouse in the north fence: passage x 14..18, z 95..101.</summary>
+        const float GateX = 16f, GateZ0 = 95f, GateZ1 = 101f;
+        /// <summary>Bob's garage (fuel can) x -46..-38, z -4..4, big door on the east side; its two plates.</summary>
+        static readonly Vector3 GaragePlateA = new(-34f, 0f, -7f), GaragePlateB = new(-26f, 0f, 29f);
+        /// <summary>From TruckPos: the ignition post by the cab door, the fuel cap on the other side, the exhaust under the back.</summary>
         static readonly Vector3 IgnitionOffset = new(2.1f, 0f, 3.3f);
+        static readonly Vector3 FuelCapOffset = new(-2.1f, 0f, -0.6f);
         static readonly Vector3 TruckExhaust = new(1.8f, 0.3f, -2.75f);
         /// <summary>Bob's chimney (west of the house) and where a pig pops out (the fireplace inside).</summary>
         static readonly Vector3 ChimneyTop = new(-20.85f, 5.72f, 35f);
         static readonly Vector3 ChimneyExit = new(-19.2f, 0.6f, 35.3f);
+        /// <summary>Armed's three bullseyes (the exit gate's latch) sit on poles around the farm.</summary>
+        static readonly Vector3[] BullseyePoles = { new(-26f, 0f, 16.5f), new(50f, 0f, 40f), new(-4f, 0f, 93f) };
 
         static void BuildFarmyard(Transform r)
         {
@@ -34,119 +40,272 @@ namespace Porkour.EditorTools
             var dirt = Mat("Dirt", new Color(0.5f, 0.38f, 0.24f));
             var stone = Mat("Stone", new Color(0.5f, 0.5f, 0.52f));
             bool kit = Kit.Available;
-            var farm = new GameObject("Farmyard").transform;
+            var farm = new GameObject("Farm1").transform;
             farm.SetParent(r, false);
 
-            // Invisible walls + roof (14 m) around the farmyard; farm fences for the eye. North: the road gate (x 12..20)
-            // opens into a short dead-end road (the truck "drives off" there in your imagination).
+            // Invisible walls + roof (14 m) around the farm; farm fences for the eye. The barn's south wall and Bob's BBQ yard
+            // close the south side between x -12 and 12 (the BBQ is NOT part of the farm: only the pig flap / Bob's door lead there).
             const float t = 0.4f, wallH = 14f;
-            float midZ = (15.4f + FarmMaxZ) / 2f, lenZ = FarmMaxZ - 15.4f;
+            float midZ = (FarmMinZ + FarmMaxZ) / 2f, lenZ = FarmMaxZ - FarmMinZ;
             Boundary(farm, "FarmW", new Vector3(FarmMinX - 0.2f, wallH / 2f, midZ), new Vector3(t, wallH, lenZ + 0.8f));
             Boundary(farm, "FarmE", new Vector3(FarmMaxX + 0.2f, wallH / 2f, midZ), new Vector3(t, wallH, lenZ + 0.8f));
-            Boundary(farm, "FarmN1", new Vector3((FarmMinX + 11.8f) / 2f, wallH / 2f, FarmMaxZ + 0.2f), new Vector3(11.8f - FarmMinX, wallH, t));
-            Boundary(farm, "FarmN2", new Vector3((20.2f + FarmMaxX) / 2f, wallH / 2f, FarmMaxZ + 0.2f), new Vector3(FarmMaxX - 20.2f, wallH, t));
-            Boundary(farm, "RoadW", new Vector3(11.6f, wallH / 2f, FarmMaxZ + 3f), new Vector3(t, wallH, 6f));
-            Boundary(farm, "RoadE", new Vector3(20.4f, wallH / 2f, FarmMaxZ + 3f), new Vector3(t, wallH, 6f));
-            Boundary(farm, "RoadN", new Vector3(16f, wallH / 2f, FarmMaxZ + 6.2f), new Vector3(9.2f, wallH, t));
-            Boundary(farm, "FarmSW", new Vector3((FarmMinX - 20.4f) / 2f, wallH / 2f, 15.2f), new Vector3(-20.4f - FarmMinX, wallH, t));
-            Boundary(farm, "FarmSE", new Vector3((20.4f + FarmMaxX) / 2f, wallH / 2f, 15.2f), new Vector3(FarmMaxX - 20.4f, wallH, t));
-            Boundary(farm, "FarmRoof", new Vector3(0f, wallH + 0.25f, (15.4f + FarmMaxZ + 6f) / 2f), new Vector3(FarmMaxX - FarmMinX + 1f, 0.5f, FarmMaxZ + 6f - 15.4f));
-            FenceRun(farm, new Vector3(FarmMinX, 0f, 15.4f), new Vector3(FarmMinX, 0f, FarmMaxZ), wood);
-            FenceRun(farm, new Vector3(FarmMaxX, 0f, 15.4f), new Vector3(FarmMaxX, 0f, FarmMaxZ), wood);
-            FenceRun(farm, new Vector3(FarmMinX, 0f, FarmMaxZ), new Vector3(12f, 0f, FarmMaxZ), wood);
-            FenceRun(farm, new Vector3(20f, 0f, FarmMaxZ), new Vector3(FarmMaxX, 0f, FarmMaxZ), wood);
-            FenceRun(farm, new Vector3(FarmMinX, 0f, 15.4f), new Vector3(-20.4f, 0f, 15.4f), wood);
-            FenceRun(farm, new Vector3(20.4f, 0f, 15.4f), new Vector3(FarmMaxX, 0f, 15.4f), wood);
-            Solid("GatePostW", farm, new Vector3(11.75f, 1.4f, FarmMaxZ), new Vector3(0.4f, 2.8f, 0.4f), darkWood, false);
-            Solid("GatePostE", farm, new Vector3(20.25f, 1.4f, FarmMaxZ), new Vector3(0.4f, 2.8f, 0.4f), darkWood, false);
-            Label(farm, "FARM GATE\n(stand on both GATE PLATES)", new Vector3(16f, 4f, FarmMaxZ - 0.5f), new Color(1f, 0.85f, 0.4f), 0.045f);
-            var latch = new GameObject("FarmGateLatch").AddComponent<ChannelLatch>(); // both plates at once → the gate stays open
-            latch.transform.SetParent(farm, false);
-            latch.inputs = new[] { ChannelIds.GatePlateA, ChannelIds.GatePlateB };
-            latch.output = ChannelIds.FarmGate;
+            Boundary(farm, "FarmN1", new Vector3((FarmMinX + GateX - 2.4f) / 2f, wallH / 2f, FarmMaxZ + 0.2f), new Vector3(GateX - 2.4f - FarmMinX, wallH, t));
+            Boundary(farm, "FarmN2", new Vector3((GateX + 2.4f + FarmMaxX) / 2f, wallH / 2f, FarmMaxZ + 0.2f), new Vector3(FarmMaxX - GateX - 2.4f, wallH, t));
+            Boundary(farm, "FarmS1", new Vector3((FarmMinX - 12f) / 2f, wallH / 2f, FarmMinZ - 0.2f), new Vector3(-12f - FarmMinX, wallH, t));
+            Boundary(farm, "FarmS2", new Vector3((12f + FarmMaxX) / 2f, wallH / 2f, FarmMinZ - 0.2f), new Vector3(FarmMaxX - 12f, wallH, t));
+            Boundary(farm, "RoadW", new Vector3(GateX - 2.6f, wallH / 2f, GateZ1 + 3f), new Vector3(t, wallH, 6f));
+            Boundary(farm, "RoadE", new Vector3(GateX + 2.6f, wallH / 2f, GateZ1 + 3f), new Vector3(t, wallH, 6f));
+            Boundary(farm, "RoadN", new Vector3(GateX, wallH / 2f, GateZ1 + 6.2f), new Vector3(5.6f, wallH, t));
+            Boundary(farm, "FarmRoof", new Vector3(0f, wallH + 0.25f, (FarmMinZ + GateZ1 + 6f) / 2f), new Vector3(FarmMaxX - FarmMinX + 1f, 0.5f, GateZ1 + 6f - FarmMinZ));
+            FenceRun(farm, new Vector3(FarmMinX, 0f, FarmMinZ), new Vector3(FarmMinX, 0f, FarmMaxZ), wood);
+            FenceRun(farm, new Vector3(FarmMaxX, 0f, FarmMinZ), new Vector3(FarmMaxX, 0f, FarmMaxZ), wood);
+            FenceRun(farm, new Vector3(FarmMinX, 0f, FarmMaxZ), new Vector3(GateX - 2.4f, 0f, FarmMaxZ), wood);
+            FenceRun(farm, new Vector3(GateX + 2.4f, 0f, FarmMaxZ), new Vector3(FarmMaxX, 0f, FarmMaxZ), wood);
+            FenceRun(farm, new Vector3(FarmMinX, 0f, FarmMinZ), new Vector3(-20.4f, 0f, FarmMinZ), wood);
+            FenceRun(farm, new Vector3(20.4f, 0f, FarmMinZ), new Vector3(FarmMaxX, 0f, FarmMinZ), wood);
 
+            Gatehouse(farm, kit, darkWood);
             BobsHouse(farm, kit);
+            Garage(farm, kit, wood, darkWood);
+            PigSty(farm, wood, darkWood);
             BuildTruck(farm);
-            Label(farm, "BOB'S FARM", new Vector3(0f, 4.6f, 20.5f), new Color(1f, 0.85f, 0.4f), 0.08f);
 
-            // Dirt road: barn exit → north, east to the truck, north through the gate; a path to Bob's front door.
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(0f, 0.01f, 32.7f), new Vector3(3f, 0.02f, 26.6f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(7.75f, 0.01f, 46f), new Vector3(12.5f, 0.02f, 3f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(16f, 0.01f, (44.5f + FarmMaxZ + 6f) / 2f), new Vector3(4f, 0.02f, FarmMaxZ + 6f - 44.5f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(-7.5f, 0.01f, 31.5f), new Vector3(12f, 0.02f, 2.5f), dirt);
+            // Dirt roads: barn doorway → north, east to the truck, north through the gatehouse; side paths.
+            Part(PrimitiveType.Cube, "Path", farm, new Vector3(0f, 0.01f, 30.7f), new Vector3(4f, 0.02f, 30.6f), dirt);
+            Part(PrimitiveType.Cube, "Path", farm, new Vector3(8f, 0.01f, 46f), new Vector3(12f, 0.02f, 3f), dirt);
+            Part(PrimitiveType.Cube, "Path", farm, new Vector3(GateX, 0.01f, (47.5f + GateZ1 + 6f) / 2f), new Vector3(4f, 0.02f, GateZ1 + 6f - 47.5f), dirt);
+            Part(PrimitiveType.Cube, "Path", farm, new Vector3(-8.5f, 0.01f, 31.5f), new Vector3(13f, 0.02f, 2.5f), dirt);
+            Part(PrimitiveType.Cube, "Path", farm, new Vector3(-29f, 0.01f, 0f), new Vector3(17.5f, 0.02f, 3f), dirt);
 
             // Farm buildings (Quaternius) - landmarks with simple box colliders.
             FarmBuildingAt(farm, "TowerWindmill", new Vector3(-36f, 0f, 80f), 0f, 14f, new Vector3(4f, 12f, 4f), stone, colliderXZ: 0.4f, spin: true);
             FarmBuildingAt(farm, "Windmill", new Vector3(42f, 0f, 30f), 90f, 13f, new Vector3(3f, 11f, 3f), stone, colliderXZ: 0.35f, spin: true);
             FarmBuildingAt(farm, "WaterTower", new Vector3(-40f, 0f, 28f), 0f, 10f, new Vector3(3f, 10f, 3f), stone, colliderXZ: 0.8f);
             FarmBuildingAt(farm, "Silo_House", new Vector3(40f, 0f, 84f), 180f, 11f, new Vector3(6f, 11f, 4f), stone, colliderXZ: 0.9f);
+            FarmBuildingAt(farm, "Silo", new Vector3(56f, 0f, 70f), 0f, 12f, new Vector3(3.5f, 12f, 3.5f), stone, colliderXZ: 0.9f);
             FarmBuildingAt(farm, "SmallBarn", new Vector3(-38f, 0f, 52f), 90f, 6.4f, new Vector3(8f, 6f, 8f), darkWood);
             FarmBuildingAt(farm, "Barn", new Vector3(-14f, 0f, 82f), 0f, 8f, new Vector3(10f, 8f, 10f), darkWood);
-            var well = FarmBuildingAt(farm, "Well", new Vector3(0f, 0f, 54f), 0f, 2.6f, new Vector3(1.6f, 1f, 1.6f), stone);
-            Label(farm, "WELL", well.center + Vector3.up * (well.extents.y + 0.6f), Color.white, 0.035f);
+            FarmBuildingAt(farm, "BigBarn", new Vector3(-55f, 0f, 64f), 90f, 10f, new Vector3(10f, 10f, 10f), darkWood);
+            FarmBuildingAt(farm, "Well", new Vector3(0f, 0f, 54f), 0f, 2.6f, new Vector3(1.6f, 1f, 1.6f), stone);
             // Open barn (tractor shed): roof only, hay inside to hide in.
-            var shed = FarmBuildingAt(farm, "OpenBarn", new Vector3(34f, 0f, 78f), 180f, 6f, new Vector3(7f, 6f, 7f), darkWood, collide: false);
+            var shed = FarmBuildingAt(farm, "OpenBarn", new Vector3(34f, 0f, 76f), 180f, 6f, new Vector3(7f, 6f, 7f), darkWood, collide: false);
             Invisible(Block("ShedRoofCollider", farm, new Vector3(shed.center.x, shed.max.y - 0.6f, shed.center.z), new Vector3(shed.size.x, 1.2f, shed.size.z), null));
-            Haystack(farm, new Vector3(34f, 0f, 78f), hay);
-            TractorAt(farm, new Vector3(28.5f, 0f, 70f), 200f);
+            Haystack(farm, new Vector3(34f, 0f, 76f), hay);
+            TractorAt(farm, new Vector3(28.5f, 0f, 68f), 200f);
+
+            // Medieval-kit houses: farmhand cottage, stable, workshop (closed: walls + roof slopes as colliders).
+            if (kit)
+            {
+                ClosedKitHouse(farm, "Cottage", -60f, -52f, 18f, 24f, 1, (side, i, _) => side == 0 && i == 1 ? "Wall_Plaster_Door_RoundInset"
+                    : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_Straight");
+                ClosedKitHouse(farm, "Stable", 50f, 60f, 18f, 26f, 2, (side, i, story) => story == 0
+                    ? (side == 3 && i % 2 == 1 ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
+                    : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_WoodGrid");
+                ClosedKitHouse(farm, "Workshop", 52f, 58f, 2f, 8f, 1, (side, i, _) => side == 3 && i == 1 ? "Wall_Plaster_Door_RoundInset"
+                    : "Wall_Plaster_WoodGrid");
+                foreach (var (pos, yaw) in new[] { (new Vector3(47f, 0f, 22f), 0f), (new Vector3(-49f, 0f, 21f), 90f), (new Vector3(-52f, 0f, 46f), 0f) })
+                {
+                    Invisible(Block("Wagon", farm, pos + Vector3.up * 0.6f, new Vector3(1.9f, 1.2f, 4f), null));
+                    Kit.Fit("Prop_Wagon", farm, pos + Vector3.up * 0.765f, new Vector3(1.95f, 1.53f, 4f), yaw, keepLongSide: true);
+                }
+            }
 
             // Chicken pen (x 18..26, z 20..26): low fence with a gap in the north side, the coop in a corner.
             bool fences = ArtSetup.FarmBuilding("Fence") != null || kit;
-            Solid("PenW", farm, new Vector3(18f, 0.5f, 23f), new Vector3(0.15f, 1f, 6f), wood, fences);
-            Solid("PenE", farm, new Vector3(26f, 0.5f, 23f), new Vector3(0.15f, 1f, 6f), wood, fences);
-            Solid("PenS", farm, new Vector3(22f, 0.5f, 20f), new Vector3(8f, 1f, 0.15f), wood, fences);
-            Solid("PenN1", farm, new Vector3(19.5f, 0.5f, 26f), new Vector3(3f, 1f, 0.15f), wood, fences);
-            Solid("PenN2", farm, new Vector3(24.5f, 0.5f, 26f), new Vector3(3f, 1f, 0.15f), wood, fences);
-            if (fences)
-            {
-                FenceRun(farm, new Vector3(18f, 0f, 20f), new Vector3(18f, 0f, 26f), wood, 1f);
-                FenceRun(farm, new Vector3(26f, 0f, 20f), new Vector3(26f, 0f, 26f), wood, 1f);
-                FenceRun(farm, new Vector3(18f, 0f, 20f), new Vector3(26f, 0f, 20f), wood, 1f);
-                FenceRun(farm, new Vector3(18f, 0f, 26f), new Vector3(21f, 0f, 26f), wood, 1f);
-                FenceRun(farm, new Vector3(23f, 0f, 26f), new Vector3(26f, 0f, 26f), wood, 1f);
-            }
+            Pen(farm, new Vector2(18f, 20f), new Vector2(26f, 26f), new Vector2(21f, 23f), true, wood, fences);
             FarmBuildingAt(farm, "ChickenCoop", new Vector3(24.4f, 0f, 21.6f), 180f, 2.2f, new Vector3(2.2f, 1.6f, 1.8f), darkWood);
-            Label(farm, "CHICKENS (Bob loves them)", new Vector3(22f, 3f, 23f), Color.white, 0.04f);
+            // Second coop east of the barn with chicks pecking around.
+            Pen(farm, new Vector2(42f, -12f), new Vector2(50f, -4f), new Vector2(-8f, -6f), false, wood, fences);
+            FarmBuildingAt(farm, "ChickenCoop", new Vector3(48f, 0f, -10f), 0f, 2.2f, new Vector3(2.2f, 1.6f, 1.8f), darkWood);
+            foreach (var (x, z, yaw) in new[] { (44f, -7f, 30f), (45.5f, -9f, 200f), (46f, -6f, 120f) })
+                DecorAnimal(farm, "chick", new Vector3(x, 0f, z), yaw, 0.6f);
 
-            // Cow pasture (x 24..46, z 42..66), entrance on the west side; two cows graze, the calf (bait) lives here.
-            Solid("PastureS", farm, new Vector3(35f, 0.55f, 42f), new Vector3(22f, 1.1f, 0.15f), wood, fences);
-            Solid("PastureN", farm, new Vector3(35f, 0.55f, 66f), new Vector3(22f, 1.1f, 0.15f), wood, fences);
-            Solid("PastureW1", farm, new Vector3(24f, 0.55f, 47f), new Vector3(0.15f, 1.1f, 10f), wood, fences);
-            Solid("PastureW2", farm, new Vector3(24f, 0.55f, 61f), new Vector3(0.15f, 1.1f, 10f), wood, fences);
-            if (fences)
-            {
-                FenceRun(farm, new Vector3(24f, 0f, 42f), new Vector3(46f, 0f, 42f), wood);
-                FenceRun(farm, new Vector3(24f, 0f, 66f), new Vector3(46f, 0f, 66f), wood);
-                FenceRun(farm, new Vector3(24f, 0f, 42f), new Vector3(24f, 0f, 52f), wood);
-                FenceRun(farm, new Vector3(24f, 0f, 56f), new Vector3(24f, 0f, 66f), wood);
-            }
-            DecorAnimal(farm, "cow", new Vector3(31f, 0f, 60f), 120f, 1.7f);
-            DecorAnimal(farm, "cow", new Vector3(41f, 0f, 47f), -60f, 1.7f);
+            // Cow pasture (x 24..46, z 42..66), entrance on the west side; cows graze, the calf (bait) lives here.
+            Pen(farm, new Vector2(24f, 42f), new Vector2(46f, 66f), new Vector2(52f, 56f), false, wood, fences);
+            foreach (var (x, z, yaw) in new[] { (31f, 60f, 120f), (41f, 47f, -60f), (36f, 52f, 10f), (43f, 61f, 160f) })
+                DecorAnimal(farm, "cow", new Vector3(x, 0f, z), yaw, 1.7f);
             Block("CalfTrough", farm, new Vector3(36f, 0.25f, 64.8f), new Vector3(3f, 0.5f, 0.6f), darkWood);
 
+            // Animals around the farm (look only): Bob's dog by his house, cats, bunnies by the field.
+            DecorAnimal(farm, "dog", new Vector3(-10.5f, 0f, 33f), 200f, 0.9f);
+            DecorAnimal(farm, "cat", new Vector3(1.5f, 0f, 52.5f), 250f, 0.55f);
+            DecorAnimal(farm, "cat", new Vector3(-41f, 0f, 6f), 80f, 0.55f);
+            foreach (var (x, z, yaw) in new[] { (-28f, 72f, 40f), (-27f, 74f, 190f), (-44f, 72f, 300f) })
+                DecorAnimal(farm, "bunny", new Vector3(x, 0f, z), yaw, 0.55f);
+
             // Hiding: mud puddles, hay; Heavy shakes apples out of the apple trees.
-            Mud(farm, new Vector3(-4.5f, 0f, 27f), 1.6f);
+            Mud(farm, new Vector3(-4.5f, 0f, 26f), 1.6f);
             Mud(farm, new Vector3(21f, 0f, 34f), 1.4f);
-            Mud(farm, new Vector3(-8f, 0f, 60f), 1.5f);
+            Mud(farm, new Vector3(-8f, 0f, 62f), 1.5f);
             Mud(farm, new Vector3(30f, 0f, 50f), 1.8f);
-            Haystack(farm, new Vector3(-25f, 0f, 24f), hay);
+            Mud(farm, new Vector3(-30f, 0f, 10f), 1.5f);
+            Haystack(farm, new Vector3(-25f, 0f, 22f), hay);
             Haystack(farm, new Vector3(4f, 0f, 37f), hay);
-            Haystack(farm, new Vector3(-26f, 0f, 66f), hay);
+            Haystack(farm, new Vector3(-26f, 0f, 64f), hay);
             Haystack(farm, new Vector3(8f, 0f, 66f), hay);
-            AppleTreeAt(farm, new Vector3(7f, 0f, 25f));
-            AppleTreeAt(farm, new Vector3(-6f, 0f, 66f));
+            Haystack(farm, new Vector3(28f, 0f, 8f), hay);
+            Haystack(farm, new Vector3(-50f, 0f, 8f), hay);
+            Haystack(farm, new Vector3(56f, 0f, 44f), hay);
+            AppleTreeAt(farm, new Vector3(7f, 0f, 24f));
+            AppleTreeAt(farm, new Vector3(-6f, 0f, 70f));
             AppleTreeAt(farm, new Vector3(9f, 0f, 58f));
-            AppleTreeAt(farm, new Vector3(-28f, 0f, 42f));
-            Label(farm, "APPLE TREE\n(Heavy: slam it)", new Vector3(7f, 5.6f, 25f), new Color(1f, 0.6f, 0.5f), 0.035f);
-            foreach (var (x, z, size) in new[] { (-44f, 40f, 1.2f), (-45f, 74f, 1.3f), (44f, 72f, 1.2f), (-20f, 58f, 1f), (-44f, 86f, 1.1f) })
-                Tree(farm, new Vector3(x, 0f, z), size);
+            AppleTreeAt(farm, new Vector3(-28f, 0f, 44f));
+            AppleTreeAt(farm, new Vector3(36f, 0f, 2f));
+            foreach (var (x, z, size) in new[] { (-60f, 40f, 1.2f), (-45f, 92f, 1.3f), (60f, 92f, 1.2f), (-20f, 58f, 1f), (-60f, 90f, 1.1f),
+                         (60f, 50f, 1.3f), (-60f, -8f, 1.2f), (60f, -12f, 1.1f), (-30f, 96f, 1f) })
+                Tree(farm, new Vector3(x, 0f, z), size, collide: true);
 
             // Static crates: a step up to the lean-to roof, cover around the yard.
-            foreach (var c in new[] { new Vector3(-22.6f, 0f, 38.9f), new Vector3(19.6f, 0f, 70.5f), new Vector3(-33f, 0f, 76f), new Vector3(-33f, 0f, 77.1f) })
+            foreach (var c in new[] { new Vector3(-22.6f, 0f, 38.9f), new Vector3(20.6f, 0f, 82f), new Vector3(-33f, 0f, 76f), new Vector3(-33f, 0f, 77.1f),
+                         new Vector3(-36f, 0f, 6f), new Vector3(38f, 0f, -14f) })
                 StaticCrate(farm, c, wood, kit);
             Crops(farm, new Vector2(-46f, 58f), new Vector2(-30f, 70f));
 
+            // Armed's three bullseyes on poles around the farm (the gate latch).
+            foreach (var foot in BullseyePoles) BullseyePole(farm, foot, darkWood);
+
             Scenery(r);
+        }
+
+        /// <summary>Bullseye pole (the ShootTarget is network-spawned on top, see FarmSpawnPoints): kit post look.</summary>
+        static void BullseyePole(Transform parent, Vector3 foot, Material wood)
+        {
+            bool kit = Kit.Available;
+            Solid("BullseyePole", parent, foot + new Vector3(0f, 2.5f, 0f), new Vector3(0.35f, 5f, 0.35f), wood, kit);
+            if (kit) Kit.Fit("Corner_ExteriorWide_Wood", parent, foot + new Vector3(0f, 2.5f, 0f), new Vector3(0.4f, 5f, 0.4f), 0f);
+        }
+
+        /// <summary>Low fenced pen (pigs hop over): colliders 1 m high + fence look; a gap in the north side (gapNorth: x range) or the west side (z range).</summary>
+        static void Pen(Transform parent, Vector2 min, Vector2 max, Vector2 gap, bool gapNorth, Material wood, bool fenceLook)
+        {
+            void Side(Vector3 a, Vector3 b)
+            {
+                Vector3 d = b - a;
+                if (d.magnitude < 0.2f) return;
+                Vector3 c = (a + b) / 2f + Vector3.up * 0.5f;
+                bool alongX = Mathf.Abs(d.x) > Mathf.Abs(d.z);
+                Solid("PenFence", parent, c, alongX ? new Vector3(d.magnitude, 1f, 0.15f) : new Vector3(0.15f, 1f, d.magnitude), wood, fenceLook);
+                if (fenceLook) FenceRun(parent, a, b, wood, 1f);
+            }
+            Vector3 p(float x, float z) => new(x, 0f, z);
+            Side(p(min.x, min.y), p(max.x, min.y));
+            Side(p(max.x, min.y), p(max.x, max.y));
+            if (gapNorth)
+            {
+                Side(p(min.x, max.y), p(gap.x, max.y));
+                Side(p(gap.y, max.y), p(max.x, max.y));
+                Side(p(min.x, min.y), p(min.x, max.y));
+            }
+            else
+            {
+                Side(p(min.x, max.y), p(max.x, max.y));
+                // gap on the west side (gap = z range); a gap outside the side's range means "closed"
+                Side(p(min.x, min.y), p(min.x, Mathf.Clamp(gap.x, min.y, max.y)));
+                Side(p(min.x, Mathf.Clamp(gap.y, min.y, max.y)), p(min.x, max.y));
+            }
+        }
+
+        /// <summary>
+        /// The farm's exit in the north fence: a little roofed gatehouse (kit walls) with the electric fence and the exit gate
+        /// inside (network-spawned), four lamps over the entrance (key, fence, power, targets) and the padlock post beside it.
+        /// </summary>
+        static void Gatehouse(Transform parent, bool kit, Material darkWood)
+        {
+            var wall = Mat("BarnWall", new Color(0.65f, 0.18f, 0.15f));
+            var house = new GameObject("Gatehouse").transform;
+            house.SetParent(parent, false);
+            float zc = (GateZ0 + GateZ1) / 2f, len = GateZ1 - GateZ0;
+            Solid("GatehouseW", house, new Vector3(GateX - 2.2f, Story / 2f, zc), new Vector3(0.4f, Story, len), wall, kit);
+            Solid("GatehouseE", house, new Vector3(GateX + 2.2f, Story / 2f, zc), new Vector3(0.4f, Story, len), wall, kit);
+            Block("GatehouseRoof", house, new Vector3(GateX, Story + 0.15f, zc), new Vector3(4.8f, 0.3f, len), darkWood);
+            if (kit)
+            {
+                Kit.WallRun(house, new Vector3(GateX - 2f, 0f, GateZ0), new Vector3(GateX - 2f, 0f, GateZ1), Vector3.left, 1, (_, _) => "Wall_UnevenBrick_Straight");
+                Kit.WallRun(house, new Vector3(GateX + 2f, 0f, GateZ0), new Vector3(GateX + 2f, 0f, GateZ1), Vector3.right, 1, (_, _) => "Wall_UnevenBrick_Straight");
+                Kit.Fit("Roof_RoundTiles_4x6", house, new Vector3(GateX, Story + 1.6f, zc), new Vector3(5.8f, 3.4f, len + 0.8f), 0f, keepLongSide: true);
+            }
+            var lampMat = Mat("Lamp", Color.white);
+            string[] names = { "KEY", "FENCE", "POWER", "TARGETS" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                float x = GateX - 1.5f + i * 1f;
+                var lamp = Part(PrimitiveType.Sphere, "GateLamp", house, new Vector3(x, Story - 0.35f, GateZ0 - 0.3f), Vector3.one * 0.4f, lampMat);
+                var objectiveLamp = lamp.AddComponent<ObjectiveLamp>();
+                objectiveLamp.objective = i;
+                objectiveLamp.lamp = lamp.GetComponent<Renderer>();
+                Label(house, names[i], new Vector3(x, Story - 0.85f, GateZ0 - 0.35f), Color.white, 0.022f);
+            }
+            PointLight(house, new Vector3(GateX, 2.4f, GateZ0 - 1f), new Color(0.8f, 1f, 0.8f), 8f, 1.2f);
+        }
+
+        /// <summary>
+        /// Bob's garage (x -46..-38, z -4..4): kit walls, big door on the east side (network-spawned Gate, channel GarageDoor:
+        /// opens for good once both garage plates are pressed together - ChannelLatch), the fuel can inside.
+        /// </summary>
+        static void Garage(Transform parent, bool kit, Material wood, Material darkWood)
+        {
+            var plaster = Mat("HouseWall", new Color(0.92f, 0.86f, 0.72f));
+            var garage = new GameObject("Garage").transform;
+            garage.SetParent(parent, false);
+            const float x0 = -46f, x1 = -38f, z0 = -4f, z1 = 4f, t = 0.4f, gable = 7.8f;
+            Solid("GarageW", garage, new Vector3(x0 - 0.2f, gable / 2f, 0f), new Vector3(t, gable, z1 - z0 + 0.8f), plaster, kit);
+            Solid("GarageN", garage, new Vector3((x0 + x1) / 2f, Story / 2f, z1 + 0.2f), new Vector3(x1 - x0 + 0.8f, Story, t), plaster, kit);
+            Solid("GarageS", garage, new Vector3((x0 + x1) / 2f, Story / 2f, z0 - 0.2f), new Vector3(x1 - x0 + 0.8f, Story, t), plaster, kit);
+            Solid("GarageE1", garage, new Vector3(x1 + 0.2f, gable / 2f, -3.2f), new Vector3(t, gable, 2.4f), plaster, kit);
+            Solid("GarageE2", garage, new Vector3(x1 + 0.2f, gable / 2f, 3.2f), new Vector3(t, gable, 2.4f), plaster, kit);
+            Solid("GarageLintel", garage, new Vector3(x1 + 0.2f, (Story + gable) / 2f, 0f), new Vector3(t, gable - Story, 4f), plaster, kit);
+            RoofSlopes(garage, x0, x1, z0, z1, Story);
+            if (kit)
+            {
+                KitHouse(garage, x0, x1, z0, z1, 1, (side, i, _) => side == 2 && (i == 1 || i == 2) ? null
+                    : side == 2 ? "Wall_UnevenBrick_Straight" : "Wall_Plaster_WoodGrid");
+                Kit.FloorTiles("Floor_Brick", garage, new Vector2(x0, z0), new Vector2(x1, z1), 0.02f);
+            }
+            else Block("GarageRoof", garage, new Vector3((x0 + x1) / 2f, Story + 0.15f, 0f), new Vector3(x1 - x0 + 0.8f, 0.3f, z1 - z0 + 0.8f), darkWood);
+            Table(garage, new Vector3(-44.5f, 0f, 2.8f), wood);
+            StaticCrate(garage, new Vector3(-45f, 0f, -2.8f), wood, kit);
+            PointLight(garage, new Vector3(-42f, 2.6f, 0f), new Color(1f, 0.85f, 0.6f), 8f, 1.2f);
+            var latch = new GameObject("GarageDoorLatch").AddComponent<ChannelLatch>(); // both plates at once → the door stays open
+            latch.transform.SetParent(garage, false);
+            latch.inputs = new[] { ChannelIds.GatePlateA, ChannelIds.GatePlateB };
+            latch.output = ChannelIds.GarageDoor;
+        }
+
+        /// <summary>The pigs' sty east of the barn (x 26..36, z -12..-2), where every round starts: low fence, mud, trough.</summary>
+        static void PigSty(Transform parent, Material wood, Material darkWood)
+        {
+            bool fences = ArtSetup.FarmBuilding("Fence") != null || Kit.Available;
+            Pen(parent, new Vector2(26f, -12f), new Vector2(36f, -2f), new Vector2(-8f, -6f), false, wood, fences);
+            Mud(parent, new Vector3(33.5f, 0f, -9.5f), 1.8f);
+            Block("StyTrough", parent, new Vector3(30f, 0.25f, -11.4f), new Vector3(2.4f, 0.5f, 0.6f), darkWood);
+            Block("StyShelter", parent, new Vector3(34.5f, 1.6f, -3.2f), new Vector3(3f, 0.2f, 2.4f), darkWood);
+            foreach (var (x, z) in new[] { (33.2f, -2.2f), (35.8f, -2.2f), (33.2f, -4.2f), (35.8f, -4.2f) })
+                Block("ShelterPost", parent, new Vector3(x, 0.75f, z), new Vector3(0.15f, 1.5f, 0.15f), darkWood);
+        }
+
+        /// <summary>Colliders for a closed building: one box for the walls, gable boxes up to the ridge, two roof slopes (pigs slide off).</summary>
+        static void ClosedKitHouse(Transform parent, string name, float x0, float x1, float z0, float z1, int stories,
+            System.Func<int, int, int, string> pick)
+        {
+            var root = new GameObject(name).transform;
+            root.SetParent(parent, false);
+            float top = stories * Story;
+            Invisible(Block(name + "Collider", root, new Vector3((x0 + x1) / 2f, top / 2f, (z0 + z1) / 2f), new Vector3(x1 - x0 + 0.8f, top, z1 - z0 + 0.8f), null));
+            RoofSlopes(root, x0, x1, z0, z1, top);
+            KitHouse(root, x0, x1, z0, z1, stories, pick);
+        }
+
+        /// <summary>Invisible roof: two slopes from the eaves to the ridge (along x) + gable boxes - pigs that land up there slide off.</summary>
+        static void RoofSlopes(Transform parent, float x0, float x1, float z0, float z1, float top)
+        {
+            float span = z1 - z0, k = span / 6f, rise = 4.6f * k, run = span / 2f + 0.6f;
+            float angle = Mathf.Atan2(rise, run) * Mathf.Rad2Deg, slope = Mathf.Sqrt(rise * rise + run * run);
+            float xc = (x0 + x1) / 2f, zc = (z0 + z1) / 2f;
+            foreach (float side in new[] { -1f, 1f })
+                PassThrough(Invisible(Block("RoofSlope", parent, new Vector3(xc, top + 0.1f + rise / 2f, zc + side * run / 2f),
+                    new Vector3(x1 - x0 + 1.7f, 0.3f, slope), null, new Vector3(side * angle, 0f, 0f))));
+            foreach (float x in new[] { x0 - 0.2f, x1 + 0.2f })
+                Invisible(Block("Gable", parent, new Vector3(x, top + rise / 2f, zc), new Vector3(0.4f, rise, span * 0.5f), null));
         }
 
         /// <summary>
@@ -336,10 +495,26 @@ namespace Porkour.EditorTools
             Label(truck, "GETAWAY TRUCK", o + new Vector3(0f, 3.6f, 2f), new Color(0.5f, 1f, 0.5f), 0.07f);
         }
 
-        /// <summary>Spawn points in the farmyard and Bob's house.</summary>
+        /// <summary>Spawn points in the farmyard, the gatehouse, the garage and Bob's house.</summary>
         static void FarmSpawnPoints(Transform spawnRoot, List<NetSpawnPoint> points, PrefabSet p)
         {
-            // Bob's house: chimney chute, front door (opens from inside), shuttered window + its bullseye, boarded back door.
+            // The pigs start in their sty east of the barn.
+            for (int i = 0; i < 4; i++)
+                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", p.pig, new Vector3(28f + i * 1.8f, 1f, -7f), rotation: Quaternion.Euler(0f, -60f, 0f)));
+
+            // Gatehouse (mission 1): electric fence (fuse box in the barn), exit gate (padlock + generator + 3 bullseyes).
+            points.Add(SpawnPoint(spawnRoot, "Padlock", p.padlock, new Vector3(GateX - 4f, 0f, GateZ0 - 1.5f), channel: ChannelIds.Padlock));
+            points.Add(SpawnPoint(spawnRoot, "ElectricFence", p.fence, new Vector3(GateX, 1.55f, GateZ0 + 1.2f), channel: ChannelIds.Fence));
+            points.Add(SpawnPoint(spawnRoot, "ExitGate", p.exitGate, new Vector3(GateX, 1.55f, GateZ1 - 1.4f)));
+            int[] targets = { ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3 };
+            for (int i = 0; i < BullseyePoles.Length; i++)
+            {
+                Vector3 foot = BullseyePoles[i], face = new Vector3(-foot.x, 0f, 40f - foot.z).normalized; // facing the middle of the farm
+                points.Add(SpawnPoint(spawnRoot, $"Bullseye {i + 1}", p.target, foot + new Vector3(0f, 4.6f, 0f) + face * 0.3f, channel: targets[i],
+                    rotation: Quaternion.LookRotation(face)));
+            }
+
+            // Bob's house (mission 2): chimney chute, front door (opens from inside), shuttered window + its bullseye, boarded back door.
             points.Add(SpawnPoint(spawnRoot, "ChimneyChute", p.chimney, ChimneyTop));
             points.Add(SpawnPoint(spawnRoot, "HouseDoor", p.houseDoor, new Vector3(-15f, 1.225f, 33.8f), channel: ChannelIds.HouseDoor));
             points.Add(SpawnPoint(spawnRoot, "WindowShutter", p.shutter, new Vector3(-11.8f, 1.88f, 37f), channel: ChannelIds.HouseWindow,
@@ -350,39 +525,58 @@ namespace Porkour.EditorTools
             points.Add(SpawnPoint(spawnRoot, "TruckKeys", p.truckKeys, new Vector3(-13.4f, 1f, 38.8f)));
             points.Add(SpawnPoint(spawnRoot, "Pie", p.pie, new Vector3(-18.6f, 1f, 38.8f)));
             points.Add(SpawnPoint(spawnRoot, "PiggyBank", p.piggyBank, new Vector3(-17.5f, 0.5f, 36.8f)));
-            // Truck ignition, the farm gate and its two plates (required missions).
             points.Add(SpawnPoint(spawnRoot, "Ignition", p.ignition, TruckPos + IgnitionOffset, channel: ChannelIds.Truck));
-            points.Add(SpawnPoint(spawnRoot, "FarmGate", p.farmGate, FarmGatePos, channel: ChannelIds.FarmGate));
-            points.Add(SpawnPoint(spawnRoot, "GatePlate A", p.gatePlate, GatePlateAPos, channel: ChannelIds.GatePlateA));
-            points.Add(SpawnPoint(spawnRoot, "GatePlate B", p.gatePlate, GatePlateBPos, channel: ChannelIds.GatePlateB));
+
+            // Garage (mission 3): both plates at once → the door opens for good → fuel can → the truck's fuel cap.
+            points.Add(SpawnPoint(spawnRoot, "GarageDoor", p.garageDoor, new Vector3(-37.8f, 1.55f, 0f), channel: ChannelIds.GarageDoor));
+            points.Add(SpawnPoint(spawnRoot, "GaragePlate A", p.gatePlate, GaragePlateA, channel: ChannelIds.GatePlateA));
+            points.Add(SpawnPoint(spawnRoot, "GaragePlate B", p.gatePlate, GaragePlateB, channel: ChannelIds.GatePlateB));
+            points.Add(SpawnPoint(spawnRoot, "FuelCan", p.fuelCan, new Vector3(-42.5f, 0.4f, -0.5f)));
+            points.Add(SpawnPoint(spawnRoot, "FuelCap", p.fuelCap, TruckPos + FuelCapOffset, channel: ChannelIds.Fuel));
 
             // Animals, props, ammo.
-            foreach (var pos in new[] { new Vector3(20f, 0.35f, 24f), new Vector3(22f, 0.35f, 25f), new Vector3(20.5f, 0.35f, 21.5f) })
+            foreach (var pos in new[] { new Vector3(20f, 0.35f, 24f), new Vector3(22f, 0.35f, 25f), new Vector3(20.5f, 0.35f, 21.5f), new Vector3(45f, 0.35f, -7f) })
                 points.Add(SpawnPoint(spawnRoot, "Chicken", p.chicken, pos));
             points.Add(SpawnPoint(spawnRoot, "Calf", p.calf, new Vector3(34f, 0.55f, 55f)));
-            points.Add(SpawnPoint(spawnRoot, "Bucket", p.bucket, new Vector3(9f, 0.55f, 30f)));
-            points.Add(SpawnPoint(spawnRoot, "Bucket", p.bucket, new Vector3(-9f, 0.55f, 38f)));
-            points.Add(SpawnPoint(spawnRoot, "Bucket", p.bucket, new Vector3(-30f, 0.55f, 60f)));
-            foreach (var pos in new[] { new Vector3(-25f, 0.5f, 41f), new Vector3(-26.3f, 0.5f, 41.4f), new Vector3(10f, 0.5f, 70f), new Vector3(-28f, 0.5f, 76f) })
+            foreach (var pos in new[] { new Vector3(9f, 0.55f, 30f), new Vector3(-9f, 0.55f, 38f), new Vector3(-30f, 0.55f, 60f), new Vector3(24f, 0.55f, -8f),
+                         new Vector3(-48f, 0.55f, 30f), new Vector3(46f, 0.55f, 70f) })
+                points.Add(SpawnPoint(spawnRoot, "Bucket", p.bucket, pos));
+            foreach (var pos in new[]
+                     {
+                         new Vector3(-25f, 0.5f, 41f), new Vector3(-26.3f, 0.5f, 41.4f), new Vector3(10f, 0.5f, 70f), new Vector3(-28f, 0.5f, 76f),
+                         new Vector3(48f, 0.5f, 30f), new Vector3(-36f, 0.5f, -10f), new Vector3(-48f, 0.5f, 72f), new Vector3(23f, 0.5f, -12f),
+                     })
                 points.Add(SpawnPoint(spawnRoot, "Crate", p.crate, pos));
-            foreach (var pos in new[] { new Vector3(6f, 0.6f, 48.5f), new Vector3(-8f, 0.6f, 24f) })
+            foreach (var pos in new[] { new Vector3(6f, 0.6f, 48.5f), new Vector3(-8f, 0.6f, 24f), new Vector3(-36.5f, 0.6f, 5f), new Vector3(52f, 0.6f, 10f) })
                 points.Add(SpawnPoint(spawnRoot, "Barrel", p.barrel, pos));
             points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(2f, 0.45f, 50f), contents: p.corn));
             points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(-10f, 0.45f, 32f), contents: p.apple));
             points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(30f, 0.45f, 76f), contents: p.egg));
+            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(44f, 0.45f, 20f), contents: p.corn));
+            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(-50f, 0.45f, 50f), contents: p.apple));
+            AmmoPile(spawnRoot, points, p.apple, new Vector3(29f, 0.2f, -10.5f), 4); // in the sty: Armed starts with something to shoot
             AmmoPile(spawnRoot, points, p.corn, new Vector3(19.5f, 0.2f, 23f), 3);
             AmmoPile(spawnRoot, points, p.egg, new Vector3(22.5f, 0.2f, 21f), 2);
+            AmmoPile(spawnRoot, points, p.bolt, new Vector3(55f, 0.2f, 10.5f), 3);
 
             // Loot + coins (team money for the shop later).
             points.Add(SpawnPoint(spawnRoot, "GoldenEgg", p.goldenEgg, new Vector3(24.4f, 3f, 21.6f))); // on the coop roof
+            points.Add(SpawnPoint(spawnRoot, "GoldenEgg", p.goldenEgg, new Vector3(48f, 3f, -10f)));     // on the second coop
             foreach (var pos in new[]
                      {
                          new Vector3(-16f, 0.7f, 37f), new Vector3(-16f, 0.7f, 42.5f), new Vector3(-38f, 0.7f, 58f), new Vector3(40f, 0.7f, 62f),
                          new Vector3(-31f, 0.7f, 84f), new Vector3(-37f, 0.7f, 31f), new Vector3(36f, 0.7f, 80f), new Vector3(9f, 0.7f, 61f),
-                         new Vector3(-26f, 1.85f, 35.6f), new Vector3(0f, 0.7f, 57f), new Vector3(44f, 0.7f, 25f),
+                         new Vector3(-26f, 1.85f, 35.6f), new Vector3(0f, 0.7f, 57f), new Vector3(44f, 0.7f, 25f), new Vector3(-56f, 0.7f, 26.5f),
+                         new Vector3(55f, 0.7f, 30f), new Vector3(60f, 0.7f, 70f), new Vector3(-58f, 0.7f, 80f), new Vector3(30f, 0.7f, -14f),
+                         new Vector3(-50f, 0.7f, -10f), new Vector3(2f, 0.7f, 88f), new Vector3(-20f, 0.7f, 70f), new Vector3(28f, 0.7f, 92f),
+                         new Vector3(-41f, 0.7f, 2f),
                      })
                 points.Add(SpawnPoint(spawnRoot, "Coin", p.coin, pos));
-            foreach (var pos in new[] { ChimneyTop + Vector3.up * 0.7f, new Vector3(-22.5f, 2.95f, 34.4f), TruckPos + new Vector3(0f, 2.95f, 3.3f) })
+            foreach (var pos in new[]
+                     {
+                         ChimneyTop + Vector3.up * 0.7f, new Vector3(-22.5f, 2.95f, 34.4f), TruckPos + new Vector3(0f, 2.95f, 3.3f),
+                         new Vector3(34.5f, 2.4f, -3.2f), new Vector3(0f, 3.3f, 54f),
+                     })
                 points.Add(SpawnPoint(spawnRoot, "BigCoin", p.bigCoin, pos));
         }
 
@@ -438,17 +632,23 @@ namespace Porkour.EditorTools
             scenery.SetParent(r, false);
             foreach (var (x, z, s) in new[]
                      {
-                         (-54f, 20f, 1.2f), (-57f, 52f, 1.4f), (54f, 28f, 1.3f), (57f, 66f, 1.1f), (-18f, 98f, 1.5f), (6f, 100f, 1.2f),
-                         (34f, 99f, 1.4f), (-12f, -42f, 1.2f), (14f, -43f, 1.3f), (-27f, -6f, 1.4f), (27f, 4f, 1.2f), (26f, -22f, 1.5f),
-                         (-25f, -26f, 1.1f), (-62f, 8f, 1.6f), (63f, 14f, 1.5f), (-40f, 104f, 1.7f), (-55f, 80f, 1.3f), (55f, 88f, 1.4f),
+                         (-70f, 0f, 1.3f), (-72f, 20f, 1.2f), (-69f, 44f, 1.4f), (-74f, 62f, 1.1f), (-70f, 86f, 1.5f), (-78f, 10f, 1.6f),
+                         (-82f, 50f, 1.3f), (-76f, 100f, 1.7f), (70f, -6f, 1.2f), (72f, 14f, 1.5f), (69f, 60f, 1.3f), (74f, 76f, 1.4f),
+                         (70f, 96f, 1.2f), (84f, 40f, 1.6f), (80f, 22f, 1.3f), (-50f, 108f, 1.5f), (-24f, 106f, 1.2f), (0f, 110f, 1.4f),
+                         (40f, 106f, 1.3f), (56f, 112f, 1.6f), (-12f, -42f, 1.2f), (14f, -43f, 1.3f), (26f, -22f, 1.5f), (-25f, -26f, 1.1f),
+                         (-44f, -24f, 1.4f), (44f, -26f, 1.2f), (60f, -22f, 1.5f), (-60f, -24f, 1.3f),
                      })
                 Tree(scenery, new Vector3(x, 0f, z), s);
-            FarmBuildingAt(scenery, "BigBarn", new Vector3(74f, 0f, 30f), -90f, 10f, new Vector3(10f, 10f, 10f), Mat("BarnWall", new Color(0.65f, 0.18f, 0.15f)), collide: false);
-            FarmBuildingAt(scenery, "Silo", new Vector3(70f, 0f, 44f), 0f, 12f, new Vector3(3f, 12f, 3f), Mat("Stone", new Color(0.5f, 0.5f, 0.52f)), collide: false);
+            var red = Mat("BarnWall", new Color(0.65f, 0.18f, 0.15f));
+            var stone = Mat("Stone", new Color(0.5f, 0.5f, 0.52f));
+            FarmBuildingAt(scenery, "BigBarn", new Vector3(78f, 0f, 32f), -90f, 10f, new Vector3(10f, 10f, 10f), red, collide: false);
+            FarmBuildingAt(scenery, "Silo", new Vector3(76f, 0f, 46f), 0f, 12f, new Vector3(3f, 12f, 3f), stone, collide: false);
+            FarmBuildingAt(scenery, "Windmill", new Vector3(-80f, 0f, 74f), 90f, 13f, new Vector3(3f, 11f, 3f), stone, colliderXZ: 0.35f, spin: true, collide: false);
+            FarmBuildingAt(scenery, "SmallBarn", new Vector3(-40f, 0f, 116f), 0f, 6.4f, new Vector3(8f, 6f, 8f), red, collide: false);
             if (!Kit.Available) return;
-            Cottage(scenery, -66f, -58f, 26f, 32f, 2);
-            Cottage(scenery, 56f, 64f, 52f, 58f, 1);
-            Cottage(scenery, 24f, 32f, 104f, 110f, 2);
+            Cottage(scenery, -82f, -74f, 26f, 32f, 2);
+            Cottage(scenery, 72f, 80f, 52f, 58f, 1);
+            Cottage(scenery, 24f, 32f, 106f, 112f, 2);
         }
 
         // ---------- models: farm buildings, animals, trees, vehicles, crops ----------
@@ -481,15 +681,24 @@ namespace Porkour.EditorTools
                 GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic);
         }
 
-        /// <summary>A Cube Pets animal standing around for the look (idle animation, no physics).</summary>
-        static void DecorAnimal(Transform parent, string animal, Vector3 pos, float yaw, float height) =>
-            AnimalVisual(animal, parent, height, parent.InverseTransformPoint(pos), 1f, 3f, out _)?.transform.Rotate(0f, yaw, 0f, Space.World);
+        /// <summary>A Cube Pets animal standing around for the look (idle animation); big ones (cows) get an invisible box to bump into.</summary>
+        static void DecorAnimal(Transform parent, string animal, Vector3 pos, float yaw, float height)
+        {
+            var go = AnimalVisual(animal, parent, height, parent.InverseTransformPoint(pos), 1f, 3f, out var bounds);
+            if (go == null) return;
+            go.transform.RotateAround(pos, Vector3.up, yaw); // FitModel centred the model's bounds on pos
+            if (height < 1f) return;
+            Invisible(Block(animal + "Collider", parent, pos + Vector3.up * bounds.size.y / 2f,
+                new Vector3(bounds.size.x * 0.8f, bounds.size.y, bounds.size.z * 0.8f), null, new Vector3(0f, yaw, 0f)));
+        }
 
         static List<GameObject> treeModels;
 
         /// <summary>A tree: a model from an added nature pack (any file named *tree* / pine / oak / birch), else a primitive one.</summary>
-        static void Tree(Transform parent, Vector3 position, float size = 1f)
+        static void Tree(Transform parent, Vector3 position, float size = 1f, bool collide = false)
         {
+            if (collide) // trunk (inside the farm: pigs and Bob bump into it)
+                Invisible(Block("TreeTrunkCollider", parent, position + Vector3.up * 1.5f * size, new Vector3(0.6f, 1.5f, 0.6f) * size, null, default, PrimitiveType.Cylinder));
             treeModels ??= ArtSetup.FindModels(new[] { "tree", "pine", "oak", "birch", "willow" }, new[] { "street", "stump", "log", "dead" });
             if (treeModels.Count > 0)
             {

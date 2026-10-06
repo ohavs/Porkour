@@ -72,6 +72,8 @@ namespace Porkour
         /// <summary>Who carries this pig - another pig or Farmer Bob (null when free).</summary>
         public IPigCarrier HeldBy { get; private set; }
         public bool IsHeld => HeldBy != null;
+        /// <summary>Server: Bob's cage this pig is locked in (walks around inside, no powers / grabbing), or null.</summary>
+        public PigCage CagedIn { get; set; }
         /// <summary>Set by the grabber: carrying heavy things slows you down.</summary>
         public float SpeedMultiplier { get; set; } = 1f;
         /// <summary>Set by abilities (dash, belly flop) that drive the body themselves: no run/turn/jump.</summary>
@@ -343,6 +345,7 @@ namespace Porkour
 
         public void Respawn()
         {
+            if (CagedIn != null) CagedIn.Release(this, false);
             if (IsHeld) HeldBy.Drop();
             if (Grabber != null) Grabber.Drop();
             TeleportTo(spawnPosition, spawnRotation);

@@ -11,7 +11,7 @@ namespace Porkour
         public Vector3 Move, Aim;
         public bool JumpHeld, SprintHeld, GrabHeld, AbilityHeld;
         // Press counters (wrap around) so quick taps are never lost between sends.
-        public byte JumpPresses, GrabPresses, AbilityPresses, SwitchPresses;
+        public byte JumpPresses, GrabPresses, AbilityPresses, SwitchPresses, OinkPresses;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
@@ -25,6 +25,7 @@ namespace Porkour
             serializer.SerializeValue(ref GrabPresses);
             serializer.SerializeValue(ref AbilityPresses);
             serializer.SerializeValue(ref SwitchPresses);
+            serializer.SerializeValue(ref OinkPresses);
         }
     }
 
@@ -50,17 +51,19 @@ namespace Porkour
         public bool UsingGamepad { get; private set; }
         /// <summary>Owner: seconds since this player last touched a control (HUD "frozen" hint).</summary>
         public float IdleTime => Time.time - lastInputTime;
+        /// <summary>Owner: the missions key (Tab / Select) is held - the HUD shows the mission list + markers.</summary>
+        public bool MissionsHeld => missionsAction != null && missionsAction.IsPressed();
 
         // Owner side
         InputActionAsset actions;
-        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, abilityAction, switchAction;
+        InputAction moveAction, lookAction, jumpAction, sprintAction, grabAction, abilityAction, switchAction, missionsAction, oinkAction;
         ThirdPersonCamera cam;
         PigInputFrame pending;
         float nextSendTime, lastInputTime;
 
         // Server side
         PigInputFrame latest;
-        byte lastJump, lastGrab, lastAbility, lastSwitch;
+        byte lastJump, lastGrab, lastAbility, lastSwitch, lastOink;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
@@ -84,6 +87,8 @@ namespace Porkour
                 grabAction = actions["Grab"];
                 abilityAction = actions["Ability"];
                 switchAction = actions["SwitchPig"];
+                missionsAction = actions.FindAction("Missions"); // optional (older input assets)
+                oinkAction = actions.FindAction("Oink");
                 actions.Enable();
                 if (Camera.main != null) cam = Camera.main.GetComponent<ThirdPersonCamera>();
                 var hud = gameObject.AddComponent<PlayerHud>();
@@ -139,6 +144,7 @@ namespace Porkour
             if (grabAction.WasPressedThisFrame()) pending.GrabPresses++;
             if (abilityAction.WasPressedThisFrame()) pending.AbilityPresses++;
             if (switchAction.WasPressedThisFrame()) pending.SwitchPresses++;
+            if (oinkAction != null && oinkAction.WasPressedThisFrame()) pending.OinkPresses++;
 
             // Camera-relative stick → world direction; aim = where the camera looks.
             Vector3 aim = cam != null ? cam.transform.forward : (Pig != null ? Pig.transform.forward : Vector3.forward);
@@ -181,13 +187,16 @@ namespace Porkour
             int grabs = (byte)(frame.GrabPresses - lastGrab);
             int abilities = (byte)(frame.AbilityPresses - lastAbility);
             int switches = (byte)(frame.SwitchPresses - lastSwitch);
+            int oinks = (byte)(frame.OinkPresses - lastOink);
             lastJump = frame.JumpPresses;
             lastGrab = frame.GrabPresses;
             lastAbility = frame.AbilityPresses;
             lastSwitch = frame.SwitchPresses;
+            lastOink = frame.OinkPresses;
 
             if (switches > 0) SwitchToNextFreePig();
             if (Pig == null) return;
+            if (oinks > 0 && Pig.TryGetComponent(out PigNet net)) net.Oink();
             for (int i = 0; i < Mathf.Min(jumps, 3); i++) Pig.PressJump();
             if (grabs > 0 && Pig.Grabber != null)
             {
