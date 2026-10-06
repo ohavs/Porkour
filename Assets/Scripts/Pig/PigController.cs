@@ -30,9 +30,11 @@ namespace Porkour
         public float sprintSpeed = 9f;
         public float groundAcceleration = 30f;
         public float groundDeceleration = 40f;
-        public float airAcceleration = 15f;
-        [Tooltip("Horizontal slow-down in the air with no input.")]
+        public float airAcceleration = 18f;
+        [Tooltip("Horizontal slow-down in the air with no input after being thrown / launched (keeps momentum).")]
         public float airDrag = 5f;
+        [Tooltip("Horizontal braking in the air with no input during your own jumps (let go = stop drifting).")]
+        public float airBrake = 24f;
         public float turnSpeed = 480f;
         [Tooltip("Face where the camera looks (A/D strafe sideways). Off = turn toward movement.")]
         public bool faceAimDirection = true;
@@ -101,7 +103,9 @@ namespace Porkour
         Vector3 spawnPosition;
         Quaternion spawnRotation;
         int struggleCount;
-        float speedFactor = 1f, jumpFactor = 1f, brakeFactor = 1f;
+        float speedFactor = 1f, jumpFactor = 1f, brakeFactor = 1f, airControl = 1f;
+        float keepMomentumUntil;
+        Vector3 lastMoveVelocity; // horizontal velocity Move() left us with last step
         float noClimbUntil;
         float lastActiveTime;
 
@@ -139,6 +143,7 @@ namespace Porkour
             speedFactor = info.Speed;
             jumpFactor = info.Jump;
             brakeFactor = info.Brake;
+            airControl = info.AirControl;
             rb.mass = info.Mass;
 
             Ability = null;
@@ -250,19 +255,27 @@ namespace Porkour
         {
             Vector3 velocity = rb.linearVelocity;
             Vector3 horizontal = new(velocity.x, 0f, velocity.z);
+            // Something else changed our speed since last step (thrown, blasted, slammed): let it carry for a moment.
+            if ((horizontal - lastMoveVelocity).magnitude > 2f) keepMomentumUntil = Time.time + 0.6f;
             Vector3 target = moveInput * ((sprintHeld ? sprintSpeed : walkSpeed) * speedFactor * SpeedMultiplier);
             bool hasInput = moveInput.sqrMagnitude > 0.01f;
             float dt = Time.fixedDeltaTime;
             Vector3 newHorizontal;
             if (IsGrounded)
                 newHorizontal = Vector3.MoveTowards(horizontal, target, (hasInput ? groundAcceleration : groundDeceleration * brakeFactor) * dt);
-            else if (!hasInput) // no input in the air: only light drag, so throws/knockbacks carry
-                newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, airDrag * dt);
+            else if (!hasInput)
+            {
+                // Own jump at running speed: let go = stop drifting (precise landings). Thrown / launched /
+                // knocked: only light drag so the momentum carries.
+                bool ownMotion = Time.time >= keepMomentumUntil && horizontal.magnitude <= sprintSpeed * speedFactor + 0.5f;
+                newHorizontal = Vector3.MoveTowards(horizontal, Vector3.zero, (ownMotion ? airBrake * airControl : airDrag) * dt);
+            }
             else if (horizontal.magnitude <= target.magnitude)
-                newHorizontal = Vector3.MoveTowards(horizontal, target, airAcceleration * dt);
+                newHorizontal = Vector3.MoveTowards(horizontal, target, airAcceleration * airControl * dt);
             else // flying faster than we can run (thrown): steer, don't brake
-                newHorizontal = Vector3.MoveTowards(horizontal, moveInput.normalized * horizontal.magnitude, airAcceleration * dt);
+                newHorizontal = Vector3.MoveTowards(horizontal, moveInput.normalized * horizontal.magnitude, airAcceleration * airControl * dt);
             rb.AddForce(newHorizontal - horizontal, ForceMode.VelocityChange);
+            lastMoveVelocity = newHorizontal;
         }
 
         void Turn()
@@ -309,6 +322,7 @@ namespace Porkour
         /// <summary>Ability launch (e.g. Rocket Fart): sets upward speed, adds a horizontal push, no short-hop braking.</summary>
         public void Launch(float upSpeed, Vector3 horizontalPush)
         {
+            keepMomentumUntil = Time.time + 0.4f; // the push carries even if the player lets go
             Vector3 velocity = rb.linearVelocity + new Vector3(horizontalPush.x, 0f, horizontalPush.z);
             velocity.y = upSpeed;
             rb.linearVelocity = velocity;

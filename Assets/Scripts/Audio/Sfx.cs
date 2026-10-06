@@ -11,9 +11,9 @@ namespace Porkour
     }
 
     /// <summary>
-    /// Placeholder sound effects, synthesized from code at startup (beeps, noise bursts, little jingles) so the
-    /// game has audio feedback before real sounds are imported. To replace one, drop an audio file named like the
-    /// Sound (e.g. "Fart.wav") into Assets/Resources/Sfx/ - it's used instead automatically.
+    /// Sound effects. Real clips come from the SoundBank (menu Porkour → Sounds; several clips = random variant);
+    /// any sound without clips uses a placeholder synthesized from code at startup (beeps, noise bursts, jingles).
+    /// A file named like the Sound in Assets/Resources/Sfx/ (e.g. "Fart.wav") also works.
     /// Local only: call it from code that already runs on every PC (PlayEffect, RPCs, NetworkVariable changes).
     /// </summary>
     public static class Sfx
@@ -21,10 +21,11 @@ namespace Porkour
         const int Rate = 22050;
         const int PoolSize = 24;
 
-        /// <summary>Master volume for all effects.</summary>
-        public static float Volume = 0.8f;
+        /// <summary>Volume for all effects (the SoundBank's effectsVolume when there is one).</summary>
+        public static float EffectsVolume => SoundBank.Instance != null ? SoundBank.Instance.effectsVolume : 0.8f;
 
-        static AudioClip[] clips;
+        static AudioClip[][] clips; // variants per Sound
+        static float[] volumes;
         static AudioSource[] pool;
         static int next;
         static readonly System.Random Rng = new(1234);
@@ -35,6 +36,7 @@ namespace Porkour
         static void ResetStatics()
         {
             clips = null;
+            volumes = null;
             pool = null;
             next = 0;
         }
@@ -43,10 +45,12 @@ namespace Porkour
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Prewarm() => EnsureClips();
 
+        /// <summary>A clip for this sound (random variant).</summary>
         public static AudioClip Clip(Sound sound)
         {
             EnsureClips();
-            return clips[(int)sound];
+            var variants = clips[(int)sound];
+            return variants.Length == 0 ? null : variants[UnityEngine.Random.Range(0, variants.Length)];
         }
 
         /// <summary>3D sound at a world position.</summary>
@@ -63,7 +67,7 @@ namespace Porkour
             Setup3D(src);
             src.clip = Clip(sound);
             src.loop = true;
-            src.volume = volume * Volume;
+            src.volume = volume * volumes[(int)sound] * EffectsVolume;
             src.playOnAwake = false;
             return src;
         }
@@ -77,7 +81,7 @@ namespace Porkour
             src.transform.position = position;
             src.spatialBlend = spatial ? 1f : 0f;
             src.pitch = 1f + UnityEngine.Random.Range(-pitchJitter, pitchJitter);
-            src.volume = Mathf.Clamp01(volume * Volume);
+            src.volume = Mathf.Clamp01(volume * volumes[(int)sound] * EffectsVolume);
             src.clip = clip;
             src.Play();
         }
@@ -123,16 +127,31 @@ namespace Porkour
         {
             if (clips != null) return;
             var sounds = (Sound[])Enum.GetValues(typeof(Sound));
-            clips = new AudioClip[sounds.Length];
+            clips = new AudioClip[sounds.Length][];
+            volumes = new float[sounds.Length];
+            var bank = SoundBank.Instance;
             foreach (var sound in sounds)
             {
+                int i = (int)sound;
+                volumes[i] = 1f;
+                var entry = bank != null ? bank.Find(sound) : null;
+                if (entry != null)
+                {
+                    var assigned = Array.FindAll(entry.clips ?? new AudioClip[0], c => c != null);
+                    if (assigned.Length > 0)
+                    {
+                        clips[i] = assigned;
+                        volumes[i] = entry.volume;
+                        continue;
+                    }
+                }
                 string name = sound.ToString();
                 var custom = Resources.Load<AudioClip>("Sfx/" + name);
-                if (custom != null) { clips[(int)sound] = custom; continue; }
+                if (custom != null) { clips[i] = new[] { custom }; continue; }
                 var data = Normalize(Make(sound));
                 var clip = AudioClip.Create(name, data.Length, 1, Rate, false);
                 clip.SetData(data, 0);
-                clips[(int)sound] = clip;
+                clips[i] = new[] { clip };
             }
         }
 

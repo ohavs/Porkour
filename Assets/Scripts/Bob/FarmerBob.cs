@@ -697,19 +697,8 @@ namespace Porkour
             }
             stars.gameObject.SetActive(false);
 
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) return;
-            var go = new GameObject("Mark");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = Vector3.up * 2.6f;
-            go.AddComponent<MeshRenderer>().sharedMaterial = font.material;
-            mark = go.AddComponent<TextMesh>();
-            mark.font = font;
-            mark.fontSize = 96;
-            mark.characterSize = 0.06f;
-            mark.fontStyle = FontStyle.Bold;
-            mark.anchor = TextAnchor.MiddleCenter;
-            mark.alignment = TextAlignment.Center;
+            mark = GameFonts.CreateTextMesh(transform, "Mark", 0.09f, Color.white);
+            mark.transform.localPosition = Vector3.up * 2.6f;
         }
 
         void UpdateIndicators()
@@ -727,13 +716,13 @@ namespace Porkour
             if (Time.time < speechUntil && !string.IsNullOrEmpty(speech))
             {
                 mark.text = speech;
-                mark.characterSize = 0.035f;
-                mark.color = Color.white;
+                mark.characterSize = 0.05f;
+                mark.color = new Color(1f, 0.97f, 0.85f);
             }
             else
             {
                 mark.text = s == BobState.Chasing ? "!" : s == BobState.Investigating ? "?" : "";
-                mark.characterSize = 0.06f;
+                mark.characterSize = 0.09f;
                 mark.color = s == BobState.Chasing ? new Color(1f, 0.2f, 0.1f) : new Color(1f, 0.9f, 0.2f);
             }
             var cam = Camera.main;

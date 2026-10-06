@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Text floating in the level ("TOOL SHED", "FREEDOM!"), built at runtime from the built-in font (local only).
+    /// Text floating in the level ("TOOL SHED", "FREEDOM!"), built at runtime in the game's title font (local only).
     /// Fixed labels read correctly when looking along the object's forward; billboard labels always face the camera.
     /// </summary>
     public class WorldLabel : MonoBehaviour
@@ -17,19 +17,7 @@ namespace Porkour
 
         void Awake()
         {
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) return;
-            var go = new GameObject("Text");
-            go.transform.SetParent(transform, false);
-            go.AddComponent<MeshRenderer>().sharedMaterial = font.material;
-            mesh = go.AddComponent<TextMesh>();
-            mesh.font = font;
-            mesh.fontSize = 64;
-            mesh.characterSize = characterSize;
-            mesh.fontStyle = FontStyle.Bold;
-            mesh.anchor = TextAnchor.MiddleCenter;
-            mesh.alignment = TextAlignment.Center;
-            mesh.color = color;
+            mesh = GameFonts.CreateTextMesh(transform, "Text", characterSize, color);
             mesh.text = text;
         }
 
