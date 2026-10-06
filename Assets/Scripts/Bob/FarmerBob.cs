@@ -510,8 +510,7 @@ namespace Porkour
             }
             if (lungeStart >= 0f)
             {
-                Stop();
-                if (d.sqrMagnitude > 0.01f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(d), 540f * Time.deltaTime);
+                MoveTo(target.Body.position, chaseSpeed * slow); // reaching while he runs: dodge sideways / jump / hit him
                 if (Time.time - lungeStart < grabWindup) return;
                 lungeStart = -1f;
                 if (d.magnitude <= grabRange + 0.5f && dy > -0.5f && dy < 1.8f && !IsHidden(target)) { GrabPig(target); return; }
@@ -706,9 +705,15 @@ namespace Porkour
             if (rb.TryGetComponent(out PigController pig))
             {
                 // Jumping on his head: stomp! (the pig bounces off)
-                if (!pig.IsGrounded && pig.Body.position.y > transform.position.y + 1.6f && speed >= stompSpeed)
+                if (!pig.IsGrounded && pig.Body.position.y > transform.position.y + 2.2f && speed >= stompSpeed)
                 {
-                    if (Stun()) pig.Launch(5f, (pig.Body.position - transform.position).normalized * 3f);
+                    if (Stun())
+                    {
+                        Vector3 away = pig.Body.position - transform.position;
+                        away.y = 0f;
+                        if (away.sqrMagnitude < 0.01f) away = -transform.forward;
+                        pig.Launch(5f, away.normalized * 3f); // bounce off his head, not back onto it
+                    }
                     return;
                 }
                 // Walking into Bob does nothing - only flying pigs (thrown / launched) or a Heavy belly slam.
@@ -727,8 +732,8 @@ namespace Porkour
         {
             if ((!Busy && state.Value != BobState.Away) || !RoundActive) return false; // also while guarding his grill
             if (Time.time < stunImmuneUntil) return false; // just got up - not again right away
-            stunImmuneUntil = Time.time + stunTime + 2.5f;
             dazedUntil = Time.time + stunTime + 1.5f; // after waking up he needs a moment before he spots anyone
+            stunImmuneUntil = dazedUntil;             // ...and can't be knocked out again until then
             string freed = carried != null ? PigTypes.Info(carried.Type).Name : null;
             Drop();
             ClearTarget();

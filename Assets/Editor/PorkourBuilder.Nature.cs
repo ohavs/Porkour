@@ -327,7 +327,7 @@ namespace Porkour.EditorTools
         /// With a nature pack (e.g. Quaternius Stylized Nature MegaKit): bushes (pigs hide in them), rocks (solid) and
         /// flowers / ferns / mushrooms scattered over free ground. Nothing happens without one.
         /// </summary>
-        static void ScatterNature(Transform r)
+        static void ScatterNature(Transform r, List<NetSpawnPoint> keepClear)
         {
             var bushes = ArtSetup.FindModelsByWord(new[] { "bush", "shrub", "hedge" }, new[] { "dead", "berry" });
             var rocks = ArtSetup.FindModelsByWord(new[] { "rock", "boulder", "pebble" }, new[] { "path", "wall", "tile", "brick", "cliff" });
@@ -339,7 +339,10 @@ namespace Porkour.EditorTools
             var rng = new System.Random(777);
             Scatter(bushes, 45, 1.1f, 1.6f, (go, b) =>
             {
-                var spot = go.AddComponent<HideSpot>();
+                var hide = new GameObject("BushHideSpot"); // at the bush's base, whatever the model's pivot
+                hide.transform.SetParent(root, false);
+                hide.transform.position = new Vector3(b.center.x, b.min.y, b.center.z);
+                var spot = hide.AddComponent<HideSpot>();
                 spot.radius = Mathf.Max(0.7f, Mathf.Min(b.extents.x, b.extents.z) * 0.9f);
                 spot.height = Mathf.Max(1f, b.size.y);
                 spot.hint = "Hidden in the bush";
@@ -354,7 +357,7 @@ namespace Porkour.EditorTools
                 for (int placed = 0, tries = 0; placed < count && tries < count * 8; tries++)
                 {
                     float x = Mathf.Lerp(-62f, 62f, (float)rng.NextDouble()), z = Mathf.Lerp(-14f, 98f, (float)rng.NextDouble());
-                    if (!FreeGround(x, z)) continue;
+                    if (!FreeGround(x, z) || NearSpawn(x, z)) continue;
                     var model = models[rng.Next(models.Count)];
                     float height = Mathf.Lerp(minHeight, maxHeight, (float)rng.NextDouble());
                     var go = FitModel(model, root, model.name, height, root.InverseTransformPoint(new Vector3(x, 0f, z)), (float)rng.NextDouble() * 360f, null, out var bounds);
@@ -364,6 +367,16 @@ namespace Porkour.EditorTools
                     NoGrassAround(bounds.center, bounds.size * 0.5f, 0f);
                     placed++;
                 }
+            }
+
+            bool NearSpawn(float x, float z)
+            {
+                foreach (var point in keepClear)
+                {
+                    Vector3 d = point.transform.position - new Vector3(x, 0f, z);
+                    if (d.x * d.x + d.z * d.z < 3f * 3f) return true; // pigs, plates, locks, props, coins stay free
+                }
+                return false;
             }
         }
 

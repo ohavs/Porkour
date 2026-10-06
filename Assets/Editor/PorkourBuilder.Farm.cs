@@ -370,7 +370,7 @@ namespace Porkour.EditorTools
             Kit.FloorTiles("Floor_WoodDark", stable, new Vector2(x0, loftZ), new Vector2(x1, z1), Story + 0.012f);
             Ladder(stable, new Vector3(58f, 0f, loftZ), Vector3.back, Story, wood);
             Haystack(stable, new Vector3(52.5f, Story, 24.5f), hay);
-            Block("LoftBale", stable, new Vector3(57.5f, Story + 0.5f, 25.2f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
+            Block("LoftBale", stable, new Vector3(57.5f, Story + 0.8f, 25.2f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
             // Stalls (south half): low dividers, a cow, a haystack to hide in, a trough.
             foreach (float x in new[] { 53.4f, 56.6f })
                 Block("StallWall", stable, new Vector3(x, 0.65f, 19.6f), new Vector3(0.15f, 1.3f, 3.2f), wood);
@@ -840,7 +840,7 @@ namespace Porkour.EditorTools
         /// <summary>Crop rows in a field if a pack with crops was added (corn, wheat, pumpkins...): decor, pigs walk through.</summary>
         static void Crops(Transform parent, Vector2 min, Vector2 max)
         {
-            var models = ArtSetup.FindModels(new[] { "corn", "wheat", "crop", "pumpkin", "carrot", "cabbage", "lettuce" });
+            var models = ArtSetup.FindModelsByWord(new[] { "corn", "wheat", "crop", "pumpkin", "carrot", "cabbage", "lettuce" });
             Part(PrimitiveType.Cube, "Field", parent, new Vector3((min.x + max.x) / 2f, 0.012f, (min.y + max.y) / 2f),
                 new Vector3(max.x - min.x, 0.02f, max.y - min.y), Mat("Field", new Color(0.42f, 0.3f, 0.18f)));
             NoGrassRect(min.x, min.y, max.x, max.y);
