@@ -246,4 +246,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b9fe1ee3f8b466b819cc3e19dae8a45, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Porkour.KeyItem
+  keyId: gate
+  labelText: KEY
+  labelColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  bonus: 0
   killHeight: -10
