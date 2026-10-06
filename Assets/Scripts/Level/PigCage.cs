@@ -46,6 +46,8 @@ namespace Porkour
         readonly NetworkVariable<bool> sabotaged = new();
         float lastRescuer;
         float nextSmoke;
+        MeshRenderer doorRing; // glowing "stand here" ring at the door while someone is caged (local visual)
+        Material ringMaterial;
 
         public int Count => caged != null ? caged.Count : 0;
         public bool Sabotaged => sabotaged.Value;
@@ -55,6 +57,29 @@ namespace Porkour
         public Vector3 GrillPoint => transform.TransformPoint(grill);
 
         void Awake() => caged = new NetworkList<Caged>();
+
+        public override void OnDestroy()
+        {
+            if (ringMaterial != null) Destroy(ringMaterial);
+            base.OnDestroy();
+        }
+
+        /// <summary>Shows rescuers where to stand (no screen text needed): pulses, brighter while the latch opens.</summary>
+        void UpdateDoorRing(bool any)
+        {
+            if (doorRing == null)
+            {
+                if (!any) return;
+                ringMaterial = FxUtil.NewMaterial(new Color(0.45f, 1f, 0.4f, 0.35f), true);
+                doorRing = FxUtil.NewMeshObject("DoorRing", PrimitiveType.Cylinder, transform, ringMaterial);
+                doorRing.transform.localPosition = door + Vector3.up * 0.03f;
+                doorRing.transform.localScale = new Vector3(unlockRadius * 2f, 0.01f, unlockRadius * 2f);
+            }
+            if (doorRing.enabled != any) doorRing.enabled = any && ringMaterial != null;
+            if (!any || ringMaterial == null) return;
+            float pulse = unlock.Value > 0f ? 0.55f + 0.2f * Mathf.Sin(Time.time * 12f) : 0.25f + 0.15f * Mathf.Sin(Time.time * 4f);
+            ringMaterial.SetColor(FxUtil.BaseColorId, new Color(0.45f, 1f, 0.4f, pulse));
+        }
 
         public override void OnNetworkSpawn() => Instance = this;
 
@@ -231,6 +256,7 @@ namespace Porkour
         {
             if (!IsSpawned) return;
             bool any = Soonest(out _, out float left);
+            UpdateDoorRing(any);
             if (label != null)
             {
                 string text = !any ? "" : unlock.Value > 0f ? $"OPENING {Mathf.RoundToInt(unlock.Value * 100f)}%"

@@ -66,6 +66,10 @@ namespace Porkour
         [Tooltip("...and are only noticed this close.")]
         public float frozenSpotRange = 3f;
         public float grabRange = 1.7f;
+        [Tooltip("Bob reaches for a pig this long before he has it: a hit now stuns him, a quick pig dodges (he stumbles).")]
+        public float grabWindup = 0.5f;
+        [Tooltip("A pig landing on Bob's head this fast stuns him (and bounces off).")]
+        public float stompSpeed = 2.5f;
         [Tooltip("Hit speed that stuns Bob (flying pigs need a bit more).")]
         public float stunHitSpeed = 7f;
 
@@ -104,6 +108,7 @@ namespace Porkour
         float nextLook, nextRepath, nextCallTime;
         float unreachableTime, nextThrow;
         float glanceAt, glanceUntil;
+        float lungeStart = -1f, stumbleUntil, dazedUntil, stunImmuneUntil;
         int throwsAtTarget;
         readonly Dictionary<PigController, float> ignoreUntil = new();
 
@@ -315,6 +320,7 @@ namespace Porkour
 
         void ClearTarget()
         {
+            lungeStart = -1f;
             target = null;
             targetId.Value = ulong.MaxValue;
             unreachableTime = 0f;
@@ -408,7 +414,7 @@ namespace Porkour
 
         bool TrySpot()
         {
-            if (Time.time < nextLook) return false;
+            if (Time.time < nextLook || Time.time < dazedUntil) return false; // still seeing stars after a stun
             nextLook = Time.time + 0.15f;
             if (SmokeCloud.InSmoke(Eyes)) return false; // blinded
             PigController best = null;
@@ -495,9 +501,22 @@ namespace Porkour
             Vector3 d = target.Body.position - transform.position;
             float dy = d.y;
             d.y = 0f;
-            if (d.magnitude <= grabRange && dy > -0.5f && dy < 1.8f && !IsHidden(target))
+            if (Time.time < stumbleUntil) { Stop(); return; } // missed a grab: catching his balance
+            bool inReach = d.magnitude <= grabRange && dy > -0.5f && dy < 1.8f && !IsHidden(target);
+            if (lungeStart < 0f && inReach)
             {
-                GrabPig(target);
+                lungeStart = Time.time; // reach out - a hit now stuns him, a quick pig gets away
+                LungeRpc();
+            }
+            if (lungeStart >= 0f)
+            {
+                Stop();
+                if (d.sqrMagnitude > 0.01f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(d), 540f * Time.deltaTime);
+                if (Time.time - lungeStart < grabWindup) return;
+                lungeStart = -1f;
+                if (d.magnitude <= grabRange + 0.5f && dy > -0.5f && dy < 1.8f && !IsHidden(target)) { GrabPig(target); return; }
+                stumbleUntil = Time.time + 0.7f;
+                Say("Whoa! Slippery!");
                 return;
             }
 
@@ -683,22 +702,33 @@ namespace Porkour
                 if (speed > 2f) TakeBait(bait);
                 return;
             }
+            bool reaching = lungeStart >= 0f; // caught mid-grab: any real hit counts
             if (rb.TryGetComponent(out PigController pig))
             {
+                // Jumping on his head: stomp! (the pig bounces off)
+                if (!pig.IsGrounded && pig.Body.position.y > transform.position.y + 1.6f && speed >= stompSpeed)
+                {
+                    if (Stun()) pig.Launch(5f, (pig.Body.position - transform.position).normalized * 3f);
+                    return;
+                }
                 // Walking into Bob does nothing - only flying pigs (thrown / launched) or a Heavy belly slam.
                 if (pig.IsGrounded && !pig.MovementLocked) return;
-                if (speed < stunHitSpeed + 1f) return;
+                if (speed < (reaching ? 3f : stunHitSpeed + 1f)) return;
             }
-            else if (speed < stunHitSpeed) return;
+            else if (rb.TryGetComponent(out Ammo ammo) && ammo.ShotByPig) { if (speed < 3f) return; } // Armed's shots always count
+            else if (speed < (reaching ? 3f : stunHitSpeed)) return;
             Stun();
         }
 
         bool Busy => state.Value is BobState.Coming or BobState.Searching or BobState.Investigating
             or BobState.Chasing or BobState.Carrying;
 
-        void Stun()
+        bool Stun()
         {
-            if ((!Busy && state.Value != BobState.Away) || !RoundActive) return; // also while guarding his grill
+            if ((!Busy && state.Value != BobState.Away) || !RoundActive) return false; // also while guarding his grill
+            if (Time.time < stunImmuneUntil) return false; // just got up - not again right away
+            stunImmuneUntil = Time.time + stunTime + 2.5f;
+            dazedUntil = Time.time + stunTime + 1.5f; // after waking up he needs a moment before he spots anyone
             string freed = carried != null ? PigTypes.Info(carried.Type).Name : null;
             Drop();
             ClearTarget();
@@ -706,6 +736,7 @@ namespace Porkour
             Stop();
             Announce(freed != null ? $"Bob is stunned - the {freed} pig is free!" : "Bob is stunned!");
             Say("OW! My head!");
+            return true;
         }
 
         void TakeBait(Bait bait)
@@ -756,6 +787,13 @@ namespace Porkour
         {
             speech = text;
             speechUntil = Time.time + 2.5f;
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void LungeRpc()
+        {
+            Sfx.Play(Sound.Throw, transform.position + Vector3.up * 1.5f, 0.7f);
+            if (anim != null) anim.Trigger("Throw");
         }
 
         [Rpc(SendTo.Everyone)]

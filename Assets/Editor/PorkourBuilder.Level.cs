@@ -33,7 +33,6 @@ namespace Porkour.EditorTools
             var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
             var beam = Mat("Beam", new Color(0.42f, 0.28f, 0.16f));
             var hay = Mat("Hay", new Color(0.93f, 0.8f, 0.35f));
-            var grass = Mat("Grass", new Color(0.35f, 0.6f, 0.25f));
             var shed = Mat("ShedWall", new Color(0.5f, 0.42f, 0.32f));
             var darkWood = Mat("RoofWood", new Color(0.33f, 0.22f, 0.14f));
             bool kit = Kit.Available;
@@ -46,8 +45,9 @@ namespace Porkour.EditorTools
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
 
             // Ground: one grass slab under barn, yard and farmyard (+ NavMesh); far grass to the horizon is scenery only.
-            Block("Ground", r, new Vector3(0f, -0.5f, 33f), new Vector3(144f, 1f, 160f), grass);
-            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 33f), new Vector3(600f, 1f, 600f), grass);
+            Block("Ground", r, new Vector3(0f, -0.5f, 33f), new Vector3(144f, 1f, 160f), GroundMaterial("GrassGround", new Vector3(144f, 1f, 160f), 8f));
+            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 33f), new Vector3(600f, 1f, 600f), GroundMaterial("GrassFar", new Vector3(600f, 1f, 600f), 8f));
+            NoGrassRect(-20.6f, -15.6f, 20.6f, 15.6f); // the barn
 
             // Barn floor, walls, invisible ceiling (nobody flies out over the walls).
             const float t = 0.4f;
@@ -169,7 +169,7 @@ namespace Porkour.EditorTools
             FenceRun(yard, new Vector3(-12f, 0f, -15.4f), new Vector3(-12f, 0f, -36.4f), wood);
             FenceRun(yard, new Vector3(12f, 0f, -15.4f), new Vector3(12f, 0f, -36.4f), wood);
             FenceRun(yard, new Vector3(-12f, 0f, -36.4f), new Vector3(12f, 0f, -36.4f), wood);
-            Part(PrimitiveType.Cube, "BbqDirt", yard, new Vector3(0f, 0.01f, -27f), new Vector3(20f, 0.02f, 13f), dirt);
+            DirtPath(yard, new Vector3(0f, 0.01f, -27f), new Vector3(20f, 0.02f, 13f), dirt);
 
             // Brick grill + smokestack.
             Vector3 g = new(GrillPos.x, 0f, GrillPos.z);
