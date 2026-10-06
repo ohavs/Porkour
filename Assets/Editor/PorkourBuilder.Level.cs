@@ -12,6 +12,10 @@ namespace Porkour.EditorTools
     public static partial class PorkourBuilder
     {
         const float CeilingHeight = 8.5f;
+        /// <summary>Bob's BBQ (behind the barn): his cage and his grill; the pig flap in the barn's south wall (x).</summary>
+        static readonly Vector3 CagePos = new(5f, 0f, -29f);
+        static readonly Vector3 GrillPos = new(-5f, 1f, -29f);
+        const float PigFlapX = -11f;
         /// <summary>Barn walls: three kit stories (9.36 m).</summary>
         const float BarnWallTop = 3f * Kit.StoryHeight;
         const float Story = Kit.StoryHeight;
@@ -43,8 +47,8 @@ namespace Porkour.EditorTools
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
 
             // Ground: one grass slab under barn, yard and farmyard (+ NavMesh); far grass to the horizon is scenery only.
-            Block("Ground", r, new Vector3(0f, -0.5f, 14f), new Vector3(100f, 1f, 110f), grass);
-            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 14f), new Vector3(500f, 1f, 500f), grass);
+            Block("Ground", r, new Vector3(0f, -0.5f, 26f), new Vector3(104f, 1f, 144f), grass);
+            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 26f), new Vector3(500f, 1f, 500f), grass);
 
             // Barn floor, walls, invisible ceiling (nobody flies out over the walls).
             const float t = 0.4f;
@@ -53,7 +57,14 @@ namespace Porkour.EditorTools
             Solid("WallN1", r, new Vector3(-11.2f, BarnWallTop / 2f, 15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
             Solid("WallN2", r, new Vector3(11.2f, BarnWallTop / 2f, 15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
             Solid("ExitLintel", r, new Vector3(0f, (Story + BarnWallTop) / 2f, 15.2f), new Vector3(4f, BarnWallTop - Story, t), wall, kit);
-            Solid("WallS1", r, new Vector3(-11.2f, BarnWallTop / 2f, -15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
+            // South wall west part, with the PIG FLAP: a low hole (1.1 m) pigs fit through but Bob doesn't - the way out to his
+            // BBQ to rescue caged friends.
+            Solid("WallS1a", r, new Vector3((-20.4f + PigFlapX - 0.7f) / 2f, BarnWallTop / 2f, -15.2f), new Vector3(PigFlapX - 0.7f + 20.4f, BarnWallTop, t), wall, kit);
+            Solid("WallS1b", r, new Vector3((PigFlapX + 0.7f - 2f) / 2f, BarnWallTop / 2f, -15.2f), new Vector3(-2f - PigFlapX - 0.7f, BarnWallTop, t), wall, kit);
+            Solid("PigFlapLintel", r, new Vector3(PigFlapX, (1.1f + BarnWallTop) / 2f, -15.2f), new Vector3(1.4f, BarnWallTop - 1.1f, t), wall, kit);
+            Part(PrimitiveType.Cube, "PigFlapBoards", r, new Vector3(PigFlapX, 1.8f, -15.2f), new Vector3(1.5f, 1.4f, 0.5f), Mat("RoofWood", new Color(0.33f, 0.22f, 0.14f)));
+            Part(PrimitiveType.Cube, "PigFlap", r, new Vector3(PigFlapX, 0.85f, -15.48f), new Vector3(1.3f, 0.5f, 0.04f), Mat("FlapRubber", new Color(0.15f, 0.12f, 0.1f)), new Vector3(-25f, 0f, 0f));
+            Label(r, "PIG FLAP\n(to Bob's BBQ)", new Vector3(PigFlapX, 2.9f, -14.6f), new Color(1f, 0.85f, 0.4f), 0.035f);
             Solid("WallS2", r, new Vector3(11.2f, BarnWallTop / 2f, -15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
             Solid("DoorLintel", r, new Vector3(0f, (Story + BarnWallTop) / 2f, -15.2f), new Vector3(4f, BarnWallTop - Story, t), wall, kit);
             Solid("WallE", r, new Vector3(20.2f, BarnWallTop / 2f, 0f), new Vector3(t, BarnWallTop, 30.8f), wall, kit);
@@ -141,10 +152,18 @@ namespace Porkour.EditorTools
             PointLight(r, new Vector3(0f, 2.8f, 12.5f), new Color(0.8f, 1f, 0.8f), 9f, 1.2f);
 
             // Pig pen (start), south-east: low fence (jump over) with a gap on the north-west.
-            Block("PenN", r, new Vector3(13.8f, 0.4f, -8f), new Vector3(6.4f, 0.8f, 0.2f), wood);
-            Block("PenW", r, new Vector3(9f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood);
-            Block("PenE", r, new Vector3(17f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood);
-            Block("PenS", r, new Vector3(13f, 0.4f, -14f), new Vector3(8.2f, 0.8f, 0.2f), wood);
+            bool fences = ArtSetup.FarmBuilding("Fence") != null;
+            Solid("PenN", r, new Vector3(13.8f, 0.4f, -8f), new Vector3(6.4f, 0.8f, 0.2f), wood, fences);
+            Solid("PenW", r, new Vector3(9f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood, fences);
+            Solid("PenE", r, new Vector3(17f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood, fences);
+            Solid("PenS", r, new Vector3(13f, 0.4f, -14f), new Vector3(8.2f, 0.8f, 0.2f), wood, fences);
+            if (fences)
+            {
+                FenceRun(r, new Vector3(10.6f, 0f, -8f), new Vector3(17f, 0f, -8f), wood, 0.85f);
+                FenceRun(r, new Vector3(9f, 0f, -8f), new Vector3(9f, 0f, -14f), wood, 0.85f);
+                FenceRun(r, new Vector3(17f, 0f, -8f), new Vector3(17f, 0f, -14f), wood, 0.85f);
+                FenceRun(r, new Vector3(8.9f, 0f, -14f), new Vector3(17.1f, 0f, -14f), wood, 0.85f);
+            }
             Block("Trough", r, new Vector3(11f, 0.25f, -13.4f), new Vector3(2f, 0.5f, 0.6f), beam);
             Part(PrimitiveType.Cube, "Mud", r, new Vector3(14.5f, 0.035f, -12f), new Vector3(3f, 0.02f, 2.2f), Mat("Mud", new Color(0.35f, 0.24f, 0.14f)));
 
@@ -157,18 +176,52 @@ namespace Porkour.EditorTools
             Block("HayBale2", r, new Vector3(-15.3f, 0.8f, 13.3f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 30f, 90f), PrimitiveType.Cylinder);
             Block("HayBale3", r, new Vector3(-9f, 0.8f, -12.5f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 70f, 90f), PrimitiveType.Cylinder);
 
-            // Bob's yard behind the barn door: his grill. Invisible walls + roof keep carried pigs from wandering off.
-            Block("Grill", r, new Vector3(0f, 0.45f, -24f), new Vector3(1.8f, 0.9f, 1f), Mat("GrillMetal", new Color(0.18f, 0.18f, 0.2f)));
-            Block("GrillCoals", r, new Vector3(0f, 0.93f, -24f), new Vector3(1.6f, 0.06f, 0.8f), Mat("Coals", new Color(1f, 0.35f, 0.1f)));
-            Label(r, "BOB'S BBQ", new Vector3(0f, 2.2f, -24f), new Color(1f, 0.5f, 0.3f), 0.06f);
-            Boundary(r, "YardW", new Vector3(-7.5f, h / 2f, -21.4f), new Vector3(t, h, 12f));
-            Boundary(r, "YardE", new Vector3(7.5f, h / 2f, -21.4f), new Vector3(t, h, 12f));
-            Boundary(r, "YardS", new Vector3(0f, h / 2f, -27.6f), new Vector3(15.4f, h, t));
-            Boundary(r, "YardRoof", new Vector3(0f, h + 0.25f, -21.5f), new Vector3(15.4f, 0.5f, 12.4f));
-            FenceRun(r, new Vector3(-7.3f, 0f, -15.4f), new Vector3(-7.3f, 0f, -27.4f), wood);
-            FenceRun(r, new Vector3(7.3f, 0f, -15.4f), new Vector3(7.3f, 0f, -27.4f), wood);
-            FenceRun(r, new Vector3(-7.3f, 0f, -27.4f), new Vector3(7.3f, 0f, -27.4f), wood);
+            BuildBbqYard(r, kit);
             return r;
+        }
+
+        /// <summary>
+        /// Bob's BBQ yard behind the barn (x -12..12, z -36..-15.4): his brick grill, his cage (network-spawned PigCage, door
+        /// toward the barn), gas bottle, picnic table. Invisible walls + roof: pigs only get here through Bob's door or the
+        /// pig flap.
+        /// </summary>
+        static void BuildBbqYard(Transform r, bool kit)
+        {
+            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
+            var dirt = Mat("Dirt", new Color(0.5f, 0.38f, 0.24f));
+            const float t = 0.4f, h = CeilingHeight;
+            var yard = new GameObject("BobsBBQ").transform;
+            yard.SetParent(r, false);
+            Boundary(yard, "YardW", new Vector3(-12.2f, h / 2f, -25.9f), new Vector3(t, h, 21f));
+            Boundary(yard, "YardE", new Vector3(12.2f, h / 2f, -25.9f), new Vector3(t, h, 21f));
+            Boundary(yard, "YardS", new Vector3(0f, h / 2f, -36.6f), new Vector3(24.8f, h, t));
+            Boundary(yard, "YardRoof", new Vector3(0f, h + 0.25f, -26f), new Vector3(24.8f, 0.5f, 21.4f));
+            FenceRun(yard, new Vector3(-12f, 0f, -15.4f), new Vector3(-12f, 0f, -36.4f), wood);
+            FenceRun(yard, new Vector3(12f, 0f, -15.4f), new Vector3(12f, 0f, -36.4f), wood);
+            FenceRun(yard, new Vector3(-12f, 0f, -36.4f), new Vector3(12f, 0f, -36.4f), wood);
+            Part(PrimitiveType.Cube, "BbqDirt", yard, new Vector3(0f, 0.01f, -27f), new Vector3(20f, 0.02f, 13f), dirt);
+
+            // Brick grill + smokestack.
+            Vector3 g = new(GrillPos.x, 0f, GrillPos.z);
+            Solid("Grill", yard, g + new Vector3(0f, 0.45f, 0f), new Vector3(2.6f, 0.9f, 1.3f), Mat("GrillBrick", new Color(0.55f, 0.25f, 0.18f)), kit);
+            if (kit) Kit.Fit("Wall_UnevenBrick_Straight", yard, g + new Vector3(0f, 0.45f, 0f), new Vector3(2.6f, 0.9f, 1.3f), 0f);
+            Block("GrillTop", yard, g + new Vector3(0f, 0.93f, 0f), new Vector3(2.3f, 0.06f, 1.1f), Mat("GrillMetal", new Color(0.18f, 0.18f, 0.2f)));
+            Part(PrimitiveType.Cube, "Coals", yard, g + new Vector3(0f, 0.97f, 0f), new Vector3(2f, 0.04f, 0.9f), Mat("Coals", new Color(1f, 0.35f, 0.1f)));
+            if (!kit || Kit.Fit("Prop_Chimney", yard, g + new Vector3(0f, 1.9f, -0.45f), new Vector3(0.6f, 2f, 0.4f), 0f) == null)
+                Part(PrimitiveType.Cube, "Smokestack", yard, g + new Vector3(0f, 1.9f, -0.45f), new Vector3(0.5f, 2f, 0.35f), Mat("GrillBrick", new Color(0.55f, 0.25f, 0.18f)));
+            PointLight(yard, g + new Vector3(0f, 1.6f, 0.6f), new Color(1f, 0.5f, 0.2f), 6f, 1.6f);
+            Label(yard, "BOB'S BBQ", g + new Vector3(0f, 3.4f, 0f), new Color(1f, 0.5f, 0.3f), 0.06f);
+            Label(yard, "BOB'S CAGE\n(stand at the door to open it)", CagePos + new Vector3(0f, 4.4f, 0f), new Color(1f, 0.85f, 0.4f), 0.035f);
+
+            // Picnic table, crates (decor + cover).
+            Block("PicnicTable", yard, new Vector3(0f, 0.75f, -33f), new Vector3(2.6f, 0.1f, 1.2f), wood);
+            foreach (float z in new[] { -33.9f, -32.1f })
+                Block("Bench", yard, new Vector3(0f, 0.45f, z), new Vector3(2.6f, 0.08f, 0.4f), wood);
+            foreach (var (x, z) in new[] { (-1.1f, -33.4f), (1.1f, -33.4f), (-1.1f, -32.6f), (1.1f, -32.6f) })
+                Block("TableLeg", yard, new Vector3(x, 0.35f, z), new Vector3(0.1f, 0.7f, 0.1f), wood);
+            foreach (var c in new[] { new Vector3(-10.5f, 0f, -34.8f), new Vector3(-9.4f, 0f, -34.8f), new Vector3(10.5f, 0f, -18f) })
+                StaticCrate(yard, c, wood, kit);
+            Haystack(yard, new Vector3(-9f, 0f, -20f), Mat("Hay", new Color(0.93f, 0.8f, 0.35f)));
         }
 
         /// <summary>Kit walls on the barn's four sides: stone base, timber frame, plaster with windows (not where a bullseye hangs).</summary>
@@ -176,16 +229,16 @@ namespace Porkour.EditorTools
         {
             var walls = new GameObject("BarnWalls (kit)").transform;
             walls.SetParent(r, false);
-            void Run(Vector3 a, Vector3 b, Vector3 outward, bool doorway, int noWindow)
+            void Run(Vector3 a, Vector3 b, Vector3 outward, bool doorway, int noWindow, int flap = -1)
             {
                 bool Window(int i) => i % 4 == 2 && i != noWindow;
                 Kit.WallRun(walls, a, b, outward, 3, (i, story) =>
-                    story == 0 ? (doorway && (i == 9 || i == 10) ? null : "Wall_UnevenBrick_Straight")
+                    story == 0 ? (doorway && (i == 9 || i == 10) ? null : i == flap ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
                     : story == 1 ? "Wall_Plaster_WoodGrid"
                     : Window(i) ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_Straight");
                 Kit.WallRun(walls, a, b, outward, 3, (i, story) => story == 2 && Window(i) ? "Window_Wide_Round1" : null);
             }
-            Run(new Vector3(-20f, 0f, -15f), new Vector3(20f, 0f, -15f), Vector3.back, true, 6);     // south: Bob's door, bullseye 2
+            Run(new Vector3(-20f, 0f, -15f), new Vector3(20f, 0f, -15f), Vector3.back, true, 6, Mathf.FloorToInt((PigFlapX + 20f) / 2f)); // south: Bob's door, pig flap, bullseye 2
             Run(new Vector3(-20f, 0f, 15f), new Vector3(20f, 0f, 15f), Vector3.forward, true, 14);   // north: exit, bullseye 1
             Run(new Vector3(20f, 0f, -15f), new Vector3(20f, 0f, 15f), Vector3.right, false, -1);
             Run(new Vector3(-20f, 0f, -15f), new Vector3(-20f, 0f, 15f), Vector3.left, false, 2);    // west: bullseye 3
@@ -264,7 +317,19 @@ namespace Porkour.EditorTools
             points.Add(SpawnPoint(spawnRoot, "BreakableCrate", p.weakCrate, new Vector3(-18.5f, 0.45f, 0.8f), contents: p.apple));
 
             // ---- Farmer Bob, his barn door (channel 99), bait, hiding buckets, the bell lure ----
-            points.Add(SpawnPoint(spawnRoot, "FarmerBob", p.bob, new Vector3(0f, 0f, -21.5f)));
+            points.Add(SpawnPoint(spawnRoot, "FarmerBob", p.bob, new Vector3(0f, 0f, -22f)));
+            // His BBQ: the cage (door toward the barn) and the gas bottle (bonus: smash it, the grill gets slow).
+            points.Add(SpawnPoint(spawnRoot, "PigCage", p.cage, CagePos));
+            points.Add(SpawnPoint(spawnRoot, "GasBottle", p.gasBottle, new Vector3(GrillPos.x - 2.3f, 0.65f, GrillPos.z - 0.4f), channel: ChannelIds.Sabotage));
+            // Loot: Bob's gold watch up on the hayloft.
+            points.Add(SpawnPoint(spawnRoot, "GoldWatch", p.watch, new Vector3(18.6f, 3.5f, 0.5f)));
+            // Coins: easy ones near the start, big ones in hard places (beams, shelf).
+            foreach (var pos in new[] { new Vector3(13f, 0.7f, -12.5f), new Vector3(-16f, 0.7f, -6f), new Vector3(-2f, 0.7f, 11.5f),
+                         new Vector3(9.5f, 0.7f, -33.5f), new Vector3(-6f, 0.7f, -2f) })
+                points.Add(SpawnPoint(spawnRoot, "Coin", p.coin, pos));
+            foreach (var pos in new[] { new Vector3(8f, 5.95f, 7f), new Vector3(-16f, 5.95f, -2f), new Vector3(-19.2f, 3.75f, 10.3f),
+                         new Vector3(18.5f, 4.9f, 12.5f) })
+                points.Add(SpawnPoint(spawnRoot, "BigCoin", p.bigCoin, pos));
             points.Add(SpawnPoint(spawnRoot, "BarnDoor", p.barnDoor, new Vector3(0f, 1.55f, -15.2f), channel: ChannelIds.BobDoor));
             foreach (var pos in new[] { new Vector3(-4f, 0.35f, 0f), new Vector3(4f, 0.35f, -5f) })
                 points.Add(SpawnPoint(spawnRoot, "Chicken", p.chicken, pos));
@@ -309,21 +374,27 @@ namespace Porkour.EditorTools
             return go;
         }
 
-        /// <summary>Wooden fence look from a to b (kit fence pieces, or two rails); no colliders.</summary>
-        static void FenceRun(Transform parent, Vector3 a, Vector3 b, Material wood)
+        /// <summary>
+        /// Wooden fence look from a to b: Quaternius farm fence pieces (about 6 m), else medieval kit fences (2 m), else two
+        /// rails. No colliders (the builder adds boxes / invisible walls where it matters).
+        /// </summary>
+        static void FenceRun(Transform parent, Vector3 a, Vector3 b, Material wood, float height = 1.1f)
         {
+            var farmFence = ArtSetup.FarmBuilding("Fence");
             Vector3 dir = b - a;
-            int count = Mathf.Max(1, Mathf.RoundToInt(dir.magnitude / 2f));
+            float pieceLength = farmFence != null ? 6f : 2f;
+            int count = Mathf.Max(1, Mathf.RoundToInt(dir.magnitude / pieceLength));
             bool alongX = Mathf.Abs(dir.x) >= Mathf.Abs(dir.z);
             float piece = dir.magnitude / count;
             for (int i = 0; i < count; i++)
             {
                 Vector3 c = a + dir * ((i + 0.5f) / count);
-                var size = alongX ? new Vector3(piece, 0.84f, 0.12f) : new Vector3(0.12f, 0.84f, piece);
-                if (Kit.Fit("Prop_WoodenFence_Single", parent, c + Vector3.up * 0.42f, size, alongX ? 0f : 90f) != null) continue;
-                Part(PrimitiveType.Cube, "Rail", parent, c + Vector3.up * 0.7f, alongX ? new Vector3(piece, 0.1f, 0.08f) : new Vector3(0.08f, 0.1f, piece), wood);
-                Part(PrimitiveType.Cube, "Rail", parent, c + Vector3.up * 0.35f, alongX ? new Vector3(piece, 0.1f, 0.08f) : new Vector3(0.08f, 0.1f, piece), wood);
-                Part(PrimitiveType.Cube, "Post", parent, c - dir.normalized * piece / 2f + Vector3.up * 0.45f, new Vector3(0.12f, 0.9f, 0.12f), wood);
+                var size = alongX ? new Vector3(piece, height, 0.16f) : new Vector3(0.16f, height, piece);
+                if (Kit.FitAsset(farmFence, parent, c + Vector3.up * height / 2f, size, alongX ? 0f : 90f, keepLongSide: true) != null) continue;
+                if (Kit.Fit("Prop_WoodenFence_Single", parent, c + Vector3.up * height / 2f, size, alongX ? 0f : 90f) != null) continue;
+                Part(PrimitiveType.Cube, "Rail", parent, c + Vector3.up * height * 0.75f, alongX ? new Vector3(piece, 0.1f, 0.08f) : new Vector3(0.08f, 0.1f, piece), wood);
+                Part(PrimitiveType.Cube, "Rail", parent, c + Vector3.up * height * 0.35f, alongX ? new Vector3(piece, 0.1f, 0.08f) : new Vector3(0.08f, 0.1f, piece), wood);
+                Part(PrimitiveType.Cube, "Post", parent, c - dir.normalized * piece / 2f + Vector3.up * height / 2f, new Vector3(0.12f, height, 0.12f), wood);
             }
         }
 
@@ -334,12 +405,6 @@ namespace Porkour.EditorTools
                 Part(PrimitiveType.Cube, "DoorPost", parent, bottomCenter + new Vector3(side * (width / 2f + 0.12f), Story / 2f, 0f),
                     new Vector3(0.24f, Story, 0.6f), wood);
             Part(PrimitiveType.Cube, "DoorBeam", parent, bottomCenter + new Vector3(0f, Story + 0.1f, 0f), new Vector3(width + 0.48f, 0.3f, 0.6f), wood);
-        }
-
-        static void Tree(Transform parent, Vector3 position, float size = 1f)
-        {
-            Part(PrimitiveType.Cylinder, "Trunk", parent, position + Vector3.up * 1.5f * size, new Vector3(0.5f, 1.5f, 0.5f) * size, Mat("Trunk", new Color(0.4f, 0.27f, 0.15f)));
-            Part(PrimitiveType.Sphere, "Leaves", parent, position + Vector3.up * 3.6f * size, new Vector3(3f, 2.6f, 3f) * size, Mat("Leaves", new Color(0.25f, 0.55f, 0.2f)));
         }
 
         static void Haystack(Transform parent, Vector3 position, Material hay)

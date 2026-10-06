@@ -135,6 +135,8 @@ namespace Porkour
             {
                 var tree = col.GetComponentInParent<AppleTree>();
                 if (tree != null) tree.Shake(); // apples fall
+                var cage = col.GetComponentInParent<PigCage>();
+                if (cage != null && cage.Count > 0) cage.Smash(); // Bob's cage bursts open
                 var breakable = col.GetComponentInParent<Breakable>();
                 if (breakable != null)
                 {

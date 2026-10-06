@@ -15,9 +15,11 @@ namespace Porkour
     /// Away (at the grill in the yard) → every ~2 min: Coming (dinner bell, 5 s to hide) → Searching the barn.
     /// He spots pigs in his view cone with line of sight - not pigs hidden in hay (HideSpot), in fart smoke,
     /// under a bucket (standing still), or frozen (standing still) unless very close; smoke also blinds and slows him.
-    /// He ignores sleeping pigs (nobody plays them) and escaped ones. Spotted → Chasing → grab → Carrying to the grill:
-    /// others have 20 s to rescue by hitting him hard (thrown things, flying pigs, Heavy's slam, Armed's shots →
-    /// Stunned 3 s, pig dropped) or throwing a chicken/sheep (Bait) at him. Too late → grilled (RoundManager counts it).
+    /// He ignores sleeping pigs (nobody plays them) and escaped ones. Spotted → Chasing → grab → Carrying to his BBQ:
+    /// on the way others can save the pig by hitting him hard (thrown things, flying pigs, Heavy's slam, Armed's shots →
+    /// Stunned 3 s, pig dropped) or throwing a chicken/calf (Bait) at him. At the BBQ he locks it in his cage (PigCage):
+    /// 2 minutes until the grill is hot, then he throws it on (grilled - RoundManager counts it). While he's at the BBQ he
+    /// tends the grill and glances around - rescuers must sneak up (or distract / stun him).
     /// A pig he can't reach (loft, beams, crates) gets corn thrown at it until it falls or he gives up.
     /// Last minute of the round: final hunt - he searches non-stop. A rung bell lures him.
     /// Only acts while the round is being played. Host debug: G = Grill Call now.
@@ -63,7 +65,7 @@ namespace Porkour
         public float freezeTime = 1f;
         [Tooltip("...and are only noticed this close.")]
         public float frozenSpotRange = 3f;
-        public float grabRange = 1.5f;
+        public float grabRange = 1.7f;
         [Tooltip("Hit speed that stuns Bob (flying pigs need a bit more).")]
         public float stunHitSpeed = 7f;
 
@@ -101,6 +103,7 @@ namespace Porkour
         float stateStart, stateUntil, searchEnd, wanderUntil, investigateUntil, lastSeenTime;
         float nextLook, nextRepath, nextCallTime;
         float unreachableTime, nextThrow;
+        float glanceAt, glanceUntil;
         int throwsAtTarget;
         readonly Dictionary<PigController, float> ignoreUntil = new();
 
@@ -112,8 +115,8 @@ namespace Porkour
         string speech;
         float speechUntil;
 
-        Vector3 Eyes => transform.position + Vector3.up * 1.7f;
-        Vector3 CarryPosition => carryPoint != null ? carryPoint.position : transform.TransformPoint(new Vector3(0.3f, 2f, -0.1f));
+        Vector3 Eyes => transform.position + Vector3.up * 2.1f;
+        Vector3 CarryPosition => carryPoint != null ? carryPoint.position : transform.TransformPoint(new Vector3(0.3f, 2.55f, -0.1f));
         static bool RoundActive => RoundManager.Instance == null || RoundManager.Instance.IsPlaying;
 
         void Awake()
@@ -192,8 +195,8 @@ namespace Porkour
             switch (state.Value)
             {
                 case BobState.Away:
-                    Stop();
-                    if (now >= nextCallTime) StartGrillCall();
+                    if (TendGrill()) break;
+                    if (now >= nextCallTime && (PigCage.Instance == null || PigCage.Instance.Overdue() == null)) StartGrillCall();
                     break;
 
                 case BobState.Coming:
@@ -205,6 +208,12 @@ namespace Porkour
                 case BobState.Searching:
                     if (TrySpot()) break;
                     if (now >= searchEnd) { SetState(BobState.Leaving, 0f); break; }
+                    if (!finalHunt.Value && PigCage.Instance != null && PigCage.Instance.Overdue() != null)
+                    {
+                        Say("Ooh, the grill's hot!");
+                        SetState(BobState.Leaving, 0f);
+                        break;
+                    }
                     if (!hasWanderPoint || Arrived(wanderPoint, 1.2f) || now > wanderUntil) PickWanderPoint();
                     MoveTo(wanderPoint, walkSpeed * slow * (finalHunt.Value ? 1.15f : 1f));
                     break;
@@ -228,8 +237,15 @@ namespace Porkour
                         BeginSearch(12f);
                         break;
                     }
-                    MoveTo(home, carrySpeed * slow);
-                    if (now >= stateUntil) Grill();
+                    var cage = PigCage.Instance;
+                    if (cage == null) // no cage in this level: straight onto the grill
+                    {
+                        MoveTo(home, carrySpeed * slow);
+                        if (now >= stateUntil) GrillPig(ReleaseCarriedPig());
+                        break;
+                    }
+                    MoveTo(cage.DoorPoint, carrySpeed * slow);
+                    if (Arrived(cage.DoorPoint, 1.8f) || now > stateStart + 60f) CagePig(cage);
                     break;
 
                 case BobState.Stunned:
@@ -270,9 +286,12 @@ namespace Porkour
                 carriedBait = null;
             }
             ClearTarget();
-            float wait = finalHunt.Value ? 6f : UnityEngine.Random.Range(callInterval.x, callInterval.y);
-            nextCallTime = Time.time + wait;
-            nextCall.Value = NetworkManager.ServerTime.Time + wait;
+            if (Time.time >= nextCallTime - 1f) // back from a Grill Call (not just from the cage): next one later
+            {
+                float wait = finalHunt.Value ? 6f : UnityEngine.Random.Range(callInterval.x, callInterval.y);
+                nextCallTime = Time.time + wait;
+                nextCall.Value = NetworkManager.ServerTime.Time + wait;
+            }
             SetState(BobState.Away, 0f);
         }
 
@@ -486,7 +505,7 @@ namespace Porkour
         {
             var prefab = Ammo.PrefabFor(Ammo.Kind.Corn);
             if (prefab == null) return;
-            Vector3 hand = transform.position + Vector3.up * 1.9f + transform.forward * 0.5f;
+            Vector3 hand = transform.position + Vector3.up * 2.3f + transform.forward * 0.5f;
             Vector3 aim = pig.Body.position + pig.Body.linearVelocity * 0.25f + UnityEngine.Random.insideUnitSphere * 0.35f;
             Vector3 velocity = Ammo.BallisticVelocity(hand, aim, throwSpeed);
             var go = Instantiate(prefab, hand, Quaternion.LookRotation(velocity));
@@ -506,9 +525,9 @@ namespace Porkour
             carriedColliders = pig.GetComponentsInChildren<Collider>();
             IgnoreCollisions(carriedColliders, true);
             pig.SetHeldBy(this);
-            SetState(BobState.Carrying, rescueTime);
+            SetState(BobState.Carrying, PigCage.Instance != null ? 0f : rescueTime);
             Announce($"Bob caught the {PigTypes.Info(pig.Type).Name} pig! Hit Bob or throw a chicken at him!");
-            Say("Into the BBQ you go!");
+            Say("Into the cage you go!");
         }
 
         public void Drop()
@@ -531,18 +550,71 @@ namespace Porkour
             return pig;
         }
 
-        void Grill()
+        /// <summary>Let go of the carried pig (no toss) and clear the synced id.</summary>
+        PigController ReleaseCarriedPig()
         {
-            var pig = carried;
+            var pig = ReleaseCarried();
+            carriedId.Value = ulong.MaxValue;
+            return pig;
+        }
+
+        void CagePig(PigCage cage)
+        {
+            var pig = ReleaseCarriedPig();
+            if (pig == null) { BeginSearch(10f); return; }
+            if (!cage.Lock(pig)) { GrillPig(pig); return; } // cage full: straight onto the grill
+            Say("You wait in there till the grill's hot!");
+            SetState(BobState.Leaving, 0f);
+        }
+
+        /// <summary>The pig goes on the grill: back to the pen, and the round counts it.</summary>
+        void GrillPig(PigController pig)
+        {
             if (pig == null) { BeginSearch(10f); return; }
             string name = PigTypes.Info(pig.Type).Name;
-            pig.Respawn(); // lets go through Drop(), then back to its start
+            pig.Respawn(); // lets go of it (Bob / cage), then back to its start
             grilled.Value++;
-            GrillFxRpc(home + Vector3.back * 2f);
+            var cage = PigCage.Instance;
+            GrillFxRpc(cage != null ? cage.GrillPoint : home + Vector3.back * 2f);
             Say("Mmm... BBQ!");
             if (RoundManager.Instance != null) RoundManager.Instance.OnPigGrilled(name);
             else Announce($"The {name} pig got grilled! (it's back at the start)");
             SetState(BobState.Leaving, 0f);
+        }
+
+        /// <summary>
+        /// Away at the BBQ: grill an overdue caged pig, else stand by the grill with his back to the barn, glancing around
+        /// now and then - a pig he sees (a rescuer) gets chased. True if he started doing something else.
+        /// </summary>
+        bool TendGrill()
+        {
+            var cage = PigCage.Instance;
+            var due = cage != null ? cage.Overdue() : null;
+            if (due != null)
+            {
+                MoveTo(cage.DoorPoint, walkSpeed);
+                if (Arrived(cage.DoorPoint, 1.8f))
+                {
+                    Stop();
+                    ThrowFxRpc(cage.GrillPoint);
+                    GrillPig(due);
+                    return true;
+                }
+                return false;
+            }
+            Stop();
+            float now = Time.time;
+            if (now > glanceAt) // look over his shoulder now and then
+            {
+                glanceAt = now + UnityEngine.Random.Range(8f, 12f);
+                glanceUntil = now + 2.5f;
+                if (cage != null && cage.Count > 0) Say(UnityEngine.Random.value < 0.5f ? "Hmm?" : "Anybody there?");
+            }
+            Vector3 look = (now < glanceUntil ? doorPosition : cage != null ? cage.GrillPoint : home + Vector3.back) - transform.position;
+            look.y = 0f;
+            if (look.sqrMagnitude > 0.04f)
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(look), 240f * Time.deltaTime);
+            return TrySpot();
         }
 
         void FixedUpdate()
@@ -601,7 +673,7 @@ namespace Porkour
 
         void Stun()
         {
-            if (!Busy || !RoundActive) return;
+            if ((!Busy && state.Value != BobState.Away) || !RoundActive) return; // also while guarding his grill
             string freed = carried != null ? PigTypes.Info(carried.Type).Name : null;
             Drop();
             ClearTarget();
@@ -710,7 +782,7 @@ namespace Porkour
             indicatorMaterial = FxUtil.NewMaterial(new Color(1f, 0.9f, 0.2f), transparent: false);
             stars = new GameObject("DizzyStars").transform;
             stars.SetParent(transform, false);
-            stars.localPosition = Vector3.up * 2.3f;
+            stars.localPosition = Vector3.up * 2.75f;
             for (int i = 0; i < 4; i++)
             {
                 var star = FxUtil.NewMeshObject("Star", PrimitiveType.Sphere, stars, indicatorMaterial).transform;
@@ -720,7 +792,7 @@ namespace Porkour
             stars.gameObject.SetActive(false);
 
             mark = GameFonts.CreateTextMesh(transform, "Mark", 0.09f, Color.white);
-            mark.transform.localPosition = Vector3.up * 2.6f;
+            mark.transform.localPosition = Vector3.up * 3.05f;
         }
 
         void UpdateIndicators()

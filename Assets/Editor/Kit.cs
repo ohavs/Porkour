@@ -116,7 +116,27 @@ namespace Porkour.EditorTools
         public static GameObject Fit(string piece, Transform parent, Vector3 center, Vector3 size, float yaw, bool keepLongSide = false)
         {
             var go = Place(piece, parent, center, yaw);
-            if (go == null) return null;
+            if (go != null) Stretch(go, center, size, yaw, keepLongSide);
+            return go;
+        }
+
+        /// <summary>Any model (not from the kit) stretched into a world box - like Fit. Null if asset is null.</summary>
+        public static GameObject FitAsset(GameObject asset, Transform parent, Vector3 center, Vector3 size, float yaw, bool keepLongSide = false)
+        {
+            if (asset == null) return null;
+            var holder = new GameObject(asset.name);
+            holder.transform.SetParent(parent, false);
+            holder.transform.SetPositionAndRotation(center, Quaternion.Euler(0f, yaw, 0f));
+            PrefabUtility.InstantiatePrefab(asset, holder.transform);
+            foreach (var t in holder.GetComponentsInChildren<Transform>())
+                GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic);
+            Stretch(holder, center, size, yaw, keepLongSide);
+            return holder;
+        }
+
+        /// <summary>Scale a holder (pivot at center, turned by yaw) so its renderers fill the box exactly.</summary>
+        static void Stretch(GameObject go, Vector3 center, Vector3 size, float yaw, bool keepLongSide)
+        {
             var b = RendererBounds(go);
             if (keepLongSide && (b.size.x > b.size.z) != (size.x > size.z))
             {
@@ -128,9 +148,8 @@ namespace Porkour.EditorTools
             // Per world axis; the holder is turned by a multiple of 90°, so its local X is world X or world Z.
             var world = new Vector3(size.x / Mathf.Max(b.size.x, 0.01f), size.y / Mathf.Max(b.size.y, 0.01f), size.z / Mathf.Max(b.size.z, 0.01f));
             bool quarter = Mathf.Abs(Mathf.Sin(yaw * Mathf.Deg2Rad)) > 0.7f;
-            go.transform.localScale = quarter ? new Vector3(world.z, world.y, world.x) : world;
+            go.transform.localScale = Vector3.Scale(go.transform.localScale, quarter ? new Vector3(world.z, world.y, world.x) : world);
             go.transform.position -= Vector3.Scale(b.center - center, world); // its scaled centre back onto the box centre
-            return go;
         }
 
         /// <summary>Wall piece whose inner face lies on innerPoint's line, facing outward (unit ±X / ±Z).</summary>

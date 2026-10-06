@@ -116,13 +116,23 @@ namespace Porkour.EditorTools
             return renderers;
         }
 
-        /// <summary>Mixamo Bob (Humanoid) with his animations. Null when Bob.fbx is missing.</summary>
-        static GameObject BobVisual(Transform parent)
+        /// <summary>Mixamo Bob (Humanoid) with his animations and his real skin. Null when Bob.fbx is missing.</summary>
+        static GameObject BobVisual(Transform parent, float height)
         {
             var model = ArtSetup.BobModel;
             if (model == null) return null;
             float yaw = FacingYaw(model, "lefttoebase", "leftfoot");
-            return FitModel(model, parent, "Model_Bob", 1.95f, Vector3.zero, yaw, ArtSetup.BobController(), out _);
+            var bob = FitModel(model, parent, "Model_Bob", height, Vector3.zero, yaw, ArtSetup.BobController(), out _);
+            var skin = ArtSetup.BobMaterial();
+            if (skin != null)
+                foreach (var r in bob.GetComponentsInChildren<Renderer>())
+                {
+                    var mats = r.sharedMaterials;
+                    for (int i = 0; i < mats.Length; i++)
+                        if (mats[i] == null || mats[i].mainTexture == null) mats[i] = skin; // only the white ones
+                    r.sharedMaterials = mats;
+                }
+            return bob;
         }
     }
 }
