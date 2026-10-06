@@ -51,6 +51,7 @@ namespace Porkour.EditorTools
             { Sound.Cluck, new[] { "chicken", "cluck", "hen" } },
             { Sound.Baa, new[] { "sheep", "baa" } },
             { Sound.Moo, new[] { "cow", "moo", "calf" } },
+            { Sound.Oink, new[] { "oink", "pig", "grunt", "squeal", "snort" } },
             { Sound.Alarm, new[] { "alarm", "siren", "warning" } },
         };
 

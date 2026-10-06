@@ -33,7 +33,7 @@ namespace Porkour
         public float firstCallDelay = 45f;
         public Vector2 callInterval = new(95f, 135f);
         public float warningTime = 5f;
-        public float searchTime = 30f;
+        public float searchTime = 40f;
         public float rescueTime = 20f;
         public float stunTime = 3f;
 
@@ -118,6 +118,8 @@ namespace Porkour
         Vector3 Eyes => transform.position + Vector3.up * 2.1f;
         Vector3 CarryPosition => carryPoint != null ? carryPoint.position : transform.TransformPoint(new Vector3(0.3f, 2.55f, -0.1f));
         static bool RoundActive => RoundManager.Instance == null || RoundManager.Instance.IsPlaying;
+        /// <summary>Server: a caged pig's grill time is up - Bob drops what he's doing and goes back to his grill.</summary>
+        static bool GrillDue => PigCage.Instance != null && PigCage.Instance.Overdue() != null;
 
         void Awake()
         {
@@ -200,6 +202,7 @@ namespace Porkour
                     break;
 
                 case BobState.Coming:
+                    if (GrillDue) { GoGrill(); break; }
                     if (now < stateStart + 2f) Stop(); // ringing the bell by the grill
                     else MoveTo(insidePoint, walkSpeed * slow);
                     if (Arrived(insidePoint, 1f) || now > stateStart + warningTime + 10f) BeginSearch(searchTime);
@@ -208,17 +211,13 @@ namespace Porkour
                 case BobState.Searching:
                     if (TrySpot()) break;
                     if (now >= searchEnd) { SetState(BobState.Leaving, 0f); break; }
-                    if (!finalHunt.Value && PigCage.Instance != null && PigCage.Instance.Overdue() != null)
-                    {
-                        Say("Ooh, the grill's hot!");
-                        SetState(BobState.Leaving, 0f);
-                        break;
-                    }
+                    if (GrillDue) { GoGrill(); break; }
                     if (!hasWanderPoint || Arrived(wanderPoint, 1.2f) || now > wanderUntil) PickWanderPoint();
                     MoveTo(wanderPoint, walkSpeed * slow * (finalHunt.Value ? 1.15f : 1f));
                     break;
 
                 case BobState.Investigating:
+                    if (GrillDue) { GoGrill(); break; }
                     if (TrySpot()) break;
                     MoveTo(noisePos, chaseSpeed * slow);
                     if (investigateUntil <= 0f && Arrived(noisePos, 2f)) investigateUntil = now + 3f; // look around
@@ -227,6 +226,7 @@ namespace Porkour
                     break;
 
                 case BobState.Chasing:
+                    if (GrillDue) { GoGrill(); break; }
                     Chase(slow);
                     break;
 
@@ -254,11 +254,20 @@ namespace Porkour
                     break;
 
                 case BobState.Leaving:
-                    if (finalHunt.Value && carriedBait == null) { BeginSearch(0f); break; }
-                    MoveTo(home, walkSpeed * slow);
+                    bool due = GrillDue;
+                    if (finalHunt.Value && carriedBait == null && !due) { BeginSearch(0f); break; }
+                    MoveTo(home, walkSpeed * slow * (due ? 1.4f : 1f)); // hurrying back to a hot grill
                     if (Arrived(home, 0.8f)) GoAway();
                     break;
             }
+        }
+
+        void GoGrill()
+        {
+            ClearTarget();
+            Say("Ooh, the grill's hot!");
+            Announce("The grill is hot - Bob is going back to his BBQ!");
+            SetState(BobState.Leaving, 0f);
         }
 
         void StartGrillCall()
@@ -331,6 +340,7 @@ namespace Porkour
             if (!IsServer) return;
             var s = state.Value;
             if (s != BobState.Searching && s != BobState.Investigating && s != BobState.Chasing) return;
+            if (s == BobState.Investigating && (position - noisePos).sqrMagnitude < 25f && Time.time - stateStart < 4f) return; // already on it
             noisePos = NavMesh.SamplePosition(position, out NavMeshHit hit, 5f, NavMesh.AllAreas) ? hit.position : position;
             ClearTarget();
             SetState(BobState.Investigating, 0f);
@@ -373,9 +383,15 @@ namespace Porkour
                 var path = new NavMeshPath();
                 for (int i = 0; i < 8; i++)
                 {
-                    bool second = searchHalfSize2.sqrMagnitude > 0f && UnityEngine.Random.value < 0.45f;
+                    bool second = searchHalfSize2.sqrMagnitude > 0f && UnityEngine.Random.value < 0.65f;
                     Vector3 c = second ? searchCenter2 : searchCenter;
                     Vector2 h = second ? searchHalfSize2 : searchHalfSize;
+                    // The farm is big: half the time Bob "sniffs" his way to the area around a random pig (not right onto it).
+                    if (i < 4 && UnityEngine.Random.value < 0.5f && RandomHuntablePig() is PigController near)
+                    {
+                        c = near.Body.position;
+                        h = new Vector2(10f, 10f);
+                    }
                     Vector3 p = c + new Vector3(UnityEngine.Random.Range(-h.x, h.x), 0f, UnityEngine.Random.Range(-h.y, h.y));
                     if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2f, NavMesh.AllAreas)) continue;
                     if (!agent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete) continue;
@@ -418,7 +434,16 @@ namespace Porkour
         }
 
         /// <summary>Pigs Bob cares about: someone plays it, it's free, not escaped yet.</summary>
-        static bool IsHuntable(PigController pig) => pig != null && pig.Owner != null && !pig.Escaped && !pig.IsHeld;
+        static PigController RandomHuntablePig()
+        {
+            int count = 0;
+            PigController pick = null;
+            foreach (var pig in PigController.All)
+                if (IsHuntable(pig) && UnityEngine.Random.Range(0, ++count) == 0) pick = pig;
+            return pick;
+        }
+
+        static bool IsHuntable(PigController pig) => pig != null && pig.Owner != null && !pig.Escaped && !pig.IsHeld && pig.CagedIn == null;
 
         /// <summary>Hidden right now (hay, still under a bucket) - can't be seen or grabbed.</summary>
         static bool IsHidden(PigController pig)

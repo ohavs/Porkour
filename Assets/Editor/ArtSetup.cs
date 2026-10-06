@@ -27,7 +27,7 @@ namespace Porkour.EditorTools
             ("Bob_Throw", "Throw", false), ("Bob_Yell", "Yell", true),
         };
 
-        static readonly string[] Animals = { "pig", "hog", "chick", "cow" };
+        static readonly string[] Animals = { "pig", "hog", "chick", "cow", "dog", "cat", "bunny" };
 
         public const string FarmBuildingsDir = "Assets/Art/Farm/Farm Buildings by Quaternius/FBX";
         static readonly string[] SkippedPacks =

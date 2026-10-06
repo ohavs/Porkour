@@ -11,8 +11,8 @@ namespace Porkour
     /// One round on one of Bob's farms (server runs it, every PC reads the synced state for the HUD):
     /// Intro (read your role) → Playing (12 min) → Won / Lost → results + payout → a fresh round (NetworkGame respawns
     /// the level, pig types are shuffled again).
-    /// Missions: 3 required (break out of the barn, steal the truck keys, open the farm gate) + 2 bonus (pie heist, ruin
-    /// the BBQ). Win: required missions done and every pig a player controls in the getaway truck (EscapeZone).
+    /// Missions: 3 required (unlock the farm gate, steal the truck keys, fuel the truck) + 2 bonus (pie heist, ruin the
+    /// BBQ). Win: required missions done and every pig a player controls in the getaway truck (EscapeZone).
     /// Coins (team): coin pickups, rescues from Bob's cage, bonus missions, loot in the truck, winning. Payout = coins + XP,
     /// saved on every player's PC (PlayerProgress) for the shop later. Stars: escaped, nobody grilled, fast, both bonuses.
     /// Lose: time runs out, or Bob grills maxGrills pigs. Last minute: Bob's final hunt. Host debug: R = restart.
@@ -52,24 +52,24 @@ namespace Porkour
             }
         }
 
-        /// <summary>Mission steps (HUD checklist; the first four are the lamps over the barn exit).</summary>
+        /// <summary>Mission steps (HUD list + markers; the first four are the lamps on the farm gate).</summary>
         public static readonly Objective[] Objectives =
         {
-            new("Padlock", "bring the KEY from the roof beams", ChannelIds.Padlock),
-            new("Electric fence", "smash the FUSE BOX in the tool shed (Heavy)", ChannelIds.Fence),
-            new("Gate motor", "fart into the GENERATOR on the hayloft (Gassy)", ChannelIds.Generator),
-            new("Gate latch", "shoot the 3 BULLSEYES (Armed)", ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3),
-            new("Truck keys", "sneak into BOB'S HOUSE (chimney / window / back door), keys into the truck's IGNITION", ChannelIds.Truck),
-            new("Farm gate", "stand on BOTH gate plates at the same time (one by the gate, one by the windmill)", ChannelIds.FarmGate),
-            new("Pie heist", "put BOB'S PIE (in his house) into the truck", ChannelIds.PieInTruck),
-            new("Ruin the BBQ", "smash Bob's GAS BOTTLE by the grill (his grill gets slow)", ChannelIds.Sabotage),
+            new("Padlock", "KEY on the barn's roof beams -> PADLOCK on the farm gate", ChannelIds.Padlock),
+            new("Electric fence", "smash the FUSE BOX in the barn's tool shed (Heavy)", ChannelIds.Fence),
+            new("Gate motor", "fart into the GENERATOR on the barn's hayloft (Gassy)", ChannelIds.Generator),
+            new("Gate latch", "shoot the 3 BULLSEYES on poles around the farm (Armed)", ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3),
+            new("Truck keys", "TRUCK KEYS from Bob's house -> the truck's IGNITION", ChannelIds.Truck),
+            new("Fuel", "2 pigs on the GARAGE plates at once -> FUEL CAN -> the truck", ChannelIds.Fuel),
+            new("Pie heist", "BOB'S PIE (his house) -> into the truck", ChannelIds.PieInTruck),
+            new("Ruin the BBQ", "smash Bob's GAS BOTTLE by his grill (Heavy)", ChannelIds.Sabotage),
         };
 
         public static readonly Mission[] Missions =
         {
-            new("Break out of the barn", true, 0, 150, 0, 1, 2, 3),
+            new("Unlock the farm gate", true, 0, 150, 0, 1, 2, 3),
             new("Steal the truck keys", true, 0, 100, 4),
-            new("Open the farm gate", true, 0, 100, 5),
+            new("Fuel the truck", true, 0, 100, 5),
             new("Pie heist", false, 40, 75, 6),
             new("Ruin the BBQ", false, 40, 75, 7),
         };
@@ -77,7 +77,7 @@ namespace Porkour
         static readonly int[] TrackedChannels =
         {
             ChannelIds.Padlock, ChannelIds.Fence, ChannelIds.Generator, ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3,
-            ChannelIds.Truck, ChannelIds.FarmGate, ChannelIds.PieInTruck, ChannelIds.Sabotage,
+            ChannelIds.Truck, ChannelIds.Fuel, ChannelIds.PieInTruck, ChannelIds.Sabotage,
         };
 
         [Header("Timing (seconds)")]
@@ -130,10 +130,12 @@ namespace Porkour
         /// <summary>Won: coins from loot that rode away in the truck.</summary>
         public int LootCoins => lootCoins.Value;
         public int Rescues => rescues.Value;
-        /// <summary>Barn exit open (padlock, generator, bullseyes done).</summary>
+        /// <summary>The farm gate itself is open (padlock, generator, bullseyes done).</summary>
         public bool ExitOpen => ObjectiveDone(0) && ObjectiveDone(2) && ObjectiveDone(3);
-        /// <summary>Truck started and farm gate open: pigs in the truck now count as escaped.</summary>
-        public bool CanEscape => MissionDone(1) && MissionDone(2);
+        /// <summary>Keys in the ignition and fuel in the tank (every PC: the truck shakes, smokes, lights up).</summary>
+        public bool TruckReady => MissionDone(1) && MissionDone(2);
+        /// <summary>All required missions done: pigs in the truck now count as escaped.</summary>
+        public bool CanEscape => RequiredDone;
         public bool RequiredDone
         {
             get
@@ -265,7 +267,7 @@ namespace Porkour
         {
             SetPhase(RoundPhase.Playing, roundTime);
             if (FarmerBob.Instance != null) FarmerBob.Instance.ResetCallTimer();
-            AnnounceRpc("GO! Break out of the barn, steal Bob's truck and get off his farm!");
+            AnnounceRpc("GO! Steal Bob's truck and get off his farm! (hold Tab for the missions)");
             RoundSoundRpc(Sound.Escape);
         }
 
@@ -311,7 +313,7 @@ namespace Porkour
             if (!exitAlarmed && ExitOpen)
             {
                 exitAlarmed = true;
-                AnnounceRpc("THE BARN EXIT IS OPEN! Steal the truck keys and open the farm gate!");
+                AnnounceRpc("THE FARM GATE IS OPEN!");
                 Vector3 exit = Vector3.zero;
                 foreach (var gate in FindObjectsByType<Gate>(FindObjectsSortMode.None))
                     if (gate.requiredChannels != null && gate.requiredChannels.Length > 0) exit = gate.transform.position;

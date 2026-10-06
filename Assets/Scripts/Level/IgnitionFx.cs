@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Porkour
 {
-    /// <summary>The getaway truck coming to life once its KeySlot (ignition) takes the keys: exhaust smoke, headlights, engine (local).</summary>
+    /// <summary>The getaway truck coming to life once its KeySlot (ignition) has the keys and the tank has fuel: exhaust smoke, headlights, engine (local).</summary>
     [RequireComponent(typeof(KeySlot))]
     public class IgnitionFx : MonoBehaviour
     {
@@ -19,7 +19,8 @@ namespace Porkour
 
         void Update()
         {
-            bool on = slot.IsSpawned && slot.IsUnlocked;
+            var round = RoundManager.Instance;
+            bool on = slot.IsSpawned && slot.IsUnlocked && (round == null || !round.IsSpawned || round.TruckReady); // keys + fuel
             if (on != running)
             {
                 running = on;

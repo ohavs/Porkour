@@ -113,7 +113,7 @@ namespace Porkour
         /// <summary>What a grab press would pick up right now (null if nothing).</summary>
         public Rigidbody FindGrabTarget()
         {
-            if (IsHolding || pig.IsHeld) return null;
+            if (IsHolding || pig.IsHeld || pig.CagedIn != null) return null; // no grabbing through the cage bars
             Vector3 center = pig.Body.position + transform.forward * reach + Vector3.up * 0.1f;
             Rigidbody best = null;
             float bestDist = float.MaxValue;
@@ -133,7 +133,7 @@ namespace Porkour
             if (rb.isKinematic && Simulate) return false; // on clients every synced body is kinematic
             if (rb.TryGetComponent(out PigController other))
             {
-                if (other.IsHeld) return false;
+                if (other.IsHeld || other.CagedIn != null) return false;
                 if (other.Grabber != null && other.Grabber.Held == pig.Body) return false; // no carry loops
             }
             return true;

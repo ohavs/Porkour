@@ -35,7 +35,7 @@ namespace Porkour.EditorTools
         const string OldScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
         /// <summary>Bump whenever BuildBarn generates something new → auto-rebuild after the next compile.</summary>
-        const int BuildVersion = 6;
+        const int BuildVersion = 7;
         /// <summary>Farmer Bob is a big man (model height; collider / NavMesh agent follow).</summary>
         const float BobHeight = 2.4f;
 
@@ -109,22 +109,16 @@ namespace Porkour.EditorTools
 
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            // Cube Pets models: pig for everyone, the big hog for Heavy (PigLook swaps), type colour on a saddle cloth.
+            // Cube Pets models: pig for everyone (recoloured per type), the big hog for Heavy (PigLook swaps them).
             var feet = new Vector3(0f, -col.radius, 0.05f);
-            var pigModel = AnimalVisual("pig", v, 1.15f, feet, 2.5f, 7f, out var pigBounds);
+            var pigModel = AnimalVisual("pig", v, 1.15f, feet, 2.5f, 7f, out _);
             if (pigModel != null)
             {
-                var cloth = Mat("Saddle", Color.white);
-                var skin = new List<Renderer>(Saddle(pigModel, pigBounds, cloth));
-                var hogModel = AnimalVisual("hog", v, 1.3f, feet, 2.2f, 6f, out var hogBounds);
-                if (hogModel != null)
-                {
-                    skin.AddRange(Saddle(hogModel, hogBounds, cloth));
-                    hogModel.SetActive(false);
-                }
+                var hogModel = AnimalVisual("hog", v, 1.3f, feet, 2.2f, 6f, out _);
+                if (hogModel != null) hogModel.SetActive(false);
                 look.pigModel = pigModel;
                 look.hogModel = hogModel;
-                look.skin = skin.ToArray();
+                look.typeMaterials = PigSkins(pigModel); // each type its own colour
             }
             else look.skin = PrimitivePig(v);
 
@@ -212,13 +206,14 @@ namespace Porkour.EditorTools
             public GameObject pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence,
                 fuseBox, generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt,
                 truckKeys, pie, ignition, chimney, houseDoor, shutter,
-                cage, gasBottle, gatePlate, coin, bigCoin, farmGate, piggyBank, goldenEgg, watch;
+                cage, gasBottle, gatePlate, coin, bigCoin, piggyBank, goldenEgg, watch, fuelCan, fuelCap, garageDoor;
 
             public GameObject[] All => new[]
             {
                 pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence, fuseBox,
                 generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt, truckKeys, pie,
-                ignition, chimney, houseDoor, shutter, cage, gasBottle, gatePlate, coin, bigCoin, farmGate, piggyBank, goldenEgg, watch,
+                ignition, chimney, houseDoor, shutter, cage, gasBottle, gatePlate, coin, bigCoin, piggyBank, goldenEgg, watch,
+                fuelCan, fuelCap, garageDoor,
             };
         }
 
@@ -281,10 +276,13 @@ namespace Porkour.EditorTools
             p.chimney = BuildChimneyPrefab();
             p.cage = BuildCagePrefab(GrillPos - CagePos);
             p.gasBottle = BuildGasBottlePrefab();
-            p.gatePlate = BuildPressurePlatePrefab("GatePlate", 20f, "GATE PLATE\n(both at once!)");
+            p.gatePlate = BuildPressurePlatePrefab("GatePlate", 20f); // the garage's two plates (both at once)
             p.coin = BuildCoinPrefab("Coin", 5, 0.45f);
             p.bigCoin = BuildCoinPrefab("BigCoin", 15, 0.7f);
-            p.farmGate = BuildFarmGatePrefab();
+            p.fuelCan = BuildFuelCanPrefab();
+            p.fuelCap = BuildFuelCapPrefab();
+            p.garageDoor = BuildGatePrefab("GarageDoor", new Vector3(0.3f, 3.1f, 4f), new Vector3(0f, -3.15f, 0f), 3f, carve: true,
+                Mat("BarnDoor", new Color(0.45f, 0.2f, 0.12f)));
             p.piggyBank = BuildPiggyBankPrefab();
             p.goldenEgg = BuildGoldenEggPrefab();
             p.watch = BuildWatchPrefab();
@@ -315,7 +313,7 @@ namespace Porkour.EditorTools
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             // Leftovers from older builds.
-            foreach (var old in new[] { OldScenePath, PropDir + "/Gate.prefab", PropDir + "/Key.prefab", PropDir + "/Sheep.prefab" })
+            foreach (var old in new[] { OldScenePath, PropDir + "/Gate.prefab", PropDir + "/Key.prefab", PropDir + "/Sheep.prefab", PropDir + "/FarmGate.prefab" })
                 if (File.Exists(old)) AssetDatabase.DeleteAsset(old);
             AssetDatabase.SaveAssets();
             Debug.Log("Porkour: Farm built. Press Play!");
@@ -710,8 +708,8 @@ namespace Porkour.EditorTools
             bob.searchCenter = new Vector3(0f, 0f, 0f);
             bob.searchHalfSize = new Vector2(18f, 13f);
             // Farmyard (see BuildFarmyard): only reachable for him once the barn exit is open.
-            bob.searchCenter2 = new Vector3(0f, 0f, 52f);
-            bob.searchHalfSize2 = new Vector2(45f, 36f);
+            bob.searchCenter2 = new Vector3(0f, 0f, 42f);
+            bob.searchHalfSize2 = new Vector2(60f, 56f);
             bob.doorChannel = ChannelIds.BobDoor;
             return SavePrefab(root, $"{PrefabDir}/FarmerBob.prefab");
         }

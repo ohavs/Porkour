@@ -21,9 +21,9 @@ namespace Porkour.EditorTools
         const float Story = Kit.StoryHeight;
 
         /// <summary>
-        /// Barn 40 x 30 (x -20..20, z -15..15), walls 9.36 + invisible ceiling at 8.5. South: Bob's door → his yard + grill.
-        /// North: exit passage (electric fence, exit gate) → the farmyard (BuildFarmyard). East: hayloft (3.2 m) + lift.
-        /// West: tool shed (rotten boards, fuse box) and a shelf up to the roof beams (5.5 m). South-east: pig pen.
+        /// Barn 40 x 30 (x -20..20, z -15..15), walls 9.36 + invisible ceiling at 8.5. South: Bob's door + pig flap → his BBQ.
+        /// North: a big open doorway (x -4..4) to the farm (BuildFarmyard). East: hayloft (3.2 m) + lift + generator.
+        /// West: tool shed (rotten boards, fuse box) and a shelf up to the roof beams (5.3 m, padlock key).
         /// Returns the level root (NavMesh surface for Bob).
         /// </summary>
         static Transform BuildLevel()
@@ -36,7 +36,6 @@ namespace Porkour.EditorTools
             var grass = Mat("Grass", new Color(0.35f, 0.6f, 0.25f));
             var shed = Mat("ShedWall", new Color(0.5f, 0.42f, 0.32f));
             var darkWood = Mat("RoofWood", new Color(0.33f, 0.22f, 0.14f));
-            var lampMat = Mat("Lamp", Color.white);
             bool kit = Kit.Available;
 
             var r = new GameObject("Farm").transform;
@@ -47,16 +46,17 @@ namespace Porkour.EditorTools
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
 
             // Ground: one grass slab under barn, yard and farmyard (+ NavMesh); far grass to the horizon is scenery only.
-            Block("Ground", r, new Vector3(0f, -0.5f, 26f), new Vector3(104f, 1f, 144f), grass);
-            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 26f), new Vector3(500f, 1f, 500f), grass);
+            Block("Ground", r, new Vector3(0f, -0.5f, 33f), new Vector3(144f, 1f, 160f), grass);
+            Part(PrimitiveType.Cube, "FarGrass", null, new Vector3(0f, -0.55f, 33f), new Vector3(600f, 1f, 600f), grass);
 
             // Barn floor, walls, invisible ceiling (nobody flies out over the walls).
             const float t = 0.4f;
             const float h = CeilingHeight;
             Solid("Floor", r, new Vector3(0f, -0.49f, 0f), new Vector3(40.8f, 1f, 30.8f), floor, kit);
-            Solid("WallN1", r, new Vector3(-11.2f, BarnWallTop / 2f, 15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
-            Solid("WallN2", r, new Vector3(11.2f, BarnWallTop / 2f, 15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
-            Solid("ExitLintel", r, new Vector3(0f, (Story + BarnWallTop) / 2f, 15.2f), new Vector3(4f, BarnWallTop - Story, t), wall, kit);
+            // North: the big barn doorway (x -4..4) stands open - the barn is part of the farm, pigs come and go.
+            Solid("WallN1", r, new Vector3(-12.2f, BarnWallTop / 2f, 15.2f), new Vector3(16.4f, BarnWallTop, t), wall, kit);
+            Solid("WallN2", r, new Vector3(12.2f, BarnWallTop / 2f, 15.2f), new Vector3(16.4f, BarnWallTop, t), wall, kit);
+            Solid("DoorwayLintel", r, new Vector3(0f, (Story + BarnWallTop) / 2f, 15.2f), new Vector3(8f, BarnWallTop - Story, t), wall, kit);
             // South wall west part, with the PIG FLAP: a low hole (1.1 m) pigs fit through but Bob doesn't - the way out to his
             // BBQ to rescue caged friends.
             Solid("WallS1a", r, new Vector3((-20.4f + PigFlapX - 0.7f) / 2f, BarnWallTop / 2f, -15.2f), new Vector3(PigFlapX - 0.7f + 20.4f, BarnWallTop, t), wall, kit);
@@ -64,14 +64,14 @@ namespace Porkour.EditorTools
             Solid("PigFlapLintel", r, new Vector3(PigFlapX, (1.1f + BarnWallTop) / 2f, -15.2f), new Vector3(1.4f, BarnWallTop - 1.1f, t), wall, kit);
             Part(PrimitiveType.Cube, "PigFlapBoards", r, new Vector3(PigFlapX, 1.8f, -15.2f), new Vector3(1.5f, 1.4f, 0.5f), Mat("RoofWood", new Color(0.33f, 0.22f, 0.14f)));
             Part(PrimitiveType.Cube, "PigFlap", r, new Vector3(PigFlapX, 0.85f, -15.48f), new Vector3(1.3f, 0.5f, 0.04f), Mat("FlapRubber", new Color(0.15f, 0.12f, 0.1f)), new Vector3(-25f, 0f, 0f));
-            Label(r, "PIG FLAP\n(to Bob's BBQ)", new Vector3(PigFlapX, 2.9f, -14.6f), new Color(1f, 0.85f, 0.4f), 0.035f);
+            Label(r, "PIG FLAP", new Vector3(PigFlapX, 2.9f, -14.6f), new Color(1f, 0.85f, 0.4f), 0.035f);
             Solid("WallS2", r, new Vector3(11.2f, BarnWallTop / 2f, -15.2f), new Vector3(18.4f, BarnWallTop, t), wall, kit);
             Solid("DoorLintel", r, new Vector3(0f, (Story + BarnWallTop) / 2f, -15.2f), new Vector3(4f, BarnWallTop - Story, t), wall, kit);
             Solid("WallE", r, new Vector3(20.2f, BarnWallTop / 2f, 0f), new Vector3(t, BarnWallTop, 30.8f), wall, kit);
             Solid("WallW", r, new Vector3(-20.2f, BarnWallTop / 2f, 0f), new Vector3(t, BarnWallTop, 30.8f), wall, kit);
             Boundary(r, "Ceiling", new Vector3(0f, h + 0.25f, 0f), new Vector3(40.8f, 0.5f, 30.8f));
             DoorFrame(r, new Vector3(0f, 0f, -15.2f), 4f, beam);
-            DoorFrame(r, new Vector3(0f, 0f, 15.2f), 4f, beam);
+            DoorFrame(r, new Vector3(0f, 0f, 15.2f), 8f, beam);
             if (kit)
             {
                 BarnKitWalls(r);
@@ -85,9 +85,18 @@ namespace Porkour.EditorTools
             // Roof beams (5.5 m): the key sits on the north one, far west, between two little rails.
             // Up from the hayloft or the west shelf (3.2 m): Jumpy's ledge grab, Gassy's rocket, a rope, Heavy's trampoline.
             // 1.6 m wide: Jumpy's ledge grab pops it up with some forward speed, and it has to land on it.
-            PassThrough(Block("BeamS", r, new Vector3(0f, 5.3f, -2f), new Vector3(40f, 0.4f, 1.6f), beam));
-            PassThrough(Block("BeamN", r, new Vector3(0f, 5.3f, 7f), new Vector3(40f, 0.4f, 1.6f), beam));
-            PassThrough(Block("CrossBeam", r, new Vector3(-8f, 5.3f, 2.5f), new Vector3(1.2f, 0.4f, 7.6f), beam));
+            PassThrough(Solid("BeamS", r, new Vector3(0f, 5.3f, -2f), new Vector3(40f, 0.4f, 1.6f), beam, kit));
+            PassThrough(Solid("BeamN", r, new Vector3(0f, 5.3f, 7f), new Vector3(40f, 0.4f, 1.6f), beam, kit));
+            PassThrough(Solid("CrossBeam", r, new Vector3(-8f, 5.3f, 2.5f), new Vector3(1.2f, 0.4f, 7.6f), beam, kit));
+            if (kit) // big round logs (kit) as the beams' look
+            {
+                var logs = new GameObject("Beams (kit)").transform;
+                logs.SetParent(r, false);
+                foreach (float z in new[] { -2f, 7f })
+                    for (int i = 0; i < 4; i++)
+                        Kit.Fit("Roof_Log", logs, new Vector3(-15f + i * 10f, 5.3f, z), new Vector3(10f, 0.5f, 1.6f), 90f, keepLongSide: true);
+                Kit.Fit("Roof_Log", logs, new Vector3(-8f, 5.3f, 2.5f), new Vector3(1.2f, 0.5f, 7.6f), 0f, keepLongSide: true);
+            }
             PassThrough(Block("KeyRail1", r, new Vector3(-12f, 5.65f, 6.25f), new Vector3(1.2f, 0.3f, 0.1f), beam));
             PassThrough(Block("KeyRail2", r, new Vector3(-12f, 5.65f, 7.75f), new Vector3(1.2f, 0.3f, 0.1f), beam));
             // West shelf (3.2 m, like the hayloft) next to the north beam: Jumpy (ledge grab) / Gassy (rocket) / stacked crates.
@@ -98,12 +107,13 @@ namespace Porkour.EditorTools
             // Hayloft (east, 3.2 m) on posts; the lift (network-spawned) rises at its south-west corner.
             Block("Hayloft", r, new Vector3(16f, 3f, 4.5f), new Vector3(8f, 0.4f, 21f), wood);
             foreach (float z in new[] { -5.75f, -0.5f, 4.5f, 9.5f, 14.5f })
-                PassThrough(Block("LoftPost", r, new Vector3(12.25f, 1.4f, z), new Vector3(0.4f, 2.8f, 0.4f), beam));
+            {
+                PassThrough(Solid("LoftPost", r, new Vector3(12.25f, 1.4f, z), new Vector3(0.4f, 2.8f, 0.4f), beam, kit));
+                if (kit) Kit.Fit("Corner_ExteriorWide_Wood", r, new Vector3(12.25f, 1.4f, z), new Vector3(0.45f, 2.8f, 0.45f), 0f);
+            }
             Block("LoftBale1", r, new Vector3(19f, 4f, 12.5f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
             Block("LoftBale2", r, new Vector3(19f, 4f, 6f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
             Haystack(r, new Vector3(17.5f, 3.2f, -3.5f), hay);
-            Label(r, "HAYLOFT", new Vector3(12.2f, 4.2f, 2f), Color.white, 0.06f);
-            Label(r, "LIFT", new Vector3(6.5f, 1.8f, -3.3f), Color.white, 0.05f);
             PointLight(r, new Vector3(15.5f, 2.3f, 1.5f), new Color(1f, 0.85f, 0.6f), 9f, 1.5f); // under the loft
 
             // Tool shed (west, x -20..-12, z -8..2): its doorway (z -4..-2) is nailed shut with rotten boards (network-spawned).
@@ -122,50 +132,10 @@ namespace Porkour.EditorTools
                 foreach (float z in new[] { 2.2f, -8.2f })
                     Kit.Fit("Corner_Exterior_Wood", shedWalls, new Vector3(-11.8f, Story / 2f, z), new Vector3(0.45f, Story, 0.45f), 0f);
             }
-            Label(r, "TOOL SHED", new Vector3(-11.3f, 4f, -3f), Color.white, 0.06f);
-            Label(r, "FUSE BOX", new Vector3(-19.3f, 2.2f, -3f), new Color(1f, 0.9f, 0.3f), 0.04f);
+
             PointLight(r, new Vector3(-16f, 2.6f, -3f), new Color(1f, 0.8f, 0.5f), 8f, 1.5f);
 
-            // Exit passage (x -2..2, z 15.4..19.4) through the north wall: electric fence, then the exit gate (network-spawned).
-            Solid("PassageW", r, new Vector3(-2.2f, Story / 2f, 17.4f), new Vector3(t, Story, 4f), wall, kit);
-            Solid("PassageE", r, new Vector3(2.2f, Story / 2f, 17.4f), new Vector3(t, Story, 4f), wall, kit);
-            Block("PassageRoof", r, new Vector3(0f, Story + 0.15f, 17.4f), new Vector3(4.8f, 0.3f, 4f), darkWood);
-            if (kit)
-            {
-                var passage = new GameObject("Passage (kit)").transform;
-                passage.SetParent(r, false);
-                Kit.WallRun(passage, new Vector3(-2f, 0f, 15.4f), new Vector3(-2f, 0f, 19.4f), Vector3.left, 1, (_, _) => "Wall_UnevenBrick_Straight");
-                Kit.WallRun(passage, new Vector3(2f, 0f, 15.4f), new Vector3(2f, 0f, 19.4f), Vector3.right, 1, (_, _) => "Wall_UnevenBrick_Straight");
-            }
-            Label(r, "EXIT", new Vector3(0f, 6.4f, 14.7f), new Color(0.5f, 1f, 0.5f), 0.1f);
-            string[] lampNames = { "KEY", "FENCE", "POWER", "TARGETS" };
-            for (int i = 0; i < lampNames.Length; i++)
-            {
-                float x = -1.65f + i * 1.1f;
-                var lamp = Part(PrimitiveType.Sphere, "ExitLamp", r, new Vector3(x, 5.2f, 14.8f), Vector3.one * 0.45f, lampMat);
-                var objectiveLamp = lamp.AddComponent<ObjectiveLamp>();
-                objectiveLamp.objective = i;
-                objectiveLamp.lamp = lamp.GetComponent<Renderer>();
-                Label(r, lampNames[i], new Vector3(x, 4.6f, 14.7f), Color.white, 0.03f);
-            }
-            Label(r, "PADLOCK", new Vector3(-4.5f, 2.3f, 13.6f), new Color(1f, 0.85f, 0.2f), 0.04f);
-            PointLight(r, new Vector3(0f, 2.8f, 12.5f), new Color(0.8f, 1f, 0.8f), 9f, 1.2f);
-
-            // Pig pen (start), south-east: low fence (jump over) with a gap on the north-west.
-            bool fences = ArtSetup.FarmBuilding("Fence") != null;
-            Solid("PenN", r, new Vector3(13.8f, 0.4f, -8f), new Vector3(6.4f, 0.8f, 0.2f), wood, fences);
-            Solid("PenW", r, new Vector3(9f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood, fences);
-            Solid("PenE", r, new Vector3(17f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood, fences);
-            Solid("PenS", r, new Vector3(13f, 0.4f, -14f), new Vector3(8.2f, 0.8f, 0.2f), wood, fences);
-            if (fences)
-            {
-                FenceRun(r, new Vector3(10.6f, 0f, -8f), new Vector3(17f, 0f, -8f), wood, 0.85f);
-                FenceRun(r, new Vector3(9f, 0f, -8f), new Vector3(9f, 0f, -14f), wood, 0.85f);
-                FenceRun(r, new Vector3(17f, 0f, -8f), new Vector3(17f, 0f, -14f), wood, 0.85f);
-                FenceRun(r, new Vector3(8.9f, 0f, -14f), new Vector3(17.1f, 0f, -14f), wood, 0.85f);
-            }
-            Block("Trough", r, new Vector3(11f, 0.25f, -13.4f), new Vector3(2f, 0.5f, 0.6f), beam);
-            Part(PrimitiveType.Cube, "Mud", r, new Vector3(14.5f, 0.035f, -12f), new Vector3(3f, 0.02f, 2.2f), Mat("Mud", new Color(0.35f, 0.24f, 0.14f)));
+            PointLight(r, new Vector3(0f, 2.8f, 12.5f), new Color(1f, 0.95f, 0.8f), 9f, 1.2f);
 
             // Hay to hide in (no colliders - walk in), bales as obstacles.
             Haystack(r, new Vector3(-6f, 0f, 11f), hay);
@@ -210,8 +180,7 @@ namespace Porkour.EditorTools
             if (!kit || Kit.Fit("Prop_Chimney", yard, g + new Vector3(0f, 1.9f, -0.45f), new Vector3(0.6f, 2f, 0.4f), 0f) == null)
                 Part(PrimitiveType.Cube, "Smokestack", yard, g + new Vector3(0f, 1.9f, -0.45f), new Vector3(0.5f, 2f, 0.35f), Mat("GrillBrick", new Color(0.55f, 0.25f, 0.18f)));
             PointLight(yard, g + new Vector3(0f, 1.6f, 0.6f), new Color(1f, 0.5f, 0.2f), 6f, 1.6f);
-            Label(yard, "BOB'S BBQ", g + new Vector3(0f, 3.4f, 0f), new Color(1f, 0.5f, 0.3f), 0.06f);
-            Label(yard, "BOB'S CAGE\n(stand at the door to open it)", CagePos + new Vector3(0f, 4.4f, 0f), new Color(1f, 0.85f, 0.4f), 0.035f);
+
 
             // Picnic table, crates (decor + cover).
             Block("PicnicTable", yard, new Vector3(0f, 0.75f, -33f), new Vector3(2.6f, 0.1f, 1.2f), wood);
@@ -229,19 +198,19 @@ namespace Porkour.EditorTools
         {
             var walls = new GameObject("BarnWalls (kit)").transform;
             walls.SetParent(r, false);
-            void Run(Vector3 a, Vector3 b, Vector3 outward, bool doorway, int noWindow, int flap = -1)
+            void Run(Vector3 a, Vector3 b, Vector3 outward, bool doorway, int noWindow, int flap = -1, int doorFrom = 9, int doorTo = 10)
             {
                 bool Window(int i) => i % 4 == 2 && i != noWindow;
                 Kit.WallRun(walls, a, b, outward, 3, (i, story) =>
-                    story == 0 ? (doorway && (i == 9 || i == 10) ? null : i == flap ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
+                    story == 0 ? (doorway && i >= doorFrom && i <= doorTo ? null : i == flap ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
                     : story == 1 ? "Wall_Plaster_WoodGrid"
                     : Window(i) ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_Straight");
                 Kit.WallRun(walls, a, b, outward, 3, (i, story) => story == 2 && Window(i) ? "Window_Wide_Round1" : null);
             }
-            Run(new Vector3(-20f, 0f, -15f), new Vector3(20f, 0f, -15f), Vector3.back, true, 6, Mathf.FloorToInt((PigFlapX + 20f) / 2f)); // south: Bob's door, pig flap, bullseye 2
-            Run(new Vector3(-20f, 0f, 15f), new Vector3(20f, 0f, 15f), Vector3.forward, true, 14);   // north: exit, bullseye 1
+            Run(new Vector3(-20f, 0f, -15f), new Vector3(20f, 0f, -15f), Vector3.back, true, -1, Mathf.FloorToInt((PigFlapX + 20f) / 2f)); // south: Bob's door, pig flap
+            Run(new Vector3(-20f, 0f, 15f), new Vector3(20f, 0f, 15f), Vector3.forward, true, -1, doorFrom: 8, doorTo: 11); // north: the big open doorway
             Run(new Vector3(20f, 0f, -15f), new Vector3(20f, 0f, 15f), Vector3.right, false, -1);
-            Run(new Vector3(-20f, 0f, -15f), new Vector3(-20f, 0f, 15f), Vector3.left, false, 2);    // west: bullseye 3
+            Run(new Vector3(-20f, 0f, -15f), new Vector3(-20f, 0f, 15f), Vector3.left, false, -1);
             foreach (float x in new[] { -20.2f, 20.2f })
             foreach (float z in new[] { -15.2f, 15.2f })
                 Kit.Fit("Corner_ExteriorWide_Wood", walls, new Vector3(x, BarnWallTop / 2f, z), new Vector3(0.5f, BarnWallTop, 0.5f), 0f);
@@ -271,33 +240,19 @@ namespace Porkour.EditorTools
             hider.size = new Vector3(41f, 17f, 31f);
         }
 
-        /// <summary>Spawn points inside the barn (and Bob in his yard).</summary>
+        /// <summary>Spawn points inside the barn (and Bob in his yard). The pigs start outside in their sty (FarmSpawnPoints).</summary>
         static void BarnSpawnPoints(Transform spawnRoot, List<NetSpawnPoint> points, PrefabSet p)
         {
-            // Pigs start in the pen (south-east); the server gives them random types (colour = type) every round.
-            for (int i = 0; i < PigTypes.All.Length; i++)
-                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", p.pig, new Vector3(10.6f + i * 1.8f, 1f, -10.5f)));
-
-            // ---- Escape: 4 locks on the exit (north) ----
-            // 1. Padlock: the key sits on the north roof beam, far west - Jumpy's job (Gassy can rocket up too).
+            // ---- Farm gate locks that live in the barn ----
+            // Padlock key on the north roof beam, far west - Jumpy's job (Gassy can rocket up too). The padlock is at the gate.
             points.Add(SpawnPoint(spawnRoot, "Key", p.key, new Vector3(-12f, 5.75f, 7f)));
-            points.Add(SpawnPoint(spawnRoot, "Padlock", p.padlock, new Vector3(-4.5f, 0f, 13.6f), channel: ChannelIds.Padlock));
-            // 2. Electric fence in the exit passage; its fuse box is in the tool shed behind rotten boards - Heavy.
-            points.Add(SpawnPoint(spawnRoot, "ElectricFence", p.fence, new Vector3(0f, 1.55f, 16.6f), channel: ChannelIds.Fence));
+            // The electric fence's fuse box: in the tool shed behind rotten boards - Heavy.
             points.Add(SpawnPoint(spawnRoot, "RottenBoards", p.boards, new Vector3(-11.8f, 1.55f, -3f), rotation: Quaternion.Euler(0f, 90f, 0f)));
             points.Add(SpawnPoint(spawnRoot, "FuseBox", p.fuseBox, new Vector3(-19.75f, 1f, -3f), channel: ChannelIds.Fence,
                 rotation: Quaternion.Euler(0f, 90f, 0f)));
-            // 3. Generator (runs on farts) up on the hayloft - Gassy.
+            // The gate motor's generator (runs on farts) up on the hayloft - Gassy.
             points.Add(SpawnPoint(spawnRoot, "Generator", p.generator, new Vector3(17.5f, 3.2f, 10.5f), channel: ChannelIds.Generator,
                 rotation: Quaternion.Euler(0f, -90f, 0f)));
-            // 4. Three bullseyes high on the walls - Armed (latching).
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 1", p.target, new Vector3(9f, 6f, 14.85f), channel: ChannelIds.Target1,
-                rotation: Quaternion.Euler(0f, 180f, 0f)));
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 2", p.target, new Vector3(-8f, 6f, -14.85f), channel: ChannelIds.Target2));
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 3", p.target, new Vector3(-19.85f, 6.5f, -11f), channel: ChannelIds.Target3,
-                rotation: Quaternion.Euler(0f, 90f, 0f)));
-            // The exit gate opens when padlock + generator + bullseyes are done (see BuildExitGatePrefab).
-            points.Add(SpawnPoint(spawnRoot, "ExitGate", p.exitGate, new Vector3(0f, 1.55f, 19.1f)));
 
             // ---- Getting up high ----
             // Lift to the hayloft: stand on the plate (40 kg = Heavy, or two pigs) and the lift rises.
@@ -325,14 +280,13 @@ namespace Porkour.EditorTools
             points.Add(SpawnPoint(spawnRoot, "GoldWatch", p.watch, new Vector3(18.6f, 3.5f, 0.5f)));
             // Coins: easy ones near the start, big ones in hard places (beams, shelf).
             foreach (var pos in new[] { new Vector3(13f, 0.7f, -12.5f), new Vector3(-16f, 0.7f, -6f), new Vector3(-2f, 0.7f, 11.5f),
-                         new Vector3(9.5f, 0.7f, -33.5f), new Vector3(-6f, 0.7f, -2f) })
+                         new Vector3(9.5f, 0.7f, -33.5f), new Vector3(-6f, 0.7f, -2f), new Vector3(17f, 0.7f, -13f) })
                 points.Add(SpawnPoint(spawnRoot, "Coin", p.coin, pos));
             foreach (var pos in new[] { new Vector3(8f, 5.95f, 7f), new Vector3(-16f, 5.95f, -2f), new Vector3(-19.2f, 3.75f, 10.3f),
                          new Vector3(18.5f, 4.9f, 12.5f) })
                 points.Add(SpawnPoint(spawnRoot, "BigCoin", p.bigCoin, pos));
             points.Add(SpawnPoint(spawnRoot, "BarnDoor", p.barnDoor, new Vector3(0f, 1.55f, -15.2f), channel: ChannelIds.BobDoor));
-            foreach (var pos in new[] { new Vector3(-4f, 0.35f, 0f), new Vector3(4f, 0.35f, -5f) })
-                points.Add(SpawnPoint(spawnRoot, "Chicken", p.chicken, pos));
+            points.Add(SpawnPoint(spawnRoot, "Chicken", p.chicken, new Vector3(-4f, 0.35f, 0f)));
             foreach (var pos in new[] { new Vector3(3f, 0.55f, -8f), new Vector3(-10f, 0.55f, 12f), new Vector3(-15.5f, 0.55f, 0.5f) })
                 points.Add(SpawnPoint(spawnRoot, "Bucket", p.bucket, pos));
             points.Add(SpawnPoint(spawnRoot, "Bell", p.bell, new Vector3(-5f, 5.1f, -2f)));

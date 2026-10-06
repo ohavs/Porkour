@@ -7,7 +7,7 @@ namespace Porkour
     {
         Jump, Land, Step, Fart, Dash, Slam, Boing, Rope, Shoot, Suck, Smash, Splat, Bell, Ding, Click, Zap,
         Unlock, Engine, EngineLoop, Rumble, Grab, Throw, GrillCall, Spotted, Caught, Bonk, Sizzle, Escape, Win,
-        Lose, Tick, Cluck, Baa, Alarm, Moo,
+        Lose, Tick, Cluck, Baa, Alarm, Moo, Oink,
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ namespace Porkour
         {
             Sound.Fart, Sound.Slam, Sound.Boing, Sound.Shoot, Sound.Smash, Sound.Splat, Sound.Bell, Sound.Ding, Sound.Zap,
             Sound.Unlock, Sound.Engine, Sound.GrillCall, Sound.Spotted, Sound.Caught, Sound.Bonk, Sound.Sizzle, Sound.Escape,
-            Sound.Win, Sound.Lose, Sound.Tick, Sound.Alarm,
+            Sound.Win, Sound.Lose, Sound.Tick, Sound.Alarm, Sound.Oink,
         };
 
         /// <summary>Volume for all effects (the SoundBank's effectsVolume when there is one).</summary>
@@ -53,6 +53,7 @@ namespace Porkour
             volumes = null;
             lastPlayed = null;
             voiceSound = null;
+            startOffsets.Clear();
             listener = null;
             pool = null;
             next = 0;
@@ -106,7 +107,32 @@ namespace Porkour
             src.pitch = 1f + UnityEngine.Random.Range(-pitchJitter, pitchJitter);
             src.volume = Mathf.Clamp01(volume * volumes[s] * EffectsVolume);
             src.clip = clip;
+            src.time = StartOffset(clip); // skip silence at the start of the file: the sound starts with the action
             src.Play();
+        }
+
+        static readonly System.Collections.Generic.Dictionary<AudioClip, float> startOffsets = new();
+
+        /// <summary>Seconds of silence at the start of a clip (some sound files begin with a gap), measured once.</summary>
+        static float StartOffset(AudioClip clip)
+        {
+            if (startOffsets.TryGetValue(clip, out float t)) return t;
+            t = 0f;
+            if (clip.loadType != AudioClipLoadType.Streaming && clip.samples > 0
+                && (clip.loadState == AudioDataLoadState.Loaded || (clip.LoadAudioData() && clip.loadState == AudioDataLoadState.Loaded)))
+            {
+                int frames = Mathf.Min(clip.samples, clip.frequency * 2);
+                var data = new float[frames * clip.channels];
+                if (clip.GetData(data, 0))
+                    for (int i = 0; i < data.Length; i++)
+                        if (Mathf.Abs(data[i]) > 0.03f)
+                        {
+                            t = Mathf.Max(0f, (float)(i / clip.channels) / clip.frequency - 0.01f);
+                            break;
+                        }
+            }
+            startOffsets[clip] = t;
+            return t;
         }
 
         static AudioListener listener;
@@ -283,6 +309,11 @@ namespace Porkour
                 case Sound.Cluck:
                     return Seq(Voice(0.06f, u => 700f + 400f * u, Wave.Square, 0.2f, curve: 1f, cutoff: _ => 2500f), Silence(0.04f),
                         Voice(0.08f, u => 900f - 300f * u, Wave.Square, 0.2f, curve: 1.2f, cutoff: _ => 2500f));
+                case Sound.Oink: // "oink-oink": two short nasal grunts
+                    return Seq(Voice(0.15f, u => 240f - 80f * u + 30f * Mathf.Sin(2f * Mathf.PI * 4.5f * u), Wave.Saw, 0.32f,
+                            attack: 0.01f, curve: 1.2f, cutoff: _ => 1100f), Silence(0.07f),
+                        Voice(0.2f, u => 260f - 110f * u + 30f * Mathf.Sin(2f * Mathf.PI * 6f * u), Wave.Saw, 0.32f,
+                            attack: 0.01f, curve: 1.1f, cutoff: _ => 1000f));
                 case Sound.Baa:
                     return Voice(0.6f, u => 290f * (1f + 0.04f * Mathf.Sin(2f * Mathf.PI * 7f * u * 0.6f)), Wave.Saw, 0.35f,
                         attack: 0.05f, curve: 0.7f, cutoff: _ => 1100f);

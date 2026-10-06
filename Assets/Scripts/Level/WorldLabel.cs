@@ -3,8 +3,9 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Text floating in the level ("TOOL SHED", "FREEDOM!"), built at runtime in the game's title font (local only).
-    /// Fixed labels read correctly when looking along the object's forward; billboard labels always face the camera.
+    /// Text floating in the level, built at runtime in the game's title font (local only). Fixed labels read correctly when
+    /// looking along the object's forward; billboard labels always face the camera. Shown only when the camera is near
+    /// (showDistance) so the screen isn't full of text.
     /// </summary>
     public class WorldLabel : MonoBehaviour
     {
@@ -12,6 +13,8 @@ namespace Porkour
         public Color color = Color.white;
         public float characterSize = 0.08f;
         public bool billboard;
+        [Tooltip("Visible only within this distance of the camera (0 = always).")]
+        public float showDistance = 14f;
 
         TextMesh mesh;
 
@@ -31,9 +34,11 @@ namespace Porkour
 
         void LateUpdate()
         {
-            if (!billboard || mesh == null) return;
             var cam = Camera.main;
-            if (cam != null) mesh.transform.rotation = Quaternion.LookRotation(mesh.transform.position - cam.transform.position);
+            if (mesh == null || cam == null) return;
+            bool show = showDistance <= 0f || (cam.transform.position - transform.position).sqrMagnitude < showDistance * showDistance;
+            if (mesh.gameObject.activeSelf != show) mesh.gameObject.SetActive(show);
+            if (show && billboard) mesh.transform.rotation = Quaternion.LookRotation(mesh.transform.position - cam.transform.position);
         }
     }
 }

@@ -137,11 +137,19 @@ namespace Porkour
             foreach (var point in spawnPoints)
             {
                 if (point == null || point.prefab == null) continue;
-                var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
-                if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
-                if (go.TryGetComponent(out Breakable breakable)) breakable.contents = point.contents;
-                foreach (var part in go.GetComponents<IPuzzleChannel>()) part.Channel = point.channel;
-                go.GetComponent<NetworkObject>().Spawn();
+                try // one broken prop must not stop the rest of the level from appearing
+                {
+                    var go = Instantiate(point.prefab, point.transform.position, point.transform.rotation);
+                    if (go.TryGetComponent(out PigNet pigNet)) pigNet.initialType = types[pigCount++ % types.Length];
+                    if (go.TryGetComponent(out Breakable breakable)) breakable.contents = point.contents;
+                    foreach (var part in go.GetComponents<IPuzzleChannel>()) part.Channel = point.channel;
+                    go.GetComponent<NetworkObject>().Spawn();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"Porkour: could not spawn '{point.name}' - the rest of the level still spawns.");
+                }
             }
         }
 

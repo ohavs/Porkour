@@ -21,10 +21,13 @@ namespace Porkour.EditorTools
         {
             bounds = default;
             if (model == null) return null;
+            // holder (position, scale - its axes are the parent's: the model faces its +Z) → Turn (yaw fix) → the model.
             var holder = new GameObject(name).transform;
             holder.SetParent(parent, false);
-            holder.localRotation = Quaternion.Euler(0f, yaw, 0f);
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(model, holder);
+            var turn = new GameObject("Turn").transform;
+            turn.SetParent(holder, false);
+            turn.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(model, turn);
             var b = Kit.RendererBounds(holder.gameObject);
             float s = b.size.y > 0.001f ? height / b.size.y : 1f;
             // Uniform scale about the holder's pivot: bounds scale with it (no need to re-measure skinned meshes).
@@ -95,25 +98,69 @@ namespace Porkour.EditorTools
                 AnimalYaw(), ArtSetup.AnimalController(animal, walkSpeed, runSpeed), out bounds);
         }
 
-        /// <summary>Cloth in the pig-type colour over a pig model's back (+ side flaps). Children of the model, so they hide with it.</summary>
-        static Renderer[] Saddle(GameObject model, Bounds bounds, Material cloth)
+        /// <summary>
+        /// Pig skins per type: the Cube Pets texture with its pink recoloured to the type colour (eyes, snout shading and
+        /// the rest stay), saved in Assets/Art/Generated. Index = PigType; Heavy keeps the hog's own look (null).
+        /// Null array when the texture can't be read - PigLook then tints instead.
+        /// </summary>
+        static Material[] PigSkins(GameObject pigModel)
         {
-            var t = model.transform;
-            float s = t.lossyScale.x;
-            var level = new Vector3(0f, -t.localEulerAngles.y, 0f); // undo the model's turn: sizes below are world-aligned
-            Vector3 top = new(bounds.center.x, bounds.max.y + 0.02f, bounds.center.z - bounds.size.z * 0.12f);
-            float width = bounds.size.x * 0.8f, length = bounds.size.z * 0.45f, drop = bounds.size.y * 0.3f;
-            var parts = new[]
+            var renderer = pigModel.GetComponentInChildren<Renderer>(true);
+            var baseMat = renderer != null ? renderer.sharedMaterial : null;
+            var tex = baseMat != null ? baseMat.mainTexture as Texture2D : null;
+            string texPath = tex != null ? AssetDatabase.GetAssetPath(tex) : "";
+            if (string.IsNullOrEmpty(texPath) || !System.IO.File.Exists(texPath))
             {
-                Part(PrimitiveType.Cube, "Saddle", t, t.InverseTransformPoint(top), new Vector3(width, 0.05f, length) / s, cloth, level),
-                Part(PrimitiveType.Cube, "SaddleL", t, t.InverseTransformPoint(top + new Vector3(-bounds.extents.x - 0.015f, -drop / 2f, 0f)),
-                    new Vector3(0.03f, drop, length) / s, cloth, level),
-                Part(PrimitiveType.Cube, "SaddleR", t, t.InverseTransformPoint(top + new Vector3(bounds.extents.x + 0.015f, -drop / 2f, 0f)),
-                    new Vector3(0.03f, drop, length) / s, cloth, level),
-            };
-            var renderers = new Renderer[parts.Length];
-            for (int i = 0; i < parts.Length; i++) renderers[i] = parts[i].GetComponent<Renderer>();
-            return renderers;
+                Debug.LogWarning("Porkour: pig texture not found - pig colours will be tints.");
+                return null;
+            }
+            var src = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!src.LoadImage(System.IO.File.ReadAllBytes(texPath)))
+            {
+                Object.DestroyImmediate(src);
+                return null;
+            }
+            var original = src.GetPixels32();
+            var mats = new Material[System.Enum.GetValues(typeof(PigType)).Length];
+            var srcImporter = AssetImporter.GetAtPath(texPath) as TextureImporter;
+            foreach (PigType type in System.Enum.GetValues(typeof(PigType)))
+            {
+                if (type == PigType.Heavy) continue;
+                Color.RGBToHSV(PigTypes.Info(type).Color, out float hue, out float sat, out _);
+                var pixels = (Color32[])original.Clone();
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    Color.RGBToHSV(pixels[i], out float h, out float s, out float v);
+                    bool pink = (h > 0.86f || h < 0.05f) && s > 0.12f && v > 0.25f;
+                    if (!pink) continue;
+                    var c = Color.HSVToRGB(hue, Mathf.Clamp01(Mathf.Lerp(s, sat, 0.7f) + 0.05f), v);
+                    pixels[i] = new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), pixels[i].a);
+                }
+                var outTex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false);
+                outTex.SetPixels32(pixels);
+                outTex.Apply();
+                string path = $"{ArtSetup.GeneratedDir}/PigSkin_{type}.png";
+                System.IO.File.WriteAllBytes(path, outTex.EncodeToPNG());
+                Object.DestroyImmediate(outTex);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                if (AssetImporter.GetAtPath(path) is TextureImporter importer)
+                {
+                    importer.mipmapEnabled = false; // a colour atlas: no blending between neighbouring colours
+                    importer.filterMode = srcImporter != null ? srcImporter.filterMode : FilterMode.Point;
+                    importer.textureCompression = TextureImporterCompression.Uncompressed;
+                    importer.SaveAndReimport();
+                }
+                var skinTex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                string matPath = $"{ArtSetup.GeneratedDir}/PigSkin_{type}.mat";
+                AssetDatabase.DeleteAsset(matPath);
+                var mat = new Material(baseMat);
+                if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", skinTex);
+                mat.mainTexture = skinTex;
+                AssetDatabase.CreateAsset(mat, matPath);
+                mats[(int)type] = mat;
+            }
+            Object.DestroyImmediate(src);
+            return mats;
         }
 
         /// <summary>Mixamo Bob (Humanoid) with his animations and his real skin. Null when Bob.fbx is missing.</summary>
