@@ -40,6 +40,7 @@ namespace Porkour
             Vector3 rear = RearPoint;
             pig.Launch(Mathf.Sqrt(2f * -Physics.gravity.y * launchHeight), pig.MoveInput * forwardBoost);
             Blast(rear);
+            FartSwitch.Blast(rear, blastRadius); // the generator runs on farts
             TriggerEffect(0, rear, -transform.forward);
         }
 
@@ -65,6 +66,8 @@ namespace Porkour
         public override void PlayEffect(byte kind, Vector3 position, Vector3 direction)
         {
             SmokeCloud.Spawn(position, cloudRadius, cloudLifetime, SmokeCloud.FartColor, smokeScreen: true);
+            Sfx.Play(Sound.Fart, position, 1f, 0.15f);
+            ThirdPersonCamera.Shake(position, 0.25f, 6f);
             StartCoroutine(Trail());
         }
 

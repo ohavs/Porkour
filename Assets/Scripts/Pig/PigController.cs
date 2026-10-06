@@ -85,6 +85,10 @@ namespace Porkour
         public PigType Type { get; private set; }
         /// <summary>This type's special ability (null if not built yet).</summary>
         public PigAbility Ability { get; private set; }
+        /// <summary>Reached the getaway truck this round (server, synced by PigNet). Bob leaves escaped pigs alone.</summary>
+        public bool Escaped { get; set; }
+        /// <summary>Wearing a bucket (Wearable) right now.</summary>
+        public Wearable Worn => Grabber != null && Grabber.Held != null && Grabber.Held.TryGetComponent(out Wearable w) ? w : null;
 
         Rigidbody rb;
         CapsuleCollider body;

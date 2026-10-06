@@ -36,6 +36,8 @@ namespace Porkour
     public class NetPlayer : NetworkBehaviour
     {
         public static readonly List<NetPlayer> All = new();
+        /// <summary>This PC's own player (null until spawned).</summary>
+        public static NetPlayer Local { get; private set; }
 
         public InputActionAsset controls;
         [Tooltip("Throw-arc line material for the HUD (set by the builder).")]
@@ -61,7 +63,11 @@ namespace Porkour
         byte lastJump, lastGrab, lastAbility, lastSwitch;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics() => All.Clear();
+        static void ResetStatics()
+        {
+            All.Clear();
+            Local = null;
+        }
 
         public override void OnNetworkSpawn()
         {
@@ -69,6 +75,7 @@ namespace Porkour
             name = $"Player {OwnerClientId}";
             if (IsOwner)
             {
+                Local = this;
                 actions = Instantiate(controls);
                 moveAction = actions["Move"];
                 lookAction = actions["Look"];
@@ -89,6 +96,7 @@ namespace Porkour
         public override void OnNetworkDespawn()
         {
             All.Remove(this);
+            if (Local == this) Local = null;
             pigId.OnValueChanged -= OnPigIdChanged;
             if (IsServer && Pig != null) ReleasePig();
             if (actions != null)
@@ -230,7 +238,7 @@ namespace Porkour
             for (int i = 1; i <= pigs.Count; i++)
             {
                 var next = pigs[(start + i + pigs.Count) % pigs.Count];
-                if (next.Owner == null) { AssignPig(next); return; }
+                if (IsFree(next)) { AssignPig(next); return; }
             }
         }
 
@@ -238,8 +246,12 @@ namespace Porkour
         public static PigController FindFreePig()
         {
             foreach (var pig in PigController.All)
-                if (pig.Owner == null) return pig;
+                if (IsFree(pig)) return pig;
             return null;
         }
+
+        // Despawned pigs (new round) stay in the list until the end of the frame - skip them.
+        static bool IsFree(PigController pig) => pig != null && pig.Owner == null
+            && pig.TryGetComponent(out NetworkObject obj) && obj.IsSpawned;
     }
 }

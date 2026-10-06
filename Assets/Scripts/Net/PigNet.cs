@@ -22,6 +22,7 @@ namespace Porkour
         readonly NetworkVariable<double> chargeStart = new();
         readonly NetworkVariable<double> abilityReadyAt = new();
         readonly NetworkVariable<int> abilityCharges = new(-1);
+        readonly NetworkVariable<bool> escaped = new();
 
         PigController controller;
         PigGrabber grabber;
@@ -34,6 +35,8 @@ namespace Porkour
         public PigType Type => controller.Type;
         public PigAbility Ability => controller.Ability;
         public bool IsHeld => Authority ? controller.IsHeld : isHeld.Value;
+        /// <summary>Made it to the getaway truck this round.</summary>
+        public bool IsEscaped => Authority ? controller.Escaped : escaped.Value;
         public bool IsCharging => Authority ? grabber.IsCharging : charging.Value;
         public float Charge => Authority ? grabber.Charge
             : charging.Value ? Mathf.Clamp01((float)(NetworkManager.ServerTime.Time - chargeStart.Value) / grabber.fullChargeTime) : 0f;
@@ -70,12 +73,21 @@ namespace Porkour
             if (IsServer) type.Value = initialType;
             ApplyType(type.Value);
             type.OnValueChanged += OnTypeChanged;
+            heldId.OnValueChanged += OnHeldChanged;
         }
 
         public override void OnNetworkDespawn()
         {
             type.OnValueChanged -= OnTypeChanged;
+            heldId.OnValueChanged -= OnHeldChanged;
             HookAbility(null);
+        }
+
+        // Grab / throw sounds on every PC.
+        void OnHeldChanged(ulong previous, ulong current)
+        {
+            if (current != ulong.MaxValue) Sfx.Play(Sound.Grab, transform.position, 0.7f);
+            else if (previous != ulong.MaxValue) Sfx.Play(Sound.Throw, transform.position, 0.7f);
         }
 
         /// <summary>Server: change this pig's type (e.g. a new round).</summary>
@@ -132,6 +144,7 @@ namespace Porkour
             if (heldId.Value != id) heldId.Value = id;
 
             if (isHeld.Value != controller.IsHeld) isHeld.Value = controller.IsHeld;
+            if (escaped.Value != controller.Escaped) escaped.Value = controller.Escaped;
 
             if (charging.Value != grabber.IsCharging)
             {

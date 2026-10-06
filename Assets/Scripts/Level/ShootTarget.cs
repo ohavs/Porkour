@@ -5,12 +5,14 @@ namespace Porkour
 {
     /// <summary>
     /// Bullseye switch (a "remote lock"): a hard hit (Armed's shot, or anything thrown fast) toggles its puzzle
-    /// channel on/off - e.g. opens a gate. Centre turns green while on.
+    /// channel on/off - e.g. opens a gate. Centre turns green while on. Latching targets stay on once hit.
     /// </summary>
     public class ShootTarget : NetworkBehaviour, IPuzzleChannel
     {
         public int channel;
         public float minHitSpeed = 6f;
+        [Tooltip("Stays on after the first hit (exit gate targets).")]
+        public bool latch;
         [Tooltip("Centre disc that shows on/off (set by the builder).")]
         public Renderer lamp;
         public Color offColor = new(0.85f, 0.2f, 0.15f);
@@ -38,11 +40,24 @@ namespace Porkour
             if (!IsServer || !IsSpawned || Time.time < nextHitTime) return;
             if (collision.relativeVelocity.magnitude < minHitSpeed) return;
             nextHitTime = Time.time + 0.5f;
+            if (latch && on.Value) { HitRpc(); return; }
             on.Value = !on.Value;
             PuzzleSignals.Set(channel, this, on.Value);
         }
 
-        void OnToggled(bool previous, bool current) => wobble = 1f;
+        void OnToggled(bool previous, bool current)
+        {
+            wobble = 1f;
+            Sfx.Play(Sound.Ding, transform.position, 1f, 0f);
+            if (current) Sfx.Play(Sound.Click, transform.position, 0.6f);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void HitRpc()
+        {
+            wobble = 1f;
+            Sfx.Play(Sound.Bonk, transform.position, 0.5f);
+        }
 
         void Update()
         {

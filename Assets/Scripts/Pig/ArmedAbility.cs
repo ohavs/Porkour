@@ -124,11 +124,11 @@ namespace Porkour
             if (flat.sqrMagnitude > 0.001f) pig.FaceDirection(flat);
             Vector3 muzzle = pig.Body.position + (flat.sqrMagnitude > 0.001f ? flat.normalized : transform.forward) * 1.25f
                              + Vector3.up * 0.2f;
-            Vector3 velocity = BallisticVelocity(muzzle, AimPoint(aim), shotSpeed);
+            Vector3 velocity = Ammo.BallisticVelocity(muzzle, AimPoint(aim), shotSpeed);
 
             var go = Instantiate(prefab, muzzle, Quaternion.LookRotation(velocity));
             go.GetComponent<NetworkObject>().Spawn();
-            go.GetComponent<Ammo>().Fire(pig, velocity);
+            go.GetComponent<Ammo>().Fire(pig.GetComponentsInChildren<Collider>(), velocity);
             StartCooldown(shotCooldown);
             TriggerEffect(FxShoot, muzzle, velocity.normalized);
         }
@@ -149,14 +149,6 @@ namespace Porkour
             return pivot + aim * best;
         }
 
-        /// <summary>Launch velocity (about `speed`) that lands on target despite gravity.</summary>
-        static Vector3 BallisticVelocity(Vector3 from, Vector3 to, float speed)
-        {
-            Vector3 delta = to - from;
-            float time = Mathf.Max(0.05f, delta.magnitude / speed);
-            return delta / time - Physics.gravity * (0.5f * time);
-        }
-
         // ---------- visuals (every PC) ----------
 
         public override void PlayEffect(byte kind, Vector3 position, Vector3 direction)
@@ -165,6 +157,7 @@ namespace Porkour
             {
                 case FxSuckOn:
                     if (suckFx == null) suckFx = StartCoroutine(SuckSwirl());
+                    Sfx.Play(Sound.Suck, transform.position, 0.6f);
                     break;
                 case FxSuckOff:
                     if (suckFx != null) StopCoroutine(suckFx);
@@ -172,6 +165,7 @@ namespace Porkour
                     break;
                 case FxShoot:
                     SmokeCloud.Spawn(position, 0.25f, 0.35f, SmokeCloud.DustColor);
+                    Sfx.Play(Sound.Shoot, position);
                     break;
             }
         }

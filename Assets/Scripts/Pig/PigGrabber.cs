@@ -9,7 +9,7 @@ namespace Porkour
     /// Press Grab again → throw where you aim; hold longer before releasing = stronger throw
     /// (a quick tap just tosses it down in front of you).
     /// Held things follow by velocity (still collide with walls), heavy loads slow you down,
-    /// and a carried pig can wriggle free by mashing jump.
+    /// and a carried pig can wriggle free by mashing jump. Wearables (the bucket) go over the pig instead of on its back.
     /// </summary>
     [RequireComponent(typeof(PigController))]
     public class PigGrabber : MonoBehaviour, IPigCarrier
@@ -55,6 +55,7 @@ namespace Porkour
         Collider[] ownColliders;
         readonly List<Collider> heldColliders = new();
         PigController heldPig;
+        Wearable worn;
         Quaternion heldRelativeRotation;
         float heldLift; // carry point height above our centre
         float stuckTime;
@@ -151,6 +152,7 @@ namespace Porkour
             heldLift = 0.45f + bottomBelowPivot + 0.05f;
             heldRelativeRotation = Quaternion.Inverse(transform.rotation) * rb.rotation;
 
+            rb.TryGetComponent(out worn);
             if (rb.TryGetComponent(out heldPig)) heldPig.SetHeldBy(this);
             else rb.useGravity = false;
 
@@ -192,6 +194,7 @@ namespace Porkour
             rb.linearVelocity = pig.Body.linearVelocity; // no leftover pull-up speed
             Held = null;
             heldPig = null;
+            worn = null;
             heldColliders.Clear();
             charging = false;
             pig.SpeedMultiplier = 1f;
@@ -202,7 +205,8 @@ namespace Porkour
             if (!Simulate || !IsHolding) return;
             if (!Held.gameObject.activeInHierarchy) { Drop(); return; }
 
-            Vector3 target = pig.Body.position + Vector3.up * heldLift;
+            Vector3 target = worn != null ? pig.Body.position + transform.rotation * worn.wornOffset
+                : pig.Body.position + Vector3.up * heldLift;
             Vector3 toTarget = target - Held.position;
             if (toTarget.magnitude > breakDistance)
             {
@@ -214,7 +218,8 @@ namespace Porkour
             Vector3 correction = Vector3.ClampMagnitude(toTarget * followStrength, maxCorrectionSpeed);
             Held.linearVelocity = pig.Body.linearVelocity + correction;
             Held.angularVelocity = Vector3.zero;
-            Held.MoveRotation(Quaternion.Slerp(Held.rotation, transform.rotation * heldRelativeRotation, 0.3f));
+            Quaternion rotation = worn != null ? transform.rotation : transform.rotation * heldRelativeRotation;
+            Held.MoveRotation(Quaternion.Slerp(Held.rotation, rotation, 0.3f));
         }
 
         void OnDisable() => Drop();

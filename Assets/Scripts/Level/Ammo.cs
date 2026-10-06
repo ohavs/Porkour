@@ -7,6 +7,7 @@ namespace Porkour
     /// <summary>
     /// Small item Armed can suck up and shoot (apple, corn, egg, bolt). A normal networked physics prop
     /// (anyone can also grab/throw it). When fired it ignores the shooter for a moment; eggs splat on a hard hit.
+    /// Farmer Bob throws corn too: his throws knock a pig off whatever it stands on.
     /// Server-side prefab lookup by kind (from the NetworkManager's prefab list) so abilities need no references.
     /// </summary>
     public class Ammo : NetworkBehaviour
@@ -22,6 +23,7 @@ namespace Porkour
 
         Rigidbody rb;
         Collider[] shooterColliders;
+        bool knocksPigs;
 
         public Rigidbody Body => rb;
 
@@ -43,13 +45,22 @@ namespace Porkour
         }
 
         /// <summary>Server, right after Spawn: launch it and don't hit the shooter for a moment.</summary>
-        public void Fire(PigController shooter, Vector3 velocity)
+        public void Fire(Collider[] shooter, Vector3 velocity, bool knockPigs = false)
         {
             rb.linearVelocity = velocity;
             rb.angularVelocity = Random.insideUnitSphere * 10f;
-            shooterColliders = shooter.GetComponentsInChildren<Collider>();
+            knocksPigs = knockPigs;
+            shooterColliders = shooter;
             IgnoreShooter(true);
             Invoke(nameof(RestoreCollisions), 0.4f);
+        }
+
+        /// <summary>Launch velocity (about `speed`) that lands on target despite gravity.</summary>
+        public static Vector3 BallisticVelocity(Vector3 from, Vector3 to, float speed)
+        {
+            Vector3 delta = to - from;
+            float time = Mathf.Max(0.05f, delta.magnitude / speed);
+            return delta / time - Physics.gravity * (0.5f * time);
         }
 
         void RestoreCollisions() => IgnoreShooter(false);
@@ -66,6 +77,17 @@ namespace Porkour
         void OnCollisionEnter(Collision collision)
         {
             if (!IsServer || !IsSpawned) return;
+            if (knocksPigs)
+            {
+                knocksPigs = false; // only the first thing it hits
+                if (collision.rigidbody != null && collision.rigidbody.TryGetComponent(out PigController pig) && !pig.IsHeld)
+                {
+                    Vector3 push = rb.linearVelocity;
+                    push.y = 0f;
+                    pig.Launch(4f, push.normalized * 5f);
+                    BonkRpc(pig.Body.position);
+                }
+            }
             if (breaksOnHit && collision.relativeVelocity.magnitude > 8f) Splat();
         }
 
@@ -76,8 +98,16 @@ namespace Porkour
         }
 
         [Rpc(SendTo.Everyone)]
+        void BonkRpc(Vector3 position)
+        {
+            Sfx.Play(Sound.Bonk, position);
+            ThirdPersonCamera.Shake(position, 0.35f, 4f);
+        }
+
+        [Rpc(SendTo.Everyone)]
         void SplatRpc(Vector3 position)
         {
+            Sfx.Play(Sound.Splat, position);
             Debris.Burst(new Bounds(position, Vector3.one * 0.3f), debrisColor, 6);
         }
     }
