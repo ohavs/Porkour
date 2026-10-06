@@ -50,6 +50,7 @@ namespace Porkour.EditorTools
             { Sound.Tick, new[] { "tick", "clock" } },
             { Sound.Cluck, new[] { "chicken", "cluck", "hen" } },
             { Sound.Baa, new[] { "sheep", "baa" } },
+            { Sound.Moo, new[] { "cow", "moo", "calf" } },
             { Sound.Alarm, new[] { "alarm", "siren", "warning" } },
         };
 
@@ -59,6 +60,7 @@ namespace Porkour.EditorTools
             { MusicMood.Danger, new[] { "danger", "tense", "sneak", "suspense", "stealth" } },
             { MusicMood.Chase, new[] { "chase", "action", "fast", "run", "battle" } },
             { MusicMood.FinalHunt, new[] { "final", "boss", "intense", "hunt" } },
+            { MusicMood.Theme, new[] { "theme", "title", "intro" } },
         };
 
         [MenuItem("Porkour/Sounds/Open Sound Bank")]
@@ -155,12 +157,25 @@ namespace Porkour.EditorTools
             return bank;
         }
 
-        static string Normalize(string fileName) => fileName.ToLowerInvariant().Replace('-', '_').Replace(' ', '_').Replace('.', '_');
+        /// <summary>Lower case, words split by '_' (also at camelCase humps: "doorOpen" → "door_open").</summary>
+        static string Normalize(string fileName)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < fileName.Length; i++)
+            {
+                char c = fileName[i];
+                if (char.IsUpper(c) && i > 0 && char.IsLower(fileName[i - 1])) sb.Append('_');
+                sb.Append(c is '-' or ' ' or '.' ? '_' : char.ToLowerInvariant(c));
+            }
+            return sb.ToString();
+        }
 
+        /// <summary>Every part of the keyword must start a word of the file name ("lose" doesn't match "close").</summary>
         static bool Matches(string name, string keyword)
         {
+            var words = name.Split('_');
             foreach (var part in keyword.Split('+'))
-                if (!name.Contains(part)) return false;
+                if (!Array.Exists(words, w => w.StartsWith(part))) return false;
             return true;
         }
     }

@@ -2,11 +2,11 @@ using UnityEngine;
 
 namespace Porkour
 {
-    public enum MusicMood : byte { None, Calm, Danger, Chase, FinalHunt }
+    public enum MusicMood : byte { None, Calm, Danger, Chase, FinalHunt, Theme }
 
     /// <summary>
-    /// Background music (local, one per PC): the HUD picks a mood from the game state (Bob away = Calm, Grill Call =
-    /// Danger, chase/carry = Chase, last minute = FinalHunt) and the tracks from the SoundBank crossfade.
+    /// Background music (local, one per PC): the HUD picks a mood from the game state (round intro = Theme, Bob away =
+    /// Calm, Grill Call = Danger, chase/carry = Chase, last minute = FinalHunt) and the tracks from the SoundBank crossfade.
     /// A missing mood falls back to a calmer one; no tracks at all = silence. M mutes (see PlayerHud).
     /// </summary>
     public class MusicPlayer : MonoBehaviour
@@ -86,6 +86,7 @@ namespace Porkour
         {
             var bank = SoundBank.Instance;
             if (bank == null || m == MusicMood.None) return null;
+            if (m == MusicMood.Theme) return bank.FindMusic(MusicMood.Theme) ?? bank.FindMusic(MusicMood.Calm);
             for (var tryMood = m; tryMood >= MusicMood.Calm; tryMood--)
             {
                 var entry = bank.FindMusic(tryMood);

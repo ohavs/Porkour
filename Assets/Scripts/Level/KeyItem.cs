@@ -4,13 +4,28 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// The padlock key (a normal networked prop). Floats a "KEY" label so players spot it, and goes back to where it
-    /// started if it falls out of the level (server). KeySlot uses it up.
+    /// A quest item (a normal networked prop): the padlock key, the truck keys, Bob's pie... Floats a label so players
+    /// spot it, and goes back to where it started if it falls out of the level (server). A KeySlot with the same
+    /// keyId uses it up; bonus items (pie) only count when they ride away in the truck.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class KeyItem : MonoBehaviour
     {
+        [Tooltip("Which KeySlot takes it (\"gate\", \"truck\"...). Empty = no slot (bonus item).")]
+        public string keyId = "gate";
+        public string labelText = "KEY";
+        public Color labelColor = new(1f, 0.85f, 0.2f);
+        [Tooltip("Bonus item: worth a star if it's in the truck when the pigs escape.")]
+        public bool bonus;
         public float killHeight = -10f;
+
+        public static readonly System.Collections.Generic.List<KeyItem> All = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => All.Clear();
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
 
         Rigidbody rb;
         Vector3 home;
@@ -46,8 +61,8 @@ namespace Porkour
 
         void BuildLabel()
         {
-            label = GameFonts.CreateTextMesh(transform, "KeyLabel", 0.04f, new Color(1f, 0.85f, 0.2f));
-            label.text = "KEY";
+            label = GameFonts.CreateTextMesh(transform, "KeyLabel", 0.04f, labelColor);
+            label.text = labelText;
         }
     }
 }

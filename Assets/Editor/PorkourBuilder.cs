@@ -14,12 +14,15 @@ using UnityEngine.InputSystem;
 namespace Porkour.EditorTools
 {
     /// <summary>
-    /// Menu "Porkour/..." - builds the placeholder prefabs (pig, player, props - all networked) and the barn
-    /// scene from code, so no manual editor setup is needed. Re-running overwrites them.
+    /// Menu "Porkour/..." - builds the prefabs (pig, player, props - all networked) and the farm scene from code, so no
+    /// manual editor setup is needed. Re-running overwrites them. Split in parts: this file = prefabs + spawn points,
+    /// .Level = the barn, .Farm = farmyard / Bob's house / truck, .Models = imported characters.
+    /// Gameplay geometry is always simple boxes (colliders, NavMesh); the medieval kit / models are visuals on top
+    /// (missing art → primitive placeholders).
     /// After every compile the editor checks the scene's SceneBuildInfo stamp and rebuilds by itself when
     /// BuildVersion is newer - so the user never has to remember "Rebuild Barn".
     /// </summary>
-    public static class PorkourBuilder
+    public static partial class PorkourBuilder
     {
         const string MaterialDir = "Assets/Art/Materials";
         const string PhysicsDir = "Assets/Art/Physics";
@@ -32,7 +35,7 @@ namespace Porkour.EditorTools
         const string OldScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
         /// <summary>Bump whenever BuildBarn generates something new → auto-rebuild after the next compile.</summary>
-        const int BuildVersion = 4;
+        const int BuildVersion = 5;
 
         static bool autoRebuildFailed;
 
@@ -82,10 +85,6 @@ namespace Porkour.EditorTools
         public static GameObject BuildPigPrefab()
         {
             EnsureFolder(PrefabDir);
-            var pink = Mat("Pig", new Color(1f, 0.62f, 0.68f));
-            var darkPink = Mat("PigSnout", new Color(0.9f, 0.42f, 0.5f));
-            var black = Mat("Eye", new Color(0.05f, 0.05f, 0.05f));
-
             var root = new GameObject("Pig");
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 30f;
@@ -96,8 +95,8 @@ namespace Porkour.EditorTools
             var col = root.AddComponent<CapsuleCollider>();
             col.direction = 2; // lying along Z (pig faces +Z)
             col.radius = 0.45f;
-            col.height = 1.6f;
-            col.center = new Vector3(0f, 0f, 0.1f);
+            col.height = 1.35f;
+            col.center = Vector3.zero;
             col.sharedMaterial = SlipperyMaterial();
 
             root.AddComponent<PigController>();
@@ -106,29 +105,54 @@ namespace Porkour.EditorTools
             AddNetworkSync(root);
             root.AddComponent<PigNet>();
 
-            // Placeholder look - primitives only, no colliders.
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            var skin = new List<Renderer>
+            // Cube Pets models: pig for everyone, the big hog for Heavy (PigLook swaps), type colour on a saddle cloth.
+            var feet = new Vector3(0f, -col.radius, 0.05f);
+            var pigModel = AnimalVisual("pig", v, 1.15f, feet, 2.5f, 7f, out var pigBounds);
+            if (pigModel != null)
             {
-                Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.85f, 0.65f, 0.7f), pink, new Vector3(90f, 0f, 0f)).GetComponent<Renderer>(),
-                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.2f, 0.62f), Vector3.one * 0.6f, pink).GetComponent<Renderer>(),
-            };
-            Part(PrimitiveType.Cylinder, "Snout", v, new Vector3(0f, 0.15f, 0.93f), new Vector3(0.28f, 0.05f, 0.28f), darkPink, new Vector3(90f, 0f, 0f));
-            Part(PrimitiveType.Sphere, "EyeL", v, new Vector3(-0.12f, 0.3f, 0.87f), Vector3.one * 0.07f, black);
-            Part(PrimitiveType.Sphere, "EyeR", v, new Vector3(0.12f, 0.3f, 0.87f), Vector3.one * 0.07f, black);
-            Part(PrimitiveType.Cube, "EarL", v, new Vector3(-0.16f, 0.48f, 0.58f), new Vector3(0.14f, 0.18f, 0.04f), darkPink, new Vector3(0f, 0f, 20f));
-            Part(PrimitiveType.Cube, "EarR", v, new Vector3(0.16f, 0.48f, 0.58f), new Vector3(0.14f, 0.18f, 0.04f), darkPink, new Vector3(0f, 0f, -20f));
-            Part(PrimitiveType.Sphere, "Tail", v, new Vector3(0f, 0.2f, -0.68f), Vector3.one * 0.12f, darkPink);
-            foreach (var (x, z) in new[] { (-0.22f, 0.38f), (0.22f, 0.38f), (-0.22f, -0.38f), (0.22f, -0.38f) })
-                skin.Add(Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.16f, 0.1f, 0.16f), pink).GetComponent<Renderer>());
-            look.skin = skin.ToArray();
+                var cloth = Mat("Saddle", Color.white);
+                var skin = new List<Renderer>(Saddle(pigModel, pigBounds, cloth));
+                var hogModel = AnimalVisual("hog", v, 1.3f, feet, 2.2f, 6f, out var hogBounds);
+                if (hogModel != null)
+                {
+                    skin.AddRange(Saddle(hogModel, hogBounds, cloth));
+                    hogModel.SetActive(false);
+                }
+                look.pigModel = pigModel;
+                look.hogModel = hogModel;
+                look.skin = skin.ToArray();
+            }
+            else look.skin = PrimitivePig(v);
 
             var anim = root.AddComponent<ProceduralAnimator>();
             anim.kind = ProceduralAnimator.Kind.Pig;
             anim.visual = v;
 
             return SavePrefab(root, PigPrefabPath);
+        }
+
+        /// <summary>The old placeholder pig from primitives (no model imported). Returns the skin renderers.</summary>
+        static Renderer[] PrimitivePig(Transform v)
+        {
+            var pink = Mat("Pig", new Color(1f, 0.62f, 0.68f));
+            var darkPink = Mat("PigSnout", new Color(0.9f, 0.42f, 0.5f));
+            var black = Mat("Eye", new Color(0.05f, 0.05f, 0.05f));
+            var skin = new List<Renderer>
+            {
+                Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.85f, 0.65f, 0.7f), pink, new Vector3(90f, 0f, 0f)).GetComponent<Renderer>(),
+                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.2f, 0.52f), Vector3.one * 0.6f, pink).GetComponent<Renderer>(),
+            };
+            Part(PrimitiveType.Cylinder, "Snout", v, new Vector3(0f, 0.15f, 0.83f), new Vector3(0.28f, 0.05f, 0.28f), darkPink, new Vector3(90f, 0f, 0f));
+            Part(PrimitiveType.Sphere, "EyeL", v, new Vector3(-0.12f, 0.3f, 0.77f), Vector3.one * 0.07f, black);
+            Part(PrimitiveType.Sphere, "EyeR", v, new Vector3(0.12f, 0.3f, 0.77f), Vector3.one * 0.07f, black);
+            Part(PrimitiveType.Cube, "EarL", v, new Vector3(-0.16f, 0.48f, 0.48f), new Vector3(0.14f, 0.18f, 0.04f), darkPink, new Vector3(0f, 0f, 20f));
+            Part(PrimitiveType.Cube, "EarR", v, new Vector3(0.16f, 0.48f, 0.48f), new Vector3(0.14f, 0.18f, 0.04f), darkPink, new Vector3(0f, 0f, -20f));
+            Part(PrimitiveType.Sphere, "Tail", v, new Vector3(0f, 0.2f, -0.6f), Vector3.one * 0.12f, darkPink);
+            foreach (var (x, z) in new[] { (-0.22f, 0.32f), (0.22f, 0.32f), (-0.22f, -0.32f), (0.22f, -0.32f) })
+                skin.Add(Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.16f, 0.1f, 0.16f), pink).GetComponent<Renderer>());
+            return skin.ToArray();
         }
 
         public static GameObject BuildPlayerPrefab()
@@ -180,116 +204,83 @@ namespace Porkour.EditorTools
             }
         }
 
+        /// <summary>Every networked prefab, built once per rebuild and handed to the spawn-point layouts.</summary>
+        sealed class PrefabSet
+        {
+            public GameObject pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence,
+                fuseBox, generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt,
+                truckKeys, pie, ignition, chimney, houseDoor, shutter;
+
+            public GameObject[] All => new[]
+            {
+                pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence, fuseBox,
+                generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt, truckKeys, pie,
+                ignition, chimney, houseDoor, shutter,
+            };
+        }
+
         public static bool BuildBarn()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
-            var pigPrefab = BuildPigPrefab();
-            var playerPrefab = BuildPlayerPrefab();
-            if (pigPrefab == null || playerPrefab == null) return false;
-            var round = BuildRoundPrefab();
+            Kit.Reset();
+            animalYaw = null;
+            ArtSetup.PrepareImports(); // Bob / animal import settings (first time only)
+
+            var p = new PrefabSet { pig = BuildPigPrefab(), player = BuildPlayerPrefab() };
+            if (p.pig == null || p.player == null) return false;
+            p.round = BuildRoundPrefab();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-
             var cam = Camera.main;
             cam.gameObject.AddComponent<ThirdPersonCamera>();
             cam.transform.SetPositionAndRotation(new Vector3(13f, 4f, -18f), Quaternion.Euler(15f, 0f, 0f));
             var sun = GameObject.Find("Directional Light");
             if (sun != null) sun.transform.rotation = Quaternion.Euler(58f, -35f, 0f);
 
-            var barn = BuildLevel();
+            var level = BuildLevel();   // ground, barn, Bob's yard (PorkourBuilder.Level)
+            BuildFarmyard(level);       // farmyard, Bob's house, truck (PorkourBuilder.Farm)
+
+            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
+            p.crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f);
+            p.barrel = BuildPropPrefab("Barrel", PrimitiveType.Cylinder, new Vector3(0.8f, 0.6f, 0.8f), wood, 15f);
+            p.key = BuildKeyPrefab();
+            p.weakCrate = BuildBreakableCratePrefab();
+            p.boards = BuildRottenBoardsPrefab();
+            p.plate = BuildPressurePlatePrefab();
+            p.lift = BuildGatePrefab("Lift", new Vector3(2.4f, 0.2f, 2.4f), new Vector3(0f, 3.1f, 0f), 1.5f, carve: false,
+                Mat("LiftDeck", new Color(0.85f, 0.7f, 0.25f)));
+            p.barnDoor = BuildGatePrefab("BarnDoor", new Vector3(4f, 3.1f, 0.3f), new Vector3(0f, -3.15f, 0f), 5f, carve: false,
+                Mat("BarnDoor", new Color(0.45f, 0.2f, 0.12f)));
+            p.houseDoor = BuildGatePrefab("HouseDoor", new Vector3(1.4f, 2.45f, 0.15f), new Vector3(1.45f, 0f, 0f), 3f, carve: true,
+                Mat("HouseDoor", new Color(0.4f, 0.24f, 0.13f)), rumble: false);
+            p.shutter = BuildGatePrefab("WindowShutter", new Vector3(1.45f, 1.8f, 0.1f), new Vector3(0f, 0f, 1.5f), 2.5f, carve: false,
+                Mat("Shutter", new Color(0.3f, 0.45f, 0.3f)), rumble: false);
+            p.exitGate = BuildExitGatePrefab();
+            p.fence = BuildElectricFencePrefab();
+            p.fuseBox = BuildFuseBoxPrefab();
+            p.generator = BuildGeneratorPrefab();
+            p.padlock = BuildKeySlotPrefab();
+            p.bob = BuildBobPrefab();
+            p.target = BuildTargetPrefab();
+            p.bell = BuildBellPrefab();
+            p.chicken = BuildChickenPrefab();
+            p.calf = BuildCalfPrefab();
+            p.bucket = BuildBucketPrefab();
+            p.apple = BuildAmmoPrefab("Apple", Ammo.Kind.Apple, PrimitiveType.Sphere, Vector3.one * 0.28f, new Color(0.85f, 0.12f, 0.1f));
+            p.corn = BuildAmmoPrefab("Corn", Ammo.Kind.Corn, PrimitiveType.Capsule, new Vector3(0.16f, 0.2f, 0.16f), new Color(1f, 0.85f, 0.2f));
+            p.egg = BuildAmmoPrefab("Egg", Ammo.Kind.Egg, PrimitiveType.Sphere, new Vector3(0.2f, 0.26f, 0.2f), new Color(0.98f, 0.95f, 0.85f),
+                breaks: true, debris: new Color(1f, 0.85f, 0.3f));
+            p.bolt = BuildAmmoPrefab("Bolt", Ammo.Kind.Bolt, PrimitiveType.Cylinder, new Vector3(0.12f, 0.1f, 0.12f), new Color(0.55f, 0.57f, 0.6f));
+            p.truckKeys = BuildTruckKeysPrefab();
+            p.pie = BuildPiePrefab();
+            p.ignition = BuildIgnitionPrefab();
+            p.chimney = BuildChimneyPrefab();
 
             // Networked things are spawned by the server when a round starts, at these points.
-            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
-            var crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f);
-            var barrel = BuildPropPrefab("Barrel", PrimitiveType.Cylinder, new Vector3(0.8f, 0.6f, 0.8f), wood, 15f);
-            var key = BuildKeyPrefab();
-            var weakCrate = BuildBreakableCratePrefab();
-            var boards = BuildRottenBoardsPrefab();
-            var plate = BuildPressurePlatePrefab();
-            var lift = BuildGatePrefab("Lift", new Vector3(2.4f, 0.2f, 2.4f), new Vector3(0f, 3.1f, 0f), 1.5f, carve: false,
-                Mat("LiftDeck", new Color(0.85f, 0.7f, 0.25f)));
-            var barnDoor = BuildGatePrefab("BarnDoor", new Vector3(3f, 3.5f, 0.3f), new Vector3(0f, -3.6f, 0f), 5f, carve: false,
-                Mat("BarnDoor", new Color(0.45f, 0.2f, 0.12f)));
-            var exitGate = BuildExitGatePrefab();
-            var fence = BuildElectricFencePrefab();
-            var fuseBox = BuildFuseBoxPrefab();
-            var generator = BuildGeneratorPrefab();
-            var padlock = BuildKeySlotPrefab();
-            var bob = BuildBobPrefab();
-            var target = BuildTargetPrefab();
-            var bell = BuildBellPrefab();
-            var chicken = BuildChickenPrefab();
-            var sheep = BuildSheepPrefab();
-            var bucket = BuildBucketPrefab();
-            var apple = BuildAmmoPrefab("Apple", Ammo.Kind.Apple, PrimitiveType.Sphere, Vector3.one * 0.28f, new Color(0.85f, 0.12f, 0.1f));
-            var corn = BuildAmmoPrefab("Corn", Ammo.Kind.Corn, PrimitiveType.Capsule, new Vector3(0.16f, 0.2f, 0.16f), new Color(1f, 0.85f, 0.2f));
-            var egg = BuildAmmoPrefab("Egg", Ammo.Kind.Egg, PrimitiveType.Sphere, new Vector3(0.2f, 0.26f, 0.2f), new Color(0.98f, 0.95f, 0.85f),
-                breaks: true, debris: new Color(1f, 0.85f, 0.3f));
-            var bolt = BuildAmmoPrefab("Bolt", Ammo.Kind.Bolt, PrimitiveType.Cylinder, new Vector3(0.12f, 0.1f, 0.12f), new Color(0.55f, 0.57f, 0.6f));
-
             var spawnRoot = new GameObject("SpawnPoints").transform;
             var points = new List<NetSpawnPoint>();
-            // Pigs start in the pen (south-east); the server gives them random types (colour = type) every round.
-            for (int i = 0; i < PigTypes.All.Length; i++)
-                points.Add(SpawnPoint(spawnRoot, $"Pig {i + 1}", pigPrefab, new Vector3(10.6f + i * 1.8f, 1f, -10.5f)));
-
-            // ---- Escape: 4 locks on the exit (north) ----
-            // 1. Padlock: the key sits on the north roof beam, far west - Jumpy's job (Gassy can rocket up too).
-            points.Add(SpawnPoint(spawnRoot, "Key", key, new Vector3(-12f, 5.75f, 7f)));
-            points.Add(SpawnPoint(spawnRoot, "Padlock", padlock, new Vector3(-4.5f, 0f, 13.6f), channel: ChannelIds.Padlock));
-            // 2. Electric fence in the exit passage; its fuse box is in the tool shed behind rotten boards - Heavy.
-            points.Add(SpawnPoint(spawnRoot, "ElectricFence", fence, new Vector3(0f, 2f, 16.6f), channel: ChannelIds.Fence));
-            points.Add(SpawnPoint(spawnRoot, "RottenBoards", boards, new Vector3(-13f, 1.5f, -2.5f), rotation: Quaternion.Euler(0f, 90f, 0f)));
-            points.Add(SpawnPoint(spawnRoot, "FuseBox", fuseBox, new Vector3(-19.75f, 1f, -2.5f), channel: ChannelIds.Fence,
-                rotation: Quaternion.Euler(0f, 90f, 0f)));
-            // 3. Generator (runs on farts) up on the hayloft - Gassy.
-            points.Add(SpawnPoint(spawnRoot, "Generator", generator, new Vector3(17.5f, 3.2f, 10.5f), channel: ChannelIds.Generator,
-                rotation: Quaternion.Euler(0f, -90f, 0f)));
-            // 4. Three bullseyes high on the walls - Armed (latching).
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 1", target, new Vector3(9f, 6f, 14.85f), channel: ChannelIds.Target1,
-                rotation: Quaternion.Euler(0f, 180f, 0f)));
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 2", target, new Vector3(-8f, 6f, -14.85f), channel: ChannelIds.Target2));
-            points.Add(SpawnPoint(spawnRoot, "Bullseye 3", target, new Vector3(-19.85f, 6.5f, -11f), channel: ChannelIds.Target3,
-                rotation: Quaternion.Euler(0f, 90f, 0f)));
-            // The exit gate opens when padlock + generator + bullseyes are done (see BuildExitGatePrefab).
-            points.Add(SpawnPoint(spawnRoot, "ExitGate", exitGate, new Vector3(0f, 2f, 19.5f)));
-
-            // ---- Getting up high ----
-            // Lift to the hayloft: stand on the plate (40 kg = Heavy, or two pigs) and the lift rises.
-            points.Add(SpawnPoint(spawnRoot, "LiftPlate", plate, new Vector3(6.5f, 0f, -3.3f), channel: ChannelIds.Lift));
-            points.Add(SpawnPoint(spawnRoot, "Lift", lift, new Vector3(10.7f, 0.1f, -3.3f), channel: ChannelIds.Lift));
-            // Crates to stack: by the hayloft edge and under the west shelf.
-            foreach (var p in new[] { new Vector3(10.8f, 0.5f, 2.5f), new Vector3(10.8f, 0.5f, 3.8f), new Vector3(9.6f, 0.5f, 3.1f),
-                         new Vector3(-17f, 0.5f, 9.3f), new Vector3(-17f, 0.5f, 10.6f), new Vector3(-15.7f, 0.5f, 9.9f) })
-                points.Add(SpawnPoint(spawnRoot, "Crate", crate, p));
-            foreach (var p in new[] { new Vector3(-4f, 0.6f, -10f), new Vector3(-3f, 0.6f, -11f), new Vector3(6f, 0.6f, 9f) })
-                points.Add(SpawnPoint(spawnRoot, "Barrel", barrel, p));
-
-            // ---- Heavy's toys: weak crates (some with ammo inside) ----
-            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", weakCrate, new Vector3(-8f, 0.45f, -9f), contents: apple));
-            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", weakCrate, new Vector3(2f, 0.45f, 10f), contents: corn));
-            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", weakCrate, new Vector3(-10f, 0.45f, 4f)));
-            points.Add(SpawnPoint(spawnRoot, "BreakableCrate", weakCrate, new Vector3(-18.5f, 0.45f, 0.8f), contents: apple));
-
-            // ---- Farmer Bob, his barn door (channel 99), bait, hiding buckets, the bell lure ----
-            points.Add(SpawnPoint(spawnRoot, "FarmerBob", bob, new Vector3(0f, 0f, -21.5f)));
-            points.Add(SpawnPoint(spawnRoot, "BarnDoor", barnDoor, new Vector3(0f, 1.75f, -15.5f), channel: ChannelIds.BobDoor));
-            foreach (var p in new[] { new Vector3(-4f, 0.35f, 0f), new Vector3(4f, 0.35f, -5f), new Vector3(-12f, 0.35f, 8f) })
-                points.Add(SpawnPoint(spawnRoot, "Chicken", chicken, p));
-            points.Add(SpawnPoint(spawnRoot, "Sheep", sheep, new Vector3(6f, 0.55f, 2f)));
-            foreach (var p in new[] { new Vector3(3f, 0.55f, -8f), new Vector3(-10f, 0.55f, 12f), new Vector3(-15.5f, 0.55f, 0.5f) })
-                points.Add(SpawnPoint(spawnRoot, "Bucket", bucket, p));
-            points.Add(SpawnPoint(spawnRoot, "Bell", bell, new Vector3(-5f, 5.1f, -2f)));
-
-            // ---- Armed's ammo piles ----
-            var ammoPiles = new (GameObject prefab, Vector3 center, int count)[]
-            {
-                (apple, new Vector3(7.5f, 0.2f, -7f), 4), (corn, new Vector3(-2f, 0.2f, 3f), 4),
-                (egg, new Vector3(18.5f, 3.4f, 3f), 3), (bolt, new Vector3(-17f, 0.2f, -5.5f), 4),
-            };
-            foreach (var (prefab, center, count) in ammoPiles)
-                for (int i = 0; i < count; i++)
-                    points.Add(SpawnPoint(spawnRoot, prefab.name, prefab, center + new Vector3((i % 2 - 0.5f) * 0.5f, 0f, (i / 2 - 0.5f) * 0.5f)));
+            BarnSpawnPoints(spawnRoot, points, p);
+            FarmSpawnPoints(spawnRoot, points, p);
 
             var netGo = new GameObject("NetworkManager");
             var nm = netGo.AddComponent<NetworkManager>();
@@ -297,17 +288,12 @@ namespace Porkour.EditorTools
             if (nm.NetworkConfig == null) nm.NetworkConfig = new NetworkConfig();
             nm.NetworkConfig.NetworkTransport = transport;
             nm.NetworkConfig.EnableSceneManagement = false; // everyone loads the same scene; all networked objects are spawned at runtime
-            nm.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList>
-            {
-                BuildNetworkPrefabsList(pigPrefab, playerPrefab, round, crate, barrel, key, weakCrate, boards, plate, lift,
-                    barnDoor, exitGate, fence, fuseBox, generator, padlock, bob, target, bell, chicken, sheep, bucket,
-                    apple, corn, egg, bolt),
-            };
+            nm.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList> { BuildNetworkPrefabsList(p.All) };
             var game = netGo.AddComponent<NetworkGame>();
-            game.playerPrefab = playerPrefab;
-            game.roundPrefab = round;
+            game.playerPrefab = p.player;
+            game.roundPrefab = p.round;
             game.spawnPoints = points.ToArray();
-            game.navMesh = barn.GetComponent<NavMeshSurface>();
+            game.navMesh = level.GetComponent<NavMeshSurface>();
 
             EnsureFolder("Assets/Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -315,233 +301,12 @@ namespace Porkour.EditorTools
             scenes.RemoveAll(s => s.path == ScenePath || s.path == OldScenePath);
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
-            // Leftovers from the old test barn.
-            if (File.Exists(OldScenePath)) AssetDatabase.DeleteAsset(OldScenePath);
-            if (File.Exists(PropDir + "/Gate.prefab")) AssetDatabase.DeleteAsset(PropDir + "/Gate.prefab");
-            if (File.Exists(PropDir + "/Key.prefab")) AssetDatabase.DeleteAsset(PropDir + "/Key.prefab");
+            // Leftovers from older builds.
+            foreach (var old in new[] { OldScenePath, PropDir + "/Gate.prefab", PropDir + "/Key.prefab", PropDir + "/Sheep.prefab" })
+                if (File.Exists(old)) AssetDatabase.DeleteAsset(old);
             AssetDatabase.SaveAssets();
-            Debug.Log("Porkour: Barn built. Press Play!");
+            Debug.Log("Porkour: Farm built. Press Play!");
             return true;
-        }
-
-        // ---------- the barn (static level geometry) ----------
-
-        /// <summary>
-        /// Barn 40 x 30 (x -20..20, z -15..15), walls 8.5 high + invisible ceiling. South: Bob's door → yard + grill.
-        /// North: exit passage (electric fence, exit gate) → meadow with the getaway truck. East: hayloft (3.2 m) + lift.
-        /// West: tool shed (rotten boards, fuse box) and a shelf up to the roof beams (5.5 m). South-east: pig pen.
-        /// </summary>
-        static Transform BuildLevel()
-        {
-            var floor = Mat("BarnFloor", new Color(0.55f, 0.4f, 0.25f));
-            var wall = Mat("BarnWall", new Color(0.65f, 0.18f, 0.15f));
-            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
-            var beam = Mat("Beam", new Color(0.42f, 0.28f, 0.16f));
-            var hay = Mat("Hay", new Color(0.93f, 0.8f, 0.35f));
-            var grass = Mat("Grass", new Color(0.35f, 0.6f, 0.25f));
-            var shed = Mat("ShedWall", new Color(0.5f, 0.42f, 0.32f));
-            var lampMat = Mat("Lamp", Color.white);
-
-            var r = new GameObject("Barn").transform;
-            r.gameObject.AddComponent<SceneBuildInfo>().builderVersion = BuildVersion;
-            // Farmer Bob's NavMesh: baked on the server at game start from these (static) children only.
-            var surface = r.gameObject.AddComponent<NavMeshSurface>();
-            surface.collectObjects = CollectObjects.Children;
-            surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
-            const float h = 8.5f; // wall height = ceiling
-
-            // Floor, walls, invisible ceiling (nobody flies out over the walls).
-            Block("Floor", r, new Vector3(0f, -0.5f, 0f), new Vector3(42f, 1f, 32f), floor);
-            Block("WallN1", r, new Vector3(-11.5f, h / 2f, 15.5f), new Vector3(19f, h, 1f), wall);
-            Block("WallN2", r, new Vector3(11.5f, h / 2f, 15.5f), new Vector3(19f, h, 1f), wall);
-            Block("ExitLintel", r, new Vector3(0f, (4f + h) / 2f, 15.5f), new Vector3(4f, h - 4f, 1f), wall);
-            Block("WallS1", r, new Vector3(-11.25f, h / 2f, -15.5f), new Vector3(19.5f, h, 1f), wall);
-            Block("WallS2", r, new Vector3(11.25f, h / 2f, -15.5f), new Vector3(19.5f, h, 1f), wall);
-            Block("DoorLintel", r, new Vector3(0f, (3.5f + h) / 2f, -15.5f), new Vector3(3f, h - 3.5f, 1f), wall);
-            Block("WallE", r, new Vector3(20.5f, h / 2f, 0f), new Vector3(1f, h, 30f), wall);
-            Block("WallW", r, new Vector3(-20.5f, h / 2f, 0f), new Vector3(1f, h, 30f), wall);
-            var ceiling = Block("Ceiling", r, new Vector3(0f, h + 0.25f, 0f), new Vector3(42f, 0.5f, 32f), wall);
-            Object.DestroyImmediate(ceiling.GetComponent<MeshRenderer>());
-            Object.DestroyImmediate(ceiling.GetComponent<MeshFilter>());
-            ceiling.AddComponent<CameraPassThrough>();
-
-            // Roof beams (5.5 m): the key sits on the north one, far west, between two little rails.
-            // Up from the hayloft or the west shelf (3.2 m): Jumpy's ledge grab, Gassy's rocket, a rope, Heavy's trampoline.
-            // 1.6 m wide: Jumpy's ledge grab pops it up with some forward speed, and it has to land on it.
-            PassThrough(Block("BeamS", r, new Vector3(0f, 5.3f, -2f), new Vector3(40f, 0.4f, 1.6f), beam));
-            PassThrough(Block("BeamN", r, new Vector3(0f, 5.3f, 7f), new Vector3(40f, 0.4f, 1.6f), beam));
-            PassThrough(Block("CrossBeam", r, new Vector3(-8f, 5.3f, 2.5f), new Vector3(1.2f, 0.4f, 7.6f), beam));
-            PassThrough(Block("KeyRail1", r, new Vector3(-12f, 5.65f, 6.25f), new Vector3(1.2f, 0.3f, 0.1f), beam));
-            PassThrough(Block("KeyRail2", r, new Vector3(-12f, 5.65f, 7.75f), new Vector3(1.2f, 0.3f, 0.1f), beam));
-            // West shelf (3.2 m, like the hayloft) next to the north beam: Jumpy (ledge grab) / Gassy (rocket) / stacked crates.
-            Block("Shelf", r, new Vector3(-19.2f, 3.05f, 9.4f), new Vector3(1.6f, 0.3f, 3f), beam);
-            Part(PrimitiveType.Cube, "ShelfBracket", r, new Vector3(-19.7f, 2.5f, 8.3f), new Vector3(0.2f, 0.9f, 0.15f), beam, new Vector3(0f, 0f, 30f));
-            Part(PrimitiveType.Cube, "ShelfBracket", r, new Vector3(-19.7f, 2.5f, 10.5f), new Vector3(0.2f, 0.9f, 0.15f), beam, new Vector3(0f, 0f, 30f));
-
-            // Hayloft (east, 3.2 m) on posts; the lift (network-spawned) rises at its south-west corner.
-            Block("Hayloft", r, new Vector3(16f, 3f, 4.5f), new Vector3(8f, 0.4f, 21f), wood);
-            foreach (float z in new[] { -5.75f, -0.5f, 4.5f, 9.5f, 14.5f })
-                PassThrough(Block("LoftPost", r, new Vector3(12.25f, 1.4f, z), new Vector3(0.4f, 2.8f, 0.4f), beam));
-            Block("LoftBale1", r, new Vector3(19f, 4f, 12.5f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
-            Block("LoftBale2", r, new Vector3(19f, 4f, 6f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
-            Haystack(r, new Vector3(17.5f, 3.2f, -3.5f), hay);
-            Label(r, "HAYLOFT", new Vector3(12.2f, 4.2f, 2f), Color.white, 0.06f);
-            Label(r, "LIFT", new Vector3(6.5f, 1.8f, -3.3f), Color.white, 0.05f);
-            PointLight(r, new Vector3(15.5f, 2.3f, 1.5f), new Color(1f, 0.85f, 0.6f), 9f, 1.5f); // under the loft
-
-            // Tool shed (west): doorway in its east wall is nailed shut with rotten boards (network-spawned).
-            Block("ShedE1", r, new Vector3(-13f, 1.75f, -5.25f), new Vector3(0.5f, 3.5f, 3.5f), shed);
-            Block("ShedE2", r, new Vector3(-13f, 1.75f, 0.25f), new Vector3(0.5f, 3.5f, 3.5f), shed);
-            Block("ShedLintel", r, new Vector3(-13f, 3.25f, -2.5f), new Vector3(0.5f, 0.5f, 2f), shed);
-            Block("ShedN", r, new Vector3(-16.625f, 1.75f, 2.25f), new Vector3(7.25f, 3.5f, 0.5f), shed);
-            Block("ShedS", r, new Vector3(-16.625f, 1.75f, -7.25f), new Vector3(7.25f, 3.5f, 0.5f), shed);
-            Block("ShedRoof", r, new Vector3(-16.5f, 3.65f, -2.5f), new Vector3(7.5f, 0.3f, 10f), shed);
-            Label(r, "TOOL SHED", new Vector3(-12.6f, 4.3f, -2.5f), Color.white, 0.06f);
-            Label(r, "FUSE BOX", new Vector3(-19.3f, 2.2f, -2.5f), new Color(1f, 0.9f, 0.3f), 0.04f);
-            PointLight(r, new Vector3(-16.5f, 3f, -2.5f), new Color(1f, 0.8f, 0.5f), 8f, 1.5f);
-
-            // Exit passage through the north wall: electric fence, then the exit gate (both network-spawned).
-            Block("PassageFloor", r, new Vector3(0f, -0.5f, 18f), new Vector3(6f, 1f, 4f), floor);
-            Block("PassageW", r, new Vector3(-2.5f, 2.25f, 18f), new Vector3(1f, 4.5f, 4f), wall);
-            Block("PassageE", r, new Vector3(2.5f, 2.25f, 18f), new Vector3(1f, 4.5f, 4f), wall);
-            Block("PassageRoof", r, new Vector3(0f, 4.25f, 18f), new Vector3(6f, 0.5f, 4f), wall);
-            Label(r, "EXIT", new Vector3(0f, 6.4f, 14.7f), new Color(0.5f, 1f, 0.5f), 0.1f);
-            string[] lampNames = { "KEY", "FENCE", "POWER", "TARGETS" };
-            for (int i = 0; i < lampNames.Length; i++)
-            {
-                float x = -1.65f + i * 1.1f;
-                var lamp = Part(PrimitiveType.Sphere, "ExitLamp", r, new Vector3(x, 5.2f, 14.8f), Vector3.one * 0.45f, lampMat);
-                var objectiveLamp = lamp.AddComponent<ObjectiveLamp>();
-                objectiveLamp.objective = i;
-                objectiveLamp.lamp = lamp.GetComponent<Renderer>();
-                Label(r, lampNames[i], new Vector3(x, 4.6f, 14.7f), Color.white, 0.03f);
-            }
-            Label(r, "PADLOCK", new Vector3(-4.5f, 2.3f, 13.6f), new Color(1f, 0.85f, 0.2f), 0.04f);
-            PointLight(r, new Vector3(0f, 3.5f, 12.5f), new Color(0.8f, 1f, 0.8f), 9f, 1.2f);
-
-            // Meadow behind the exit + the getaway truck (goal).
-            Block("Meadow", r, new Vector3(0f, -0.5f, 27f), new Vector3(18f, 1f, 14f), grass);
-            Block("MeadowFenceW", r, new Vector3(-9.15f, 1.25f, 27f), new Vector3(0.3f, 2.5f, 14f), wood);
-            Block("MeadowFenceE", r, new Vector3(9.15f, 1.25f, 27f), new Vector3(0.3f, 2.5f, 14f), wood);
-            Block("MeadowFenceN", r, new Vector3(0f, 1.25f, 34.15f), new Vector3(18.6f, 2.5f, 0.3f), wood);
-            Block("MeadowFenceSW", r, new Vector3(-6f, 1.25f, 20.15f), new Vector3(6f, 2.5f, 0.3f), wood);
-            Block("MeadowFenceSE", r, new Vector3(6f, 1.25f, 20.15f), new Vector3(6f, 2.5f, 0.3f), wood);
-            BuildTruck(r);
-            foreach (var p in new[] { new Vector3(-12f, 0f, 24f), new Vector3(12f, 0f, 30f), new Vector3(-11f, 0f, 33f), new Vector3(11.5f, 0f, 21f) })
-                Tree(r, p);
-
-            // Pig pen (start), south-east: low fence (jump over) with a gap on the north-west.
-            Block("PenN", r, new Vector3(13.8f, 0.4f, -8f), new Vector3(6.4f, 0.8f, 0.2f), wood);
-            Block("PenW", r, new Vector3(9f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood);
-            Block("PenE", r, new Vector3(17f, 0.4f, -11f), new Vector3(0.2f, 0.8f, 6f), wood);
-            Block("PenS", r, new Vector3(13f, 0.4f, -14f), new Vector3(8.2f, 0.8f, 0.2f), wood);
-            Block("Trough", r, new Vector3(11f, 0.25f, -13.4f), new Vector3(2f, 0.5f, 0.6f), beam);
-            Part(PrimitiveType.Cube, "Mud", r, new Vector3(14.5f, 0.01f, -12f), new Vector3(3f, 0.02f, 2.2f), Mat("Mud", new Color(0.35f, 0.24f, 0.14f)));
-
-            // Hay to hide in (no colliders - walk in), bales as obstacles.
-            Haystack(r, new Vector3(-6f, 0f, 11f), hay);
-            Haystack(r, new Vector3(5f, 0f, 12f), hay);
-            Haystack(r, new Vector3(-15f, 0f, -11.5f), hay);
-            Haystack(r, new Vector3(16f, 0f, 1.5f), hay); // under the hayloft
-            Block("HayBale1", r, new Vector3(-17.5f, 0.8f, 13f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
-            Block("HayBale2", r, new Vector3(-15.3f, 0.8f, 13.3f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 30f, 90f), PrimitiveType.Cylinder);
-            Block("HayBale3", r, new Vector3(-9f, 0.8f, -12.5f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 70f, 90f), PrimitiveType.Cylinder);
-
-            // Yard behind Bob's barn door: his grill.
-            Block("YardFloor", r, new Vector3(0f, -0.5f, -21f), new Vector3(14f, 1f, 12f), grass);
-            Block("FenceW", r, new Vector3(-7.15f, 1.25f, -21.5f), new Vector3(0.3f, 2.5f, 11f), wood);
-            Block("FenceE", r, new Vector3(7.15f, 1.25f, -21.5f), new Vector3(0.3f, 2.5f, 11f), wood);
-            Block("FenceS", r, new Vector3(0f, 1.25f, -27.15f), new Vector3(14.6f, 2.5f, 0.3f), wood);
-            Block("Grill", r, new Vector3(0f, 0.45f, -24f), new Vector3(1.8f, 0.9f, 1f), Mat("GrillMetal", new Color(0.18f, 0.18f, 0.2f)));
-            Block("GrillCoals", r, new Vector3(0f, 0.93f, -24f), new Vector3(1.6f, 0.06f, 0.8f), Mat("Coals", new Color(1f, 0.35f, 0.1f)));
-            Label(r, "BOB'S BBQ", new Vector3(0f, 2.2f, -24f), new Color(1f, 0.5f, 0.3f), 0.06f);
-            return r;
-        }
-
-        static void BuildTruck(Transform r)
-        {
-            var paint = Mat("Truck", new Color(0.2f, 0.45f, 0.75f));
-            var dark = Mat("Wheel", new Color(0.12f, 0.12f, 0.13f));
-            var glass = Mat("TruckWindow", new Color(0.55f, 0.75f, 0.9f));
-            var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
-            Block("TruckChassis", r, new Vector3(0f, 0.35f, 28f), new Vector3(3.4f, 0.5f, 7f), dark);
-            Block("TruckBed", r, new Vector3(0f, 0.75f, 27f), new Vector3(3.6f, 0.3f, 4f), wood);
-            Block("TruckSideW", r, new Vector3(-1.75f, 1.2f, 27f), new Vector3(0.1f, 0.6f, 4f), paint);
-            Block("TruckSideE", r, new Vector3(1.75f, 1.2f, 27f), new Vector3(0.1f, 0.6f, 4f), paint);
-            Block("TruckBedFront", r, new Vector3(0f, 1.2f, 28.95f), new Vector3(3.6f, 0.6f, 0.1f), paint);
-            Block("TruckCab", r, new Vector3(0f, 1.4f, 30.3f), new Vector3(3.6f, 2f, 2.4f), paint);
-            Block("TruckHood", r, new Vector3(0f, 0.95f, 32.2f), new Vector3(3.4f, 1.1f, 1.5f), paint);
-            Part(PrimitiveType.Cube, "TruckWindowBack", r, new Vector3(0f, 1.9f, 29.08f), new Vector3(2.8f, 0.7f, 0.05f), glass);
-            Part(PrimitiveType.Cube, "TruckWindowFront", r, new Vector3(0f, 1.9f, 31.52f), new Vector3(3f, 0.7f, 0.05f), glass);
-            foreach (var (x, z) in new[] { (-1.75f, 25.8f), (1.75f, 25.8f), (-1.75f, 31.3f), (1.75f, 31.3f) })
-                Part(PrimitiveType.Cylinder, "Wheel", r, new Vector3(x, 0.45f, z), new Vector3(0.9f, 0.15f, 0.9f), dark, new Vector3(0f, 0f, 90f));
-            // Tailgate down = ramp into the bed.
-            const float rise = 0.9f, run = 2f;
-            float angle = Mathf.Atan2(rise, run) * Mathf.Rad2Deg;
-            float length = Mathf.Sqrt(rise * rise + run * run);
-            Block("TruckRamp", r, new Vector3(0f, rise / 2f - 0.1f, 24f), new Vector3(3.2f, 0.2f, length), wood, new Vector3(-angle, 0f, 0f));
-
-            var zone = new GameObject("EscapeZone");
-            zone.transform.SetParent(r, false);
-            zone.transform.position = new Vector3(0f, 1.9f, 27f);
-            zone.AddComponent<EscapeZone>().size = new Vector3(3.4f, 2f, 3.8f);
-            Label(r, "GETAWAY TRUCK - JUMP IN!", new Vector3(0f, 3.4f, 29f), new Color(0.5f, 1f, 0.5f), 0.07f);
-        }
-
-        static void Tree(Transform parent, Vector3 position)
-        {
-            Part(PrimitiveType.Cylinder, "Trunk", parent, position + Vector3.up * 1.5f, new Vector3(0.5f, 1.5f, 0.5f), Mat("Trunk", new Color(0.4f, 0.27f, 0.15f)));
-            Part(PrimitiveType.Sphere, "Leaves", parent, position + Vector3.up * 3.6f, new Vector3(3f, 2.6f, 3f), Mat("Leaves", new Color(0.25f, 0.55f, 0.2f)));
-        }
-
-        static void Haystack(Transform parent, Vector3 position, Material hay)
-        {
-            var root = new GameObject("Haystack").transform;
-            root.SetParent(parent, false);
-            root.position = position;
-            Part(PrimitiveType.Sphere, "Hay", root, new Vector3(0f, 0.4f, 0f), new Vector3(2.6f, 1.5f, 2.6f), hay);
-            Part(PrimitiveType.Sphere, "Hay", root, new Vector3(0.6f, 0.25f, 0.5f), new Vector3(1.4f, 1f, 1.4f), hay);
-            Part(PrimitiveType.Sphere, "Hay", root, new Vector3(-0.7f, 0.2f, -0.4f), new Vector3(1.2f, 0.9f, 1.2f), hay);
-            var spot = root.gameObject.AddComponent<HideSpot>();
-            spot.radius = 1.1f;
-            spot.height = 1.2f;
-            var obstacle = root.gameObject.AddComponent<NavMeshObstacle>(); // Bob walks around, not through
-            obstacle.shape = NavMeshObstacleShape.Capsule;
-            obstacle.center = new Vector3(0f, 0.8f, 0f);
-            obstacle.radius = 1.2f;
-            obstacle.height = 1.6f;
-            obstacle.carving = true;
-        }
-
-        static void Label(Transform parent, string text, Vector3 position, Color color, float size)
-        {
-            var go = new GameObject("Label " + text);
-            go.transform.SetParent(parent, false);
-            go.transform.position = position;
-            var label = go.AddComponent<WorldLabel>();
-            label.text = text;
-            label.color = color;
-            label.characterSize = size;
-            label.billboard = true;
-        }
-
-        static void PointLight(Transform parent, Vector3 position, Color color, float range, float intensity)
-        {
-            var go = new GameObject("Light");
-            go.transform.SetParent(parent, false);
-            go.transform.position = position;
-            var light = go.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = color;
-            light.range = range;
-            light.intensity = intensity;
-            light.shadows = LightShadows.None;
-        }
-
-        static GameObject PassThrough(GameObject go)
-        {
-            go.AddComponent<CameraPassThrough>();
-            return go;
         }
 
         // ---------- helpers ----------
@@ -669,7 +434,8 @@ namespace Porkour.EditorTools
         }
 
         /// <summary>Gate / door / lift that moves by openOffset while its channel is on (see Gate).</summary>
-        static GameObject BuildGatePrefab(string name, Vector3 size, Vector3 openOffset, float speed, bool carve, Material mat)
+        static GameObject BuildGatePrefab(string name, Vector3 size, Vector3 openOffset, float speed, bool carve, Material mat,
+            bool rumble = true)
         {
             EnsureFolder(PropDir);
             var go = Part(PrimitiveType.Cube, name, null, Vector3.zero, size, mat, default, keepCollider: true);
@@ -682,6 +448,7 @@ namespace Porkour.EditorTools
             var gate = go.AddComponent<Gate>();
             gate.openOffset = openOffset;
             gate.speed = speed;
+            gate.rumble = rumble;
             if (carve) // Bob paths around it while it's closed
             {
                 var obstacle = go.AddComponent<NavMeshObstacle>();
@@ -692,13 +459,13 @@ namespace Porkour.EditorTools
             return SavePrefab(go, $"{PropDir}/{name}.prefab");
         }
 
-        /// <summary>Big wooden exit door: sinks when the padlock, generator and all three bullseyes are done.</summary>
+        /// <summary>Big wooden exit door (4 x 3.1, one kit story): sinks when the padlock, generator and all three bullseyes are done.</summary>
         static GameObject BuildExitGatePrefab()
         {
             EnsureFolder(PropDir);
             var plank = Mat("ExitDoor", new Color(0.5f, 0.3f, 0.16f));
             var dark = Mat("Beam", new Color(0.42f, 0.28f, 0.16f));
-            var go = Part(PrimitiveType.Cube, "ExitGate", null, Vector3.zero, new Vector3(4f, 4f, 0.35f), plank, default, keepCollider: true);
+            var go = Part(PrimitiveType.Cube, "ExitGate", null, Vector3.zero, new Vector3(4f, 3.1f, 0.35f), plank, default, keepCollider: true);
             var rb = go.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.mass = 1000f;
@@ -707,16 +474,16 @@ namespace Porkour.EditorTools
             nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = false;
             var gate = go.AddComponent<Gate>();
             gate.requiredChannels = new[] { ChannelIds.Padlock, ChannelIds.Generator, ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3 };
-            gate.openOffset = new Vector3(0f, -4.05f, 0f);
+            gate.openOffset = new Vector3(0f, -3.15f, 0f);
             gate.speed = 1.2f;
             var obstacle = go.AddComponent<NavMeshObstacle>();
             obstacle.shape = NavMeshObstacleShape.Box;
             obstacle.size = Vector3.one;
             obstacle.carving = true;
             // Z brace (children live in the scaled cube's local space: divide by its size).
-            var inv = new Vector3(1f / 4f, 1f / 4f, 1f / 0.35f);
-            Part(PrimitiveType.Cube, "Brace", go.transform, Vector3.Scale(new Vector3(0f, 1.4f, -0.2f), inv), Vector3.Scale(new Vector3(3.8f, 0.3f, 0.06f), inv), dark);
-            Part(PrimitiveType.Cube, "Brace", go.transform, Vector3.Scale(new Vector3(0f, -1.4f, -0.2f), inv), Vector3.Scale(new Vector3(3.8f, 0.3f, 0.06f), inv), dark);
+            var inv = new Vector3(1f / 4f, 1f / 3.1f, 1f / 0.35f);
+            Part(PrimitiveType.Cube, "Brace", go.transform, Vector3.Scale(new Vector3(0f, 1.05f, -0.2f), inv), Vector3.Scale(new Vector3(3.8f, 0.3f, 0.06f), inv), dark);
+            Part(PrimitiveType.Cube, "Brace", go.transform, Vector3.Scale(new Vector3(0f, -1.05f, -0.2f), inv), Vector3.Scale(new Vector3(3.8f, 0.3f, 0.06f), inv), dark);
             return SavePrefab(go, $"{PropDir}/ExitGate.prefab");
         }
 
@@ -727,7 +494,7 @@ namespace Porkour.EditorTools
             var post = Mat("FencePost", new Color(0.25f, 0.25f, 0.27f));
             var wire = Mat("Wire", new Color(1f, 0.9f, 0.2f));
             var root = new GameObject("ElectricFence");
-            root.AddComponent<BoxCollider>().size = new Vector3(4f, 4f, 0.3f);
+            root.AddComponent<BoxCollider>().size = new Vector3(4f, 3.1f, 0.3f);
             var rb = root.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.mass = 1000f;
@@ -735,19 +502,19 @@ namespace Porkour.EditorTools
             var nt = root.AddComponent<NetworkTransform>();
             nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = false;
             var gate = root.AddComponent<Gate>();
-            gate.openOffset = new Vector3(0f, -4.05f, 0f);
+            gate.openOffset = new Vector3(0f, -3.15f, 0f);
             gate.speed = 2f;
             var obstacle = root.AddComponent<NavMeshObstacle>();
             obstacle.shape = NavMeshObstacleShape.Box;
-            obstacle.size = new Vector3(4f, 4f, 0.3f);
+            obstacle.size = new Vector3(4f, 3.1f, 0.3f);
             obstacle.carving = true;
-            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(-1.9f, 0f, 0f), new Vector3(0.2f, 4f, 0.25f), post);
-            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(1.9f, 0f, 0f), new Vector3(0.2f, 4f, 0.25f), post);
-            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(0f, 0f, 0f), new Vector3(0.15f, 4f, 0.2f), post);
+            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(-1.9f, 0f, 0f), new Vector3(0.2f, 3.1f, 0.25f), post);
+            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(1.9f, 0f, 0f), new Vector3(0.2f, 3.1f, 0.25f), post);
+            Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(0f, 0f, 0f), new Vector3(0.15f, 3.1f, 0.2f), post);
             var wires = new List<Renderer>();
-            for (int i = 0; i < 8; i++)
-                wires.Add(Part(PrimitiveType.Cube, "Wire", root.transform, new Vector3(0f, -1.75f + i * 0.5f, 0f), new Vector3(3.8f, 0.05f, 0.05f), wire).GetComponent<Renderer>());
-            var sign = Part(PrimitiveType.Cube, "DangerSign", root.transform, new Vector3(0f, 0.6f, -0.14f), new Vector3(0.9f, 0.6f, 0.03f), wire);
+            for (int i = 0; i < 6; i++)
+                wires.Add(Part(PrimitiveType.Cube, "Wire", root.transform, new Vector3(0f, -1.3f + i * 0.5f, 0f), new Vector3(3.8f, 0.05f, 0.05f), wire).GetComponent<Renderer>());
+            var sign = Part(PrimitiveType.Cube, "DangerSign", root.transform, new Vector3(0f, 0.3f, -0.14f), new Vector3(0.9f, 0.6f, 0.03f), wire);
             sign.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
             var zapper = root.AddComponent<Zapper>();
             zapper.wires = wires.ToArray();
@@ -840,7 +607,7 @@ namespace Porkour.EditorTools
             return SavePrefab(root, $"{PropDir}/Padlock.prefab");
         }
 
-        /// <summary>Farmer Bob (placeholder farmer from primitives): kinematic body + NavMeshAgent (server) + FarmerBob.</summary>
+        /// <summary>Farmer Bob (Mixamo model, or a primitive farmer): kinematic body + NavMeshAgent (server) + FarmerBob.</summary>
         static GameObject BuildBobPrefab()
         {
             EnsureFolder(PrefabDir);
@@ -874,17 +641,21 @@ namespace Porkour.EditorTools
 
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            Part(PrimitiveType.Capsule, "Legs", v, new Vector3(0f, 0.55f, 0f), new Vector3(0.55f, 0.55f, 0.4f), overalls);
-            Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 1.25f, 0f), new Vector3(0.75f, 0.5f, 0.5f), overalls);
-            Part(PrimitiveType.Cube, "Shirt", v, new Vector3(0f, 1.55f, 0f), new Vector3(0.7f, 0.25f, 0.42f), shirt);
-            Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 1.85f, 0f), Vector3.one * 0.42f, skin);
-            Part(PrimitiveType.Sphere, "Nose", v, new Vector3(0f, 1.83f, 0.22f), Vector3.one * 0.1f, skin);
-            Part(PrimitiveType.Cylinder, "HatBrim", v, new Vector3(0f, 2.05f, 0f), new Vector3(0.8f, 0.02f, 0.8f), straw);
-            Part(PrimitiveType.Cylinder, "HatTop", v, new Vector3(0f, 2.15f, 0f), new Vector3(0.42f, 0.1f, 0.42f), straw);
-            Part(PrimitiveType.Capsule, "ArmL", v, new Vector3(-0.48f, 1.3f, 0f), new Vector3(0.18f, 0.35f, 0.18f), shirt, new Vector3(0f, 0f, 10f));
-            Part(PrimitiveType.Capsule, "ArmR", v, new Vector3(0.48f, 1.3f, 0f), new Vector3(0.18f, 0.35f, 0.18f), shirt, new Vector3(0f, 0f, -10f));
-            Part(PrimitiveType.Cube, "BootL", v, new Vector3(-0.15f, 0.08f, 0.05f), new Vector3(0.2f, 0.16f, 0.35f), boots);
-            Part(PrimitiveType.Cube, "BootR", v, new Vector3(0.15f, 0.08f, 0.05f), new Vector3(0.2f, 0.16f, 0.35f), boots);
+            bool model = BobVisual(v) != null; // Mixamo Bob + his animations, else the primitive farmer
+            if (!model)
+            {
+                Part(PrimitiveType.Capsule, "Legs", v, new Vector3(0f, 0.55f, 0f), new Vector3(0.55f, 0.55f, 0.4f), overalls);
+                Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 1.25f, 0f), new Vector3(0.75f, 0.5f, 0.5f), overalls);
+                Part(PrimitiveType.Cube, "Shirt", v, new Vector3(0f, 1.55f, 0f), new Vector3(0.7f, 0.25f, 0.42f), shirt);
+                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 1.85f, 0f), Vector3.one * 0.42f, skin);
+                Part(PrimitiveType.Sphere, "Nose", v, new Vector3(0f, 1.83f, 0.22f), Vector3.one * 0.1f, skin);
+                Part(PrimitiveType.Cylinder, "HatBrim", v, new Vector3(0f, 2.05f, 0f), new Vector3(0.8f, 0.02f, 0.8f), straw);
+                Part(PrimitiveType.Cylinder, "HatTop", v, new Vector3(0f, 2.15f, 0f), new Vector3(0.42f, 0.1f, 0.42f), straw);
+                Part(PrimitiveType.Capsule, "ArmL", v, new Vector3(-0.48f, 1.3f, 0f), new Vector3(0.18f, 0.35f, 0.18f), shirt, new Vector3(0f, 0f, 10f));
+                Part(PrimitiveType.Capsule, "ArmR", v, new Vector3(0.48f, 1.3f, 0f), new Vector3(0.18f, 0.35f, 0.18f), shirt, new Vector3(0f, 0f, -10f));
+                Part(PrimitiveType.Cube, "BootL", v, new Vector3(-0.15f, 0.08f, 0.05f), new Vector3(0.2f, 0.16f, 0.35f), boots);
+                Part(PrimitiveType.Cube, "BootR", v, new Vector3(0.15f, 0.08f, 0.05f), new Vector3(0.2f, 0.16f, 0.35f), boots);
+            }
 
             var anim = root.AddComponent<ProceduralAnimator>();
             anim.kind = ProceduralAnimator.Kind.Farmer;
@@ -906,6 +677,9 @@ namespace Porkour.EditorTools
             bob.insidePoint = new Vector3(0f, 0f, -12f);
             bob.searchCenter = new Vector3(0f, 0f, 0f);
             bob.searchHalfSize = new Vector2(18f, 13f);
+            // Farmyard (see BuildFarmyard): only reachable for him once the barn exit is open.
+            bob.searchCenter2 = new Vector3(0f, 0f, 38f);
+            bob.searchHalfSize2 = new Vector2(25f, 20f);
             bob.doorChannel = ChannelIds.BobDoor;
             return SavePrefab(root, $"{PrefabDir}/FarmerBob.prefab");
         }
@@ -969,13 +743,16 @@ namespace Porkour.EditorTools
             critter.groundCheck = 0.45f;
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            Part(PrimitiveType.Sphere, "Body", v, Vector3.zero, new Vector3(0.5f, 0.45f, 0.6f), white);
-            Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.25f, 0.25f), Vector3.one * 0.28f, white);
-            Part(PrimitiveType.Cube, "Comb", v, new Vector3(0f, 0.42f, 0.25f), new Vector3(0.05f, 0.1f, 0.14f), red);
-            Part(PrimitiveType.Cube, "Beak", v, new Vector3(0f, 0.24f, 0.42f), new Vector3(0.08f, 0.06f, 0.1f), yellow);
-            Part(PrimitiveType.Cube, "Tail", v, new Vector3(0f, 0.15f, -0.3f), new Vector3(0.3f, 0.25f, 0.08f), white, new Vector3(-25f, 0f, 0f));
-            Part(PrimitiveType.Cylinder, "LegL", v, new Vector3(-0.08f, -0.25f, 0f), new Vector3(0.04f, 0.08f, 0.04f), yellow);
-            Part(PrimitiveType.Cylinder, "LegR", v, new Vector3(0.08f, -0.25f, 0f), new Vector3(0.04f, 0.08f, 0.04f), yellow);
+            if (AnimalVisual("chick", v, 0.75f, new Vector3(0f, -0.25f, 0f), critter.walkSpeed, critter.fleeSpeed, out _) == null)
+            {
+                Part(PrimitiveType.Sphere, "Body", v, Vector3.zero, new Vector3(0.5f, 0.45f, 0.6f), white);
+                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.25f, 0.25f), Vector3.one * 0.28f, white);
+                Part(PrimitiveType.Cube, "Comb", v, new Vector3(0f, 0.42f, 0.25f), new Vector3(0.05f, 0.1f, 0.14f), red);
+                Part(PrimitiveType.Cube, "Beak", v, new Vector3(0f, 0.24f, 0.42f), new Vector3(0.08f, 0.06f, 0.1f), yellow);
+                Part(PrimitiveType.Cube, "Tail", v, new Vector3(0f, 0.15f, -0.3f), new Vector3(0.3f, 0.25f, 0.08f), white, new Vector3(-25f, 0f, 0f));
+                Part(PrimitiveType.Cylinder, "LegL", v, new Vector3(-0.08f, -0.25f, 0f), new Vector3(0.04f, 0.08f, 0.04f), yellow);
+                Part(PrimitiveType.Cylinder, "LegR", v, new Vector3(0.08f, -0.25f, 0f), new Vector3(0.04f, 0.08f, 0.04f), yellow);
+            }
             var anim = root.AddComponent<ProceduralAnimator>();
             anim.kind = ProceduralAnimator.Kind.Critter;
             anim.visual = v;
@@ -985,41 +762,161 @@ namespace Porkour.EditorTools
             return SavePrefab(root, $"{PropDir}/Chicken.prefab");
         }
 
-        /// <summary>Sheep = heavier Bait (harder to throw), wanders slowly and baas.</summary>
-        static GameObject BuildSheepPrefab()
+        /// <summary>Calf = heavier Bait (harder to throw), wanders slowly. Kenney cow model, or a primitive one.</summary>
+        static GameObject BuildCalfPrefab()
         {
             EnsureFolder(PropDir);
-            var wool = Mat("Wool", new Color(0.95f, 0.93f, 0.86f));
-            var face = Mat("SheepFace", new Color(0.15f, 0.13f, 0.12f));
-            var root = new GameObject("Sheep");
+            var hide = Mat("CalfHide", new Color(0.95f, 0.93f, 0.88f));
+            var spots = Mat("CalfSpots", new Color(0.2f, 0.16f, 0.14f));
+            var root = new GameObject("Calf");
             var sphere = root.AddComponent<SphereCollider>();
             sphere.radius = 0.5f;
             root.AddComponent<Rigidbody>().mass = 18f;
             AddNetworkSync(root);
-            root.AddComponent<Bait>().displayName = "sheep";
+            root.AddComponent<Bait>().displayName = "calf";
             var critter = root.AddComponent<Critter>();
             critter.walkSpeed = 0.9f;
             critter.fleeSpeed = 2.8f;
             critter.hopSpeed = 0f;
             critter.groundCheck = 0.7f;
-            critter.voice = Sound.Baa;
+            critter.voice = Sound.Moo;
             critter.voiceVolume = 0.7f;
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            Part(PrimitiveType.Sphere, "Wool", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.9f, 0.75f, 1.15f), wool);
-            Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.25f, 0.6f), new Vector3(0.36f, 0.4f, 0.42f), face);
-            Part(PrimitiveType.Sphere, "WoolTop", v, new Vector3(0f, 0.45f, 0.55f), Vector3.one * 0.3f, wool);
-            Part(PrimitiveType.Cube, "EarL", v, new Vector3(-0.22f, 0.3f, 0.55f), new Vector3(0.18f, 0.06f, 0.1f), face, new Vector3(0f, 0f, -20f));
-            Part(PrimitiveType.Cube, "EarR", v, new Vector3(0.22f, 0.3f, 0.55f), new Vector3(0.18f, 0.06f, 0.1f), face, new Vector3(0f, 0f, 20f));
-            foreach (var (x, z) in new[] { (-0.22f, 0.3f), (0.22f, 0.3f), (-0.22f, -0.3f), (0.22f, -0.3f) })
-                Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.12f, 0.15f, 0.12f), face);
+            if (AnimalVisual("cow", v, 1.15f, new Vector3(0f, -0.5f, 0f), critter.walkSpeed, critter.fleeSpeed, out _) == null)
+            {
+                Part(PrimitiveType.Sphere, "Body", v, new Vector3(0f, 0.05f, 0f), new Vector3(0.8f, 0.7f, 1.1f), hide);
+                Part(PrimitiveType.Sphere, "Spot", v, new Vector3(0.25f, 0.2f, -0.1f), new Vector3(0.4f, 0.35f, 0.5f), spots);
+                Part(PrimitiveType.Sphere, "Head", v, new Vector3(0f, 0.3f, 0.6f), new Vector3(0.42f, 0.42f, 0.48f), hide);
+                Part(PrimitiveType.Cube, "EarL", v, new Vector3(-0.25f, 0.4f, 0.55f), new Vector3(0.2f, 0.06f, 0.1f), spots, new Vector3(0f, 0f, -20f));
+                Part(PrimitiveType.Cube, "EarR", v, new Vector3(0.25f, 0.4f, 0.55f), new Vector3(0.2f, 0.06f, 0.1f), spots, new Vector3(0f, 0f, 20f));
+                foreach (var (x, z) in new[] { (-0.22f, 0.3f), (0.22f, 0.3f), (-0.22f, -0.3f), (0.22f, -0.3f) })
+                    Part(PrimitiveType.Cylinder, "Leg", v, new Vector3(x, -0.35f, z), new Vector3(0.12f, 0.15f, 0.12f), hide);
+            }
             var anim = root.AddComponent<ProceduralAnimator>();
             anim.kind = ProceduralAnimator.Kind.Critter;
             anim.visual = v;
             anim.stepsPerMetre = 2f;
             anim.bobHeight = 0.04f;
             anim.fullSpeed = 2.5f;
-            return SavePrefab(root, $"{PropDir}/Sheep.prefab");
+            return SavePrefab(root, $"{PropDir}/Calf.prefab");
+        }
+
+        // ---------- the farmhouse puzzle ----------
+
+        /// <summary>Bob's truck keys (KeyItem "truck"): bring them to the truck's ignition.</summary>
+        static GameObject BuildTruckKeysPrefab()
+        {
+            EnsureFolder(PropDir);
+            var gold = Mat("Gold", new Color(1f, 0.8f, 0.1f));
+            var metal = Mat("FencePost", new Color(0.25f, 0.25f, 0.27f));
+            var root = new GameObject("TruckKeys");
+            root.AddComponent<BoxCollider>().size = new Vector3(0.55f, 0.15f, 0.35f);
+            root.AddComponent<Rigidbody>().mass = 1f;
+            AddNetworkSync(root);
+            var key = root.AddComponent<KeyItem>();
+            key.keyId = "truck";
+            key.labelText = "TRUCK KEYS";
+            key.labelColor = new Color(0.5f, 0.9f, 1f);
+            Part(PrimitiveType.Cylinder, "Ring", root.transform, Vector3.zero, new Vector3(0.3f, 0.02f, 0.3f), metal);
+            Part(PrimitiveType.Cube, "Key1", root.transform, new Vector3(0.2f, 0f, 0.05f), new Vector3(0.3f, 0.06f, 0.1f), gold, new Vector3(0f, 20f, 0f));
+            Part(PrimitiveType.Cube, "Key2", root.transform, new Vector3(-0.18f, 0f, 0.08f), new Vector3(0.28f, 0.06f, 0.1f), gold, new Vector3(0f, -30f, 0f));
+            Part(PrimitiveType.Cube, "Tag", root.transform, new Vector3(0f, 0f, -0.15f), new Vector3(0.14f, 0.05f, 0.12f), Mat("TargetRed", new Color(0.85f, 0.15f, 0.12f)));
+            return SavePrefab(root, $"{PropDir}/TruckKeys.prefab");
+        }
+
+        /// <summary>Bob's pie (bonus KeyItem, no lock): a star if it rides away in the truck.</summary>
+        static GameObject BuildPiePrefab()
+        {
+            EnsureFolder(PropDir);
+            var root = new GameObject("Pie");
+            var box = root.AddComponent<BoxCollider>();
+            box.size = new Vector3(0.6f, 0.18f, 0.6f);
+            root.AddComponent<Rigidbody>().mass = 2f;
+            AddNetworkSync(root);
+            var pie = root.AddComponent<KeyItem>();
+            pie.keyId = "";
+            pie.bonus = true;
+            pie.labelText = "PIE (bonus star)";
+            pie.labelColor = new Color(1f, 0.7f, 0.4f);
+            Part(PrimitiveType.Cylinder, "Tin", root.transform, new Vector3(0f, -0.04f, 0f), new Vector3(0.6f, 0.05f, 0.6f), Mat("FencePost", new Color(0.25f, 0.25f, 0.27f)));
+            Part(PrimitiveType.Cylinder, "Crust", root.transform, new Vector3(0f, 0.02f, 0f), new Vector3(0.56f, 0.06f, 0.56f), Mat("PieCrust", new Color(0.85f, 0.6f, 0.3f)));
+            Part(PrimitiveType.Sphere, "Top", root.transform, new Vector3(0f, 0.07f, 0f), new Vector3(0.5f, 0.08f, 0.5f), Mat("PieTop", new Color(0.75f, 0.45f, 0.2f)));
+            return SavePrefab(root, $"{PropDir}/Pie.prefab");
+        }
+
+        /// <summary>
+        /// The truck's ignition (KeySlot "truck" on a post by the cab door) + IgnitionFx: exhaust and headlights placed
+        /// around the truck relative to this post (see BuildTruck / FarmSpawnPoints).
+        /// </summary>
+        static GameObject BuildIgnitionPrefab()
+        {
+            EnsureFolder(PropDir);
+            var metal = Mat("FencePost", new Color(0.25f, 0.25f, 0.27f));
+            var root = new GameObject("Ignition");
+            var box = root.AddComponent<BoxCollider>();
+            box.size = new Vector3(0.35f, 1.1f, 0.35f);
+            box.center = new Vector3(0f, 0.55f, 0f);
+            root.AddComponent<NetworkObject>();
+            var slot = root.AddComponent<KeySlot>();
+            slot.acceptsKey = "truck";
+            slot.channel = ChannelIds.Truck;
+            slot.radius = 1.4f;
+            Part(PrimitiveType.Cylinder, "Post", root.transform, new Vector3(0f, 0.55f, 0f), new Vector3(0.25f, 0.55f, 0.25f), Mat("Beam", new Color(0.42f, 0.28f, 0.16f)));
+            Part(PrimitiveType.Cube, "Box", root.transform, new Vector3(0f, 1.3f, 0f), new Vector3(0.6f, 0.5f, 0.35f), metal);
+            var shackle = new GameObject("Key").transform; // pops up = keys turned
+            shackle.SetParent(root.transform, false);
+            shackle.localPosition = new Vector3(0f, 1.5f, 0f);
+            Part(PrimitiveType.Cube, "Blade", shackle, Vector3.zero, new Vector3(0.06f, 0.25f, 0.04f), Mat("Gold", new Color(1f, 0.8f, 0.1f)));
+            var lamp = Part(PrimitiveType.Sphere, "Lamp", root.transform, new Vector3(0f, 1.3f, 0.18f), Vector3.one * 0.18f, Mat("Lamp", Color.white));
+            slot.shackle = shackle;
+            slot.lamp = lamp.GetComponent<Renderer>();
+
+            var fx = root.AddComponent<IgnitionFx>();
+            var exhaust = new GameObject("Exhaust").transform;
+            exhaust.SetParent(root.transform, false);
+            exhaust.localPosition = TruckExhaust - IgnitionOffset;
+            var lights = new List<Light>();
+            foreach (float side in new[] { -1f, 1f })
+            {
+                var go = new GameObject("Headlight");
+                go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = new Vector3(side * 1.25f, 0.95f, 6f) - IgnitionOffset;
+                var light = go.AddComponent<Light>();
+                light.type = LightType.Spot;
+                light.range = 16f;
+                light.spotAngle = 60f;
+                light.intensity = 4f;
+                light.color = new Color(1f, 0.95f, 0.75f);
+                light.shadows = LightShadows.None;
+                light.enabled = false;
+                lights.Add(light);
+            }
+            fx.exhaust = exhaust;
+            fx.headlights = lights.ToArray();
+            var label = new GameObject("Label");
+            label.transform.SetParent(root.transform, false);
+            label.transform.localPosition = new Vector3(0f, 2.2f, 0f);
+            var text = label.AddComponent<WorldLabel>();
+            text.text = "IGNITION\n(bring the TRUCK KEYS)";
+            text.color = new Color(0.5f, 0.9f, 1f);
+            text.characterSize = 0.035f;
+            text.billboard = true;
+            return SavePrefab(root, $"{PropDir}/Ignition.prefab");
+        }
+
+        /// <summary>Bob's chimney top: a pig that gets up there slides down into the house (ChimneyChute; geometry is static).</summary>
+        static GameObject BuildChimneyPrefab()
+        {
+            EnsureFolder(PropDir);
+            var root = new GameObject("ChimneyChute");
+            root.AddComponent<NetworkObject>();
+            var chute = root.AddComponent<ChimneyChute>();
+            chute.radius = 0.9f;
+            chute.height = 1.6f;
+            chute.exitOffset = ChimneyExit - ChimneyTop;
+            chute.exitYaw = 90f;
+            return SavePrefab(root, $"{PropDir}/ChimneyChute.prefab");
         }
 
         /// <summary>Big upside-down tub: grab it to wear it and hide from Bob (Wearable).</summary>

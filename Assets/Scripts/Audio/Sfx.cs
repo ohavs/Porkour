@@ -7,12 +7,14 @@ namespace Porkour
     {
         Jump, Land, Step, Fart, Dash, Slam, Boing, Rope, Shoot, Suck, Smash, Splat, Bell, Ding, Click, Zap,
         Unlock, Engine, EngineLoop, Rumble, Grab, Throw, GrillCall, Spotted, Caught, Bonk, Sizzle, Escape, Win,
-        Lose, Tick, Cluck, Baa, Alarm,
+        Lose, Tick, Cluck, Baa, Alarm, Moo,
     }
 
     /// <summary>
-    /// Sound effects. Real clips come from the SoundBank (menu Porkour → Sounds; several clips = random variant);
-    /// any sound without clips uses a placeholder synthesized from code at startup (beeps, noise bursts, jingles).
+    /// Sound effects. Real clips come from the SoundBank (menu Porkour → Sounds; several clips = random variant).
+    /// Only the important event sounds (Bob, puzzle, round) fall back to a placeholder synthesized from code; frequent
+    /// little sounds (steps, jumps, clucks, engine hum...) stay silent until a real clip is assigned.
+    /// Anti-spam: the same sound plays at most MaxVoices at once and not faster than MinGap; far sounds are skipped.
     /// A file named like the Sound in Assets/Resources/Sfx/ (e.g. "Fart.wav") also works.
     /// Local only: call it from code that already runs on every PC (PlayEffect, RPCs, NetworkVariable changes).
     /// </summary>
@@ -20,12 +22,24 @@ namespace Porkour
     {
         const int Rate = 22050;
         const int PoolSize = 24;
+        const int MaxVoices = 2;
+        const float MinGap = 0.08f;
+        const float HearingRange = 32f;
+
+        /// <summary>Sounds that use the synthesized placeholder when the SoundBank has no clip (the rest stay quiet).</summary>
+        static readonly Sound[] PlaceholderSounds =
+        {
+            Sound.Fart, Sound.Slam, Sound.Boing, Sound.Shoot, Sound.Smash, Sound.Splat, Sound.Bell, Sound.Ding, Sound.Zap,
+            Sound.Unlock, Sound.Engine, Sound.GrillCall, Sound.Spotted, Sound.Caught, Sound.Bonk, Sound.Sizzle, Sound.Escape,
+            Sound.Win, Sound.Lose, Sound.Tick, Sound.Alarm,
+        };
 
         /// <summary>Volume for all effects (the SoundBank's effectsVolume when there is one).</summary>
         public static float EffectsVolume => SoundBank.Instance != null ? SoundBank.Instance.effectsVolume : 0.8f;
 
-        static AudioClip[][] clips; // variants per Sound
-        static float[] volumes;
+        static AudioClip[][] clips; // variants per Sound (empty = silent)
+        static float[] volumes, lastPlayed;
+        static Sound[] voiceSound; // what each pool voice is playing
         static AudioSource[] pool;
         static int next;
         static readonly System.Random Rng = new(1234);
@@ -37,6 +51,9 @@ namespace Porkour
         {
             clips = null;
             volumes = null;
+            lastPlayed = null;
+            voiceSound = null;
+            listener = null;
             pool = null;
             next = 0;
         }
@@ -65,7 +82,7 @@ namespace Porkour
         {
             var src = parent.gameObject.AddComponent<AudioSource>();
             Setup3D(src);
-            src.clip = Clip(sound);
+            src.clip = Clip(sound); // null = silent loop (no placeholder hum)
             src.loop = true;
             src.volume = volume * volumes[(int)sound] * EffectsVolume;
             src.playOnAwake = false;
@@ -77,13 +94,35 @@ namespace Porkour
             if (!Application.isPlaying) return;
             var clip = Clip(sound);
             if (clip == null) return;
+            int s = (int)sound;
+            if (Time.unscaledTime - lastPlayed[s] < MinGap) return; // the same sound a moment ago
+            if (spatial && TooFar(position)) return;
+            if (pool != null && pool[0] != null && CountPlaying(sound) >= MaxVoices) return;
             var src = NextSource();
+            lastPlayed[s] = Time.unscaledTime;
+            voiceSound[Array.IndexOf(pool, src)] = sound;
             src.transform.position = position;
             src.spatialBlend = spatial ? 1f : 0f;
             src.pitch = 1f + UnityEngine.Random.Range(-pitchJitter, pitchJitter);
-            src.volume = Mathf.Clamp01(volume * volumes[(int)sound] * EffectsVolume);
+            src.volume = Mathf.Clamp01(volume * volumes[s] * EffectsVolume);
             src.clip = clip;
             src.Play();
+        }
+
+        static AudioListener listener;
+
+        static bool TooFar(Vector3 position)
+        {
+            if (listener == null || !listener.isActiveAndEnabled) listener = UnityEngine.Object.FindAnyObjectByType<AudioListener>();
+            return listener != null && (listener.transform.position - position).sqrMagnitude > HearingRange * HearingRange;
+        }
+
+        static int CountPlaying(Sound sound)
+        {
+            int n = 0;
+            for (int i = 0; i < pool.Length; i++)
+                if (pool[i].isPlaying && voiceSound[i] == sound) n++;
+            return n;
         }
 
         static AudioSource NextSource()
@@ -93,6 +132,7 @@ namespace Porkour
                 var host = new GameObject("Sfx");
                 UnityEngine.Object.DontDestroyOnLoad(host);
                 pool = new AudioSource[PoolSize];
+                voiceSound = new Sound[PoolSize];
                 for (int i = 0; i < PoolSize; i++)
                 {
                     var child = new GameObject("Voice");
@@ -118,8 +158,8 @@ namespace Porkour
         {
             src.spatialBlend = 1f;
             src.rolloffMode = AudioRolloffMode.Linear;
-            src.minDistance = 4f;
-            src.maxDistance = 45f;
+            src.minDistance = 3f;
+            src.maxDistance = HearingRange;
             src.dopplerLevel = 0f;
         }
 
@@ -129,6 +169,8 @@ namespace Porkour
             var sounds = (Sound[])Enum.GetValues(typeof(Sound));
             clips = new AudioClip[sounds.Length][];
             volumes = new float[sounds.Length];
+            lastPlayed = new float[sounds.Length];
+            for (int i = 0; i < lastPlayed.Length; i++) lastPlayed[i] = -10f;
             var bank = SoundBank.Instance;
             foreach (var sound in sounds)
             {
@@ -148,6 +190,7 @@ namespace Porkour
                 string name = sound.ToString();
                 var custom = Resources.Load<AudioClip>("Sfx/" + name);
                 if (custom != null) { clips[i] = new[] { custom }; continue; }
+                if (Array.IndexOf(PlaceholderSounds, sound) < 0) { clips[i] = new AudioClip[0]; continue; }
                 var data = Normalize(Make(sound));
                 var clip = AudioClip.Create(name, data.Length, 1, Rate, false);
                 clip.SetData(data, 0);

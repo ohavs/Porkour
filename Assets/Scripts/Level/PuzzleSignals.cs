@@ -16,6 +16,9 @@ namespace Porkour
         public const int Padlock = 11;
         public const int Fence = 12;
         public const int Generator = 13;
+        public const int Truck = 14;
+        public const int HouseWindow = 31;
+        public const int HouseDoor = 33;
         public const int Target1 = 21, Target2 = 22, Target3 = 23;
         public const int BobDoor = 99;
     }

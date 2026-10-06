@@ -43,6 +43,9 @@ namespace Porkour
         public Vector3 insidePoint = new(0f, 0f, -12f);
         public Vector3 searchCenter = Vector3.zero;
         public Vector2 searchHalfSize = new(13f, 13f);
+        [Tooltip("Second area he also searches when he can get there (the farmyard once the exit is open). Zero size = none.")]
+        public Vector3 searchCenter2;
+        public Vector2 searchHalfSize2;
         public int doorChannel = ChannelIds.BobDoor;
         public Transform carryPoint;
 
@@ -290,6 +293,19 @@ namespace Porkour
             throwsAtTarget = 0;
         }
 
+        /// <summary>Server: the pigs opened the big exit door - Bob comes running.</summary>
+        public void Alarm(Vector3 position)
+        {
+            if (!IsServer) return;
+            if (state.Value == BobState.Away || state.Value == BobState.Leaving)
+            {
+                SetState(BobState.Coming, 2f);
+                Announce("Bob heard the big door! He's coming!");
+                Say("WHAT WAS THAT?!");
+            }
+            else HearNoise(position);
+        }
+
         /// <summary>Server: a loud noise (bell). Bob goes to check it unless he's busy with a pig.</summary>
         public void HearNoise(Vector3 position)
         {
@@ -338,8 +354,10 @@ namespace Porkour
                 var path = new NavMeshPath();
                 for (int i = 0; i < 8; i++)
                 {
-                    Vector3 p = searchCenter + new Vector3(UnityEngine.Random.Range(-searchHalfSize.x, searchHalfSize.x), 0f,
-                        UnityEngine.Random.Range(-searchHalfSize.y, searchHalfSize.y));
+                    bool second = searchHalfSize2.sqrMagnitude > 0f && UnityEngine.Random.value < 0.45f;
+                    Vector3 c = second ? searchCenter2 : searchCenter;
+                    Vector2 h = second ? searchHalfSize2 : searchHalfSize;
+                    Vector3 p = c + new Vector3(UnityEngine.Random.Range(-h.x, h.x), 0f, UnityEngine.Random.Range(-h.y, h.y));
                     if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2f, NavMesh.AllAreas)) continue;
                     if (!agent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete) continue;
                     wanderPoint = hit.position;
@@ -644,7 +662,11 @@ namespace Porkour
         }
 
         [Rpc(SendTo.Everyone)]
-        void ThrowFxRpc(Vector3 hand) => Sfx.Play(Sound.Throw, hand, 1f);
+        void ThrowFxRpc(Vector3 hand)
+        {
+            Sfx.Play(Sound.Throw, hand, 1f);
+            if (anim != null) anim.Trigger("Throw");
+        }
 
         [Rpc(SendTo.Everyone)]
         void GrillFxRpc(Vector3 position)
@@ -711,6 +733,13 @@ namespace Porkour
             {
                 anim.ArmsUp = s == BobState.Carrying || (s == BobState.Leaving && carriedId.Value != ulong.MaxValue);
                 anim.Dizzy = dizzy;
+                // Model animation: 0 walk/run, 1 carry, 2 dizzy, 3 look around, 4 yell (ringing the dinner bell).
+                int mode = s == BobState.Carrying ? 1
+                    : dizzy ? 2
+                    : s == BobState.Coming && StateTimeLeft > warningTime - 2f ? 4
+                    : (s is BobState.Searching or BobState.Investigating) && anim.Speed < 0.3f ? 3
+                    : 0;
+                anim.SetMode(mode);
             }
             if (mark == null) return;
             if (Time.time < speechUntil && !string.IsNullOrEmpty(speech))
