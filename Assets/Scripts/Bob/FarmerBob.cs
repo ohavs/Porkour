@@ -196,7 +196,7 @@ namespace Porkour
             {
                 case BobState.Away:
                     if (TendGrill()) break;
-                    if (now >= nextCallTime) StartGrillCall();
+                    if (now >= nextCallTime && (PigCage.Instance == null || PigCage.Instance.Overdue() == null)) StartGrillCall();
                     break;
 
                 case BobState.Coming:

@@ -143,7 +143,11 @@ namespace Porkour
             for (int i = caged.Count - 1; i >= 0; i--)
                 if (caged[i].PigId == id) caged.RemoveAt(i);
             if (pig.HeldBy is Hold) pig.SetHeldBy(null);
-            if (push) pig.Launch(4f, (DoorPoint - transform.position).normalized * 3f);
+            if (!push) return;
+            // Out through the (now open) door: the door's collider stays, so put the pig outside first.
+            Vector3 outside = transform.TransformPoint(door + new Vector3(UnityEngine.Random.Range(-0.6f, 0.6f), 0.6f, 0.4f));
+            pig.TeleportTo(outside, transform.rotation);
+            pig.Launch(4f, transform.forward * 3f);
         }
 
         /// <summary>Server: open the door - everyone inside is free.</summary>
@@ -189,7 +193,7 @@ namespace Porkour
             Vector3 d = DoorPoint;
             foreach (var pig in PigController.All)
             {
-                if (pig == null || pig.IsHeld || pig.Escaped) continue;
+                if (pig == null || pig.IsHeld || pig.Escaped || pig.Owner == null) continue; // sleeping pigs don't help
                 Vector3 rel = pig.Body.position - d;
                 if (Mathf.Abs(rel.y) < 1.5f && new Vector2(rel.x, rel.z).magnitude < unlockRadius) { rescuer = true; break; }
             }
@@ -217,7 +221,12 @@ namespace Porkour
             if (!IsServer || !IsSpawned || caged.Count == 0) return;
             var rb = collision.rigidbody;
             if (rb == null || rb.isKinematic || collision.relativeVelocity.magnitude < hardHitSpeed) return;
-            if (rb.TryGetComponent(out PigController pig) && pig.HeldBy is Hold) return;
+            if (rb.TryGetComponent(out PigController pig))
+            {
+                // Running into it does nothing - only a flying pig (thrown / launched) bursts it open.
+                if (pig.HeldBy is Hold || (pig.IsGrounded && !pig.MovementLocked)) return;
+                if (collision.relativeVelocity.magnitude < hardHitSpeed + 1f) return;
+            }
             Open("knocked open");
         }
 

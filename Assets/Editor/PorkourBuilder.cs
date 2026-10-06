@@ -454,7 +454,7 @@ namespace Porkour.EditorTools
             {
                 var go = new GameObject("Label");
                 go.transform.SetParent(root.transform, false);
-                go.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+                go.transform.localPosition = new Vector3(0f, 2.3f, 0f); // above the plate's own weight label
                 var text = go.AddComponent<WorldLabel>();
                 text.text = label;
                 text.color = new Color(1f, 0.85f, 0.4f);

@@ -22,6 +22,13 @@ namespace Porkour
         public static int LastXp { get; private set; }
         public static int LastRound { get; private set; } = -1;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() // play mode starts without a domain reload in this project
+        {
+            LastRound = -1;
+            LastCoins = LastXp = 0;
+        }
+
         public static void Add(int coins, int xp, int round)
         {
             if (round == LastRound) return; // already paid

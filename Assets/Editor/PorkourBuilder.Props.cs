@@ -9,14 +9,14 @@ namespace Porkour.EditorTools
     public static partial class PorkourBuilder
     {
         /// <summary>
-        /// Bob's cage (PigCage): 2.6 x 2.2 x 2.2, door on its +Z side (rescuers stand in front of it), four spots inside.
+        /// Bob's cage (PigCage): 2.6 wide x 2.2 high x 3 deep, door on its +Z side (rescuers stand in front of it), four spots inside.
         /// Colliders on the root (so hard hits reach PigCage.OnCollisionEnter); kit metal fence panels as bars.
         /// </summary>
         static GameObject BuildCagePrefab(Vector3 grillLocal)
         {
             EnsureFolder(PropDir);
             var metal = Mat("CageMetal", new Color(0.3f, 0.3f, 0.33f));
-            const float w = 2.6f, d = 2.2f, h = 2.2f, t = 0.1f;
+            const float w = 2.6f, d = 3f, h = 2.2f, t = 0.1f; // pigs are 1.35 long: two rows of two
             var root = new GameObject("PigCage");
             void Box(Vector3 center, Vector3 size)
             {
@@ -31,7 +31,7 @@ namespace Porkour.EditorTools
             Box(new Vector3(0f, h + t / 2f, 0f), new Vector3(w, t, d));
             root.AddComponent<NetworkObject>();
             var cage = root.AddComponent<PigCage>();
-            cage.slots = new[] { new Vector3(-0.6f, 0.5f, 0.4f), new Vector3(0.6f, 0.5f, 0.4f), new Vector3(-0.6f, 0.5f, -0.45f), new Vector3(0.6f, 0.5f, -0.45f) };
+            cage.slots = new[] { new Vector3(-0.6f, 0.5f, 0.75f), new Vector3(0.6f, 0.5f, 0.75f), new Vector3(-0.6f, 0.5f, -0.75f), new Vector3(0.6f, 0.5f, -0.75f) };
             cage.door = new Vector3(0f, 0f, d / 2f + 0.7f);
             cage.grill = grillLocal;
             var obstacle = root.AddComponent<NavMeshObstacle>();
