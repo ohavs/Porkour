@@ -118,7 +118,7 @@ namespace Porkour
         {
             if (startOffsets.TryGetValue(clip, out float t)) return t;
             t = 0f;
-            if (clip.loadType != AudioClipLoadType.Streaming && clip.samples > 0
+            if (clip.loadType == AudioClipLoadType.DecompressOnLoad && clip.samples > 0
                 && (clip.loadState == AudioDataLoadState.Loaded || (clip.LoadAudioData() && clip.loadState == AudioDataLoadState.Loaded)))
             {
                 int frames = Mathf.Min(clip.samples, clip.frequency * 2);

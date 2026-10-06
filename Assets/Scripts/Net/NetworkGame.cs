@@ -183,7 +183,7 @@ namespace Porkour
             {
                 string players = nm.IsServer ? $"  |  players {nm.ConnectedClientsIds.Count}/4" : "";
                 string debug = nm.IsHost ? "  |  G: Grill Call now  |  R: restart round" : "";
-                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Tab / Y: switch pig  |  M: music{debug}", statusStyle);
+                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Q / Y: switch pig  |  Tab: missions  |  M: music{debug}", statusStyle);
                 return;
             }
 

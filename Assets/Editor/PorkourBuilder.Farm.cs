@@ -103,8 +103,11 @@ namespace Porkour.EditorTools
                     : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_WoodGrid");
                 ClosedKitHouse(farm, "Workshop", 52f, 58f, 2f, 8f, 1, (side, i, _) => side == 3 && i == 1 ? "Wall_Plaster_Door_RoundInset"
                     : "Wall_Plaster_WoodGrid");
-                foreach (var (pos, yaw) in new[] { (new Vector3(47f, 0f, 22f), 0f), (new Vector3(-49f, 0f, 21f), 90f), (new Vector3(-52f, 0f, 46f), 30f) })
+                foreach (var (pos, yaw) in new[] { (new Vector3(47f, 0f, 22f), 0f), (new Vector3(-49f, 0f, 21f), 90f), (new Vector3(-52f, 0f, 46f), 0f) })
+                {
+                    Invisible(Block("Wagon", farm, pos + Vector3.up * 0.6f, new Vector3(1.9f, 1.2f, 4f), null));
                     Kit.Fit("Prop_Wagon", farm, pos + Vector3.up * 0.765f, new Vector3(1.95f, 1.53f, 4f), yaw, keepLongSide: true);
+                }
             }
 
             // Chicken pen (x 18..26, z 20..26): low fence with a gap in the north side, the coop in a corner.

@@ -230,11 +230,11 @@ namespace Porkour
             if (net != null && grabber != null)
             {
                 held = net.Held;
-                if (net.IsHeld)
+                var cage = PigCage.Instance; // synced cage list: works on every PC (CagedIn is server-only)
+                bool caged = cage != null && cage.IsSpawned && cage.TimeLeft(net.NetworkObjectId) >= 0f;
+                if (net.IsHeld || caged)
                 {
                     var bob = FarmerBob.Instance;
-                    var cage = PigCage.Instance;
-                    bool caged = cage != null && cage.IsSpawned && cage.TimeLeft(net.NetworkObjectId) >= 0f;
                     text = caged ? "You're in Bob's cage... your friends must open it!"
                         : bob != null && bob.CarriedPigId == net.NetworkObjectId
                         ? "Bob caught you! Wait for your friends to save you..."
@@ -258,14 +258,14 @@ namespace Porkour
                     target = grabber.FindGrabTarget();
                     if (target != null) text = $"{grabKey}: grab";
                 }
-                if (text == "" && !net.IsHeld)
+                if (text == "" && !net.IsHeld && !caged)
                 {
                     var climbable = Climbable.Find(pig.transform.position);
                     if (climbable != null && pig.transform.position.y - 0.45f < climbable.Top - 0.3f)
                         text = $"Hold {jumpKey} (or walk into it): climb";
                 }
-                if (text == "" && !net.IsHeld) text = ContextHint(net, abilityKey);
-                if (text == "" && !net.IsHeld) text = HiddenHint(pig, net);
+                if (text == "" && !net.IsHeld && !caged) text = ContextHint(net, abilityKey);
+                if (text == "" && !net.IsHeld && !caged) text = HiddenHint(pig, net);
                 if (text == "" && net.IsEscaped) text = "You escaped! Wait in the truck - or go back and help your friends";
             }
 
@@ -457,7 +457,6 @@ namespace Porkour
                 }
             }
             sb.Append(round.RequiredDone ? "<color=#7CFF6B>ALL SET - everyone jump into the truck!</color>"
-                : round.CanEscape ? "<color=#FFD24A>Truck ready, gate open - finish the barn missions, then into the truck!</color>"
                 : "<color=#B9A58A>Then: everyone into the getaway truck</color>");
             return sb.ToString();
         }
