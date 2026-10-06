@@ -166,7 +166,8 @@ namespace Porkour
 
         void OnGUI()
         {
-            bigStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 22 };
+            GUI.skin.font = GameFonts.Body;
+            bigStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 26, font = GameFonts.Title };
             statusStyle ??= new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight };
             bool running = nm.IsServer || nm.IsClient;
 
@@ -174,7 +175,7 @@ namespace Porkour
             {
                 string players = nm.IsServer ? $"  |  players {nm.ConnectedClientsIds.Count}/4" : "";
                 string debug = nm.IsHost ? "  |  G: Grill Call now  |  R: restart round" : "";
-                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Tab / Y: switch pig{debug}", statusStyle);
+                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Tab / Y: switch pig  |  M: music{debug}", statusStyle);
                 return;
             }
 

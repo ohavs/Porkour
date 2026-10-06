@@ -46,19 +46,8 @@ namespace Porkour
 
         void BuildLabel()
         {
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) return;
-            var go = new GameObject("KeyLabel");
-            go.transform.SetParent(transform, false);
-            go.AddComponent<MeshRenderer>().sharedMaterial = font.material;
-            label = go.AddComponent<TextMesh>();
-            label.font = font;
+            label = GameFonts.CreateTextMesh(transform, "KeyLabel", 0.04f, new Color(1f, 0.85f, 0.2f));
             label.text = "KEY";
-            label.fontSize = 64;
-            label.characterSize = 0.04f;
-            label.fontStyle = FontStyle.Bold;
-            label.anchor = TextAnchor.MiddleCenter;
-            label.color = new Color(1f, 0.85f, 0.2f);
         }
     }
 }

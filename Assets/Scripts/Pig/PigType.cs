@@ -13,9 +13,12 @@ namespace Porkour
         public readonly float Mass;
         /// <summary>Multipliers on PigController's run speed, jump height and ground braking (low = slides).</summary>
         public readonly float Speed, Jump, Brake;
+        /// <summary>Multiplier on steering/braking in the air (high = precise jumps).</summary>
+        public readonly float AirControl;
 
-        public PigTypeInfo(string name, string abilityName, Color color, float mass, float speed, float jump, float brake)
+        public PigTypeInfo(string name, string abilityName, Color color, float mass, float speed, float jump, float brake, float airControl)
         {
+            AirControl = airControl;
             Name = name;
             AbilityName = abilityName;
             Color = color;
@@ -33,10 +36,10 @@ namespace Porkour
 
         static readonly PigTypeInfo[] Infos =
         {
-            new("Gassy", "Rocket Fart", new Color(0.62f, 0.86f, 0.42f), mass: 22f, speed: 1.1f, jump: 1f, brake: 0.3f),
-            new("Jumpy", "Rope Ladder", new Color(0.55f, 0.78f, 1f), mass: 24f, speed: 1.05f, jump: 1.3f, brake: 1f),
-            new("Heavy", "Belly Slam", new Color(0.62f, 0.52f, 0.5f), mass: 45f, speed: 0.85f, jump: 0.85f, brake: 1.2f),
-            new("Armed", "Slingshot Snout", new Color(1f, 0.66f, 0.35f), mass: 30f, speed: 1f, jump: 1f, brake: 1f),
+            new("Gassy", "Rocket Fart", new Color(0.62f, 0.86f, 0.42f), mass: 22f, speed: 1.1f, jump: 1f, brake: 0.3f, airControl: 0.8f),
+            new("Jumpy", "Rope Ladder", new Color(0.55f, 0.78f, 1f), mass: 24f, speed: 1.05f, jump: 1.3f, brake: 1.6f, airControl: 1.5f),
+            new("Heavy", "Belly Slam", new Color(0.62f, 0.52f, 0.5f), mass: 45f, speed: 0.85f, jump: 0.85f, brake: 1.2f, airControl: 1f),
+            new("Armed", "Slingshot Snout", new Color(1f, 0.66f, 0.35f), mass: 30f, speed: 1f, jump: 1f, brake: 1f, airControl: 1f),
         };
 
         public static PigTypeInfo Info(PigType type) => Infos[(int)type];

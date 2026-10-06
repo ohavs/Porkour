@@ -105,19 +105,8 @@ namespace Porkour
 
         void BuildLabel()
         {
-            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) return;
-            var go = new GameObject("WeightLabel");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = Vector3.up * 1.4f;
-            var textRenderer = go.AddComponent<MeshRenderer>();
-            textRenderer.sharedMaterial = font.material;
-            label = go.AddComponent<TextMesh>();
-            label.font = font;
-            label.fontSize = 64;
-            label.characterSize = 0.05f;
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
+            label = GameFonts.CreateTextMesh(transform, "WeightLabel", 0.05f, Color.white);
+            label.transform.localPosition = Vector3.up * 1.4f;
         }
     }
 }

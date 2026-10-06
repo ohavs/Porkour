@@ -1,15 +1,17 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 namespace Porkour
 {
     /// <summary>
-    /// Local player's on-screen hints (built from code, placeholder look):
-    /// marker over the thing you can grab, button prompt, throw charge bar, throw-arc preview,
+    /// Local player's on-screen hints (built from code; cartoon look = GameFonts + rounded UiShapes panels):
+    /// marker over the thing you can grab, button prompt pill, throw charge bar, throw-arc preview,
     /// bottom-left: your pig type + its ability (key / cooldown / ammo), Armed's crosshair,
-    /// top: round timer, Farmer Bob's Grill Call banner + announcements, top-left: the escape plan checklist,
-    /// top-right: pigs grilled / escaped, centre: round intro (your role) and results.
+    /// top: round timer, Farmer Bob's Grill Call banner + announcements (pop in), top-left: the escape plan checklist,
+    /// top-right: pigs grilled / escaped, centre: round intro (your role) and results. Also picks the music mood
+    /// and handles M (music on/off).
     /// </summary>
     [RequireComponent(typeof(NetPlayer))]
     public class PlayerHud : MonoBehaviour
@@ -20,15 +22,24 @@ namespace Porkour
         public Color chargeLowColor = new(1f, 0.9f, 0.2f);
         public Color chargeHighColor = new(1f, 0.25f, 0.15f);
 
-        const float BarWidth = 320f, BarHeight = 18f;
-        const float CooldownWidth = 260f, CooldownHeight = 10f;
+        static readonly Color PanelColor = new(0.14f, 0.08f, 0.05f, 0.78f);
+        static readonly Color OutlineColor = new(0.12f, 0.06f, 0.02f, 1f);
+        static readonly Color Cream = new(1f, 0.96f, 0.86f);
+        static readonly Color Accent = new(1f, 0.82f, 0.29f);
+        const string KeyColor = "#FFD24A";
+
+        const float BarWidth = 320f, BarHeight = 16f;
+        const float CooldownWidth = 300f, CooldownHeight = 12f;
         const int ArcSteps = 60;
         const float ArcStepTime = 0.03f;
 
         NetPlayer player;
-        Image marker, barBack, barFill, cooldownBack, cooldownFill, crosshair, planBack;
-        Text prompt, typeTitle, abilityLine, banner, message, timer, plan, status, bigText, subText;
-        float messageUntil;
+        Image marker, barBack, barFill, cooldownBack, cooldownFill, crosshair, typePanel, timerPanel, planPanel, statusPanel;
+        Text prompt, typeTitle, abilityLine, banner, message, timer, planTitle, plan, status, bigText, subText;
+        GameObject promptPill, messagePill, subPanel;
+        CanvasGroup messageGroup;
+        float messageStart = -10f, messageUntil, bigStart;
+        string lastBig = "";
         int lastTickSecond = -1;
         LineRenderer arc;
         readonly Vector3[] arcPoints = new Vector3[ArcSteps + 1];
@@ -41,14 +52,21 @@ namespace Porkour
             GameEvents.Announced += OnAnnounced;
         }
 
-        void OnDestroy() => GameEvents.Announced -= OnAnnounced;
+        void OnDestroy()
+        {
+            GameEvents.Announced -= OnAnnounced;
+            MusicPlayer.SetMood(MusicMood.None);
+        }
 
         void OnAnnounced(string text)
         {
             if (message == null) return;
             message.text = text;
+            messageStart = Time.time;
             messageUntil = Time.time + 4f;
         }
+
+        // ---------- building ----------
 
         void BuildUi()
         {
@@ -60,60 +78,81 @@ namespace Porkour
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
             var root = canvasGo.transform;
+            var title = GameFonts.Title;
+            var body = GameFonts.Body;
 
-            marker = NewImage(root, "GrabMarker", markerColor, new Vector2(22f, 22f));
+            marker = NewImage(root, "GrabMarker", markerColor, new Vector2(26f, 26f), UiShapes.Rounded);
             marker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            AddOutline(marker.gameObject, 2f);
 
-            barBack = NewImage(root, "ChargeBar", new Color(0f, 0f, 0f, 0.6f), new Vector2(BarWidth + 6f, BarHeight + 6f));
-            PlaceBottom(barBack.rectTransform, 150f);
-            barFill = NewImage(barBack.transform, "Fill", chargeLowColor, new Vector2(0f, BarHeight));
-            var fillRect = barFill.rectTransform;
-            fillRect.anchorMin = fillRect.anchorMax = fillRect.pivot = new Vector2(0f, 0.5f);
-            fillRect.anchoredPosition = new Vector2(3f, 0f);
-
-            prompt = NewText(root, "Prompt", 30, TextAnchor.MiddleCenter, new Vector2(900f, 50f));
-            PlaceBottom(prompt.rectTransform, 105f);
+            // Throw charge bar + button prompt (bottom centre).
+            barBack = UiShapes.Panel(root, "ChargeBar", PanelColor, new Vector2(BarWidth + 10f, BarHeight + 10f));
+            Place(barBack.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 170f));
+            barFill = UiShapes.Panel(barBack.transform, "Fill", chargeLowColor, new Vector2(0f, BarHeight));
+            Place(barFill.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(5f, 0f));
+            (promptPill, prompt) = Pill(root, "Prompt", body, 30, new Vector2(30f, 10f));
+            Place((RectTransform)promptPill.transform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 96f));
 
             // Pig type panel (bottom-left).
-            typeTitle = NewText(root, "PigType", 40, TextAnchor.MiddleLeft, new Vector2(600f, 46f));
-            PlaceBottomLeft(typeTitle.rectTransform, 40f, 96f);
-            abilityLine = NewText(root, "Ability", 26, TextAnchor.MiddleLeft, new Vector2(600f, 32f));
-            PlaceBottomLeft(abilityLine.rectTransform, 40f, 58f);
-            cooldownBack = NewImage(root, "AbilityCooldown", new Color(0f, 0f, 0f, 0.6f), new Vector2(CooldownWidth + 4f, CooldownHeight + 4f));
-            PlaceBottomLeft(cooldownBack.rectTransform, 40f, 32f);
-            cooldownFill = NewImage(cooldownBack.transform, "Fill", Color.white, new Vector2(0f, CooldownHeight));
-            var cdRect = cooldownFill.rectTransform;
-            cdRect.anchorMin = cdRect.anchorMax = cdRect.pivot = new Vector2(0f, 0.5f);
-            cdRect.anchoredPosition = new Vector2(2f, 0f);
+            typePanel = UiShapes.Panel(root, "TypePanel", PanelColor, new Vector2(640f, 132f));
+            Place(typePanel.rectTransform, Vector2.zero, Vector2.zero, new Vector2(20f, 20f));
+            typeTitle = NewText(typePanel.transform, "PigType", title, 46, TextAnchor.MiddleLeft, new Vector2(600f, 54f), true);
+            Place(typeTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -8f));
+            abilityLine = NewText(typePanel.transform, "Ability", body, 23, TextAnchor.MiddleLeft, new Vector2(600f, 32f));
+            Place(abilityLine.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -62f));
+            cooldownBack = UiShapes.Panel(typePanel.transform, "Cooldown", new Color(0f, 0f, 0f, 0.5f), new Vector2(CooldownWidth + 6f, CooldownHeight + 6f));
+            Place(cooldownBack.rectTransform, Vector2.zero, Vector2.zero, new Vector2(22f, 14f));
+            cooldownFill = UiShapes.Panel(cooldownBack.transform, "Fill", Color.white, new Vector2(0f, CooldownHeight));
+            Place(cooldownFill.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(3f, 0f));
 
-            // Round timer, Grill Call banner + announcements (top), Armed's crosshair (centre).
-            timer = NewText(root, "Timer", 54, TextAnchor.MiddleCenter, new Vector2(400f, 64f));
-            PlaceTop(timer.rectTransform, -42f);
-            banner = NewText(root, "Banner", 42, TextAnchor.MiddleCenter, new Vector2(1400f, 60f));
-            PlaceTop(banner.rectTransform, -105f);
-            message = NewText(root, "Message", 30, TextAnchor.MiddleCenter, new Vector2(1400f, 44f));
-            PlaceTop(message.rectTransform, -158f);
-            message.color = new Color(1f, 0.95f, 0.6f);
+            // Round timer, Grill Call banner, announcements (top centre).
+            timerPanel = UiShapes.Panel(root, "TimerPanel", PanelColor, new Vector2(230f, 80f));
+            Place(timerPanel.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f));
+            timer = NewText(timerPanel.transform, "Timer", title, 60, TextAnchor.MiddleCenter, new Vector2(230f, 80f), true);
+            Place(timer.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -2f));
+            banner = NewText(root, "Banner", title, 44, TextAnchor.MiddleCenter, new Vector2(1500f, 60f), true);
+            Place(banner.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -132f));
+            (messagePill, message) = Pill(root, "Message", body, 28, new Vector2(28f, 8f));
+            message.color = Cream;
+            Place((RectTransform)messagePill.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -190f));
+            messageGroup = messagePill.AddComponent<CanvasGroup>();
 
             // Escape plan (top-left), grilled / escaped (top-right).
-            planBack = NewImage(root, "PlanBack", new Color(0f, 0f, 0f, 0.4f), new Vector2(780f, 196f));
-            PlaceTopLeft(planBack.rectTransform, 16f, -16f);
-            plan = NewText(root, "Plan", 21, TextAnchor.UpperLeft, new Vector2(760f, 190f));
+            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(800f, 236f));
+            Place(planPanel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -16f));
+            planTitle = NewText(planPanel.transform, "PlanTitle", title, 32, TextAnchor.MiddleLeft, new Vector2(760f, 40f), true);
+            planTitle.color = Accent;
+            planTitle.text = "ESCAPE PLAN";
+            Place(planTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -8f));
+            plan = NewText(planPanel.transform, "Plan", body, 21, TextAnchor.UpperLeft, new Vector2(760f, 180f));
             plan.horizontalOverflow = HorizontalWrapMode.Wrap;
             plan.verticalOverflow = VerticalWrapMode.Overflow;
-            PlaceTopLeft(plan.rectTransform, 28f, -24f);
-            status = NewText(root, "Status", 28, TextAnchor.UpperRight, new Vector2(500f, 90f));
-            status.rectTransform.anchorMin = status.rectTransform.anchorMax = status.rectTransform.pivot = new Vector2(1f, 1f);
-            status.rectTransform.anchoredPosition = new Vector2(-28f, -24f);
+            plan.lineSpacing = 1.05f;
+            Place(plan.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -52f));
+            statusPanel = UiShapes.Panel(root, "StatusPanel", PanelColor, new Vector2(320f, 98f));
+            Place(statusPanel.rectTransform, Vector2.one, Vector2.one, new Vector2(-16f, -16f));
+            status = NewText(statusPanel.transform, "Status", body, 28, TextAnchor.MiddleRight, new Vector2(290f, 90f));
+            status.lineSpacing = 1.1f;
+            Place(status.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-18f, 0f));
 
             // Round intro / results (centre).
-            bigText = NewText(root, "Big", 72, TextAnchor.MiddleCenter, new Vector2(1600f, 90f));
-            PlaceCentre(bigText.rectTransform, 170f);
-            subText = NewText(root, "Sub", 30, TextAnchor.UpperCenter, new Vector2(1200f, 200f));
+            bigText = NewText(root, "Big", title, 96, TextAnchor.MiddleCenter, new Vector2(1800f, 120f), true);
+            Place(bigText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 200f));
+            var sub = UiShapes.Panel(root, "SubPanel", PanelColor, new Vector2(1240f, 100f));
+            Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 120f));
+            var vertical = sub.gameObject.AddComponent<VerticalLayoutGroup>();
+            vertical.padding = new RectOffset(36, 36, 20, 24);
+            vertical.childControlWidth = vertical.childControlHeight = true;
+            vertical.childForceExpandWidth = true;
+            vertical.childForceExpandHeight = false;
+            sub.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            subPanel = sub.gameObject;
+            subText = NewText(sub.transform, "Sub", body, 30, TextAnchor.UpperCenter, Vector2.zero);
             subText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            subText.verticalOverflow = VerticalWrapMode.Overflow;
-            PlaceCentre(subText.rectTransform, 20f);
-            crosshair = NewImage(root, "Crosshair", new Color(1f, 1f, 1f, 0.9f), new Vector2(8f, 8f));
+            subText.color = Cream;
+
+            crosshair = NewImage(root, "Crosshair", new Color(1f, 1f, 1f, 0.95f), new Vector2(12f, 12f), UiShapes.Circle);
+            AddOutline(crosshair.gameObject, 1.5f);
 
             if (arcMaterial == null)
             {
@@ -137,6 +176,8 @@ namespace Porkour
             }
         }
 
+        // ---------- every frame ----------
+
         void LateUpdate()
         {
             if (prompt == null) return;
@@ -144,9 +185,9 @@ namespace Porkour
             var net = pig != null ? pig.GetComponent<PigNet>() : null;
             var grabber = pig != null ? pig.Grabber : null;
             var cam = Camera.main;
-            string grabKey = player.UsingGamepad ? "RT" : "Left Click";
-            string jumpKey = player.UsingGamepad ? "A" : "Space";
-            string abilityKey = player.UsingGamepad ? "LT" : "Right Click";
+            string grabKey = K(player.UsingGamepad ? "RT" : "Left Click");
+            string jumpKey = K(player.UsingGamepad ? "A" : "Space");
+            string abilityKey = K(player.UsingGamepad ? "LT" : "Right Click");
 
             Rigidbody target = null, held = null;
             string text = "";
@@ -192,14 +233,50 @@ namespace Porkour
             }
 
             prompt.text = text;
+            if (promptPill.activeSelf != (text != "")) promptPill.SetActive(text != "");
             UpdateMarker(target, cam);
             UpdateChargeBar(charge);
             UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
             UpdateTypePanel(net, abilityKey);
             UpdateBobBanner(net);
             UpdateRound(net, abilityKey);
+            UpdateMessage();
+            UpdateMusic();
             crosshair.enabled = net != null && net.Type == PigType.Armed && !net.IsHeld;
-            message.enabled = Time.time < messageUntil;
+        }
+
+        static string K(string key) => $"<color={KeyColor}>{key}</color>";
+
+        /// <summary>Announcements pop in, then fade out.</summary>
+        void UpdateMessage()
+        {
+            bool show = Time.time < messageUntil;
+            if (messagePill.activeSelf != show) messagePill.SetActive(show);
+            if (!show) return;
+            messagePill.transform.localScale = Vector3.one * Pop(Time.time - messageStart);
+            messageGroup.alpha = Mathf.Clamp01((messageUntil - Time.time) / 0.5f);
+        }
+
+        /// <summary>Wobbly scale for things that just appeared (1 = rest).</summary>
+        static float Pop(float t) => t < 0f ? 1f : 1f + 0.3f * Mathf.Exp(-7f * t) * Mathf.Cos(18f * t);
+
+        /// <summary>Music mood from the game state; M = music on/off.</summary>
+        void UpdateMusic()
+        {
+            if (Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+            {
+                MusicPlayer.Muted = !MusicPlayer.Muted;
+                OnAnnounced(MusicPlayer.Muted ? "Music off (M)" : "Music on (M)");
+            }
+            var round = RoundManager.Instance;
+            var bob = FarmerBob.Instance;
+            MusicMood mood;
+            if (round != null && round.IsSpawned && round.IsOver) mood = MusicMood.None; // win/lose jingles play instead
+            else if (bob == null || !bob.IsSpawned || bob.State is BobState.Away or BobState.Leaving) mood = MusicMood.Calm;
+            else if (bob.FinalHunt) mood = MusicMood.FinalHunt;
+            else if (bob.State is BobState.Chasing or BobState.Carrying) mood = MusicMood.Chase;
+            else mood = MusicMood.Danger;
+            MusicPlayer.SetMood(mood);
         }
 
         /// <summary>"Press X here" hints next to the things only your pig type can do.</summary>
@@ -221,67 +298,92 @@ namespace Porkour
         {
             var round = RoundManager.Instance;
             bool show = round != null && round.IsSpawned;
-            timer.enabled = plan.enabled = planBack.enabled = status.enabled = show;
-            bigText.enabled = subText.enabled = false;
-            if (!show) return;
+            timerPanel.gameObject.SetActive(show);
+            planPanel.gameObject.SetActive(show);
+            statusPanel.gameObject.SetActive(show);
+            string big = "";
+            if (!show)
+            {
+                ShowCentre(big, "", Color.white);
+                return;
+            }
 
             // Timer (+ ticking in the last 10 seconds).
             float left = round.RoundTimeLeft;
             timer.text = FormatClock(left);
             timer.color = round.Phase == RoundPhase.Intro ? new Color(1f, 1f, 1f, 0.5f)
-                : left <= 10f ? Color.Lerp(Color.white, new Color(1f, 0.2f, 0.1f), Mathf.PingPong(Time.time * 2f, 1f))
-                : left <= 60f ? new Color(1f, 0.35f, 0.2f) : Color.white;
+                : left <= 10f ? Color.Lerp(Color.white, new Color(1f, 0.25f, 0.1f), Mathf.PingPong(Time.time * 2f, 1f))
+                : left <= 60f ? new Color(1f, 0.4f, 0.2f) : Color.white;
             int second = Mathf.CeilToInt(left);
             if (round.Phase == RoundPhase.Playing && left <= 10f && second != lastTickSecond && second > 0)
+            {
                 Sfx.PlayUi(Sound.Tick, 0.7f);
+                timerPanel.transform.localScale = Vector3.one * 1.15f;
+            }
+            timerPanel.transform.localScale = Vector3.MoveTowards(timerPanel.transform.localScale, Vector3.one, Time.deltaTime);
             lastTickSecond = second;
 
             // Escape plan checklist.
-            var sb = new System.Text.StringBuilder("<b>ESCAPE PLAN</b>  <size=18>(lamps over the exit)</size>\n");
+            var sb = new System.Text.StringBuilder();
             for (int i = 0; i < RoundManager.Objectives.Length; i++)
             {
                 var o = RoundManager.Objectives[i];
                 round.ObjectiveProgress(i, out int done, out int total);
-                string box = done == total ? "<color=#66ff66>[X]</color>" : total > 1 ? $"<color=#ffd040>[{done}/{total}]</color>" : "[  ]";
-                string line = done == total ? $"<color=#99cc99>{o.Name}</color>" : $"<b>{o.Name}</b>: {o.Hint}";
+                string box = done == total ? "<color=#7CFF6B>[X]</color>" : total > 1 ? $"<color=#FFD24A>[{done}/{total}]</color>" : "[  ]";
+                string line = done == total ? $"<color=#A9C99A>{o.Name}</color>" : $"<color=#FFE9B0>{o.Name}</color>: {o.Hint}";
                 sb.Append(box).Append(' ').Append(line).Append('\n');
             }
-            sb.Append(round.AllObjectivesDone ? "<color=#66ff66><b>EXIT OPEN - everyone into the getaway truck!</b></color>"
-                : "<color=#aaaaaa>Then: everyone into the getaway truck outside</color>");
+            sb.Append(round.AllObjectivesDone ? "<color=#7CFF6B>EXIT OPEN - everyone into the getaway truck!</color>"
+                : "<color=#B9A58A>Then: everyone into the getaway truck outside</color>");
             plan.text = sb.ToString();
 
-            status.text = $"<color=#ff7755>GRILLED  {round.Grills} / {round.maxGrills}</color>\n" +
-                          $"<color=#77ff77>ESCAPED  {round.EscapedCount} / {Mathf.Max(1, round.PlayerCount)}</color>";
+            status.text = $"<color=#FF8A66>GRILLED  {round.Grills} / {round.maxGrills}</color>\n" +
+                          $"<color=#8CFF7A>ESCAPED  {round.EscapedCount} / {Mathf.Max(1, round.PlayerCount)}</color>";
 
             // Centre: intro (your role) / results.
+            string sub = "";
+            Color color = Color.white;
             switch (round.Phase)
             {
                 case RoundPhase.Intro when net != null:
                 {
                     var info = PigTypes.Info(net.Type);
-                    bigText.enabled = subText.enabled = true;
-                    bigText.text = $"YOU ARE THE {info.Name.ToUpperInvariant()} PIG";
-                    bigText.color = info.Color;
-                    subText.text = RoleText(net.Type, abilityKey) +
-                                   $"\n\n<color=#ffd040>Escape the barn before Bob's BBQ!  Starting in {Mathf.CeilToInt(round.PhaseTimeLeft)}</color>";
+                    big = $"YOU ARE THE {info.Name.ToUpperInvariant()} PIG!";
+                    color = info.Color;
+                    sub = RoleText(net.Type, abilityKey) +
+                          $"\n\n<color={KeyColor}>Escape the barn before Bob's BBQ!  Starting in {Mathf.CeilToInt(round.PhaseTimeLeft)}</color>";
                     break;
                 }
                 case RoundPhase.Won:
-                    bigText.enabled = subText.enabled = true;
-                    bigText.text = "YOU ESCAPED!";
-                    bigText.color = new Color(0.45f, 1f, 0.45f);
-                    subText.text = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
+                    big = "YOU ESCAPED!";
+                    color = new Color(0.5f, 1f, 0.45f);
+                    sub = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
                     break;
                 case RoundPhase.Lost:
-                    bigText.enabled = subText.enabled = true;
-                    bigText.text = "BBQ TIME...";
-                    bigText.color = new Color(1f, 0.4f, 0.25f);
-                    subText.text = (round.Reason == LoseReason.Grilled
-                                       ? $"Bob grilled {round.maxGrills} pigs."
-                                       : "Time's up - Bob lit the BBQ.") +
-                                   $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
+                    big = "BBQ TIME...";
+                    color = new Color(1f, 0.45f, 0.25f);
+                    sub = (round.Reason == LoseReason.Grilled ? $"Bob grilled {round.maxGrills} pigs." : "Time's up - Bob lit the BBQ.") +
+                          $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
                     break;
             }
+            ShowCentre(big, sub, color);
+        }
+
+        void ShowCentre(string big, string sub, Color color)
+        {
+            if (big != lastBig)
+            {
+                lastBig = big;
+                bigStart = Time.time;
+            }
+            bool show = big != "";
+            bigText.enabled = show;
+            if (subPanel.activeSelf != show) subPanel.SetActive(show);
+            if (!show) return;
+            bigText.text = big;
+            bigText.color = color;
+            bigText.transform.localScale = Vector3.one * Pop(Time.time - bigStart);
+            subText.text = sub;
         }
 
         static string RoleText(PigType type, string abilityKey) => type switch
@@ -323,8 +425,9 @@ namespace Porkour
             var bob = FarmerBob.Instance;
             var round = RoundManager.Instance;
             string text = "";
-            var color = new Color(1f, 0.35f, 0.2f);
-            int size = 42;
+            var color = new Color(1f, 0.38f, 0.22f);
+            int size = 44;
+            bool pulse = false;
             bool playing = round == null || !round.IsSpawned || round.IsPlaying;
             if (bob != null && bob.IsSpawned && playing)
             {
@@ -334,40 +437,46 @@ namespace Porkour
                 {
                     case BobState.Away:
                         text = $"Next Grill Call in {FormatTime(bob.NextCallIn)}";
-                        color = new Color(1f, 1f, 1f, 0.85f);
-                        size = 26;
+                        color = new Color(1f, 0.96f, 0.86f, 0.9f);
+                        size = 28;
                         break;
                     case BobState.Coming:
                         text = left > 0 ? $"GRILL CALL! HIDE!  {left}" : "GRILL CALL! Bob is here!";
+                        pulse = true;
                         break;
                     case BobState.Searching:
                         text = bob.FinalHunt ? "FINAL HUNT - Bob won't leave!" : $"Bob is searching the barn...  {left}";
-                        color = new Color(1f, 0.65f, 0.2f);
+                        color = new Color(1f, 0.66f, 0.22f);
+                        pulse = bob.FinalHunt;
                         break;
                     case BobState.Investigating:
                         text = "Bob is checking a noise...";
-                        color = new Color(1f, 0.85f, 0.2f);
+                        color = Accent;
                         break;
                     case BobState.Chasing:
-                        text = bob.TargetPigId == me ? "BOB SEES YOU! RUN!" : "Bob is chasing a pig!";
+                        bool mine = bob.TargetPigId == me;
+                        text = mine ? "BOB SEES YOU! RUN!" : "Bob is chasing a pig!";
+                        pulse = mine;
                         break;
                     case BobState.Carrying:
                         text = bob.CarriedPigId == me ? $"Bob caught you!  {left}" : $"RESCUE! Hit Bob or throw a chicken at him!  {left}";
+                        pulse = true;
                         break;
                     case BobState.Stunned:
                         text = "Bob is stunned!";
-                        color = new Color(1f, 0.9f, 0.2f);
+                        color = Accent;
                         break;
                     case BobState.Leaving:
                         text = "Bob is going back to his grill";
-                        color = new Color(1f, 1f, 1f, 0.85f);
-                        size = 30;
+                        color = new Color(1f, 0.96f, 0.86f, 0.9f);
+                        size = 32;
                         break;
                 }
             }
             banner.text = text;
             banner.color = color;
             banner.fontSize = size;
+            banner.transform.localScale = Vector3.one * (pulse ? 1f + 0.06f * Mathf.Sin(Time.time * 10f) : 1f);
         }
 
         static string FormatTime(float seconds)
@@ -379,20 +488,21 @@ namespace Porkour
         void UpdateTypePanel(PigNet net, string abilityKey)
         {
             bool show = net != null;
-            typeTitle.enabled = abilityLine.enabled = show;
-            float left = show && net.Ability != null ? net.AbilityCooldownLeft : 0f;
-            cooldownBack.enabled = cooldownFill.enabled = left > 0f;
+            if (typePanel.gameObject.activeSelf != show) typePanel.gameObject.SetActive(show);
             if (!show) return;
+            float left = net.Ability != null ? net.AbilityCooldownLeft : 0f;
+            cooldownBack.enabled = cooldownFill.enabled = left > 0f;
 
             var info = PigTypes.Info(net.Type);
             typeTitle.text = $"{info.Name.ToUpperInvariant()} PIG";
             typeTitle.color = info.Color;
-            string charges = net.AbilityCharges >= 0 ? $"   Ammo {net.AbilityCharges}/{net.Ability.MaxCharges}" : "";
+            typePanel.color = Color.Lerp(PanelColor, new Color(info.Color.r * 0.35f, info.Color.g * 0.35f, info.Color.b * 0.35f, 0.82f), 0.5f);
+            string charges = net.AbilityCharges >= 0 ? $"   <color={KeyColor}>Ammo {net.AbilityCharges}/{net.Ability.MaxCharges}</color>" : "";
             if (net.Ability == null) abilityLine.text = $"{info.AbilityName} - coming soon";
             else if (left > 0f && net.Ability.cooldown >= 1.5f) abilityLine.text = $"{info.AbilityName}  {FormatTime(left)}{charges}";
             else abilityLine.text = (string.IsNullOrEmpty(net.Ability.Hint)
                 ? $"{abilityKey}: {info.AbilityName}"
-                : $"{abilityKey}: {info.AbilityName}  ({net.Ability.Hint})") + charges;
+                : $"{abilityKey}: {info.AbilityName}  <color=#D8C6A8>({net.Ability.Hint})</color>") + charges;
 
             if (left <= 0f) return;
             float ready = 1f - Mathf.Clamp01(left / Mathf.Max(0.01f, net.Ability.cooldown));
@@ -418,7 +528,7 @@ namespace Porkour
         void UpdateChargeBar(float charge)
         {
             bool show = charge >= 0f;
-            barBack.enabled = barFill.enabled = show;
+            if (barBack.gameObject.activeSelf != show) barBack.gameObject.SetActive(show);
             if (!show) return;
             barFill.rectTransform.sizeDelta = new Vector2(BarWidth * charge, BarHeight);
             barFill.color = Color.Lerp(chargeLowColor, chargeHighColor, charge);
@@ -460,66 +570,72 @@ namespace Porkour
             for (int i = 0; i < count; i++) arc.SetPosition(i, arcPoints[i]);
         }
 
-        static Text NewText(Transform parent, string name, int fontSize, TextAnchor alignment, Vector2 size)
+        // ---------- helpers ----------
+
+        static Text NewText(Transform parent, string name, Font font, int fontSize, TextAnchor alignment, Vector2 size, bool title = false)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = font;
             text.fontSize = fontSize;
-            text.fontStyle = FontStyle.Bold;
             text.alignment = alignment;
             text.color = Color.white;
             text.raycastTarget = false;
+            text.supportRichText = true;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.rectTransform.sizeDelta = size;
-            go.AddComponent<Outline>().effectDistance = new Vector2(2f, -2f);
+            var outline = go.AddComponent<Outline>(); // outline first, then the drop shadow copies it
+            outline.effectColor = OutlineColor;
+            outline.effectDistance = title ? new Vector2(3f, -3f) : new Vector2(2f, -2f);
+            if (title)
+            {
+                var shadow = go.AddComponent<Shadow>();
+                shadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
+                shadow.effectDistance = new Vector2(0f, -5f);
+            }
             return text;
         }
 
-        static Image NewImage(Transform parent, string name, Color color, Vector2 size)
+        /// <summary>Rounded panel that grows to fit its one line of text.</summary>
+        static (GameObject panel, Text text) Pill(Transform parent, string name, Font font, int fontSize, Vector2 padding)
+        {
+            var panel = UiShapes.Panel(parent, name, PanelColor, Vector2.zero);
+            var layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.padding = new RectOffset((int)padding.x, (int)padding.x, (int)padding.y, (int)padding.y);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+            var fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var text = NewText(panel.transform, "Text", font, fontSize, TextAnchor.MiddleCenter, Vector2.zero);
+            return (panel.gameObject, text);
+        }
+
+        static Image NewImage(Transform parent, string name, Color color, Vector2 size, Sprite sprite = null)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
+            img.sprite = sprite;
             img.color = color;
             img.raycastTarget = false;
             img.rectTransform.sizeDelta = size;
             return img;
         }
 
-        static void PlaceBottom(RectTransform rect, float y)
+        static void AddOutline(GameObject go, float distance)
         {
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(0f, y);
+            var outline = go.AddComponent<Outline>();
+            outline.effectColor = OutlineColor;
+            outline.effectDistance = new Vector2(distance, -distance);
         }
 
-        static void PlaceTop(RectTransform rect, float y)
+        static void Place(RectTransform rect, Vector2 anchor, Vector2 pivot, Vector2 position)
         {
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(0f, y);
-        }
-
-        static void PlaceCentre(RectTransform rect, float y)
-        {
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(0f, y);
-        }
-
-        static void PlaceTopLeft(RectTransform rect, float x, float y)
-        {
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(x, y);
-        }
-
-        static void PlaceBottomLeft(RectTransform rect, float x, float y)
-        {
-            rect.anchorMin = rect.anchorMax = Vector2.zero;
-            rect.pivot = new Vector2(0f, 0.5f);
-            rect.anchoredPosition = new Vector2(x, y);
+            rect.anchorMin = rect.anchorMax = anchor;
+            rect.pivot = pivot;
+            rect.anchoredPosition = position;
         }
     }
 }
