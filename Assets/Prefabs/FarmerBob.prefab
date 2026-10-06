@@ -242,6 +242,8 @@ MonoBehaviour:
   freezeTime: 1
   frozenSpotRange: 3
   grabRange: 1.7
+  grabWindup: 0.5
+  stompSpeed: 2.5
   stunHitSpeed: 7
   throwSpeed: 14
   throwInterval: 1.5
