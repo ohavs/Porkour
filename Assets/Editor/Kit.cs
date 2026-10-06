@@ -81,7 +81,10 @@ namespace Porkour.EditorTools
             return b;
         }
 
-        /// <summary>A piece with its pivot at position, turned by yaw (0 = its front faces +Z). Null if the kit is missing.</summary>
+        /// <summary>
+        /// A piece with its pivot at position, turned by yaw (0 = its front faces +Z). The returned holder's local axes are
+        /// the kit's own (front +Z), so scaling it (also non-uniformly) works whatever the FBX import did. Null if missing.
+        /// </summary>
         public static GameObject Place(string piece, Transform parent, Vector3 position, float yaw, float scaleMul = 1f)
         {
             Calibrate();
@@ -93,12 +96,41 @@ namespace Porkour.EditorTools
             }
             var holder = new GameObject(piece);
             holder.transform.SetParent(parent, false);
-            holder.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw + yawFix, 0f));
-            holder.transform.localScale = Vector3.one * (scale * scaleMul);
-            PrefabUtility.InstantiatePrefab(asset, holder.transform);
+            holder.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            holder.transform.localScale = Vector3.one * scaleMul;
+            var model = ((GameObject)PrefabUtility.InstantiatePrefab(asset, holder.transform)).transform;
+            var fix = Quaternion.Euler(0f, yawFix, 0f);
+            model.localPosition = fix * (model.localPosition * scale);
+            model.localRotation = fix * model.localRotation;
+            model.localScale *= scale;
             foreach (var t in holder.GetComponentsInChildren<Transform>())
                 GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic);
             return holder;
+        }
+
+        /// <summary>
+        /// A piece stretched to fill a world box (center/size), turned by yaw (multiples of 90). keepLongSide: turn it a
+        /// further 90° if needed so its long side follows the box's long side (roofs, wagons). For roofs, gables, posts,
+        /// props - an exact fit without knowing the piece's real size or axes.
+        /// </summary>
+        public static GameObject Fit(string piece, Transform parent, Vector3 center, Vector3 size, float yaw, bool keepLongSide = false)
+        {
+            var go = Place(piece, parent, center, yaw);
+            if (go == null) return null;
+            var b = RendererBounds(go);
+            if (keepLongSide && (b.size.x > b.size.z) != (size.x > size.z))
+            {
+                yaw += 90f;
+                go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 offset = Quaternion.Euler(0f, 90f, 0f) * (b.center - center);
+                b = new Bounds(center + offset, new Vector3(b.size.z, b.size.y, b.size.x));
+            }
+            // Per world axis; the holder is turned by a multiple of 90°, so its local X is world X or world Z.
+            var world = new Vector3(size.x / Mathf.Max(b.size.x, 0.01f), size.y / Mathf.Max(b.size.y, 0.01f), size.z / Mathf.Max(b.size.z, 0.01f));
+            bool quarter = Mathf.Abs(Mathf.Sin(yaw * Mathf.Deg2Rad)) > 0.7f;
+            go.transform.localScale = quarter ? new Vector3(world.z, world.y, world.x) : world;
+            go.transform.position -= Vector3.Scale(b.center - center, world); // its scaled centre back onto the box centre
+            return go;
         }
 
         /// <summary>Wall piece whose inner face lies on innerPoint's line, facing outward (unit ±X / ±Z).</summary>
@@ -109,7 +141,7 @@ namespace Porkour.EditorTools
         }
 
         /// <summary>
-        /// A straight run of 2 m wall pieces from a to b (inner face line), both stories if twoStories.
+        /// A straight run of 2 m wall pieces from a to b (inner face line, length a multiple of 2), `stories` high.
         /// pick(i, story) chooses the piece for slot i (null = leave a gap, e.g. a doorway).
         /// </summary>
         public static void WallRun(Transform parent, Vector3 a, Vector3 b, Vector3 outward, int stories,

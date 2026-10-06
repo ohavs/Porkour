@@ -446,7 +446,8 @@ namespace Porkour
             var bob = FarmerBob.Instance;
             if (bob == null || bob.State == BobState.Away || bob.State == BobState.Leaving || net.IsEscaped) return "";
             Vector3 p = pig.transform.position;
-            if (HideSpot.IsHidden(p)) return "Hidden in the hay";
+            var spot = HideSpot.Find(p);
+            if (spot != null) return spot.hint;
             var held = net.Held;
             if (held != null && held.TryGetComponent(out Wearable _))
                 return player.IdleTime >= 0.4f ? "Hidden under the bucket - don't move!" : "A walking bucket... Bob may notice up close";

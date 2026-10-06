@@ -7,7 +7,7 @@ namespace Porkour
     {
         Jump, Land, Step, Fart, Dash, Slam, Boing, Rope, Shoot, Suck, Smash, Splat, Bell, Ding, Click, Zap,
         Unlock, Engine, EngineLoop, Rumble, Grab, Throw, GrillCall, Spotted, Caught, Bonk, Sizzle, Escape, Win,
-        Lose, Tick, Cluck, Baa, Alarm,
+        Lose, Tick, Cluck, Baa, Alarm, Moo,
     }
 
     /// <summary>
