@@ -67,6 +67,7 @@ namespace Porkour.EditorTools
             cage.label = label.AddComponent<WorldLabel>();
             cage.label.text = "";
             cage.label.characterSize = 0.05f;
+            cage.label.showDistance = 32f; // the HUD only shows the cage timer farther away than this
             cage.label.billboard = true;
             return SavePrefab(root, $"{PropDir}/PigCage.prefab");
         }

@@ -31,7 +31,7 @@ namespace Porkour.EditorTools
 
         public const string FarmBuildingsDir = "Assets/Art/Farm/Farm Buildings by Quaternius/FBX";
         static readonly string[] SkippedPacks =
-            { "Farm Buildings by Quaternius", "Medieval Village MegaKit", "cube-pets", "Art/Characters", "Art/Generated", "/Blend/" };
+            { "Farm Buildings by Quaternius", "Medieval Village MegaKit", "cube-pets", "Art/Characters", "Art/Generated", "/Blend/", "/Source/" };
 
         public static GameObject BobModel => AssetDatabase.LoadAssetAtPath<GameObject>(BobDir + "/Bob.fbx");
 
@@ -39,23 +39,100 @@ namespace Porkour.EditorTools
         public static GameObject FarmBuilding(string name) => AssetDatabase.LoadAssetAtPath<GameObject>($"{FarmBuildingsDir}/{name}.fbx");
 
         /// <summary>
-        /// Models the user added later (any pack under Assets/Art, e.g. Kenney Nature / Car kits) whose file name contains one
-        /// of the words - trees, rocks, a truck... Packs this project already uses on purpose are skipped. Sorted by path.
+        /// Models the user added later (any pack anywhere under Assets, e.g. Quaternius Stylized Nature / Fantasy Props,
+        /// Kenney Car Kit) whose file name contains one of the words - trees, rocks, a truck... Packs this project already
+        /// uses on purpose are skipped; the same model in several formats counts once (FBX first). Sorted by path.
         /// </summary>
-        public static List<GameObject> FindModels(string[] words, string[] without = null)
+        public static List<GameObject> FindModels(string[] words, string[] without = null) =>
+            FindModelsWhere(raw =>
+            {
+                string file = raw.ToLowerInvariant();
+                return words.Any(file.Contains) && (without == null || !without.Any(file.Contains));
+            });
+
+        /// <summary>
+        /// Like FindModels, but matches whole words of the file name ("Table_Large", "bedSingle", "chair-desk" → table,
+        /// large / bed, single / chair, desk), so "table" doesn't find "Vegetable". Plural "s" is fine.
+        /// </summary>
+        public static List<GameObject> FindModelsByWord(string[] words, string[] without = null) =>
+            FindModelsWhere(raw =>
+            {
+                var tokens = Words(raw);
+                bool Has(string w) => tokens.Any(t => t == w || t == w + "s" || t == w + "es");
+                return words.Any(Has) && (without == null || !without.Any(Has));
+            });
+
+        /// <summary>match gets the file name without extension, as written.</summary>
+        static List<GameObject> FindModelsWhere(System.Func<string, bool> match)
         {
-            var found = new List<GameObject>();
-            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Art" }))
+            var byName = new Dictionary<string, string>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets" }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (SkippedPacks.Any(path.Contains)) continue;
-                string file = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
-                if (!words.Any(file.Contains) || (without != null && without.Any(file.Contains))) continue;
+                if (path.StartsWith("Assets/Prefabs") || path.StartsWith("Assets/Scenes") || SkippedPacks.Any(path.Contains)) continue;
+                string raw = System.IO.Path.GetFileNameWithoutExtension(path);
+                string file = raw.ToLowerInvariant();
+                if (!match(raw)) continue;
+                string key = System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(path)) + "/" + file; // same pack, other format folder
+                if (!byName.TryGetValue(key, out var old) || FormatRank(path) < FormatRank(old)) byName[key] = path;
+            }
+            var found = new List<GameObject>();
+            foreach (var path in byName.Values.OrderBy(v => v, System.StringComparer.Ordinal))
+            {
                 var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (model != null) found.Add(model);
             }
-            found.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
             return found;
+        }
+
+        static int FormatRank(string path)
+        {
+            string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+            return ext == ".fbx" ? 0 : ext == ".glb" || ext == ".gltf" ? 1 : 2;
+        }
+
+        /// <summary>Lower-case words of a file name: split at camelCase, digits, '_', '-', ' ', '.'.</summary>
+        static List<string> Words(string name)
+        {
+            var words = new List<string>();
+            var current = new System.Text.StringBuilder();
+            void Flush()
+            {
+                if (current.Length > 0) words.Add(current.ToString().ToLowerInvariant());
+                current.Clear();
+            }
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                if (!char.IsLetter(c)) { Flush(); continue; }
+                if (char.IsUpper(c) && i > 0 && char.IsLower(name[i - 1])) Flush();
+                current.Append(c);
+            }
+            Flush();
+            return words;
+        }
+
+        /// <summary>A daytime skybox material from an added sky pack (e.g. "Fantasy Skybox FREE"), or null.</summary>
+        public static Material FindSkybox()
+        {
+            Material best = null;
+            int bestScore = int.MinValue;
+            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { "Assets" }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.StartsWith("Assets/Art/Materials") || path.StartsWith("Assets/Art/Generated")) continue;
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (mat == null || mat.shader == null || !mat.shader.name.StartsWith("Skybox/")) continue;
+                string n = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+                int score = (n.Contains("day") ? 10 : 0) + (n.Contains("sunless") ? -2 : 0) + (n.Contains("night") || n.Contains("moon") ? -20 : 0)
+                            + (n.Contains("rain") || n.Contains("snow") || n.Contains("storm") ? -15 : 0) + (n.Contains("sunset") || n.Contains("sunrise") ? -5 : 0);
+                if (score > bestScore || (score == bestScore && string.CompareOrdinal(path, AssetDatabase.GetAssetPath(best)) < 0))
+                {
+                    best = mat;
+                    bestScore = score;
+                }
+            }
+            return best;
         }
 
         public static GameObject AnimalModel(string animal) => AssetDatabase.LoadAssetAtPath<GameObject>(AnimalPath(animal));

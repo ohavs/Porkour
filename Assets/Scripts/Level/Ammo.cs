@@ -26,6 +26,11 @@ namespace Porkour
         bool knocksPigs;
 
         public Rigidbody Body => rb;
+        /// <summary>Server: shot by a pig (Armed) within the last 1.5 s - such a hit always stuns Bob.</summary>
+        public bool ShotByPig => !knocksPigsShot && Time.time - firedAt < 1.5f;
+
+        float firedAt = -10f;
+        bool knocksPigsShot;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics() => Prefabs.Clear();
@@ -49,7 +54,8 @@ namespace Porkour
         {
             rb.linearVelocity = velocity;
             rb.angularVelocity = Random.insideUnitSphere * 10f;
-            knocksPigs = knockPigs;
+            knocksPigs = knockPigsShot = knockPigs;
+            firedAt = Time.time;
             shooterColliders = shooter;
             IgnoreShooter(true);
             Invoke(nameof(RestoreCollisions), 0.4f);

@@ -71,11 +71,15 @@ namespace Porkour.EditorTools
             BuildTruck(farm);
 
             // Dirt roads: barn doorway → north, east to the truck, north through the gatehouse; side paths.
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(0f, 0.01f, 30.7f), new Vector3(4f, 0.02f, 30.6f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(8f, 0.01f, 46f), new Vector3(12f, 0.02f, 3f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(GateX, 0.01f, (47.5f + GateZ1 + 6f) / 2f), new Vector3(4f, 0.02f, GateZ1 + 6f - 47.5f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(-8.5f, 0.01f, 31.5f), new Vector3(13f, 0.02f, 2.5f), dirt);
-            Part(PrimitiveType.Cube, "Path", farm, new Vector3(-29f, 0.01f, 0f), new Vector3(17.5f, 0.02f, 3f), dirt);
+            DirtPath(farm, new Vector3(0f, 0.01f, 30.7f), new Vector3(4f, 0.02f, 30.6f), dirt);
+            DirtPath(farm, new Vector3(8f, 0.01f, 46f), new Vector3(12f, 0.02f, 3f), dirt);
+            DirtPath(farm, new Vector3(GateX, 0.01f, (47.5f + GateZ1 + 6f) / 2f), new Vector3(4f, 0.02f, GateZ1 + 6f - 47.5f), dirt);
+            DirtPath(farm, new Vector3(-8.5f, 0.01f, 31.5f), new Vector3(13f, 0.02f, 2.5f), dirt);
+            DirtPath(farm, new Vector3(-29f, 0.01f, 0f), new Vector3(17.5f, 0.02f, 3f), dirt);
+            DirtPath(farm, new Vector3(23.5f, 0.01f, -7f), new Vector3(5f, 0.02f, 2.5f), dirt);   // sty → barn
+            DirtPath(farm, new Vector3(45f, 0.01f, 5f), new Vector3(14f, 0.02f, 2.5f), dirt);     // → workshop
+            DirtPath(farm, new Vector3(45f, 0.01f, 23f), new Vector3(10f, 0.02f, 2.5f), dirt);    // → stable
+            DirtPath(farm, new Vector3(-49f, 0.01f, 16f), new Vector3(18f, 0.02f, 2.5f), dirt);   // → cottage
 
             // Farm buildings (Quaternius) - landmarks with simple box colliders.
             FarmBuildingAt(farm, "TowerWindmill", new Vector3(-36f, 0f, 80f), 0f, 14f, new Vector3(4f, 12f, 4f), stone, colliderXZ: 0.4f, spin: true);
@@ -93,20 +97,17 @@ namespace Porkour.EditorTools
             Haystack(farm, new Vector3(34f, 0f, 76f), hay);
             TractorAt(farm, new Vector3(28.5f, 0f, 68f), 200f);
 
-            // Medieval-kit houses: farmhand cottage, stable, workshop (closed: walls + roof slopes as colliders).
+            // Medieval-kit houses you can walk into: farmhand cottage, stable with a hay loft, workshop.
             if (kit)
             {
-                ClosedKitHouse(farm, "Cottage", -60f, -52f, 18f, 24f, 1, (side, i, _) => side == 0 && i == 1 ? "Wall_Plaster_Door_RoundInset"
-                    : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_Straight");
-                ClosedKitHouse(farm, "Stable", 50f, 60f, 18f, 26f, 2, (side, i, story) => story == 0
-                    ? (side == 3 && i % 2 == 1 ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
-                    : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_WoodGrid");
-                ClosedKitHouse(farm, "Workshop", 52f, 58f, 2f, 8f, 1, (side, i, _) => side == 3 && i == 1 ? "Wall_Plaster_Door_RoundInset"
-                    : "Wall_Plaster_WoodGrid");
-                foreach (var (pos, yaw) in new[] { (new Vector3(47f, 0f, 22f), 0f), (new Vector3(-49f, 0f, 21f), 90f), (new Vector3(-52f, 0f, 46f), 0f) })
+                Cottage(farm, wood);
+                Stable(farm, wood, darkWood, hay);
+                Workshop(farm, wood);
+                foreach (var (pos, yaw) in new[] { (new Vector3(45f, 0f, 32f), 0f), (new Vector3(-49f, 0f, 23f), 90f), (new Vector3(-52f, 0f, 46f), 0f) })
                 {
                     Invisible(Block("Wagon", farm, pos + Vector3.up * 0.6f, new Vector3(1.9f, 1.2f, 4f), null));
                     Kit.Fit("Prop_Wagon", farm, pos + Vector3.up * 0.765f, new Vector3(1.95f, 1.53f, 4f), yaw, keepLongSide: true);
+                    NoGrassAround(pos, new Vector3(2f, 0f, 4f));
                 }
             }
 
@@ -214,6 +215,7 @@ namespace Porkour.EditorTools
             var wall = Mat("BarnWall", new Color(0.65f, 0.18f, 0.15f));
             var house = new GameObject("Gatehouse").transform;
             house.SetParent(parent, false);
+            NoGrassRect(GateX - 2.8f, GateZ0 - 0.5f, GateX + 2.8f, GateZ1 + 7f);
             float zc = (GateZ0 + GateZ1) / 2f, len = GateZ1 - GateZ0;
             Solid("GatehouseW", house, new Vector3(GateX - 2.2f, Story / 2f, zc), new Vector3(0.4f, Story, len), wall, kit);
             Solid("GatehouseE", house, new Vector3(GateX + 2.2f, Story / 2f, zc), new Vector3(0.4f, Story, len), wall, kit);
@@ -264,6 +266,9 @@ namespace Porkour.EditorTools
             else Block("GarageRoof", garage, new Vector3((x0 + x1) / 2f, Story + 0.15f, 0f), new Vector3(x1 - x0 + 0.8f, 0.3f, z1 - z0 + 0.8f), darkWood);
             Table(garage, new Vector3(-44.5f, 0f, 2.8f), wood);
             StaticCrate(garage, new Vector3(-45f, 0f, -2.8f), wood, kit);
+            Furnish(garage, "shelf", new Vector3(-45.75f, 0f, 0.4f), 90f, wood);
+            Furnish(garage, "barrel", new Vector3(-38.8f, 0f, 3.3f), 0f, wood);
+            Furnish(garage, "barrel", new Vector3(-39.7f, 0f, 3.4f), 0f, wood);
             PointLight(garage, new Vector3(-42f, 2.6f, 0f), new Color(1f, 0.85f, 0.6f), 8f, 1.2f);
             var latch = new GameObject("GarageDoorLatch").AddComponent<ChannelLatch>(); // both plates at once → the door stays open
             latch.transform.SetParent(garage, false);
@@ -283,16 +288,115 @@ namespace Porkour.EditorTools
                 Block("ShelterPost", parent, new Vector3(x, 0.75f, z), new Vector3(0.15f, 1.5f, 0.15f), darkWood);
         }
 
-        /// <summary>Colliders for a closed building: one box for the walls, gable boxes up to the ridge, two roof slopes (pigs slide off).</summary>
-        static void ClosedKitHouse(Transform parent, string name, float x0, float x1, float z0, float z1, int stories,
+        /// <summary>
+        /// A kit house you can walk into: invisible wall boxes follow the picked pieces (a door piece leaves a 1.4 x 2.45
+        /// doorway, null leaves the slot open, everything else is solid), corner posts, roof slopes; the kit look on top.
+        /// pick(side 0=S 1=N 2=E 3=W, slot, story) like KitHouse. Upper floors / lofts are added by the caller.
+        /// </summary>
+        static Transform OpenKitHouse(Transform parent, string name, float x0, float x1, float z0, float z1, int stories,
             System.Func<int, int, int, string> pick)
         {
             var root = new GameObject(name).transform;
             root.SetParent(parent, false);
             float top = stories * Story;
-            Invisible(Block(name + "Collider", root, new Vector3((x0 + x1) / 2f, top / 2f, (z0 + z1) / 2f), new Vector3(x1 - x0 + 0.8f, top, z1 - z0 + 0.8f), null));
+            var sides = new (Vector3 a, Vector3 b, Vector3 outward)[]
+            {
+                (new Vector3(x0, 0f, z0), new Vector3(x1, 0f, z0), Vector3.back), (new Vector3(x0, 0f, z1), new Vector3(x1, 0f, z1), Vector3.forward),
+                (new Vector3(x1, 0f, z0), new Vector3(x1, 0f, z1), Vector3.right), (new Vector3(x0, 0f, z0), new Vector3(x0, 0f, z1), Vector3.left),
+            };
+            for (int side = 0; side < sides.Length; side++)
+            {
+                var (a, b, outward) = sides[side];
+                Vector3 dir = (b - a).normalized;
+                bool alongX = Mathf.Abs(dir.x) > 0.5f;
+                int slots = Mathf.RoundToInt((b - a).magnitude / 2f);
+                Vector3 Size(float along, float height) => alongX ? new Vector3(along, height, 0.4f) : new Vector3(0.4f, height, along);
+                for (int story = 0; story < stories; story++)
+                for (int i = 0; i < slots; i++)
+                {
+                    string piece = pick(side, i, story);
+                    if (piece == null) continue;
+                    Vector3 c = a + dir * (2f * i + 1f) + outward * 0.2f + Vector3.up * story * Story;
+                    if (piece.Contains("Door"))
+                    {
+                        foreach (float off in new[] { -0.85f, 0.85f })
+                            Invisible(Block("Wall", root, c + dir * off + Vector3.up * Story / 2f, Size(0.3f, Story), null));
+                        Invisible(Block("Lintel", root, c + Vector3.up * (2.45f + Story) / 2f, Size(1.4f, Story - 2.45f), null));
+                    }
+                    else Invisible(Block("Wall", root, c + Vector3.up * Story / 2f, Size(2f, Story), null));
+                }
+            }
+            foreach (float x in new[] { x0 - 0.2f, x1 + 0.2f })
+            foreach (float z in new[] { z0 - 0.2f, z1 + 0.2f })
+                Invisible(Block("Corner", root, new Vector3(x, top / 2f, z), new Vector3(0.4f, top, 0.4f), null));
             RoofSlopes(root, x0, x1, z0, z1, top);
             KitHouse(root, x0, x1, z0, z1, stories, pick);
+            return root;
+        }
+
+        /// <summary>Farmhand's cottage (x -60..-52, z 18..24): bed to hide under, table + chairs, shelf, chest, rug.</summary>
+        static void Cottage(Transform parent, Material wood)
+        {
+            var house = OpenKitHouse(parent, "Cottage", -60f, -52f, 18f, 24f, 1, (side, i, _) => side == 0 && i == 1 ? "Wall_Plaster_Door_Round"
+                : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_Straight");
+            Kit.Wall("DoorFrame_Round_WoodDark", house, new Vector3(-57f, 0f, 18f), Vector3.back);
+            Kit.FloorTiles("Floor_WoodDark", house, new Vector2(-60f, 18f), new Vector2(-52f, 24f), 0.02f);
+            Part(PrimitiveType.Cube, "Rug", house, new Vector3(-55.5f, 0.035f, 21.2f), new Vector3(3f, 0.02f, 2f), Mat("Blanket", new Color(0.75f, 0.2f, 0.2f)));
+            Furnish(house, "bed", new Vector3(-59.1f, 0f, 22.8f), 180f, wood);
+            Furnish(house, "chest", new Vector3(-59.1f, 0f, 21.1f), 0f, wood);
+            Furnish(house, "table", new Vector3(-55.5f, 0f, 21.2f), 0f, wood);
+            Furnish(house, "chair", new Vector3(-56.6f, 0f, 21.2f), 90f, wood);
+            Furnish(house, "chair", new Vector3(-54.4f, 0f, 21.2f), -90f, wood);
+            Furnish(house, "shelf", new Vector3(-52.25f, 0f, 22.6f), -90f, wood);
+            Furnish(house, "barrel", new Vector3(-52.7f, 0f, 18.7f), 0f, wood);
+            Furnish(house, "sack", new Vector3(-53.6f, 0f, 18.6f), 30f, wood);
+            PointLight(house, new Vector3(-56f, 2.6f, 21f), new Color(1f, 0.85f, 0.6f), 8f, 1.3f);
+        }
+
+        /// <summary>
+        /// Stable (x 50..60, z 18..26): stalls with a cow and hay on the ground floor, a hay loft over the north half
+        /// (3.12 m, ladder at x 58) - Bob can't follow up there (he throws corn). Doors on the west side.
+        /// </summary>
+        static void Stable(Transform parent, Material wood, Material darkWood, Material hay)
+        {
+            const float x0 = 50f, x1 = 60f, z0 = 18f, z1 = 26f, loftZ = 22f;
+            var stable = OpenKitHouse(parent, "Stable", x0, x1, z0, z1, 2, (side, i, story) => story == 0
+                ? (side == 3 && i % 2 == 1 ? "Wall_UnevenBrick_Door_Round" : "Wall_UnevenBrick_Straight")
+                : i % 2 == 0 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_WoodGrid");
+            foreach (float z in new[] { 21f, 25f }) Kit.Wall("DoorFrame_Round_WoodDark", stable, new Vector3(x0, 0f, z), Vector3.left);
+            Kit.FloorTiles("Floor_UnevenBrick", stable, new Vector2(x0, z0), new Vector2(x1, z1), 0.02f);
+            // Loft (north half): solid floor, wooden look, ladder up at its edge.
+            PassThrough(Block("Loft", stable, new Vector3((x0 + x1) / 2f, Story - 0.15f, (loftZ + z1) / 2f), new Vector3(x1 - x0, 0.3f, z1 - loftZ), darkWood));
+            Kit.FloorTiles("Floor_WoodDark", stable, new Vector2(x0, loftZ), new Vector2(x1, z1), Story + 0.012f);
+            Ladder(stable, new Vector3(58f, 0f, loftZ), Vector3.back, Story, wood);
+            Haystack(stable, new Vector3(52.5f, Story, 24.5f), hay);
+            Block("LoftBale", stable, new Vector3(57.5f, Story + 0.8f, 25.2f), new Vector3(1.6f, 1f, 1.6f), hay, new Vector3(0f, 0f, 90f), PrimitiveType.Cylinder);
+            // Stalls (south half): low dividers, a cow, a haystack to hide in, a trough.
+            foreach (float x in new[] { 53.4f, 56.6f })
+                Block("StallWall", stable, new Vector3(x, 0.65f, 19.6f), new Vector3(0.15f, 1.3f, 3.2f), wood);
+            DecorAnimal(stable, "cow", new Vector3(51.8f, 0f, 19.8f), 0f, 1.5f);
+            Haystack(stable, new Vector3(55f, 0f, 19.6f), hay);
+            Block("StallTrough", stable, new Vector3(58.3f, 0.3f, 18.6f), new Vector3(2.4f, 0.6f, 0.6f), darkWood);
+            Furnish(stable, "barrel", new Vector3(59.3f, 0f, 23.2f), 0f, wood);
+            Furnish(stable, "sack", new Vector3(51f, 0f, 21.4f), 0f, wood);
+            PointLight(stable, new Vector3(55f, 2.6f, 20f), new Color(1f, 0.85f, 0.6f), 9f, 1.2f);
+            PointLight(stable, new Vector3(55f, Story + 2.2f, 24f), new Color(1f, 0.85f, 0.6f), 8f, 1f);
+        }
+
+        /// <summary>Workshop (x 52..58, z 2..8): workbench (bolts on it), shelf, chest, barrels, sacks.</summary>
+        static void Workshop(Transform parent, Material wood)
+        {
+            var shop = OpenKitHouse(parent, "Workshop", 52f, 58f, 2f, 8f, 1, (side, i, _) => side == 3 && i == 1 ? "Wall_Plaster_Door_Round"
+                : side == 2 && i == 1 ? "Wall_Plaster_Window_Wide_Round" : "Wall_Plaster_WoodGrid");
+            Kit.Wall("DoorFrame_Round_WoodDark", shop, new Vector3(52f, 0f, 5f), Vector3.left);
+            Kit.FloorTiles("Floor_Brick", shop, new Vector2(52f, 2f), new Vector2(58f, 8f), 0.02f);
+            Furnish(shop, "workbench", new Vector3(57.2f, 0f, 5f), -90f, wood);
+            Furnish(shop, "shelf", new Vector3(55f, 0f, 7.75f), 180f, wood);
+            Furnish(shop, "chest", new Vector3(54.5f, 0f, 2.5f), 0f, wood);
+            Furnish(shop, "barrel", new Vector3(52.7f, 0f, 7.3f), 0f, wood);
+            Furnish(shop, "barrel", new Vector3(53.6f, 0f, 7.4f), 0f, wood);
+            Furnish(shop, "sack", new Vector3(57.2f, 0f, 2.7f), 0f, wood);
+            PointLight(shop, new Vector3(55f, 2.6f, 5f), new Color(1f, 0.85f, 0.6f), 8f, 1.3f);
         }
 
         /// <summary>Invisible roof: two slopes from the eaves to the ridge (along x) + gable boxes - pigs that land up there slide off.</summary>
@@ -372,6 +476,10 @@ namespace Porkour.EditorTools
             PointLight(house, new Vector3(-16f, 2.6f, 37.5f), new Color(1f, 0.85f, 0.6f), 9f, 1.2f);
             Table(house, new Vector3(-13.4f, 0f, 38.8f), wood);
             Table(house, new Vector3(-18.6f, 0f, 38.8f), wood);
+            Furnish(house, "chair", new Vector3(-18.6f, 0f, 37.9f), 0f, wood);
+            Furnish(house, "chair", new Vector3(-13.4f, 0f, 37.9f), 0f, wood);
+            Furnish(house, "shelf", new Vector3(-19.78f, 0f, 37.5f), 90f, wood);
+            Part(PrimitiveType.Cube, "Rug", house, new Vector3(-16.2f, 0.035f, 36.6f), new Vector3(2.6f, 0.02f, 1.8f), Mat("Rug", new Color(0.3f, 0.45f, 0.7f)));
             Block("Bed", house, new Vector3(-13.4f, 0.25f, 35.2f), new Vector3(1.3f, 0.5f, 2f), darkWood);
             Part(PrimitiveType.Cube, "Blanket", house, new Vector3(-13.4f, 0.56f, 35.45f), new Vector3(1.35f, 0.14f, 1.5f), Mat("Blanket", new Color(0.75f, 0.2f, 0.2f)));
             Part(PrimitiveType.Cube, "Pillow", house, new Vector3(-13.4f, 0.58f, 34.5f), new Vector3(0.9f, 0.18f, 0.4f), Mat("Lamp", Color.white));
@@ -412,6 +520,7 @@ namespace Porkour.EditorTools
             (int side, int slot)? openWindow = null)
         {
             float top = stories * Story;
+            NoGrassRect(x0 - 0.6f, z0 - 0.6f, x1 + 0.6f, z1 + 0.6f);
             var sides = new (Vector3 a, Vector3 b, Vector3 outward)[]
             {
                 (new Vector3(x0, 0f, z0), new Vector3(x1, 0f, z0), Vector3.back), (new Vector3(x0, 0f, z1), new Vector3(x1, 0f, z1), Vector3.forward),
@@ -456,6 +565,7 @@ namespace Porkour.EditorTools
             var glass = Mat("TruckWindow", new Color(0.55f, 0.75f, 0.9f));
             var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
             var o = TruckPos;
+            NoGrassRect(o.x - 2.2f, o.z - 4.5f, o.x + 2.2f, o.z + 6.4f);
             var truck = new GameObject("Truck").transform;
             truck.SetParent(r, false);
             Block("TruckChassis", truck, o + new Vector3(0f, 0.35f, 1f), new Vector3(3.4f, 0.5f, 7f), dark);
@@ -557,11 +667,13 @@ namespace Porkour.EditorTools
             AmmoPile(spawnRoot, points, p.apple, new Vector3(29f, 0.2f, -10.5f), 4); // in the sty: Armed starts with something to shoot
             AmmoPile(spawnRoot, points, p.corn, new Vector3(19.5f, 0.2f, 23f), 3);
             AmmoPile(spawnRoot, points, p.egg, new Vector3(22.5f, 0.2f, 21f), 2);
-            AmmoPile(spawnRoot, points, p.bolt, new Vector3(55f, 0.2f, 10.5f), 3);
+            AmmoPile(spawnRoot, points, p.bolt, new Vector3(57.2f, 1.2f, 5f), 3);                 // on the workshop's workbench
+            AmmoPile(spawnRoot, points, p.corn, new Vector3(58.5f, Story + 0.3f, 24.8f), 2);      // stable loft
 
             // Loot + coins (team money for the shop later).
             points.Add(SpawnPoint(spawnRoot, "GoldenEgg", p.goldenEgg, new Vector3(24.4f, 3f, 21.6f))); // on the coop roof
             points.Add(SpawnPoint(spawnRoot, "GoldenEgg", p.goldenEgg, new Vector3(48f, 3f, -10f)));     // on the second coop
+            points.Add(SpawnPoint(spawnRoot, "PiggyBank", p.piggyBank, new Vector3(55.5f, Story + 0.5f, 25f))); // stable loft
             foreach (var pos in new[]
                      {
                          new Vector3(-16f, 0.7f, 37f), new Vector3(-16f, 0.7f, 42.5f), new Vector3(-38f, 0.7f, 58f), new Vector3(40f, 0.7f, 62f),
@@ -569,13 +681,14 @@ namespace Porkour.EditorTools
                          new Vector3(-26f, 1.85f, 35.6f), new Vector3(0f, 0.7f, 57f), new Vector3(44f, 0.7f, 25f), new Vector3(-56f, 0.7f, 26.5f),
                          new Vector3(55f, 0.7f, 30f), new Vector3(60f, 0.7f, 70f), new Vector3(-58f, 0.7f, 80f), new Vector3(30f, 0.7f, -14f),
                          new Vector3(-50f, 0.7f, -10f), new Vector3(2f, 0.7f, 88f), new Vector3(-20f, 0.7f, 70f), new Vector3(28f, 0.7f, 92f),
-                         new Vector3(-41f, 0.7f, 2f),
+                         new Vector3(-41f, 0.7f, 2f), new Vector3(-55.5f, 1.5f, 21.2f), new Vector3(54f, 0.7f, 5f), new Vector3(52f, Story + 0.7f, 23f),
+                         new Vector3(58f, 0.7f, 19.8f),
                      })
                 points.Add(SpawnPoint(spawnRoot, "Coin", p.coin, pos));
             foreach (var pos in new[]
                      {
                          ChimneyTop + Vector3.up * 0.7f, new Vector3(-22.5f, 2.95f, 34.4f), TruckPos + new Vector3(0f, 2.95f, 3.3f),
-                         new Vector3(34.5f, 2.4f, -3.2f), new Vector3(0f, 3.3f, 54f),
+                         new Vector3(34.5f, 2.4f, -3.2f), new Vector3(0f, 3.3f, 54f), new Vector3(-52.3f, 2.6f, 22.6f),
                      })
                 points.Add(SpawnPoint(spawnRoot, "BigCoin", p.bigCoin, pos));
         }
@@ -587,6 +700,7 @@ namespace Porkour.EditorTools
         {
             var mud = Part(PrimitiveType.Cylinder, "MudPuddle", parent, position + Vector3.up * 0.02f, new Vector3(radius * 2f, 0.01f, radius * 2f),
                 Mat("Mud", new Color(0.35f, 0.24f, 0.14f)));
+            NoGrassAround(position, new Vector3(radius * 2f, 0f, radius * 2f), 0.2f);
             var spot = mud.AddComponent<HideSpot>();
             spot.radius = radius;
             spot.height = 1f;
@@ -646,9 +760,9 @@ namespace Porkour.EditorTools
             FarmBuildingAt(scenery, "Windmill", new Vector3(-80f, 0f, 74f), 90f, 13f, new Vector3(3f, 11f, 3f), stone, colliderXZ: 0.35f, spin: true, collide: false);
             FarmBuildingAt(scenery, "SmallBarn", new Vector3(-40f, 0f, 116f), 0f, 6.4f, new Vector3(8f, 6f, 8f), red, collide: false);
             if (!Kit.Available) return;
-            Cottage(scenery, -82f, -74f, 26f, 32f, 2);
-            Cottage(scenery, 72f, 80f, 52f, 58f, 1);
-            Cottage(scenery, 24f, 32f, 106f, 112f, 2);
+            SceneryCottage(scenery, -82f, -74f, 26f, 32f, 2);
+            SceneryCottage(scenery, 72f, 80f, 52f, 58f, 1);
+            SceneryCottage(scenery, 24f, 32f, 106f, 112f, 2);
         }
 
         // ---------- models: farm buildings, animals, trees, vehicles, crops ----------
@@ -665,9 +779,11 @@ namespace Porkour.EditorTools
             {
                 var block = Block(name, parent, pos + Vector3.up * fallbackSize.y / 2f, fallbackSize, fallback);
                 if (!collide) Object.DestroyImmediate(block.GetComponent<Collider>());
+                NoGrassAround(pos, fallbackSize);
                 return new Bounds(pos + Vector3.up * fallbackSize.y / 2f, fallbackSize);
             }
             var go = FitModel(model, parent, name, height, parent.InverseTransformPoint(pos), yaw, null, out var bounds);
+            NoGrassAround(bounds.center, bounds.size * colliderXZ);
             if (spin) go.AddComponent<Spinner>(); // moving parts can't be static-batched
             else MakeStatic(go);
             if (collide)
@@ -724,9 +840,10 @@ namespace Porkour.EditorTools
         /// <summary>Crop rows in a field if a pack with crops was added (corn, wheat, pumpkins...): decor, pigs walk through.</summary>
         static void Crops(Transform parent, Vector2 min, Vector2 max)
         {
-            var models = ArtSetup.FindModels(new[] { "corn", "wheat", "crop", "pumpkin", "carrot", "cabbage", "lettuce" });
+            var models = ArtSetup.FindModelsByWord(new[] { "corn", "wheat", "crop", "pumpkin", "carrot", "cabbage", "lettuce" });
             Part(PrimitiveType.Cube, "Field", parent, new Vector3((min.x + max.x) / 2f, 0.012f, (min.y + max.y) / 2f),
                 new Vector3(max.x - min.x, 0.02f, max.y - min.y), Mat("Field", new Color(0.42f, 0.3f, 0.18f)));
+            NoGrassRect(min.x, min.y, max.x, max.y);
             if (models.Count == 0) return;
             int i = 0;
             for (float x = min.x + 1f; x < max.x; x += 2f)
@@ -765,7 +882,7 @@ namespace Porkour.EditorTools
             }
         }
 
-        static void Cottage(Transform parent, float x0, float x1, float z0, float z1, int stories)
+        static void SceneryCottage(Transform parent, float x0, float x1, float z0, float z1, int stories)
         {
             var root = new GameObject("Cottage").transform;
             root.SetParent(parent, false);

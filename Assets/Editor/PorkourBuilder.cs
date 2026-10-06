@@ -35,7 +35,7 @@ namespace Porkour.EditorTools
         const string OldScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
         /// <summary>Bump whenever BuildBarn generates something new → auto-rebuild after the next compile.</summary>
-        const int BuildVersion = 7;
+        const int BuildVersion = 8;
         /// <summary>Farmer Bob is a big man (model height; collider / NavMesh agent follow).</summary>
         const float BobHeight = 2.4f;
 
@@ -223,6 +223,9 @@ namespace Porkour.EditorTools
             Kit.Reset();
             animalYaw = null;
             treeModels = null;
+            NoGrass.Clear();
+            furnitureModels.Clear();
+            grassTexture = null;
             ArtSetup.PrepareImports(); // Bob / animal import settings (first time only)
 
             var p = new PrefabSet { pig = BuildPigPrefab(), player = BuildPlayerPrefab() };
@@ -238,6 +241,7 @@ namespace Porkour.EditorTools
 
             var level = BuildLevel();   // ground, barn, Bob's yard (PorkourBuilder.Level)
             BuildFarmyard(level);       // farmyard, Bob's house, truck (PorkourBuilder.Farm)
+            SetupLook(cam, sun != null ? sun.GetComponent<Light>() : null); // sky, fog, ambient, post-processing
 
             var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
             p.crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f, "Prop_Crate");
@@ -292,6 +296,10 @@ namespace Porkour.EditorTools
             var points = new List<NetSpawnPoint>();
             BarnSpawnPoints(spawnRoot, points, p);
             FarmSpawnPoints(spawnRoot, points, p);
+            foreach (var point in points) // no grass through floor switches
+                if (point.prefab == p.gatePlate || point.prefab == p.plate) NoGrassAround(point.transform.position, new Vector3(2.2f, 0f, 2.2f), 0.1f);
+            ScatterNature(level, points); // bushes / rocks / flowers if a nature pack was added - away from spawn spots (PorkourBuilder.Nature)
+            AddGrassField(level);         // grass tufts + wild flowers (made at runtime)
 
             var netGo = new GameObject("NetworkManager");
             var nm = netGo.AddComponent<NetworkManager>();

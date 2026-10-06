@@ -128,7 +128,7 @@ namespace Porkour
             cagePill.SetActive(false);
 
             // Escape plan (top-left), grilled / escaped (top-right).
-            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(860f, 330f));
+            planPanel = UiShapes.Panel(root, "PlanPanel", Color.clear, new Vector2(860f, 330f));
             Place(planPanel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -16f));
             planTitle = NewText(planPanel.transform, "PlanTitle", title, 32, TextAnchor.MiddleLeft, new Vector2(760f, 40f), true);
             planTitle.color = Accent;
@@ -160,7 +160,7 @@ namespace Porkour
             // Round intro / results (centre).
             bigText = NewText(root, "Big", title, 96, TextAnchor.MiddleCenter, new Vector2(1800f, 120f), true);
             Place(bigText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 225f));
-            var sub = UiShapes.Panel(root, "SubPanel", PanelColor, new Vector2(1240f, 100f));
+            var sub = UiShapes.Panel(root, "SubPanel", Color.clear, new Vector2(1240f, 100f));
             Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 98f));
             var vertical = sub.gameObject.AddComponent<VerticalLayoutGroup>();
             vertical.padding = new RectOffset(36, 36, 20, 24);
@@ -276,7 +276,7 @@ namespace Porkour
             UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
             UpdateTypePanel(net, abilityKey);
             UpdateBobBanner(net);
-            UpdateCage(net);
+            UpdateCage(net, cam);
             UpdateRound(net, abilityKey);
             UpdateMessage();
             UpdateMusic();
@@ -333,27 +333,26 @@ namespace Porkour
             var cage = PigCage.Instance;
             if (cage != null && cage.IsSpawned && cage.Count > 0)
             {
-                if (Vector3.Distance(p, cage.DoorPoint) < cage.unlockRadius + 0.3f) return "Stay at the door - opening the cage...";
                 if (net.Type == PigType.Heavy && Vector3.Distance(p, cage.transform.position) < 5f) return $"{abilityKey}: Belly Slam the cage open!";
             }
             return "";
         }
 
-        /// <summary>Bob's cage: who's inside and how long until the grill is hot.</summary>
-        void UpdateCage(PigNet net)
+        /// <summary>
+        /// Bob's cage, for pigs far away only: who's inside and how long until the grill is hot. Up close the cage's own
+        /// label (timer / OPENING %) and the glowing door ring say it in the world, so the screen stays clean.
+        /// </summary>
+        void UpdateCage(PigNet net, Camera cam)
         {
             var cage = PigCage.Instance;
             float left = 0f;
             bool show = cage != null && cage.IsSpawned && cage.Soonest(out _, out left);
+            if (show && net != null && cage.TimeLeft(net.NetworkObjectId) >= 0f) show = false; // you're in it: the prompt says so
+            if (show && cam != null && (cam.transform.position - cage.transform.position).sqrMagnitude < 30f * 30f) show = false;
             if (cagePill.activeSelf != show) cagePill.SetActive(show);
             if (!show) return;
-            float mine = net != null ? cage.TimeLeft(net.NetworkObjectId) : -1f;
-            string clock = FormatClock(mine >= 0f ? mine : left);
-            string opening = cage.UnlockProgress > 0f ? $"   <color=#8CFF7A>OPENING {Mathf.RoundToInt(cage.UnlockProgress * 100f)}%</color>" : "";
-            cageText.text = mine >= 0f
-                ? $"CAGED! <color={KeyColor}>{clock}</color>{opening}"
-                : $"CAGE x{cage.Count}  <color={KeyColor}>{clock}</color>{opening}";
-            float pulse = (mine >= 0f ? mine : left) < 20f ? 1f + 0.05f * Mathf.Sin(Time.time * 10f) : 1f;
+            cageText.text = $"CAGE x{cage.Count}  <color={KeyColor}>{FormatClock(left)}</color>";
+            float pulse = left < 20f ? 1f + 0.05f * Mathf.Sin(Time.time * 10f) : 1f;
             cagePill.transform.localScale = Vector3.one * pulse;
         }
 
@@ -784,10 +783,10 @@ namespace Porkour
             return text;
         }
 
-        /// <summary>Rounded panel that grows to fit its one line of text.</summary>
+        /// <summary>Invisible box that grows to fit its one line of text (keeps the pop-in / layout of the old pills).</summary>
         static (GameObject panel, Text text) Pill(Transform parent, string name, Font font, int fontSize, Vector2 padding)
         {
-            var panel = UiShapes.Panel(parent, name, PanelColor, Vector2.zero);
+            var panel = UiShapes.Panel(parent, name, Color.clear, Vector2.zero); // text only (outline + shadow), no backdrop
             var layout = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.padding = new RectOffset((int)padding.x, (int)padding.x, (int)padding.y, (int)padding.y);
             layout.childAlignment = TextAnchor.MiddleCenter;
