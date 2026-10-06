@@ -133,6 +133,8 @@ namespace Porkour
         {
             foreach (var col in Physics.OverlapSphere(center, radius, ~0, QueryTriggerInteraction.Ignore))
             {
+                var tree = col.GetComponentInParent<AppleTree>();
+                if (tree != null) tree.Shake(); // apples fall
                 var breakable = col.GetComponentInParent<Breakable>();
                 if (breakable != null)
                 {

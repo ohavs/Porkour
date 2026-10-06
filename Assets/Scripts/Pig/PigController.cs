@@ -345,11 +345,19 @@ namespace Porkour
         {
             if (IsHeld) HeldBy.Drop();
             if (Grabber != null) Grabber.Drop();
+            TeleportTo(spawnPosition, spawnRotation);
+        }
+
+        /// <summary>Server: jump straight to a place (no sliding across the map on other PCs). Keeps what it carries.</summary>
+        public void TeleportTo(Vector3 position, Quaternion rotation)
+        {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
-            rb.position = spawnPosition;
-            rb.rotation = spawnRotation;
-            transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+            rb.position = position;
+            rb.rotation = rotation;
+            transform.SetPositionAndRotation(position, rotation);
+            if (TryGetComponent(out Unity.Netcode.Components.NetworkTransform nt) && nt.IsSpawned)
+                nt.Teleport(position, rotation, transform.localScale);
         }
     }
 }

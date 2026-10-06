@@ -3,11 +3,10 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Placeholder animation from code, local on every PC (reads only the synced transform): walk bob + sway,
-    /// swinging legs/arms, squash &amp; stretch on jump/land, jump/land/footstep sounds, and for pigs a little
-    /// label above the head (Zzz = nobody plays this pig, P2 = another player, FREE! = escaped).
-    /// Only moves children of the "Visual" object, so it keeps working when real models replace the primitives
-    /// (limbs are found by name and simply skipped if missing).
+    /// Animation driver, local on every PC (reads only the synced transform). Real models: feeds the active Animator
+    /// under "Visual" (Speed, Grounded, Held parameters; Bob's Mode / Throw via SetMode / Trigger). Primitive
+    /// placeholders: walk bob + sway, swinging legs/arms. Always: squash &amp; stretch on jump/land, land/footstep
+    /// sounds, and for pigs a label above the head (Zzz = nobody plays this pig, P2 = another player, FREE! = escaped).
     /// </summary>
     public class ProceduralAnimator : MonoBehaviour
     {
@@ -26,6 +25,8 @@ namespace Porkour
         [Tooltip("Footstep sound volume (0 = silent). Bob's heavy steps warn the pigs.")]
         public float stepVolume;
 
+        /// <summary>Horizontal speed seen on this PC (m/s).</summary>
+        public float Speed { get; private set; }
         /// <summary>Farmer: arms raised (carrying a pig).</summary>
         public bool ArmsUp { get; set; }
         /// <summary>Wobble around (stunned).</summary>
@@ -52,6 +53,38 @@ namespace Porkour
         PigController pig;
         PigNet pigNet;
         TextMesh label;
+        Animator animator;
+        readonly System.Collections.Generic.HashSet<string> animatorParams = new();
+        static readonly int SpeedId = Animator.StringToHash("Speed"), GroundedId = Animator.StringToHash("Grounded"),
+            HeldId = Animator.StringToHash("Held"), ModeId = Animator.StringToHash("Mode");
+
+        /// <summary>The model's Animator (the active one - pigs swap pig / hog models), or null for primitives.</summary>
+        Animator ActiveAnimator
+        {
+            get
+            {
+                if (animator != null && animator.isActiveAndEnabled) return animator;
+                animator = visual != null ? visual.GetComponentInChildren<Animator>() : null; // only active ones
+                animatorParams.Clear();
+                if (animator != null && animator.runtimeAnimatorController != null)
+                    foreach (var p in animator.parameters) animatorParams.Add(p.name);
+                return animator;
+            }
+        }
+
+        /// <summary>Bob: animation mode (0 walk/run, 1 carry, 2 dizzy, 3 look around, 4 yell).</summary>
+        public void SetMode(int mode)
+        {
+            var a = ActiveAnimator;
+            if (a != null && animatorParams.Contains("Mode") && a.GetInteger(ModeId) != mode) a.SetInteger(ModeId, mode);
+        }
+
+        /// <summary>Fire an animation trigger (e.g. "Throw") if the model has it.</summary>
+        public void Trigger(string name)
+        {
+            var a = ActiveAnimator;
+            if (a != null && animatorParams.Contains(name)) a.SetTrigger(name);
+        }
 
         void Awake()
         {
@@ -122,6 +155,7 @@ namespace Porkour
             UpdateGround(pos, held, dt);
 
             float speed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
+            Speed = speed;
             float move = Mathf.Clamp01(speed / fullSpeed);
             if (grounded)
             {
@@ -132,7 +166,14 @@ namespace Porkour
             }
 
             UpdateSquash(dt);
-            if (visual != null) Pose(move, held);
+            var a = ActiveAnimator;
+            if (a != null)
+            {
+                if (animatorParams.Contains("Speed")) a.SetFloat(SpeedId, held ? 0f : speed, 0.1f, dt);
+                if (animatorParams.Contains("Grounded")) a.SetBool(GroundedId, grounded || held);
+                if (animatorParams.Contains("Held")) a.SetBool(HeldId, held);
+            }
+            if (visual != null) Pose(a != null ? 0f : move, held);
             if (label != null) UpdateLabel();
         }
 
@@ -168,8 +209,7 @@ namespace Porkour
         {
             float impact = -minAirVy;
             squash = Mathf.Min(squash, -Mathf.Clamp(impact * 0.025f, 0.05f, 0.3f));
-            float volume = Mathf.Clamp01(impact / 14f) * (kind == Kind.Farmer ? 1f : 0.7f);
-            Sfx.Play(Sound.Land, pos, volume, 0.15f);
+            if (impact > 6f) Sfx.Play(Sound.Land, pos, Mathf.Clamp01(impact / 16f) * 0.6f, 0.15f); // only real thumps
             if (impact > 9f) SmokeCloud.Spawn(pos + Vector3.down * (kind == Kind.Pig ? 0.4f : 0f), 0.45f, 0.6f, SmokeCloud.DustColor);
         }
 

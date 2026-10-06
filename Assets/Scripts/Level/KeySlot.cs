@@ -4,12 +4,14 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Padlock on a post. Bring the KeyItem close (carried on your back or thrown at it): the key is used up, the lock
-    /// pops open and its puzzle channel stays on.
+    /// Lock for a KeyItem (padlock on a post, the truck's ignition). Bring the matching key close (carried on your back
+    /// or thrown at it): the key is used up, the lock pops open and its puzzle channel stays on.
     /// </summary>
     public class KeySlot : NetworkBehaviour, IPuzzleChannel
     {
         public int channel;
+        [Tooltip("KeyItem.keyId this lock takes.")]
+        public string acceptsKey = "gate";
         [Tooltip("Lock position above this object's pivot, and how close the key must get.")]
         public Vector3 lockOffset = new(0f, 1.3f, 0f);
         public float radius = 1.2f;
@@ -45,10 +47,10 @@ namespace Porkour
             foreach (var col in Physics.OverlapSphere(transform.position + lockOffset, radius, ~0, QueryTriggerInteraction.Ignore))
             {
                 var rb = col.attachedRigidbody;
-                if (rb == null || !rb.TryGetComponent(out KeyItem _)) continue;
+                if (rb == null || !rb.TryGetComponent(out KeyItem key) || key.keyId != acceptsKey) continue;
                 foreach (var pig in PigController.All)
                     if (pig.Grabber != null && pig.Grabber.Held == rb) pig.Grabber.Drop();
-                if (rb.TryGetComponent(out NetworkObject key) && key.IsSpawned) key.Despawn(true);
+                if (rb.TryGetComponent(out NetworkObject keyObject) && keyObject.IsSpawned) keyObject.Despawn(true);
                 unlocked.Value = true;
                 PuzzleSignals.Set(channel, this, true);
                 return;

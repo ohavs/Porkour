@@ -109,9 +109,9 @@ namespace Porkour
             Vector3 p = transform.position;
             float speed = new Vector3(p.x - lastPos.x, 0f, p.z - lastPos.z).magnitude / dt;
             lastPos = p;
-            bool running = speed > 2.2f && speed < 30f;
-            if (Time.time < nextVoice || (!running && Random.value > 0.002f)) return;
-            nextVoice = Time.time + (running ? Random.Range(1.2f, 2.5f) : Random.Range(6f, 14f));
+            bool running = speed > 2.2f && speed < 30f; // only when it runs away - no idle chatter
+            if (!running || Time.time < nextVoice) return;
+            nextVoice = Time.time + Random.Range(5f, 9f);
             Sfx.Play(voice, p, voiceVolume, 0.12f);
         }
     }

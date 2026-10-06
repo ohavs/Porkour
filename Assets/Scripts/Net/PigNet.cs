@@ -109,9 +109,7 @@ namespace Porkour
             controller.SetType(pigType);
             HookAbility(controller.Ability);
             if (look == null) return;
-            var color = PigTypes.Info(pigType).Color;
-            look.skinColor = color; // PigLook.Start re-applies this
-            look.SetSkinColor(color);
+            look.ApplyType(pigType, PigTypes.Info(pigType).Color); // model (pig / hog) + type colour
         }
 
         // ---------- ability visuals: server → every PC ----------

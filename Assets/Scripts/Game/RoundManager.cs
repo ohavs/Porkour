@@ -11,8 +11,10 @@ namespace Porkour
     /// One round of Porkour (server runs it, every PC reads the synced state for the HUD):
     /// Intro (a few seconds, read your role) → Playing (10 min timer) → Won / Lost → results → a fresh round
     /// (NetworkGame respawns the level, pig types are shuffled again).
-    /// Win: every pig that a player controls reaches the getaway truck (EscapeZone) - the exit only opens when the
-    /// four escape objectives (padlock, electric fence, generator, bullseyes) are done.
+    /// Win: every pig that a player controls gets into the getaway truck (EscapeZone) - the barn exit opens when the
+    /// four barn objectives (padlock, electric fence, generator, bullseyes) are done, and the truck only counts once
+    /// it has been started with Bob's truck keys (from his house). Results give stars (escaped, nobody grilled,
+    /// fast, Bob's pie in the truck).
     /// Lose: time runs out, or Bob grills maxGrills pigs. Last minute: Bob's final hunt.
     /// Lives as its own networked object (spawned once by NetworkGame, survives restarts). Host debug: R = restart.
     /// </summary>
@@ -40,14 +42,23 @@ namespace Porkour
             new("Electric fence", "smash the FUSE BOX in the tool shed (Heavy)", ChannelIds.Fence),
             new("Gate motor", "fart into the GENERATOR on the hayloft (Gassy)", ChannelIds.Generator),
             new("Gate latch", "shoot the 3 BULLSEYES (Armed)", ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3),
+            new("Truck keys", "sneak into BOB'S HOUSE (back door / window / chimney), bring the keys to the truck", ChannelIds.Truck),
         };
 
+        /// <summary>Index of the last objective (truck keys) - outside, after the barn exit.</summary>
+        public const int TruckObjective = 4;
+
         static readonly int[] TrackedChannels =
-            { ChannelIds.Padlock, ChannelIds.Fence, ChannelIds.Generator, ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3 };
+        {
+            ChannelIds.Padlock, ChannelIds.Fence, ChannelIds.Generator, ChannelIds.Target1, ChannelIds.Target2, ChannelIds.Target3,
+            ChannelIds.Truck,
+        };
 
         [Header("Timing (seconds)")]
         public float introTime = 8f;
-        public float roundTime = 600f;
+        public float roundTime = 720f;
+        [Tooltip("Escape faster than this for the speed star.")]
+        public float starTime = 480f;
         [Tooltip("Bob's final hunt starts when this much time is left.")]
         public float finalHuntTime = 60f;
         public float resultsTime = 10f;
@@ -64,6 +75,8 @@ namespace Porkour
         readonly NetworkVariable<LoseReason> loseReason = new();
         readonly NetworkVariable<float> finishTime = new();
         readonly NetworkVariable<int> roundNumber = new();
+        readonly NetworkVariable<int> stars = new();
+        readonly NetworkVariable<bool> pieStolen = new();
 
         public RoundPhase Phase => phase.Value;
         public bool IsPlaying => IsSpawned && phase.Value == RoundPhase.Playing;
@@ -78,6 +91,12 @@ namespace Porkour
         /// <summary>Seconds the team needed to escape (Won only).</summary>
         public float FinishTime => finishTime.Value;
         public int RoundNumber => roundNumber.Value;
+        /// <summary>Won: stars earned (escaped + nobody grilled + fast + pie), out of MaxStars.</summary>
+        public int Stars => stars.Value;
+        public const int MaxStars = 4;
+        public bool PieStolen => pieStolen.Value;
+        /// <summary>Barn exit open (padlock, generator, bullseyes done).</summary>
+        public bool ExitOpen => ObjectiveDone(0) && ObjectiveDone(2) && ObjectiveDone(3);
         public bool AllObjectivesDone
         {
             get
@@ -88,7 +107,7 @@ namespace Porkour
             }
         }
 
-        bool finalHuntStarted;
+        bool finalHuntStarted, exitAlarmed;
 
         public override void OnNetworkSpawn() => Instance = this;
 
@@ -123,6 +142,9 @@ namespace Porkour
         {
             if (!IsServer) return;
             finalHuntStarted = false;
+            exitAlarmed = false;
+            stars.Value = 0;
+            pieStolen.Value = false;
             grills.Value = 0;
             channelBits.Value = 0;
             escaped.Value = 0;
@@ -185,7 +207,7 @@ namespace Porkour
         {
             SetPhase(RoundPhase.Playing, roundTime);
             if (FarmerBob.Instance != null) FarmerBob.Instance.ResetCallTimer();
-            AnnounceRpc("GO! Open the 4 locks on the exit and escape before Bob's BBQ!");
+            AnnounceRpc("GO! Open the 4 locks on the barn exit, then steal Bob's truck!");
             RoundSoundRpc(Sound.Escape);
         }
 
@@ -202,20 +224,28 @@ namespace Porkour
             for (int i = 0; i < Objectives.Length; i++)
             {
                 if (before[i] || !ObjectiveDone(i)) continue;
-                AnnounceRpc(AllObjectivesDone
-                    ? "THE EXIT IS OPEN! Everyone into the getaway truck!"
-                    : $"{Objectives[i].Name}: done!");
-                RoundSoundRpc(AllObjectivesDone ? Sound.Win : Sound.Escape);
+                AnnounceRpc(i == TruckObjective ? "THE TRUCK IS RUNNING! Everyone jump in!" : $"{Objectives[i].Name}: done!");
+                RoundSoundRpc(Sound.Escape);
+            }
+            if (!exitAlarmed && ExitOpen)
+            {
+                exitAlarmed = true;
+                AnnounceRpc("THE BARN EXIT IS OPEN! Now find Bob's TRUCK KEYS in his house!");
+                Vector3 exit = Vector3.zero;
+                foreach (var gate in FindObjectsByType<Gate>(FindObjectsSortMode.None))
+                    if (gate.requiredChannels != null && gate.requiredChannels.Length > 0) exit = gate.transform.position;
+                if (FarmerBob.Instance != null) FarmerBob.Instance.Alarm(exit);
             }
         }
 
         void UpdateEscapes()
         {
             int owned = 0, free = 0;
+            bool truckRunning = PuzzleSignals.IsOn(ChannelIds.Truck);
             foreach (var pig in PigController.All)
             {
                 if (pig == null || !pig.TryGetComponent(out NetworkObject obj) || !obj.IsSpawned) continue;
-                if (!pig.Escaped && EscapeZone.IsInside(pig.Body.position))
+                if (!pig.Escaped && truckRunning && EscapeZone.IsInside(pig.Body.position))
                 {
                     pig.Escaped = true;
                     AnnounceRpc($"The {PigTypes.Info(pig.Type).Name} pig escaped!");
@@ -247,6 +277,9 @@ namespace Porkour
         void Win()
         {
             finishTime.Value = roundTime - PhaseTimeLeft;
+            foreach (var item in KeyItem.All)
+                if (item.bonus && EscapeZone.IsInside(item.transform.position)) pieStolen.Value = true;
+            stars.Value = 1 + (grills.Value == 0 ? 1 : 0) + (finishTime.Value <= starTime ? 1 : 0) + (pieStolen.Value ? 1 : 0);
             SetPhase(RoundPhase.Won, resultsTime);
             RoundSoundRpc(Sound.Win);
             if (FarmerBob.Instance != null) FarmerBob.Instance.Say("Noooo! My BBQ!");

@@ -21,6 +21,8 @@ namespace Porkour
         public float maxLiftMass = 35f;
         [Tooltip("Speed multiplier when carrying something at max lift mass.")]
         public float fullLoadSpeed = 0.6f;
+        [Tooltip("Height of the pig's back above its centre (carried things sit on it).")]
+        public float backHeight = 0.62f;
 
         [Header("Carry")]
         public float followStrength = 12f;
@@ -149,7 +151,7 @@ namespace Porkour
             var bounds = new Bounds(rb.position, Vector3.zero);
             foreach (var c in heldColliders) bounds.Encapsulate(c.bounds);
             float bottomBelowPivot = rb.position.y - bounds.min.y;
-            heldLift = 0.45f + bottomBelowPivot + 0.05f;
+            heldLift = backHeight + bottomBelowPivot + 0.05f;
             heldRelativeRotation = Quaternion.Inverse(transform.rotation) * rb.rotation;
 
             rb.TryGetComponent(out worn);

@@ -35,6 +35,8 @@ namespace Porkour
 
         NetPlayer player;
         Image marker, barBack, barFill, cooldownBack, cooldownFill, crosshair, typePanel, timerPanel, planPanel, statusPanel;
+        readonly Image[] starImages = new Image[RoundManager.MaxStars];
+        GameObject starRow;
         Text prompt, typeTitle, abilityLine, banner, message, timer, planTitle, plan, status, bigText, subText;
         GameObject promptPill, messagePill, subPanel;
         CanvasGroup messageGroup;
@@ -118,13 +120,13 @@ namespace Porkour
             messageGroup = messagePill.AddComponent<CanvasGroup>();
 
             // Escape plan (top-left), grilled / escaped (top-right).
-            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(800f, 236f));
+            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(860f, 268f));
             Place(planPanel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -16f));
             planTitle = NewText(planPanel.transform, "PlanTitle", title, 32, TextAnchor.MiddleLeft, new Vector2(760f, 40f), true);
             planTitle.color = Accent;
             planTitle.text = "ESCAPE PLAN";
             Place(planTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -8f));
-            plan = NewText(planPanel.transform, "Plan", body, 21, TextAnchor.UpperLeft, new Vector2(760f, 180f));
+            plan = NewText(planPanel.transform, "Plan", body, 21, TextAnchor.UpperLeft, new Vector2(820f, 210f));
             plan.horizontalOverflow = HorizontalWrapMode.Wrap;
             plan.verticalOverflow = VerticalWrapMode.Overflow;
             plan.lineSpacing = 1.05f;
@@ -137,9 +139,9 @@ namespace Porkour
 
             // Round intro / results (centre).
             bigText = NewText(root, "Big", title, 96, TextAnchor.MiddleCenter, new Vector2(1800f, 120f), true);
-            Place(bigText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 200f));
+            Place(bigText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 225f));
             var sub = UiShapes.Panel(root, "SubPanel", PanelColor, new Vector2(1240f, 100f));
-            Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 120f));
+            Place(sub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f), new Vector2(0f, 98f));
             var vertical = sub.gameObject.AddComponent<VerticalLayoutGroup>();
             vertical.padding = new RectOffset(36, 36, 20, 24);
             vertical.childControlWidth = vertical.childControlHeight = true;
@@ -150,6 +152,18 @@ namespace Porkour
             subText = NewText(sub.transform, "Sub", body, 30, TextAnchor.UpperCenter, Vector2.zero);
             subText.horizontalOverflow = HorizontalWrapMode.Wrap;
             subText.color = Cream;
+
+            // Results stars (between the big title and the sub panel).
+            starRow = new GameObject("Stars", typeof(RectTransform));
+            starRow.transform.SetParent(root, false);
+            Place((RectTransform)starRow.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 140f));
+            for (int i = 0; i < starImages.Length; i++)
+            {
+                starImages[i] = NewImage(starRow.transform, "Star", Color.white, new Vector2(64f, 64f), UiShapes.Star);
+                starImages[i].rectTransform.anchoredPosition = new Vector2((i - (starImages.Length - 1) / 2f) * 76f, 0f);
+                AddOutline(starImages[i].gameObject, 3f);
+            }
+            starRow.SetActive(false);
 
             crosshair = NewImage(root, "Crosshair", new Color(1f, 1f, 1f, 0.95f), new Vector2(12f, 12f), UiShapes.Circle);
             AddOutline(crosshair.gameObject, 1.5f);
@@ -272,6 +286,7 @@ namespace Porkour
             var bob = FarmerBob.Instance;
             MusicMood mood;
             if (round != null && round.IsSpawned && round.IsOver) mood = MusicMood.None; // win/lose jingles play instead
+            else if (round != null && round.IsSpawned && round.Phase == RoundPhase.Intro) mood = MusicMood.Theme;
             else if (bob == null || !bob.IsSpawned || bob.State is BobState.Away or BobState.Leaving) mood = MusicMood.Calm;
             else if (bob.FinalHunt) mood = MusicMood.FinalHunt;
             else if (bob.State is BobState.Chasing or BobState.Carrying) mood = MusicMood.Chase;
@@ -333,8 +348,9 @@ namespace Porkour
                 string line = done == total ? $"<color=#A9C99A>{o.Name}</color>" : $"<color=#FFE9B0>{o.Name}</color>: {o.Hint}";
                 sb.Append(box).Append(' ').Append(line).Append('\n');
             }
-            sb.Append(round.AllObjectivesDone ? "<color=#7CFF6B>EXIT OPEN - everyone into the getaway truck!</color>"
-                : "<color=#B9A58A>Then: everyone into the getaway truck outside</color>");
+            sb.Append(round.AllObjectivesDone ? "<color=#7CFF6B>TRUCK RUNNING - everyone jump into the truck!</color>"
+                : round.ExitOpen ? "<color=#FFD24A>Barn exit open - go get the truck keys!</color>"
+                : "<color=#B9A58A>Then: everyone into the getaway truck</color>");
             plan.text = sb.ToString();
 
             status.text = $"<color=#FF8A66>GRILLED  {round.Grills} / {round.maxGrills}</color>\n" +
@@ -357,7 +373,10 @@ namespace Porkour
                 case RoundPhase.Won:
                     big = "YOU ESCAPED!";
                     color = new Color(0.5f, 1f, 0.45f);
-                    sub = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
+                    sub = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}" +
+                          (round.PieStolen ? "   |   <color=#FFD24A>Bob's pie stolen!</color>" : "") +
+                          $"\n<color=#B9A58A>Stars: escaped, nobody grilled, under {FormatClock(round.starTime)}, Bob's pie in the truck</color>" +
+                          $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
                     break;
                 case RoundPhase.Lost:
                     big = "BBQ TIME...";
@@ -367,6 +386,22 @@ namespace Porkour
                     break;
             }
             ShowCentre(big, sub, color);
+            UpdateStars(round);
+        }
+
+        void UpdateStars(RoundManager round)
+        {
+            bool show = round.Phase == RoundPhase.Won;
+            if (starRow.activeSelf != show) starRow.SetActive(show);
+            if (!show) return;
+            float t = Time.time - bigStart;
+            for (int i = 0; i < starImages.Length; i++)
+            {
+                bool earned = i < round.Stars;
+                starImages[i].color = earned ? Accent : new Color(0.25f, 0.2f, 0.15f, 0.8f);
+                float appear = t - 0.4f - i * 0.25f; // pop in one after another
+                starImages[i].transform.localScale = Vector3.one * (appear < 0f ? 0f : earned ? Pop(appear) : 1f);
+            }
         }
 
         void ShowCentre(string big, string sub, Color color)

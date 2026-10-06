@@ -18,11 +18,15 @@ MonoBehaviour:
   - name: Jump
     sound: 0
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Land
     sound: 1
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: 18bca2b7785049348ac852171944b5d8, type: 3}
+    - {fileID: 8300000, guid: 51f5aa23c8d40a046b74b690f0d1cbfb, type: 3}
+    - {fileID: 8300000, guid: fbe3cfc647e7f264bac2e0dc9b56b1c6, type: 3}
+    - {fileID: 8300000, guid: 0122c8407adc18043954e5d59577c1f1, type: 3}
+    volume: 0.7
   - name: Step
     sound: 2
     clips:
@@ -30,51 +34,62 @@ MonoBehaviour:
     - {fileID: 8300000, guid: c7d71b458b12ef04888a3303a2dbc328, type: 3}
     - {fileID: 8300000, guid: f26ceff58b849944da92a56d12af0c7d, type: 3}
     - {fileID: 8300000, guid: 624c3065045abc8458784b243a563eca, type: 3}
-    volume: 1
+    - {fileID: 8300000, guid: 659a15fe080fa9c45a3ed996580a351d, type: 3}
+    - {fileID: 8300000, guid: 37efa63d5aa2cdb4c8fac26e2c7bd9aa, type: 3}
+    - {fileID: 8300000, guid: a412592d0acc2a5428a09a454d48156b, type: 3}
+    - {fileID: 8300000, guid: d09d28306a76c424e9fd69433a97d0ed, type: 3}
+    - {fileID: 8300000, guid: 52b843f8be14e7f47b7d18121f9f0b80, type: 3}
+    - {fileID: 8300000, guid: 4b7210337fe3c5845a6926a73d1b5e5e, type: 3}
+    volume: 0.7
   - name: Fart
     sound: 3
     clips:
     - {fileID: 8300000, guid: 31707ce2b0728f940b9bc9c4fa8d7400, type: 3}
     - {fileID: 8300000, guid: 9d764184af928e64eb61f244e267a81f, type: 3}
-    volume: 1
+    volume: 1.0
   - name: Dash
     sound: 4
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: fcc346f5d8a70bd428d8d31bb59f2e8c, type: 3}
+    - {fileID: 8300000, guid: c11f50d80dc3758468d5906907edc699, type: 3}
+    volume: 0.8
   - name: Slam
     sound: 5
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Boing
     sound: 6
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Rope
     sound: 7
     clips:
-    - {fileID: 8300000, guid: be50731c9b5e41b45828b391476946f3, type: 3}
-    - {fileID: 8300000, guid: 838e2535c4a5678489b34c3aedfd2df5, type: 3}
-    volume: 1
+    - {fileID: 8300000, guid: 20788e3eeed664a44afb70e0d7c1d0a4, type: 3}
+    - {fileID: 8300000, guid: f2f0b7f6f23db6d41a3b35a955910f3e, type: 3}
+    volume: 0.8
   - name: Shoot
     sound: 8
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: 42451ffd0394efc448fa9751ee9ac641, type: 3}
+    - {fileID: 8300000, guid: c9565b4a825f1d34cb9ecf7a7f4f86d0, type: 3}
+    volume: 0.9
   - name: Suck
     sound: 9
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Smash
     sound: 10
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: 2e9b11eb01b8761438a8e2771ecb25a7, type: 3}
+    volume: 1.0
   - name: Splat
     sound: 11
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Bell
     sound: 12
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Ding
     sound: 13
     clips:
@@ -82,7 +97,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: aef90a62037f39d459110ac452fad28b, type: 3}
     - {fileID: 8300000, guid: 7955de802e2e10b4a8357b5cbd7e0064, type: 3}
     - {fileID: 8300000, guid: e0bc9841c87a53244a439091a086e5bb, type: 3}
-    volume: 1
+    volume: 0.8
   - name: Click
     sound: 14
     clips:
@@ -90,23 +105,25 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 81c6190b9a2034142b2278042742f0f5, type: 3}
     - {fileID: 8300000, guid: d62a21be9171afc4f96cc5f3ebf4be7a, type: 3}
     - {fileID: 8300000, guid: 3746056f1bafc1c4d8302529307d1055, type: 3}
-    volume: 1
+    volume: 0.7
   - name: Zap
     sound: 15
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Unlock
     sound: 16
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: 49ddb7ecdef4af84e9a593f8cfc7f080, type: 3}
+    - {fileID: 8300000, guid: 83002b43221c1c6498ee2de41da3093f, type: 3}
+    volume: 1.0
   - name: Engine
     sound: 17
     clips: []
-    volume: 1
+    volume: 1.0
   - name: EngineLoop
     sound: 18
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Rumble
     sound: 19
     clips:
@@ -114,76 +131,79 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 43965638508f0fd4b85bc3fad03d0ccf, type: 3}
     - {fileID: 8300000, guid: edb654cff32f9e54f8bf81d0a9957d3b, type: 3}
     - {fileID: 8300000, guid: f9a4a4fe886c46044872b587b226f1d6, type: 3}
-    volume: 1
+    volume: 0.6
   - name: Grab
     sound: 20
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: b849f4c41ebb9ac4888a3fc57ff06efa, type: 3}
+    - {fileID: 8300000, guid: e8572e61b38e00641ac506b43dbb851d, type: 3}
+    volume: 0.8
   - name: Throw
     sound: 21
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: d1e76515543f87e45abf54f51edac341, type: 3}
+    - {fileID: 8300000, guid: 6dc2cf8cd9ccdfa4ebf797cf584ef63a, type: 3}
+    - {fileID: 8300000, guid: 7264569927c749a4b971911a5885fdb0, type: 3}
+    - {fileID: 8300000, guid: 8f14911924a7e5846a5e6949d74acc73, type: 3}
+    volume: 0.8
   - name: GrillCall
     sound: 22
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Spotted
     sound: 23
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Caught
     sound: 24
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Bonk
     sound: 25
-    clips: []
-    volume: 1
+    clips:
+    - {fileID: 8300000, guid: c9bd06f49dba0154897168b0221eea2b, type: 3}
+    volume: 0.9
   - name: Sizzle
     sound: 26
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Escape
     sound: 27
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Win
     sound: 28
     clips:
     - {fileID: 8300000, guid: 16a40eeea666faa4e91e6a66ac947ab7, type: 3}
-    volume: 1
+    volume: 0.9
   - name: Lose
     sound: 29
-    clips:
-    - {fileID: 8300000, guid: 348fdbeb58bb71f4f9caf7d02d0b123c, type: 3}
-    - {fileID: 8300000, guid: 76ba9ced483c6b844ae992d635dfc1e9, type: 3}
-    - {fileID: 8300000, guid: fd1e97ec261ce5146af176371d179e3a, type: 3}
-    - {fileID: 8300000, guid: 4d3dc1641a1e36140b0a15ac89237143, type: 3}
-    volume: 1
+    clips: []
+    volume: 1.0
   - name: Tick
     sound: 30
     clips:
     - {fileID: 8300000, guid: e2e4272bc42e4614fa9cfd52f03686be, type: 3}
     - {fileID: 8300000, guid: d95ef189b4695be4f9b45e9dd46ac056, type: 3}
     - {fileID: 8300000, guid: 731b0d9ad15c71a48b7e994cb8be31f2, type: 3}
-    volume: 1
+    volume: 0.8
   - name: Cluck
     sound: 31
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Baa
     sound: 32
     clips: []
-    volume: 1
+    volume: 1.0
   - name: Alarm
     sound: 33
     clips: []
-    volume: 1
+    volume: 1.0
   music:
   - name: Calm
     mood: 1
     clip: {fileID: 8300000, guid: 41f5ca568946cb34da7492e534896c69, type: 3}
-    volume: 0.6
+    volume: 0.5
   - name: Danger
     mood: 2
     clip: {fileID: 0}
@@ -196,3 +216,7 @@ MonoBehaviour:
     mood: 4
     clip: {fileID: 0}
     volume: 0.6
+  - name: Theme
+    mood: 5
+    clip: {fileID: 8300000, guid: bc3b4bfccf5eab14f9641da1a9a910a0, type: 3}
+    volume: 0.5
