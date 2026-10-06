@@ -16,6 +16,11 @@ namespace Porkour
         readonly NetworkVariable<double> rangAt = new(-100.0);
         float nextRingTime;
 
+        public override void OnNetworkSpawn() => rangAt.OnValueChanged += OnRang;
+        public override void OnNetworkDespawn() => rangAt.OnValueChanged -= OnRang;
+
+        void OnRang(double previous, double current) => Sfx.Play(Sound.Bell, transform.position, 1f, 0.03f);
+
         void OnCollisionEnter(Collision collision)
         {
             if (!IsServer || !IsSpawned || Time.time < nextRingTime) return;

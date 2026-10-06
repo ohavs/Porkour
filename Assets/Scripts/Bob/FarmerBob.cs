@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -10,27 +11,27 @@ namespace Porkour
 
     /// <summary>
     /// Farmer Bob and the Grill Call cycle (server runs the AI on a runtime-baked NavMesh; clients just see
-    /// NetworkTransform + the synced state for HUD/indicators).
-    /// Away (at the grill in the yard) → every 2-3 min: Coming (bell, 5 s to hide) → Searching the barn.
+    /// NetworkTransform + the synced state for HUD/indicators/sounds).
+    /// Away (at the grill in the yard) → every ~2 min: Coming (dinner bell, 5 s to hide) → Searching the barn.
     /// He spots pigs in his view cone with line of sight - not pigs hidden in hay (HideSpot), in fart smoke,
-    /// or frozen (standing still) unless very close; smoke also blinds and slows him. Spotted → Chasing →
-    /// grab → Carrying to the grill: others have 20 s to rescue by hitting him hard (thrown things, flying pigs,
-    /// Heavy's slam, Armed's shots → Stunned 3 s, pig dropped) or throwing a chicken (Bait) at him.
-    /// Too late → the pig is grilled (respawns at the start). A bell shot rings → he goes to check (lure).
-    /// Host debug: G = Grill Call now.
+    /// under a bucket (standing still), or frozen (standing still) unless very close; smoke also blinds and slows him.
+    /// He ignores sleeping pigs (nobody plays them) and escaped ones. Spotted → Chasing → grab → Carrying to the grill:
+    /// others have 20 s to rescue by hitting him hard (thrown things, flying pigs, Heavy's slam, Armed's shots →
+    /// Stunned 3 s, pig dropped) or throwing a chicken/sheep (Bait) at him. Too late → grilled (RoundManager counts it).
+    /// A pig he can't reach (loft, beams, crates) gets corn thrown at it until it falls or he gives up.
+    /// Last minute of the round: final hunt - he searches non-stop. A rung bell lures him.
+    /// Only acts while the round is being played. Host debug: G = Grill Call now.
     /// </summary>
     [RequireComponent(typeof(NavMeshAgent), typeof(Rigidbody))]
     public class FarmerBob : NetworkBehaviour, IPigCarrier
     {
         public static FarmerBob Instance { get; private set; }
-        /// <summary>Messages for every PC's HUD ("the Jumpy pig got grilled!").</summary>
-        public static event Action<string> Announced;
 
         [Header("Grill Call timing (seconds)")]
-        public float firstCallDelay = 30f;
-        public Vector2 callInterval = new(120f, 180f);
+        public float firstCallDelay = 45f;
+        public Vector2 callInterval = new(95f, 135f);
         public float warningTime = 5f;
-        public float searchTime = 25f;
+        public float searchTime = 30f;
         public float rescueTime = 20f;
         public float stunTime = 3f;
 
@@ -42,7 +43,7 @@ namespace Porkour
         public Vector3 insidePoint = new(0f, 0f, -12f);
         public Vector3 searchCenter = Vector3.zero;
         public Vector2 searchHalfSize = new(13f, 13f);
-        public int doorChannel = 99;
+        public int doorChannel = ChannelIds.BobDoor;
         public Transform carryPoint;
 
         [Header("Movement")]
@@ -63,12 +64,18 @@ namespace Porkour
         [Tooltip("Hit speed that stuns Bob (flying pigs need a bit more).")]
         public float stunHitSpeed = 7f;
 
+        [Header("Throwing (pigs out of reach)")]
+        public float throwSpeed = 14f;
+        public float throwInterval = 1.5f;
+        public int throwsBeforeGivingUp = 3;
+
         readonly NetworkVariable<BobState> state = new();
         readonly NetworkVariable<double> stateEnd = new();
         readonly NetworkVariable<double> nextCall = new();
         readonly NetworkVariable<ulong> carriedId = new(ulong.MaxValue);
         readonly NetworkVariable<ulong> targetId = new(ulong.MaxValue);
         readonly NetworkVariable<int> grilled = new();
+        readonly NetworkVariable<bool> finalHunt = new();
 
         public BobState State => state.Value;
         /// <summary>Seconds left in the current phase (HIDE countdown, rescue time...). 0 if untimed.</summary>
@@ -78,6 +85,7 @@ namespace Porkour
         public ulong CarriedPigId => carriedId.Value;
         public ulong TargetPigId => targetId.Value;
         public int GrilledCount => grilled.Value;
+        public bool FinalHunt => finalHunt.Value;
         public int EscapePresses => int.MaxValue; // no wriggling out - friends must rescue you
 
         NavMeshAgent agent;
@@ -89,19 +97,27 @@ namespace Porkour
         bool hasWanderPoint;
         float stateStart, stateUntil, searchEnd, wanderUntil, investigateUntil, lastSeenTime;
         float nextLook, nextRepath, nextCallTime;
+        float unreachableTime, nextThrow;
+        int throwsAtTarget;
+        readonly Dictionary<PigController, float> ignoreUntil = new();
 
         // Indicators (every PC)
         Transform stars;
         TextMesh mark;
         Material indicatorMaterial;
+        ProceduralAnimator anim;
+        string speech;
+        float speechUntil;
 
         Vector3 Eyes => transform.position + Vector3.up * 1.7f;
         Vector3 CarryPosition => carryPoint != null ? carryPoint.position : transform.TransformPoint(new Vector3(0.3f, 2f, -0.1f));
+        static bool RoundActive => RoundManager.Instance == null || RoundManager.Instance.IsPlaying;
 
         void Awake()
         {
             agent = GetComponent<NavMeshAgent>();
             ownColliders = GetComponentsInChildren<Collider>();
+            anim = GetComponent<ProceduralAnimator>();
             agent.enabled = false; // server switches it on; clients follow the NetworkTransform
             BuildIndicators();
         }
@@ -109,18 +125,21 @@ namespace Porkour
         public override void OnNetworkSpawn()
         {
             Instance = this;
+            state.OnValueChanged += OnStateChanged;
+            targetId.OnValueChanged += OnTargetChanged;
             if (!IsServer) return;
             home = transform.position;
             agent.enabled = true;
             if (!agent.Warp(home)) Debug.LogWarning("Porkour: Farmer Bob is not on the NavMesh - he can't walk.");
-            nextCallTime = Time.time + firstCallDelay;
-            nextCall.Value = NetworkManager.ServerTime.Time + firstCallDelay;
+            ResetCallTimer();
             SetState(BobState.Away, 0f);
         }
 
         public override void OnNetworkDespawn()
         {
             if (Instance == this) Instance = null;
+            state.OnValueChanged -= OnStateChanged;
+            targetId.OnValueChanged -= OnTargetChanged;
             if (!IsServer) return;
             ReleaseCarried();
             PuzzleSignals.Set(doorChannel, this, false);
@@ -136,10 +155,29 @@ namespace Porkour
         {
             UpdateIndicators();
             if (!IsServer || !IsSpawned) return;
+            if (!RoundActive) { Stop(); return; } // intro / round over: wait at the grill (or freeze)
             if (state.Value == BobState.Away && Keyboard.current != null && Keyboard.current.gKey.wasPressedThisFrame)
                 StartGrillCall(); // host debug key
             Think();
             UpdateDoor();
+        }
+
+        /// <summary>Server: the round starts - first Grill Call after firstCallDelay.</summary>
+        public void ResetCallTimer()
+        {
+            if (!IsServer) return;
+            nextCallTime = Time.time + firstCallDelay;
+            nextCall.Value = NetworkManager.ServerTime.Time + firstCallDelay;
+        }
+
+        /// <summary>Server: last minute of the round - Bob comes in and searches until the end.</summary>
+        public void StartFinalHunt()
+        {
+            if (!IsServer || finalHunt.Value) return;
+            finalHunt.Value = true;
+            Say("No more hiding, piggies!");
+            if (state.Value == BobState.Away) StartGrillCall();
+            else if (state.Value == BobState.Searching) BeginSearch(0f);
         }
 
         // ---------- brain (server) ----------
@@ -165,7 +203,7 @@ namespace Porkour
                     if (TrySpot()) break;
                     if (now >= searchEnd) { SetState(BobState.Leaving, 0f); break; }
                     if (!hasWanderPoint || Arrived(wanderPoint, 1.2f) || now > wanderUntil) PickWanderPoint();
-                    MoveTo(wanderPoint, walkSpeed * slow);
+                    MoveTo(wanderPoint, walkSpeed * slow * (finalHunt.Value ? 1.15f : 1f));
                     break;
 
                 case BobState.Investigating:
@@ -197,6 +235,7 @@ namespace Porkour
                     break;
 
                 case BobState.Leaving:
+                    if (finalHunt.Value && carriedBait == null) { BeginSearch(0f); break; }
                     MoveTo(home, walkSpeed * slow);
                     if (Arrived(home, 0.8f)) GoAway();
                     break;
@@ -206,16 +245,17 @@ namespace Porkour
         void StartGrillCall()
         {
             SetState(BobState.Coming, warningTime);
-            Announce("GRILL CALL! Bob is coming - hide!");
+            Announce(finalHunt.Value ? "FINAL HUNT! Bob is coming and won't stop!" : "GRILL CALL! Bob is coming - hide!");
+            Say(finalHunt.Value ? "BBQ time is NOW!" : "Dinner time, piggies!");
         }
 
         void BeginSearch(float duration)
         {
-            target = null;
-            targetId.Value = ulong.MaxValue;
+            if (finalHunt.Value) duration = 9999f;
+            ClearTarget();
             searchEnd = Time.time + duration;
             hasWanderPoint = false;
-            SetState(BobState.Searching, duration);
+            SetState(BobState.Searching, finalHunt.Value ? 0f : duration);
         }
 
         void GoAway()
@@ -226,9 +266,8 @@ namespace Porkour
                 carriedBait.ReturnHome();
                 carriedBait = null;
             }
-            target = null;
-            targetId.Value = ulong.MaxValue;
-            float wait = UnityEngine.Random.Range(callInterval.x, callInterval.y);
+            ClearTarget();
+            float wait = finalHunt.Value ? 6f : UnityEngine.Random.Range(callInterval.x, callInterval.y);
             nextCallTime = Time.time + wait;
             nextCall.Value = NetworkManager.ServerTime.Time + wait;
             SetState(BobState.Away, 0f);
@@ -243,6 +282,14 @@ namespace Porkour
             investigateUntil = 0f;
         }
 
+        void ClearTarget()
+        {
+            target = null;
+            targetId.Value = ulong.MaxValue;
+            unreachableTime = 0f;
+            throwsAtTarget = 0;
+        }
+
         /// <summary>Server: a loud noise (bell). Bob goes to check it unless he's busy with a pig.</summary>
         public void HearNoise(Vector3 position)
         {
@@ -250,10 +297,10 @@ namespace Porkour
             var s = state.Value;
             if (s != BobState.Searching && s != BobState.Investigating && s != BobState.Chasing) return;
             noisePos = NavMesh.SamplePosition(position, out NavMeshHit hit, 5f, NavMesh.AllAreas) ? hit.position : position;
-            target = null;
-            targetId.Value = ulong.MaxValue;
+            ClearTarget();
             SetState(BobState.Investigating, 0f);
             Announce("Bob heard something...");
+            Say("Huh? What was that?");
         }
 
         // ---------- moving ----------
@@ -315,37 +362,56 @@ namespace Porkour
             float bestDist = float.MaxValue;
             foreach (var pig in PigController.All)
             {
-                if (!CanSee(pig)) continue;
+                if (pig == null) continue;
                 float d = (pig.Body.position - transform.position).sqrMagnitude;
+                if (ignoreUntil.TryGetValue(pig, out float until) && Time.time < until && d > 4f) continue; // gave up on it
+                if (!CanSee(pig)) continue;
                 if (d < bestDist) { bestDist = d; best = pig; }
             }
             if (best == null) return false;
+            ClearTarget();
             target = best;
             targetId.Value = best.GetComponent<NetworkObject>().NetworkObjectId;
             lastSeenTime = Time.time;
             lastSeenPos = best.Body.position;
             SetState(BobState.Chasing, 0f);
+            string[] lines = { "THERE you are!", "BACON!", "Come here, pork chop!", "Gotcha now!" };
+            Say(lines[UnityEngine.Random.Range(0, lines.Length)]);
             return true;
+        }
+
+        /// <summary>Pigs Bob cares about: someone plays it, it's free, not escaped yet.</summary>
+        static bool IsHuntable(PigController pig) => pig != null && pig.Owner != null && !pig.Escaped && !pig.IsHeld;
+
+        /// <summary>Hidden right now (hay, still under a bucket) - can't be seen or grabbed.</summary>
+        static bool IsHidden(PigController pig)
+        {
+            if (HideSpot.IsHidden(pig.Body.position)) return true;
+            var worn = pig.Worn;
+            return worn != null && pig.StillTime >= worn.hideStillTime;
         }
 
         bool CanSee(PigController pig)
         {
-            if (pig == null || pig.IsHeld) return false;
+            if (!IsHuntable(pig)) return false;
             Vector3 eyes = Eyes;
             Vector3 p = pig.Body.position;
             Vector3 to = p - eyes;
             float dist = to.magnitude;
             if (dist > sightRange) return false;
-            if (HideSpot.IsHidden(p) || SmokeCloud.InSmoke(p)) return false;
-            if (pig.StillTime >= freezeTime && dist > frozenSpotRange) return false; // "just a pig statue"
+            if (IsHidden(pig) || SmokeCloud.InSmoke(p)) return false;
+            var worn = pig.Worn;
+            if (worn != null && dist > worn.movingSpotRange) return false; // "just a bucket"... "wait, it moved?"
+            if (worn == null && pig.StillTime >= freezeTime && dist > frozenSpotRange) return false; // "just a pig statue"
             if (dist > 2.5f && Vector3.Angle(transform.forward, new Vector3(to.x, 0f, to.z)) > sightHalfAngle) return false;
-            // Line of sight: the first thing between the eyes and the pig must be the pig itself.
-            return !Physics.Linecast(eyes, p, out RaycastHit hit, ~0, QueryTriggerInteraction.Ignore) || hit.rigidbody == pig.Body;
+            // Line of sight: the first thing between the eyes and the pig must be the pig (or what it carries / wears).
+            if (!Physics.Linecast(eyes, p, out RaycastHit hit, ~0, QueryTriggerInteraction.Ignore)) return true;
+            return hit.rigidbody != null && (hit.rigidbody == pig.Body || (pig.Grabber != null && hit.rigidbody == pig.Grabber.Held));
         }
 
         void Chase(float slow)
         {
-            if (target == null) { BeginSearch(Mathf.Max(8f, searchEnd - Time.time)); return; }
+            if (target == null || !IsHuntable(target)) { BeginSearch(Mathf.Max(8f, searchEnd - Time.time)); return; }
             if (Time.time >= nextLook)
             {
                 nextLook = Time.time + 0.15f;
@@ -358,18 +424,58 @@ namespace Porkour
             if (Time.time - lastSeenTime > 2.5f) // lost it: check where it was last seen
             {
                 noisePos = lastSeenPos;
-                target = null;
-                targetId.Value = ulong.MaxValue;
+                ClearTarget();
                 SetState(BobState.Investigating, 0f);
+                Say("Where'd it go?");
                 return;
             }
-            MoveTo(lastSeenPos, chaseSpeed * slow);
 
             Vector3 d = target.Body.position - transform.position;
             float dy = d.y;
             d.y = 0f;
-            if (!target.IsHeld && d.magnitude <= grabRange && dy > -0.5f && dy < 1.8f && !HideSpot.IsHidden(target.Body.position))
+            if (d.magnitude <= grabRange && dy > -0.5f && dy < 1.8f && !IsHidden(target))
+            {
                 GrabPig(target);
+                return;
+            }
+
+            // Out of reach (loft, beams, crate stack)? Stand there and throw corn at it.
+            bool tooHigh = d.magnitude <= 2.5f && dy >= 1.8f;
+            bool pathEnds = agent.isOnNavMesh && !agent.pathPending && agent.hasPath
+                            && agent.pathStatus != NavMeshPathStatus.PathComplete && agent.remainingDistance < 0.8f;
+            unreachableTime = tooHigh || pathEnds ? unreachableTime + Time.deltaTime : 0f;
+            if (unreachableTime < 0.8f)
+            {
+                MoveTo(lastSeenPos, chaseSpeed * slow * (finalHunt.Value ? 1.1f : 1f));
+                return;
+            }
+            Stop();
+            if (d.sqrMagnitude > 0.01f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(d), 360f * Time.deltaTime);
+            if (Time.time < nextThrow) return;
+            if (throwsAtTarget >= throwsBeforeGivingUp)
+            {
+                ignoreUntil[target] = Time.time + 10f;
+                Say("Fine, stay up there!");
+                BeginSearch(Mathf.Max(8f, searchEnd - Time.time));
+                return;
+            }
+            ThrowCornAt(target);
+            throwsAtTarget++;
+            nextThrow = Time.time + throwInterval;
+        }
+
+        void ThrowCornAt(PigController pig)
+        {
+            var prefab = Ammo.PrefabFor(Ammo.Kind.Corn);
+            if (prefab == null) return;
+            Vector3 hand = transform.position + Vector3.up * 1.9f + transform.forward * 0.5f;
+            Vector3 aim = pig.Body.position + pig.Body.linearVelocity * 0.25f + UnityEngine.Random.insideUnitSphere * 0.35f;
+            Vector3 velocity = Ammo.BallisticVelocity(hand, aim, throwSpeed);
+            var go = Instantiate(prefab, hand, Quaternion.LookRotation(velocity));
+            go.GetComponent<NetworkObject>().Spawn();
+            go.GetComponent<Ammo>().Fire(ownColliders, velocity, knockPigs: true);
+            if (throwsAtTarget == 0) Say("Get down here!");
+            ThrowFxRpc(hand);
         }
 
         // ---------- carrying ----------
@@ -378,13 +484,13 @@ namespace Porkour
         {
             carried = pig;
             carriedId.Value = pig.GetComponent<NetworkObject>().NetworkObjectId;
-            target = null;
-            targetId.Value = ulong.MaxValue;
+            ClearTarget();
             carriedColliders = pig.GetComponentsInChildren<Collider>();
             IgnoreCollisions(carriedColliders, true);
             pig.SetHeldBy(this);
             SetState(BobState.Carrying, rescueTime);
             Announce($"Bob caught the {PigTypes.Info(pig.Type).Name} pig! Hit Bob or throw a chicken at him!");
+            Say("Into the BBQ you go!");
         }
 
         public void Drop()
@@ -415,7 +521,9 @@ namespace Porkour
             pig.Respawn(); // lets go through Drop(), then back to its start
             grilled.Value++;
             GrillFxRpc(home + Vector3.back * 2f);
-            Announce($"The {name} pig got grilled! (it's back at the start)");
+            Say("Mmm... BBQ!");
+            if (RoundManager.Instance != null) RoundManager.Instance.OnPigGrilled(name);
+            else Announce($"The {name} pig got grilled! (it's back at the start)");
             SetState(BobState.Leaving, 0f);
         }
 
@@ -475,19 +583,19 @@ namespace Porkour
 
         void Stun()
         {
-            if (!Busy) return;
+            if (!Busy || !RoundActive) return;
             string freed = carried != null ? PigTypes.Info(carried.Type).Name : null;
             Drop();
-            target = null;
-            targetId.Value = ulong.MaxValue;
+            ClearTarget();
             SetState(BobState.Stunned, stunTime);
             Stop();
             Announce(freed != null ? $"Bob is stunned - the {freed} pig is free!" : "Bob is stunned!");
+            Say("OW! My head!");
         }
 
         void TakeBait(Bait bait)
         {
-            if (!Busy) return;
+            if (!Busy || !RoundActive) return;
             bool savedPig = carried != null;
             Drop();
             foreach (var pig in PigController.All) // someone still holding it? let go
@@ -495,10 +603,10 @@ namespace Porkour
             carriedBait = bait;
             bait.Body.useGravity = false;
             IgnoreCollisions(bait.GetComponentsInChildren<Collider>(), true);
-            target = null;
-            targetId.Value = ulong.MaxValue;
+            ClearTarget();
             SetState(BobState.Leaving, 0f);
             Announce(savedPig ? $"Bob took the {bait.displayName} instead - pig saved!" : $"Bob took the {bait.displayName} and left!");
+            Say($"Ooh, a {bait.displayName}! Even better!");
         }
 
         // ---------- barn door ----------
@@ -515,19 +623,64 @@ namespace Porkour
             PuzzleSignals.Set(doorChannel, this, open);
         }
 
-        // ---------- messages & visuals ----------
+        // ---------- messages, sounds & visuals ----------
 
         void Announce(string text) => AnnounceRpc(text);
 
+        /// <summary>Server: a speech line over Bob's head on every PC.</summary>
+        public void Say(string text)
+        {
+            if (IsServer && IsSpawned) SayRpc(text);
+        }
+
         [Rpc(SendTo.Everyone)]
-        void AnnounceRpc(string text) => Announced?.Invoke(text);
+        void AnnounceRpc(string text) => GameEvents.Announce(text);
+
+        [Rpc(SendTo.Everyone)]
+        void SayRpc(string text)
+        {
+            speech = text;
+            speechUntil = Time.time + 2.5f;
+        }
+
+        [Rpc(SendTo.Everyone)]
+        void ThrowFxRpc(Vector3 hand) => Sfx.Play(Sound.Throw, hand, 1f);
 
         [Rpc(SendTo.Everyone)]
         void GrillFxRpc(Vector3 position)
         {
+            Sfx.Play(Sound.Sizzle, position, 1f, 0f);
             for (int i = 0; i < 6; i++)
                 SmokeCloud.Spawn(position + UnityEngine.Random.insideUnitSphere * 0.5f + Vector3.up * (0.8f + i * 0.3f),
                     0.5f, 2.5f, new Color(0.25f, 0.25f, 0.25f, 0.6f));
+        }
+
+        void OnStateChanged(BobState previous, BobState current)
+        {
+            Vector3 p = transform.position + Vector3.up;
+            switch (current)
+            {
+                case BobState.Coming:
+                    Sfx.PlayUi(Sound.GrillCall, 0.8f);
+                    break;
+                case BobState.Carrying:
+                    Sfx.PlayUi(Sound.Caught, 0.7f);
+                    break;
+                case BobState.Stunned:
+                    Sfx.Play(Sound.Bonk, p, 1f);
+                    Sfx.Play(Sound.Ding, p, 0.5f);
+                    ThirdPersonCamera.Shake(p, 0.4f, 8f);
+                    break;
+            }
+        }
+
+        void OnTargetChanged(ulong previous, ulong current)
+        {
+            if (current == ulong.MaxValue) return;
+            var me = NetPlayer.Local != null ? NetPlayer.Local.Pig : null;
+            bool isMe = me != null && me.TryGetComponent(out NetworkObject obj) && obj.NetworkObjectId == current;
+            if (isMe) Sfx.PlayUi(Sound.Spotted, 0.9f);
+            else Sfx.Play(Sound.Spotted, transform.position + Vector3.up * 2f, 0.6f, 0f);
         }
 
         void BuildIndicators()
@@ -565,9 +718,24 @@ namespace Porkour
             bool dizzy = s == BobState.Stunned;
             if (stars.gameObject.activeSelf != dizzy) stars.gameObject.SetActive(dizzy);
             if (dizzy) stars.Rotate(0f, 360f * Time.deltaTime, 0f, Space.Self);
+            if (anim != null)
+            {
+                anim.ArmsUp = s == BobState.Carrying || (s == BobState.Leaving && carriedId.Value != ulong.MaxValue);
+                anim.Dizzy = dizzy;
+            }
             if (mark == null) return;
-            mark.text = s == BobState.Chasing ? "!" : s == BobState.Investigating ? "?" : "";
-            mark.color = s == BobState.Chasing ? new Color(1f, 0.2f, 0.1f) : new Color(1f, 0.9f, 0.2f);
+            if (Time.time < speechUntil && !string.IsNullOrEmpty(speech))
+            {
+                mark.text = speech;
+                mark.characterSize = 0.035f;
+                mark.color = Color.white;
+            }
+            else
+            {
+                mark.text = s == BobState.Chasing ? "!" : s == BobState.Investigating ? "?" : "";
+                mark.characterSize = 0.06f;
+                mark.color = s == BobState.Chasing ? new Color(1f, 0.2f, 0.1f) : new Color(1f, 0.9f, 0.2f);
+            }
             var cam = Camera.main;
             if (cam != null && mark.text != "") mark.transform.rotation = Quaternion.LookRotation(mark.transform.position - cam.transform.position);
         }

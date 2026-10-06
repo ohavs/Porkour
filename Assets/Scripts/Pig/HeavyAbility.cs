@@ -184,8 +184,11 @@ namespace Porkour
             {
                 case FxDash:
                     StartCoroutine(DashTrail());
+                    Sfx.Play(Sound.Dash, position);
                     break;
                 case FxSlam:
+                    Sfx.Play(Sound.Slam, position);
+                    ThirdPersonCamera.Shake(position, 0.8f, 12f);
                     SmokeCloud.Spawn(position, 1f, 0.9f, SmokeCloud.DustColor);
                     for (int i = 0; i < 8; i++)
                     {
@@ -195,6 +198,7 @@ namespace Porkour
                     break;
                 case FxBounce:
                     SmokeCloud.Spawn(position, 0.4f, 0.5f, SmokeCloud.DustColor);
+                    Sfx.Play(Sound.Boing, position, 1f, 0.1f);
                     break;
             }
         }

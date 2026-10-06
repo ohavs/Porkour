@@ -193,12 +193,15 @@ namespace Porkour
                 case FxWallJump:
                 case FxMantle:
                     SmokeCloud.Spawn(position, 0.35f, 0.5f, SmokeCloud.DustColor);
+                    Sfx.Play(kind == FxWallJump ? Sound.Boing : Sound.Jump, position, kind == FxWallJump ? 0.6f : 0.4f, 0.15f);
                     break;
                 case FxRopeDrop:
+                    Sfx.Play(Sound.Rope, position);
                     if (rope != null) Destroy(rope.gameObject);
                     rope = RopeLadder.Create(position, direction, direction.magnitude, ropeLifetime);
                     break;
                 case FxRopeRemove:
+                    if (rope != null) Sfx.Play(Sound.Rope, rope.transform.position, 0.6f);
                     if (rope != null) Destroy(rope.gameObject);
                     rope = null;
                     break;

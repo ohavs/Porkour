@@ -9,6 +9,17 @@ namespace Porkour
         int Channel { get; set; }
     }
 
+    /// <summary>Channel numbers used by the barn (builder, RoundManager objectives and Bob share them).</summary>
+    public static class ChannelIds
+    {
+        public const int Lift = 2;
+        public const int Padlock = 11;
+        public const int Fence = 12;
+        public const int Generator = 13;
+        public const int Target1 = 21, Target2 = 22, Target3 = 23;
+        public const int BobDoor = 99;
+    }
+
     /// <summary>
     /// Server-side puzzle wiring: switches turn a channel on/off, gates/doors read it.
     /// A channel is on while at least one of its sources is on.
@@ -28,5 +39,17 @@ namespace Porkour
         }
 
         public static bool IsOn(int channel) => Sources.TryGetValue(channel, out var set) && set.Count > 0;
+
+        /// <summary>True when every channel in the list is on (empty list = false).</summary>
+        public static bool AllOn(int[] channels)
+        {
+            if (channels == null || channels.Length == 0) return false;
+            foreach (int c in channels)
+                if (!IsOn(c)) return false;
+            return true;
+        }
+
+        /// <summary>Forget every switch (new round: the level is respawned).</summary>
+        public static void Clear() => Sources.Clear();
     }
 }

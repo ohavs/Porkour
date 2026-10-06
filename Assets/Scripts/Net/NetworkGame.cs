@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.AI.Navigation;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -8,8 +9,8 @@ namespace Porkour
 {
     /// <summary>
     /// Starts/joins a game and runs the server side of the session:
-    /// spawns the level's networked objects (pigs get random, different types), a NetPlayer per connected PC,
-    /// and gives each a free pig.
+    /// spawns the round manager and the level's networked objects (pigs get random, different types), a NetPlayer per
+    /// connected PC, and gives each a free pig. RestartRound respawns the whole level for a fresh round.
     /// In the editor it starts automatically: main editor = Host, Multiplayer Play Mode virtual players = Client
     /// (and if the port is already taken it falls back to Client). In builds it shows a Host / Join menu.
     /// </summary>
@@ -18,6 +19,8 @@ namespace Porkour
     {
         [Tooltip("Spawned once per connected PC. All networked prefabs are registered in the NetworkManager's prefab list (set by the builder).")]
         public GameObject playerPrefab;
+        [Tooltip("RoundManager prefab, spawned once when the server starts (set by the builder).")]
+        public GameObject roundPrefab;
         public NetSpawnPoint[] spawnPoints;
         [Tooltip("Baked on the server when a game starts (Farmer Bob walks on it). Set by the builder.")]
         public NavMeshSurface navMesh;
@@ -29,7 +32,7 @@ namespace Porkour
         string address = "127.0.0.1";
         string status = "";
         bool levelSpawned;
-        GUIStyle bigStyle;
+        GUIStyle bigStyle, statusStyle;
 
         static bool IsVirtualPlayer => Application.dataPath.Replace('\\', '/').Contains("/Library/VP/");
 
@@ -104,6 +107,31 @@ namespace Porkour
             if (levelSpawned || !nm.IsServer) return;
             levelSpawned = true;
             if (navMesh != null) navMesh.BuildNavMesh(); // only static level geometry (children of the surface)
+            if (roundPrefab != null && RoundManager.Instance == null)
+                Instantiate(roundPrefab).GetComponent<NetworkObject>().Spawn();
+            SpawnLevelObjects();
+            if (RoundManager.Instance != null) RoundManager.Instance.BeginRound();
+        }
+
+        /// <summary>Server: new round - despawn everything except players and the round manager, spawn the level again,
+        /// give every player a pig (types are shuffled again).</summary>
+        public void RestartRound()
+        {
+            if (!nm.IsServer) return;
+            foreach (var player in NetPlayer.All) player.AssignPig(null);
+            var old = new List<NetworkObject>();
+            foreach (var obj in nm.SpawnManager.SpawnedObjectsList)
+                if (!obj.IsPlayerObject && obj.GetComponent<RoundManager>() == null) old.Add(obj);
+            foreach (var obj in old)
+                if (obj != null && obj.IsSpawned) obj.Despawn(true);
+            PuzzleSignals.Clear();
+            SpawnLevelObjects();
+            foreach (var player in NetPlayer.All) player.AssignPig(NetPlayer.FindFreePig());
+            if (RoundManager.Instance != null) RoundManager.Instance.BeginRound();
+        }
+
+        void SpawnLevelObjects()
+        {
             var types = PigTypes.Shuffled();
             int pigCount = 0;
             foreach (var point in spawnPoints)
@@ -139,13 +167,14 @@ namespace Porkour
         void OnGUI()
         {
             bigStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 22 };
+            statusStyle ??= new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight };
             bool running = nm.IsServer || nm.IsClient;
 
-            if (running)
+            if (running) // bottom-right, out of the HUD's way
             {
                 string players = nm.IsServer ? $"  |  players {nm.ConnectedClientsIds.Count}/4" : "";
-                string debug = nm.IsHost ? "  |  G: Grill Call now" : "";
-                GUI.Label(new Rect(12, 8, 900, 24), $"{status}{players}  |  Tab / Y: switch pig{debug}");
+                string debug = nm.IsHost ? "  |  G: Grill Call now  |  R: restart round" : "";
+                GUI.Label(new Rect(Screen.width - 912, Screen.height - 30, 900, 24), $"{status}{players}  |  Tab / Y: switch pig{debug}", statusStyle);
                 return;
             }
 

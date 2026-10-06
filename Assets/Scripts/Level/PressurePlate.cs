@@ -40,10 +40,15 @@ namespace Porkour
             BuildLabel();
         }
 
+        public override void OnNetworkSpawn() => pressed.OnValueChanged += OnPressedChanged;
+
         public override void OnNetworkDespawn()
         {
+            pressed.OnValueChanged -= OnPressedChanged;
             if (IsServer) PuzzleSignals.Set(channel, this, false);
         }
+
+        void OnPressedChanged(bool previous, bool current) => Sfx.Play(Sound.Click, transform.position, current ? 1f : 0.6f);
 
         void FixedUpdate()
         {
