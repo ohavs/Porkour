@@ -35,7 +35,9 @@ namespace Porkour.EditorTools
         const string OldScenePath = "Assets/Scenes/TestBarn.unity";
         const string InputPath = "Assets/Input/PigControls.inputactions";
         /// <summary>Bump whenever BuildBarn generates something new → auto-rebuild after the next compile.</summary>
-        const int BuildVersion = 5;
+        const int BuildVersion = 6;
+        /// <summary>Farmer Bob is a big man (model height; collider / NavMesh agent follow).</summary>
+        const float BobHeight = 2.4f;
 
         static bool autoRebuildFailed;
 
@@ -209,13 +211,14 @@ namespace Porkour.EditorTools
         {
             public GameObject pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence,
                 fuseBox, generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt,
-                truckKeys, pie, ignition, chimney, houseDoor, shutter;
+                truckKeys, pie, ignition, chimney, houseDoor, shutter,
+                cage, gasBottle, gatePlate, coin, bigCoin, farmGate, piggyBank, goldenEgg, watch;
 
             public GameObject[] All => new[]
             {
                 pig, player, round, crate, barrel, key, weakCrate, boards, plate, lift, barnDoor, exitGate, fence, fuseBox,
                 generator, padlock, bob, target, bell, chicken, calf, bucket, apple, corn, egg, bolt, truckKeys, pie,
-                ignition, chimney, houseDoor, shutter,
+                ignition, chimney, houseDoor, shutter, cage, gasBottle, gatePlate, coin, bigCoin, farmGate, piggyBank, goldenEgg, watch,
             };
         }
 
@@ -224,6 +227,7 @@ namespace Porkour.EditorTools
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return false;
             Kit.Reset();
             animalYaw = null;
+            treeModels = null;
             ArtSetup.PrepareImports(); // Bob / animal import settings (first time only)
 
             var p = new PrefabSet { pig = BuildPigPrefab(), player = BuildPlayerPrefab() };
@@ -241,7 +245,7 @@ namespace Porkour.EditorTools
             BuildFarmyard(level);       // farmyard, Bob's house, truck (PorkourBuilder.Farm)
 
             var wood = Mat("Crate", new Color(0.8f, 0.62f, 0.38f));
-            p.crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f);
+            p.crate = BuildPropPrefab("Crate", PrimitiveType.Cube, Vector3.one, wood, 8f, "Prop_Crate");
             p.barrel = BuildPropPrefab("Barrel", PrimitiveType.Cylinder, new Vector3(0.8f, 0.6f, 0.8f), wood, 15f);
             p.key = BuildKeyPrefab();
             p.weakCrate = BuildBreakableCratePrefab();
@@ -275,6 +279,15 @@ namespace Porkour.EditorTools
             p.pie = BuildPiePrefab();
             p.ignition = BuildIgnitionPrefab();
             p.chimney = BuildChimneyPrefab();
+            p.cage = BuildCagePrefab(GrillPos - CagePos);
+            p.gasBottle = BuildGasBottlePrefab();
+            p.gatePlate = BuildPressurePlatePrefab("GatePlate", 20f, "GATE PLATE\n(both at once!)");
+            p.coin = BuildCoinPrefab("Coin", 5, 0.45f);
+            p.bigCoin = BuildCoinPrefab("BigCoin", 15, 0.7f);
+            p.farmGate = BuildFarmGatePrefab();
+            p.piggyBank = BuildPiggyBankPrefab();
+            p.goldenEgg = BuildGoldenEggPrefab();
+            p.watch = BuildWatchPrefab();
 
             // Networked things are spawned by the server when a round starts, at these points.
             var spawnRoot = new GameObject("SpawnPoints").transform;
@@ -331,11 +344,17 @@ namespace Porkour.EditorTools
             return AssetDatabase.LoadAssetAtPath<GameObject>(path);
         }
 
-        static GameObject BuildPropPrefab(string name, PrimitiveType type, Vector3 scale, Material mat, float mass)
+        static GameObject BuildPropPrefab(string name, PrimitiveType type, Vector3 scale, Material mat, float mass, string kitLook = null)
         {
             EnsureFolder(PropDir);
             var go = Part(type, name, null, Vector3.zero, scale, mat, default, keepCollider: true);
             go.AddComponent<Rigidbody>().mass = mass;
+            // Kit model as the look (only for unscaled props: the root is built at the origin with scale 1).
+            if (kitLook != null && scale == Vector3.one && Kit.Fit(kitLook, go.transform, Vector3.zero, scale, 0f) is GameObject look)
+            {
+                foreach (var t in look.GetComponentsInChildren<Transform>()) GameObjectUtility.SetStaticEditorFlags(t.gameObject, 0); // it moves
+                Object.DestroyImmediate(go.GetComponent<MeshRenderer>()); // the kit model is the look; the box stays the collider
+            }
             AddNetworkSync(go);
             return SavePrefab(go, $"{PropDir}/{name}.prefab");
         }
@@ -418,10 +437,10 @@ namespace Porkour.EditorTools
         }
 
         /// <summary>Heavy floor switch (see PressurePlate): 2x2 plate, top turns green when pressed.</summary>
-        static GameObject BuildPressurePlatePrefab()
+        static GameObject BuildPressurePlatePrefab(string name = "PressurePlate", float requiredMass = 40f, string label = null)
         {
             EnsureFolder(PropDir);
-            var root = new GameObject("PressurePlate");
+            var root = new GameObject(name);
             var box = root.AddComponent<BoxCollider>();
             box.size = new Vector3(2f, 0.1f, 2f);
             box.center = new Vector3(0f, 0.05f, 0f);
@@ -430,7 +449,19 @@ namespace Porkour.EditorTools
             Part(PrimitiveType.Cube, "Frame", root.transform, new Vector3(0f, 0.04f, 0f), new Vector3(2.2f, 0.08f, 2.2f), Mat("PlateFrame", new Color(0.3f, 0.3f, 0.32f)));
             var top = Part(PrimitiveType.Cube, "Top", root.transform, new Vector3(0f, 0.08f, 0f), new Vector3(1.8f, 0.06f, 1.8f), Mat("PlateTop", Color.white));
             plate.top = top.GetComponent<Renderer>();
-            return SavePrefab(root, $"{PropDir}/PressurePlate.prefab");
+            plate.requiredMass = requiredMass;
+            if (label != null)
+            {
+                var go = new GameObject("Label");
+                go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = new Vector3(0f, 2.3f, 0f); // above the plate's own weight label
+                var text = go.AddComponent<WorldLabel>();
+                text.text = label;
+                text.color = new Color(1f, 0.85f, 0.4f);
+                text.characterSize = 0.035f;
+                text.billboard = true;
+            }
+            return SavePrefab(root, $"{PropDir}/{name}.prefab");
         }
 
         /// <summary>Gate / door / lift that moves by openOffset while its channel is on (see Gate).</summary>
@@ -619,15 +650,15 @@ namespace Porkour.EditorTools
 
             var root = new GameObject("FarmerBob");
             var col = root.AddComponent<CapsuleCollider>();
-            col.height = 1.9f;
-            col.radius = 0.4f;
-            col.center = new Vector3(0f, 0.95f, 0f);
+            col.height = BobHeight - 0.1f;
+            col.radius = 0.45f;
+            col.center = new Vector3(0f, (BobHeight - 0.1f) / 2f, 0f);
             var rb = root.AddComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.mass = 100f; // never grabbable
             var agent = root.AddComponent<NavMeshAgent>();
-            agent.radius = 0.45f;
-            agent.height = 1.9f;
+            agent.radius = 0.5f;
+            agent.height = BobHeight - 0.1f;
             agent.speed = 3.2f;
             agent.angularSpeed = 540f;
             agent.acceleration = 20f;
@@ -641,9 +672,10 @@ namespace Porkour.EditorTools
 
             var v = new GameObject("Visual").transform;
             v.SetParent(root.transform, false);
-            bool model = BobVisual(v) != null; // Mixamo Bob + his animations, else the primitive farmer
+            bool model = BobVisual(v, BobHeight) != null; // Mixamo Bob + his animations, else the primitive farmer
             if (!model)
             {
+                v.localScale = Vector3.one * (BobHeight / 2.2f); // the primitive farmer is 2.2 m with his hat
                 Part(PrimitiveType.Capsule, "Legs", v, new Vector3(0f, 0.55f, 0f), new Vector3(0.55f, 0.55f, 0.4f), overalls);
                 Part(PrimitiveType.Capsule, "Body", v, new Vector3(0f, 1.25f, 0f), new Vector3(0.75f, 0.5f, 0.5f), overalls);
                 Part(PrimitiveType.Cube, "Shirt", v, new Vector3(0f, 1.55f, 0f), new Vector3(0.7f, 0.25f, 0.42f), shirt);
@@ -660,7 +692,7 @@ namespace Porkour.EditorTools
             var anim = root.AddComponent<ProceduralAnimator>();
             anim.kind = ProceduralAnimator.Kind.Farmer;
             anim.visual = v;
-            anim.stepsPerMetre = 1.1f;
+            anim.stepsPerMetre = 0.6f; // big slow strides (footstep sounds)
             anim.bobHeight = 0.05f;
             anim.fullSpeed = 4.5f;
             anim.limbSwing = 30f;
@@ -669,7 +701,7 @@ namespace Porkour.EditorTools
 
             var carry = new GameObject("CarryPoint").transform;
             carry.SetParent(root.transform, false);
-            carry.localPosition = new Vector3(0.3f, 2.05f, -0.1f);
+            carry.localPosition = new Vector3(0.3f, BobHeight + 0.15f, -0.1f);
             bob.carryPoint = carry;
             // Barn layout (see BuildLevel).
             bob.doorPosition = new Vector3(0f, 0f, -15.5f);
@@ -678,8 +710,8 @@ namespace Porkour.EditorTools
             bob.searchCenter = new Vector3(0f, 0f, 0f);
             bob.searchHalfSize = new Vector2(18f, 13f);
             // Farmyard (see BuildFarmyard): only reachable for him once the barn exit is open.
-            bob.searchCenter2 = new Vector3(0f, 0f, 38f);
-            bob.searchHalfSize2 = new Vector2(25f, 20f);
+            bob.searchCenter2 = new Vector3(0f, 0f, 52f);
+            bob.searchHalfSize2 = new Vector2(45f, 36f);
             bob.doorChannel = ChannelIds.BobDoor;
             return SavePrefab(root, $"{PrefabDir}/FarmerBob.prefab");
         }

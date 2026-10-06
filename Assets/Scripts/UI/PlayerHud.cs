@@ -9,9 +9,9 @@ namespace Porkour
     /// Local player's on-screen hints (built from code; cartoon look = GameFonts + rounded UiShapes panels):
     /// marker over the thing you can grab, button prompt pill, throw charge bar, throw-arc preview,
     /// bottom-left: your pig type + its ability (key / cooldown / ammo), Armed's crosshair,
-    /// top: round timer, Farmer Bob's Grill Call banner + announcements (pop in), top-left: the escape plan checklist,
-    /// top-right: pigs grilled / escaped, centre: round intro (your role) and results. Also picks the music mood
-    /// and handles M (music on/off).
+    /// top: round timer, Farmer Bob's Grill Call banner + announcements (pop in) + Bob's cage timer, top-left: the
+    /// missions (required + bonus, steps), top-right: pigs grilled / escaped / team coins, centre: round intro (your role)
+    /// and results (stars, coins, XP, level). Also picks the music mood and handles M (music on/off).
     /// </summary>
     [RequireComponent(typeof(NetPlayer))]
     public class PlayerHud : MonoBehaviour
@@ -37,8 +37,8 @@ namespace Porkour
         Image marker, barBack, barFill, cooldownBack, cooldownFill, crosshair, typePanel, timerPanel, planPanel, statusPanel;
         readonly Image[] starImages = new Image[RoundManager.MaxStars];
         GameObject starRow;
-        Text prompt, typeTitle, abilityLine, banner, message, timer, planTitle, plan, status, bigText, subText;
-        GameObject promptPill, messagePill, subPanel;
+        Text prompt, typeTitle, abilityLine, banner, message, timer, planTitle, plan, status, bigText, subText, cageText;
+        GameObject promptPill, messagePill, subPanel, cagePill;
         CanvasGroup messageGroup;
         float messageStart = -10f, messageUntil, bigStart;
         string lastBig = "";
@@ -118,22 +118,26 @@ namespace Porkour
             message.color = Cream;
             Place((RectTransform)messagePill.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -190f));
             messageGroup = messagePill.AddComponent<CanvasGroup>();
+            (cagePill, cageText) = Pill(root, "Cage", body, 27, new Vector2(26f, 8f));
+            Place((RectTransform)cagePill.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -248f));
+            cagePill.GetComponent<Image>().color = new Color(0.45f, 0.08f, 0.04f, 0.85f);
+            cagePill.SetActive(false);
 
             // Escape plan (top-left), grilled / escaped (top-right).
-            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(860f, 268f));
+            planPanel = UiShapes.Panel(root, "PlanPanel", PanelColor, new Vector2(860f, 330f));
             Place(planPanel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(16f, -16f));
             planTitle = NewText(planPanel.transform, "PlanTitle", title, 32, TextAnchor.MiddleLeft, new Vector2(760f, 40f), true);
             planTitle.color = Accent;
-            planTitle.text = "ESCAPE PLAN";
+            planTitle.text = "MISSIONS";
             Place(planTitle.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -8f));
-            plan = NewText(planPanel.transform, "Plan", body, 21, TextAnchor.UpperLeft, new Vector2(820f, 210f));
+            plan = NewText(planPanel.transform, "Plan", body, 21, TextAnchor.UpperLeft, new Vector2(820f, 270f));
             plan.horizontalOverflow = HorizontalWrapMode.Wrap;
             plan.verticalOverflow = VerticalWrapMode.Overflow;
             plan.lineSpacing = 1.05f;
             Place(plan.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(22f, -52f));
-            statusPanel = UiShapes.Panel(root, "StatusPanel", PanelColor, new Vector2(320f, 98f));
+            statusPanel = UiShapes.Panel(root, "StatusPanel", PanelColor, new Vector2(320f, 132f));
             Place(statusPanel.rectTransform, Vector2.one, Vector2.one, new Vector2(-16f, -16f));
-            status = NewText(statusPanel.transform, "Status", body, 28, TextAnchor.MiddleRight, new Vector2(290f, 90f));
+            status = NewText(statusPanel.transform, "Status", body, 28, TextAnchor.MiddleRight, new Vector2(290f, 124f));
             status.lineSpacing = 1.1f;
             Place(status.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-18f, 0f));
 
@@ -213,10 +217,13 @@ namespace Porkour
                 if (net.IsHeld)
                 {
                     var bob = FarmerBob.Instance;
-                    text = bob != null && bob.CarriedPigId == net.NetworkObjectId
+                    var cage = PigCage.Instance;
+                    bool caged = cage != null && cage.IsSpawned && cage.TimeLeft(net.NetworkObjectId) >= 0f;
+                    text = caged ? "You're in Bob's cage... your friends must open it!"
+                        : bob != null && bob.CarriedPigId == net.NetworkObjectId
                         ? "Bob caught you! Wait for your friends to save you..."
                         : $"Mash {jumpKey} to break free!";
-                    if (net.Type == PigType.Gassy && net.Ability != null && net.AbilityCooldownLeft <= 0f)
+                    if (!caged && net.Type == PigType.Gassy && net.Ability != null && net.AbilityCooldownLeft <= 0f)
                         text += $"  or  {abilityKey}: fart out!";
                 }
                 else if (held != null && held.TryGetComponent(out Wearable _))
@@ -253,6 +260,7 @@ namespace Porkour
             UpdateArc(charge >= 0f ? grabber : null, pig, held, charge);
             UpdateTypePanel(net, abilityKey);
             UpdateBobBanner(net);
+            UpdateCage(net);
             UpdateRound(net, abilityKey);
             UpdateMessage();
             UpdateMusic();
@@ -305,8 +313,32 @@ namespace Porkour
             if (net.Type == PigType.Heavy)
                 foreach (var box in Breakable.All)
                     if (box.channel != 0 && box.IsSpawned && !box.IsBroken && Vector3.Distance(p, box.transform.position) < 4f)
-                        return $"{abilityKey}: Belly Slam the fuse box!";
+                        return box.channel == ChannelIds.Sabotage ? $"{abilityKey}: Belly Slam Bob's gas bottle!" : $"{abilityKey}: Belly Slam the fuse box!";
+            var cage = PigCage.Instance;
+            if (cage != null && cage.IsSpawned && cage.Count > 0)
+            {
+                if (Vector3.Distance(p, cage.DoorPoint) < cage.unlockRadius + 0.3f) return "Stay at the door - opening the cage...";
+                if (net.Type == PigType.Heavy && Vector3.Distance(p, cage.transform.position) < 5f) return $"{abilityKey}: Belly Slam the cage open!";
+            }
             return "";
+        }
+
+        /// <summary>Bob's cage: who's inside and how long until the grill is hot.</summary>
+        void UpdateCage(PigNet net)
+        {
+            var cage = PigCage.Instance;
+            float left = 0f;
+            bool show = cage != null && cage.IsSpawned && cage.Soonest(out _, out left);
+            if (cagePill.activeSelf != show) cagePill.SetActive(show);
+            if (!show) return;
+            float mine = net != null ? cage.TimeLeft(net.NetworkObjectId) : -1f;
+            string clock = FormatClock(mine >= 0f ? mine : left);
+            string opening = cage.UnlockProgress > 0f ? $"   <color=#8CFF7A>OPENING {Mathf.RoundToInt(cage.UnlockProgress * 100f)}%</color>" : "";
+            cageText.text = mine >= 0f
+                ? $"YOU'RE IN BOB'S CAGE! Grill hot in <color={KeyColor}>{clock}</color>{opening}"
+                : $"{cage.Count} pig{(cage.Count > 1 ? "s" : "")} in Bob's CAGE (behind the barn)! Grill hot in <color={KeyColor}>{clock}</color>{opening}";
+            float pulse = (mine >= 0f ? mine : left) < 20f ? 1f + 0.05f * Mathf.Sin(Time.time * 10f) : 1f;
+            cagePill.transform.localScale = Vector3.one * pulse;
         }
 
         void UpdateRound(PigNet net, string abilityKey)
@@ -338,23 +370,10 @@ namespace Porkour
             timerPanel.transform.localScale = Vector3.MoveTowards(timerPanel.transform.localScale, Vector3.one, Time.deltaTime);
             lastTickSecond = second;
 
-            // Escape plan checklist.
-            var sb = new System.Text.StringBuilder();
-            for (int i = 0; i < RoundManager.Objectives.Length; i++)
-            {
-                var o = RoundManager.Objectives[i];
-                round.ObjectiveProgress(i, out int done, out int total);
-                string box = done == total ? "<color=#7CFF6B>[X]</color>" : total > 1 ? $"<color=#FFD24A>[{done}/{total}]</color>" : "[  ]";
-                string line = done == total ? $"<color=#A9C99A>{o.Name}</color>" : $"<color=#FFE9B0>{o.Name}</color>: {o.Hint}";
-                sb.Append(box).Append(' ').Append(line).Append('\n');
-            }
-            sb.Append(round.AllObjectivesDone ? "<color=#7CFF6B>TRUCK RUNNING - everyone jump into the truck!</color>"
-                : round.ExitOpen ? "<color=#FFD24A>Barn exit open - go get the truck keys!</color>"
-                : "<color=#B9A58A>Then: everyone into the getaway truck</color>");
-            plan.text = sb.ToString();
-
+            plan.text = MissionList(round);
             status.text = $"<color=#FF8A66>GRILLED  {round.Grills} / {round.maxGrills}</color>\n" +
-                          $"<color=#8CFF7A>ESCAPED  {round.EscapedCount} / {Mathf.Max(1, round.PlayerCount)}</color>";
+                          $"<color=#8CFF7A>ESCAPED  {round.EscapedCount} / {Mathf.Max(1, round.PlayerCount)}</color>\n" +
+                          $"<color={KeyColor}>COINS  {round.Coins}</color>";
 
             // Centre: intro (your role) / results.
             string sub = "";
@@ -366,28 +385,70 @@ namespace Porkour
                     var info = PigTypes.Info(net.Type);
                     big = $"YOU ARE THE {info.Name.ToUpperInvariant()} PIG!";
                     color = info.Color;
-                    sub = RoleText(net.Type, abilityKey) +
-                          $"\n\n<color={KeyColor}>Escape the barn before Bob's BBQ!  Starting in {Mathf.CeilToInt(round.PhaseTimeLeft)}</color>";
+                    var level = SceneBuildInfo.Current;
+                    string farm = level != null ? $"<color=#B9A58A>FARM {level.levelNumber}: {level.levelName.ToUpperInvariant()}</color>\n" : "";
+                    sub = farm + RoleText(net.Type, abilityKey) +
+                          "\n<color=#D8C6A8>Caught pigs end up in Bob's CAGE behind the barn (go through the PIG FLAP) - free them before the grill is hot! Grab coins for the shop.</color>" +
+                          $"\n\n<color={KeyColor}>Break out, steal Bob's truck, get off his farm!  Starting in {Mathf.CeilToInt(round.PhaseTimeLeft)}</color>";
                     break;
                 }
                 case RoundPhase.Won:
                     big = "YOU ESCAPED!";
                     color = new Color(0.5f, 1f, 0.45f);
-                    sub = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}" +
-                          (round.PieStolen ? "   |   <color=#FFD24A>Bob's pie stolen!</color>" : "") +
-                          $"\n<color=#B9A58A>Stars: escaped, nobody grilled, under {FormatClock(round.starTime)}, Bob's pie in the truck</color>" +
-                          $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
+                    sub = $"Time {FormatClock(round.FinishTime)}   |   Pigs grilled {round.Grills}   |   Rescued {round.Rescues}" +
+                          (round.LootCoins > 0 ? $"   |   Loot <color={KeyColor}>{round.LootCoins}</color>" : "") +
+                          $"\n<color=#B9A58A>Stars: escaped, nobody grilled, under {FormatClock(round.starTime)}, both bonus missions</color>" +
+                          Payout() + $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
                     break;
                 case RoundPhase.Lost:
                     big = "BBQ TIME...";
                     color = new Color(1f, 0.45f, 0.25f);
                     sub = (round.Reason == LoseReason.Grilled ? $"Bob grilled {round.maxGrills} pigs." : "Time's up - Bob lit the BBQ.") +
-                          $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
+                          " <color=#B9A58A>(you keep half of the coins)</color>" +
+                          Payout() + $"\n\nNext round in {Mathf.CeilToInt(round.PhaseTimeLeft)}";
                     break;
             }
             ShowCentre(big, sub, color);
             UpdateStars(round);
         }
+
+        /// <summary>Missions panel: required ones first, steps of an unfinished multi-step mission, bonus missions, what's next.</summary>
+        static string MissionList(RoundManager round)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int m = 0; m < RoundManager.Missions.Length; m++)
+            {
+                var mission = RoundManager.Missions[m];
+                bool done = round.MissionDone(m);
+                int steps = mission.Steps.Length, stepsDone = round.MissionStepsDone(m);
+                string box = done ? "<color=#7CFF6B>[X]</color>" : steps > 1 ? $"<color=#FFD24A>[{stepsDone}/{steps}]</color>" : "[  ]";
+                string tag = mission.Required ? "" : $"<color=#C9A0FF>BONUS +{mission.Coins}</color> ";
+                if (done) sb.Append(box).Append(' ').Append(tag).Append($"<color=#A9C99A>{mission.Name}</color>\n");
+                else if (steps == 1)
+                    sb.Append(box).Append(' ').Append(tag).Append($"<color=#FFE9B0>{mission.Name}</color>: {RoundManager.Objectives[mission.Steps[0]].Hint}\n");
+                else
+                {
+                    sb.Append(box).Append(' ').Append(tag).Append($"<color=#FFE9B0>{mission.Name}</color>\n");
+                    foreach (int step in mission.Steps)
+                    {
+                        var o = RoundManager.Objectives[step];
+                        round.ObjectiveProgress(step, out int d, out int total);
+                        string mark = d == total ? "<color=#7CFF6B>v</color>" : total > 1 ? $"<color=#FFD24A>{d}/{total}</color>" : "-";
+                        sb.Append("      ").Append(mark).Append(' ')
+                          .Append(d == total ? $"<color=#A9C99A>{o.Name}</color>" : $"{o.Name}: <color=#D8C6A8>{o.Hint}</color>").Append('\n');
+                    }
+                }
+            }
+            sb.Append(round.RequiredDone ? "<color=#7CFF6B>ALL SET - everyone jump into the truck!</color>"
+                : round.CanEscape ? "<color=#FFD24A>Truck ready, gate open - finish the barn missions, then into the truck!</color>"
+                : "<color=#B9A58A>Then: everyone into the getaway truck</color>");
+            return sb.ToString();
+        }
+
+        /// <summary>This PC's reward line for the results screen (coins + XP saved by PlayerProgress).</summary>
+        static string Payout() =>
+            $"\n<color={KeyColor}>+{PlayerProgress.LastCoins} coins   +{PlayerProgress.LastXp} XP</color>   " +
+            $"<color=#B9A58A>(you have {PlayerProgress.Coins} coins - level {PlayerProgress.Level} - the shop opens soon!)</color>";
 
         void UpdateStars(RoundManager round)
         {
@@ -424,7 +485,7 @@ namespace Porkour
         static string RoleText(PigType type, string abilityKey) => type switch
         {
             PigType.Gassy => $"{abilityKey}: Rocket Fart - blast up to the hayloft and fart into the GENERATOR to start the gate motor. " +
-                             "Your green smoke blinds Bob!",
+                             "Your green smoke blinds Bob! (every fart makes you a bit slimmer)",
             PigType.Jumpy => "Jump at walls to wall-bounce and grab ledges: get onto the ROOF BEAMS, grab the KEY and throw it down. " +
                              $"{abilityKey} at an edge: drop a rope ladder for your friends!",
             PigType.Heavy => $"{abilityKey}: Belly Slam - smash the rotten boards of the TOOL SHED, then the FUSE BOX that powers the electric fence. " +
@@ -495,7 +556,8 @@ namespace Porkour
                         pulse = mine;
                         break;
                     case BobState.Carrying:
-                        text = bob.CarriedPigId == me ? $"Bob caught you!  {left}" : $"RESCUE! Hit Bob or throw a chicken at him!  {left}";
+                        string countdown = left > 0 ? $"  {left}" : "";
+                        text = bob.CarriedPigId == me ? $"Bob caught you!{countdown}" : $"RESCUE! Hit Bob or throw a chicken at him!{countdown}";
                         pulse = true;
                         break;
                     case BobState.Stunned:

@@ -4,9 +4,9 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// A quest item (a normal networked prop): the padlock key, the truck keys, Bob's pie... Floats a label so players
-    /// spot it, and goes back to where it started if it falls out of the level (server). A KeySlot with the same
-    /// keyId uses it up; bonus items (pie) only count when they ride away in the truck.
+    /// A quest item (a normal networked prop): the padlock key, the truck keys, Bob's pie, loot... Floats a label so
+    /// players spot it, and goes back to where it started if it falls out of the level (server). A KeySlot with the same
+    /// keyId uses it up; the pie (bonus mission) and loot (coins) only count while they're in the truck.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     public class KeyItem : MonoBehaviour
@@ -15,8 +15,10 @@ namespace Porkour
         public string keyId = "gate";
         public string labelText = "KEY";
         public Color labelColor = new(1f, 0.85f, 0.2f);
-        [Tooltip("Bonus item: worth a star if it's in the truck when the pigs escape.")]
+        [Tooltip("Bob's pie: the 'Pie heist' bonus mission is done while it's in the truck.")]
         public bool bonus;
+        [Tooltip("Loot: coins for the team if it's in the truck when the pigs escape.")]
+        public int coins;
         public float killHeight = -10f;
 
         public static readonly System.Collections.Generic.List<KeyItem> All = new();
