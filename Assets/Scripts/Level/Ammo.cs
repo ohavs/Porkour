@@ -54,7 +54,7 @@ namespace Porkour
         {
             rb.linearVelocity = velocity;
             rb.angularVelocity = Random.insideUnitSphere * 10f;
-            knocksPigs = knockPigsShot = knockPigs;
+            knocksPigs = knocksPigsShot = knockPigs;
             firedAt = Time.time;
             shooterColliders = shooter;
             IgnoreShooter(true);
