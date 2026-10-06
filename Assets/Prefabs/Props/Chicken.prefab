@@ -31,7 +31,7 @@ Transform:
   m_LocalScale: {x: 0.08, y: 0.06, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &368269007577956466
 MeshFilter:
@@ -121,7 +121,7 @@ Transform:
   m_LocalScale: {x: 0.05, y: 0.1, z: 0.14}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &6884617810745082967
 MeshFilter:
@@ -211,7 +211,7 @@ Transform:
   m_LocalScale: {x: 0.04, y: 0.08, z: 0.04}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &6071032913544611127
 MeshFilter:
@@ -270,6 +270,44 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &2677441800969052970
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5890593571710255518}
+  m_Layer: 0
+  m_Name: Visual
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5890593571710255518
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2677441800969052970}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 5275122301459393181}
+  - {fileID: 487758329223986049}
+  - {fileID: 8128952053887865846}
+  - {fileID: 4118090497483904812}
+  - {fileID: 7646894427438738970}
+  - {fileID: 8045205273081876104}
+  - {fileID: 8535773748466547128}
+  m_Father: {fileID: 7649817912049726610}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5267476744913065754
 GameObject:
   m_ObjectHideFlags: 0
@@ -301,7 +339,7 @@ Transform:
   m_LocalScale: {x: 0.5, y: 0.45, z: 0.6}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &5338328363303327555
 MeshFilter:
@@ -391,7 +429,7 @@ Transform:
   m_LocalScale: {x: 0.28, y: 0.28, z: 0.28}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &2904575708716231561
 MeshFilter:
@@ -465,6 +503,8 @@ GameObject:
   - component: {fileID: 2549185160631844283}
   - component: {fileID: 8514720640307148750}
   - component: {fileID: 1172427819825573621}
+  - component: {fileID: 1742432201570476716}
+  - component: {fileID: 6686190034431404703}
   m_Layer: 0
   m_Name: Chicken
   m_TagString: Untagged
@@ -485,13 +525,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 5275122301459393181}
-  - {fileID: 487758329223986049}
-  - {fileID: 8128952053887865846}
-  - {fileID: 4118090497483904812}
-  - {fileID: 7646894427438738970}
-  - {fileID: 8045205273081876104}
-  - {fileID: 8535773748466547128}
+  - {fileID: 5890593571710255518}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!135 &2634551471605266707
@@ -645,6 +679,45 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Porkour.Bait
   displayName: chicken
+--- !u!114 &1742432201570476716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5531705657559315468}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8d5a7e7c3484e62b6e307b3819902f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.Critter
+  walkSpeed: 1.2
+  fleeSpeed: 3.5
+  fleeRadius: 2.5
+  hopSpeed: 2.5
+  groundCheck: 0.45
+  voice: 31
+  voiceVolume: 0.6
+--- !u!114 &6686190034431404703
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5531705657559315468}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fdb0bc57d40463c9fc82f9e246b77e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.ProceduralAnimator
+  kind: 2
+  visual: {fileID: 5890593571710255518}
+  stepsPerMetre: 3
+  bobHeight: 0.05
+  swayAngle: 5
+  limbSwing: 35
+  fullSpeed: 3
+  stepVolume: 0
 --- !u!1 &6646129045837736706
 GameObject:
   m_ObjectHideFlags: 0
@@ -676,7 +749,7 @@ Transform:
   m_LocalScale: {x: 0.3, y: 0.25, z: 0.08}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &8973123203044039915
 MeshFilter:
@@ -766,7 +839,7 @@ Transform:
   m_LocalScale: {x: 0.04, y: 0.08, z: 0.04}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7649817912049726610}
+  m_Father: {fileID: 5890593571710255518}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &5428297565169778413
 MeshFilter:

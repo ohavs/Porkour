@@ -284,6 +284,7 @@ GameObject:
   - component: {fileID: 2818553537012261647}
   - component: {fileID: 1146205005067053375}
   - component: {fileID: 6701771825026263107}
+  - component: {fileID: 7369505556647087569}
   - component: {fileID: 7661929753504332512}
   m_Layer: 0
   m_Name: FarmerBob
@@ -454,6 +455,26 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!114 &7369505556647087569
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4148311998358266091}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fdb0bc57d40463c9fc82f9e246b77e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.ProceduralAnimator
+  kind: 1
+  visual: {fileID: 6195971696083528459}
+  stepsPerMetre: 1.1
+  bobHeight: 0.05
+  swayAngle: 5
+  limbSwing: 30
+  fullSpeed: 4.5
+  stepVolume: 0.9
 --- !u!114 &7661929753504332512
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -467,17 +488,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Porkour.FarmerBob
   ShowTopMostFoldoutHeaderGroup: 1
-  firstCallDelay: 30
-  callInterval: {x: 120, y: 180}
+  firstCallDelay: 45
+  callInterval: {x: 95, y: 135}
   warningTime: 5
-  searchTime: 25
+  searchTime: 30
   rescueTime: 20
   stunTime: 3
   doorPosition: {x: 0, y: 0, z: -15.5}
   doorOutward: {x: 0, y: 0, z: -1}
   insidePoint: {x: 0, y: 0, z: -12}
   searchCenter: {x: 0, y: 0, z: 0}
-  searchHalfSize: {x: 13, y: 13}
+  searchHalfSize: {x: 18, y: 13}
   doorChannel: 99
   carryPoint: {fileID: 4378432243827062280}
   walkSpeed: 3.2
@@ -490,6 +511,9 @@ MonoBehaviour:
   frozenSpotRange: 3
   grabRange: 1.5
   stunHitSpeed: 7
+  throwSpeed: 14
+  throwInterval: 1.5
+  throwsBeforeGivingUp: 3
 --- !u!1 &4260894368960952013
 GameObject:
   m_ObjectHideFlags: 0

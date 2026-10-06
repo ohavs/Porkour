@@ -402,6 +402,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   channel: 0
   minHitSpeed: 6
+  latch: 1
   lamp: {fileID: 1855001134020975516}
   offColor: {r: 0.85, g: 0.2, b: 0.15, a: 1}
   onColor: {r: 0.3, g: 0.85, b: 0.3, a: 1}

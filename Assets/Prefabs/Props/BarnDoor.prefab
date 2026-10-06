@@ -230,5 +230,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Porkour.Gate
   ShowTopMostFoldoutHeaderGroup: 1
   channel: 0
+  requiredChannels: 
   openOffset: {x: 0, y: -3.6, z: 0}
   speed: 5
+  rumble: 1
