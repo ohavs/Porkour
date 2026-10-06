@@ -375,6 +375,7 @@ MonoBehaviour:
   labelText: TRUCK KEYS
   labelColor: {r: 0.5, g: 0.9, b: 1, a: 1}
   bonus: 0
+  coins: 0
   killHeight: -10
 --- !u!1 &8409092927870105994
 GameObject:

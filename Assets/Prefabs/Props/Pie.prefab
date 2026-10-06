@@ -374,6 +374,7 @@ MonoBehaviour:
   labelText: PIE (bonus star)
   labelColor: {r: 1, g: 0.7, b: 0.4, a: 1}
   bonus: 1
+  coins: 0
   killHeight: -10
 --- !u!1 &8755730881640755289
 GameObject:

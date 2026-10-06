@@ -250,4 +250,5 @@ MonoBehaviour:
   labelText: KEY
   labelColor: {r: 1, g: 0.85, b: 0.2, a: 1}
   bonus: 0
+  coins: 0
   killHeight: -10

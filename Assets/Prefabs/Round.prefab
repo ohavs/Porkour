@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2919498670
+  GlobalObjectIdHash: 3650757700
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -77,5 +77,9 @@ MonoBehaviour:
   roundTime: 720
   starTime: 480
   finalHuntTime: 60
-  resultsTime: 10
+  resultsTime: 12
   maxGrills: 3
+  winCoins: 100
+  rescueCoins: 20
+  winXp: 250
+  rescueXp: 25
