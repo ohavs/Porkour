@@ -19,15 +19,22 @@ namespace Porkour
         public Color onColor = new(0.3f, 0.85f, 0.3f);
 
         readonly NetworkVariable<bool> on = new();
+        readonly NetworkVariable<int> netChannel = new(); // so every PC knows which lock it belongs to (HUD markers)
 
         public int Channel { get => channel; set => channel = value; }
+        public bool IsOn => on.Value;
 
         MaterialPropertyBlock block;
         float nextHitTime, wobble;
 
         void Awake() => block = new MaterialPropertyBlock();
 
-        public override void OnNetworkSpawn() => on.OnValueChanged += OnToggled;
+        public override void OnNetworkSpawn()
+        {
+            on.OnValueChanged += OnToggled;
+            if (IsServer) netChannel.Value = channel;
+            else channel = netChannel.Value;
+        }
 
         public override void OnNetworkDespawn()
         {

@@ -113,7 +113,7 @@ namespace Porkour
         /// <summary>What a grab press would pick up right now (null if nothing).</summary>
         public Rigidbody FindGrabTarget()
         {
-            if (IsHolding || pig.IsHeld) return null;
+            if (IsHolding || pig.IsHeld || InCage(pig)) return null; // no grabbing through the cage bars
             Vector3 center = pig.Body.position + transform.forward * reach + Vector3.up * 0.1f;
             Rigidbody best = null;
             float bestDist = float.MaxValue;
@@ -127,13 +127,22 @@ namespace Porkour
             return best;
         }
 
+        /// <summary>CagedIn is server-only; clients (HUD marker) read the synced cage list.</summary>
+        static bool InCage(PigController p)
+        {
+            if (p.CagedIn != null) return true;
+            var cage = PigCage.Instance;
+            return cage != null && cage.IsSpawned && p.TryGetComponent(out Unity.Netcode.NetworkObject no) && no.IsSpawned
+                   && cage.TimeLeft(no.NetworkObjectId) >= 0f;
+        }
+
         bool CanGrab(Rigidbody rb)
         {
             if (rb == null || rb == pig.Body || rb.mass > maxLiftMass) return false;
             if (rb.isKinematic && Simulate) return false; // on clients every synced body is kinematic
             if (rb.TryGetComponent(out PigController other))
             {
-                if (other.IsHeld) return false;
+                if (other.IsHeld || InCage(other)) return false;
                 if (other.Grabber != null && other.Grabber.Held == pig.Body) return false; // no carry loops
             }
             return true;

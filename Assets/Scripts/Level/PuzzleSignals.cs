@@ -22,7 +22,10 @@ namespace Porkour
         public const int PieInTruck = 16;
         /// <summary>Bob's gas bottle at the BBQ smashed: the grill heats slowly.</summary>
         public const int Sabotage = 41;
-        /// <summary>The two plates that open the farm gate together (ChannelLatch → FarmGate).</summary>
+        /// <summary>Fuel can poured into the truck (KeySlot "fuel").</summary>
+        public const int Fuel = 17;
+        /// <summary>Bob's garage door: opens for good once both plates are pressed at the same time (ChannelLatch).</summary>
+        public const int GarageDoor = 18;
         public const int GatePlateA = 51, GatePlateB = 52;
         public const int HouseWindow = 31;
         public const int HouseDoor = 33;

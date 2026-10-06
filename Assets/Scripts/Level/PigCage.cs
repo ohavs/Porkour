@@ -6,8 +6,9 @@ namespace Porkour
 {
     /// <summary>
     /// Bob's cage next to his BBQ grill. Bob locks the pigs he catches in here; each one has grillTime seconds (the grill
-    /// heating up) before Bob throws it on the grill. Free pigs open the cage by standing at its door for unlockTime
-    /// seconds (nosing the latch), or at once with a hard hit on it (thrown thing, Armed's shot, Heavy's slam).
+    /// heating up) before Bob throws it on the grill. Caged pigs walk around inside (no powers, no grabbing - the bars are
+    /// colliders). Free pigs open the cage by standing at its door for unlockTime seconds (nosing the latch), or at once
+    /// with a hard hit on it (thrown thing, Armed's shot, Heavy's slam).
     /// Smashing Bob's gas bottle (channel Sabotage) makes the grill much slower. Server runs it, every PC reads the synced
     /// list for the HUD / timer label / grill smoke.
     /// </summary>
@@ -15,30 +16,14 @@ namespace Porkour
     {
         public static PigCage Instance { get; private set; }
 
-        /// <summary>One caged pig (synced).</summary>
-        public struct Caged : IEquatable<Caged>
+        /// <summary>One caged pig (synced; plain data, so Netcode copies it byte for byte).</summary>
+        public struct Caged : INetworkSerializeByMemcpy, IEquatable<Caged>
         {
             public ulong PigId;
             public double ReadyAt;
             public byte Slot;
 
             public bool Equals(Caged other) => PigId == other.PigId && ReadyAt == other.ReadyAt && Slot == other.Slot;
-        }
-
-        /// <summary>The cage "carrying" one pig - so Respawn / Drop let go of just that pig. No wriggling out.</summary>
-        public sealed class Hold : IPigCarrier
-        {
-            public readonly PigCage Cage;
-            public readonly PigController Pig;
-
-            public Hold(PigCage cage, PigController pig)
-            {
-                Cage = cage;
-                Pig = pig;
-            }
-
-            public void Drop() => Cage.Release(Pig, false);
-            public int EscapePresses => int.MaxValue;
         }
 
         [Tooltip("Seconds until the grill is hot (then Bob throws the pig on it).")]
@@ -49,8 +34,9 @@ namespace Porkour
         public float unlockTime = 3f;
         public float unlockRadius = 1.3f;
         public float hardHitSpeed = 7f;
-        [Tooltip("Local: where caged pigs sit (set by the builder), the door (rescuers stand there), the grill (smoke).")]
-        public Vector3[] slots = { new(-0.5f, 0.5f, 0.3f), new(0.5f, 0.5f, 0.3f), new(-0.5f, 0.5f, -0.4f), new(0.5f, 0.5f, -0.4f) };
+        [Tooltip("Local: where caged pigs are put in, the inside size (pigs found outside are put back), the door (rescuers stand there), the grill (smoke). Set by the builder.")]
+        public Vector3[] slots = { new(-1f, 0.5f, 0.8f), new(1f, 0.5f, 0.8f), new(-1f, 0.5f, -0.8f), new(1f, 0.5f, -0.8f) };
+        public Vector3 inside = new(4f, 2.4f, 3.6f);
         public Vector3 door = new(0f, 0f, 1.6f);
         public Vector3 grill = new(-5f, 1f, 0f);
         public WorldLabel label;
@@ -79,7 +65,7 @@ namespace Porkour
             for (int i = caged.Count - 1; i >= 0; i--)
             {
                 var pig = PigOf(caged[i]);
-                if (pig != null && pig.HeldBy is Hold) pig.SetHeldBy(null);
+                if (pig != null && pig.CagedIn == this) pig.CagedIn = null;
             }
         }
 
@@ -117,7 +103,7 @@ namespace Porkour
             var id = pig.GetComponent<NetworkObject>().NetworkObjectId;
             if (pig.IsHeld) pig.HeldBy.Drop();
             if (pig.Grabber != null) pig.Grabber.Drop();
-            pig.SetHeldBy(new Hold(this, pig));
+            pig.CagedIn = this;
             pig.TeleportTo(transform.TransformPoint(slots[slot]), transform.rotation); // facing the door
             float time = grillTime + (sabotaged.Value ? sabotageBonus : 0f);
             caged.Add(new Caged { PigId = id, ReadyAt = NetworkManager.ServerTime.Time + time, Slot = slot });
@@ -142,7 +128,7 @@ namespace Porkour
             var id = pig.GetComponent<NetworkObject>().NetworkObjectId;
             for (int i = caged.Count - 1; i >= 0; i--)
                 if (caged[i].PigId == id) caged.RemoveAt(i);
-            if (pig.HeldBy is Hold) pig.SetHeldBy(null);
+            if (pig.CagedIn == this) pig.CagedIn = null;
             if (!push) return;
             // Out through the (now open) door: the door's collider stays, so put the pig outside first.
             Vector3 outside = transform.TransformPoint(door + new Vector3(UnityEngine.Random.Range(-0.6f, 0.6f), 0.6f, 0.4f));
@@ -178,22 +164,21 @@ namespace Porkour
                 if (unlock.Value != 0f) unlock.Value = 0f;
                 return;
             }
-            // Keep the prisoners in their spots.
+            // Prisoners walk around freely inside; one that somehow got out (glitch) is put back in.
             for (int i = caged.Count - 1; i >= 0; i--)
             {
                 var pig = PigOf(caged[i]);
-                if (pig == null || !(pig.HeldBy is Hold)) { caged.RemoveAt(i); continue; }
-                Vector3 to = transform.TransformPoint(slots[caged[i].Slot]) - pig.Body.position;
-                pig.Body.linearVelocity = to.magnitude > 2f ? Vector3.zero : to * 10f;
-                if (to.magnitude > 2f) pig.Body.position += to;
-                pig.Body.angularVelocity = Vector3.zero;
+                if (pig == null || pig.CagedIn != this) { caged.RemoveAt(i); continue; }
+                Vector3 local = transform.InverseTransformPoint(pig.Body.position) - new Vector3(0f, inside.y / 2f, 0f);
+                if (Mathf.Abs(local.x) > inside.x / 2f + 0.3f || Mathf.Abs(local.z) > inside.z / 2f + 0.3f || Mathf.Abs(local.y) > inside.y / 2f + 0.5f)
+                    pig.TeleportTo(transform.TransformPoint(slots[caged[i].Slot]), transform.rotation);
             }
             // Rescuers nosing the latch.
             bool rescuer = false;
             Vector3 d = DoorPoint;
             foreach (var pig in PigController.All)
             {
-                if (pig == null || pig.IsHeld || pig.Escaped || pig.Owner == null) continue; // sleeping pigs don't help
+                if (pig == null || pig.IsHeld || pig.Escaped || pig.Owner == null || pig.CagedIn != null) continue; // sleeping / caged pigs don't help
                 Vector3 rel = pig.Body.position - d;
                 if (Mathf.Abs(rel.y) < 1.5f && new Vector2(rel.x, rel.z).magnitude < unlockRadius) { rescuer = true; break; }
             }
@@ -224,7 +209,7 @@ namespace Porkour
             if (rb.TryGetComponent(out PigController pig))
             {
                 // Running into it does nothing - only a flying pig (thrown / launched) bursts it open.
-                if (pig.HeldBy is Hold || (pig.IsGrounded && !pig.MovementLocked)) return;
+                if (pig.CagedIn != null || (pig.IsGrounded && !pig.MovementLocked)) return;
                 if (collision.relativeVelocity.magnitude < hardHitSpeed + 1f) return;
             }
             Open("knocked open");

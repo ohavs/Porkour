@@ -3,39 +3,49 @@ using UnityEngine;
 namespace Porkour
 {
     /// <summary>
-    /// Pig visuals: shows the right model for the pig type (Heavy = the big hog, others = pig), sizes it per type (Armed big,
-    /// Gassy fat - every fart deflates him a bit, then he puffs back up) and paints the type colour on the "skin" parts
-    /// (the saddle cloth on the models; the whole body on the old primitive pig). Local, every PC.
+    /// Pig visuals: shows the right model for the pig type (Heavy = the big hog, others = pig), gives it the type's skin
+    /// (recoloured texture made by the builder; tint if missing), sizes it per type (long pigs; Armed big, Gassy fat - every
+    /// fart deflates him a bit, then he puffs back up). The old primitive pig paints its "skin" parts instead. Local, every PC.
     /// </summary>
     public class PigLook : MonoBehaviour
     {
-        [Tooltip("Renderers painted in the type colour (set by the builder).")]
+        [Tooltip("Primitive pig only: renderers painted in the type colour.")]
         public Renderer[] skin;
         public Color skinColor = new(1f, 0.62f, 0.68f);
         [Tooltip("Models (optional, set by the builder): normal pigs / Heavy.")]
         public GameObject pigModel, hogModel;
+        [Tooltip("Pig model skin per PigType (index = type; null = keep the model's own).")]
+        public Material[] typeMaterials;
 
         [Tooltip("How fast a deflated Gassy puffs back up (share of his size per second).")]
         public float reinflateSpeed = 0.08f;
 
         PigType type;
         bool hasType;
-        Material material;
+        Material material, tint;
+        Renderer[] pigRenderers;
+        Material[][] pigOriginal;
         Vector3 pigBase = Vector3.one, hogBase = Vector3.one;
         float deflated; // 0 = full size
 
-        /// <summary>Model size per type (width, height, length) - tune here.</summary>
+        /// <summary>Model size per type (width, height, length) - tune here. Every pig is stretched long.</summary>
         static Vector3 TypeScale(PigType t) => t switch
         {
-            PigType.Gassy => new Vector3(1.4f, 1.12f, 1.15f), // round and gassy
-            PigType.Armed => new Vector3(1.25f, 1.25f, 1.25f),
-            PigType.Jumpy => new Vector3(0.95f, 0.98f, 0.95f),
-            _ => Vector3.one,
+            PigType.Gassy => new Vector3(1.4f, 1.12f, 1.45f), // round and gassy
+            PigType.Armed => new Vector3(1.25f, 1.25f, 1.6f),
+            PigType.Jumpy => new Vector3(0.95f, 0.98f, 1.3f),
+            _ => new Vector3(1.05f, 1f, 1.3f),
         };
 
         void Awake()
         {
-            if (pigModel != null) pigBase = pigModel.transform.localScale;
+            if (pigModel != null)
+            {
+                pigBase = pigModel.transform.localScale;
+                pigRenderers = pigModel.GetComponentsInChildren<Renderer>(true);
+                pigOriginal = new Material[pigRenderers.Length][];
+                for (int i = 0; i < pigRenderers.Length; i++) pigOriginal[i] = pigRenderers[i].sharedMaterials;
+            }
             if (hogModel != null) hogBase = hogModel.transform.localScale;
         }
 
@@ -48,6 +58,7 @@ namespace Porkour
         void OnDestroy()
         {
             if (material != null) Destroy(material);
+            if (tint != null) Destroy(tint);
         }
 
         /// <summary>Every PC, whenever the pig's type is set.</summary>
@@ -65,8 +76,30 @@ namespace Porkour
             bool heavy = type == PigType.Heavy && hogModel != null;
             if (hogModel != null && hogModel.activeSelf != heavy) hogModel.SetActive(heavy);
             if (pigModel != null && pigModel.activeSelf == heavy) pigModel.SetActive(!heavy);
+            ApplyModelSkin();
             deflated = 0f;
             ApplySize();
+        }
+
+        /// <summary>The pig model in this type's colours (the builder's recoloured skin, or a tint).</summary>
+        void ApplyModelSkin()
+        {
+            if (pigRenderers == null) return;
+            int t = (int)type;
+            var skinMat = typeMaterials != null && t < typeMaterials.Length ? typeMaterials[t] : null;
+            if (skinMat == null && pigOriginal.Length > 0 && pigOriginal[0].Length > 0 && pigOriginal[0][0] != null)
+            {
+                if (tint == null) tint = new Material(pigOriginal[0][0]);
+                tint.SetColor("_BaseColor", Color.Lerp(Color.white, skinColor, 0.7f));
+                skinMat = tint;
+            }
+            for (int i = 0; i < pigRenderers.Length; i++)
+            {
+                var mats = (Material[])pigOriginal[i].Clone();
+                if (skinMat != null)
+                    for (int m = 0; m < mats.Length; m++) mats[m] = skinMat;
+                pigRenderers[i].sharedMaterials = mats;
+            }
         }
 
         /// <summary>Every PC: Gassy just farted - a bit of him is gone (he puffs back up over a few seconds).</summary>
@@ -89,6 +122,7 @@ namespace Porkour
             if (hogModel != null) hogModel.transform.localScale = Vector3.Scale(hogBase, size);
         }
 
+        /// <summary>Primitive pig: paint the skin parts.</summary>
         public void SetSkinColor(Color color)
         {
             if (skin == null || skin.Length == 0 || skin[0] == null) return;

@@ -9,14 +9,14 @@ namespace Porkour.EditorTools
     public static partial class PorkourBuilder
     {
         /// <summary>
-        /// Bob's cage (PigCage): 2.6 wide x 2.2 high x 3 deep, door on its +Z side (rescuers stand in front of it), four spots inside.
+        /// Bob's cage (PigCage): 4 wide x 2.4 high x 3.6 deep, door on its +Z side (rescuers stand in front of it); caged pigs walk around inside.
         /// Colliders on the root (so hard hits reach PigCage.OnCollisionEnter); kit metal fence panels as bars.
         /// </summary>
         static GameObject BuildCagePrefab(Vector3 grillLocal)
         {
             EnsureFolder(PropDir);
             var metal = Mat("CageMetal", new Color(0.3f, 0.3f, 0.33f));
-            const float w = 2.6f, d = 3f, h = 2.2f, t = 0.1f; // pigs are 1.35 long: two rows of two
+            const float w = 4f, d = 3.6f, h = 2.4f, t = 0.1f; // room to walk around inside
             var root = new GameObject("PigCage");
             void Box(Vector3 center, Vector3 size)
             {
@@ -31,7 +31,8 @@ namespace Porkour.EditorTools
             Box(new Vector3(0f, h + t / 2f, 0f), new Vector3(w, t, d));
             root.AddComponent<NetworkObject>();
             var cage = root.AddComponent<PigCage>();
-            cage.slots = new[] { new Vector3(-0.6f, 0.5f, 0.75f), new Vector3(0.6f, 0.5f, 0.75f), new Vector3(-0.6f, 0.5f, -0.75f), new Vector3(0.6f, 0.5f, -0.75f) };
+            cage.slots = new[] { new Vector3(-1f, 0.5f, 0.8f), new Vector3(1f, 0.5f, 0.8f), new Vector3(-1f, 0.5f, -0.8f), new Vector3(1f, 0.5f, -0.8f) };
+            cage.inside = new Vector3(w, h, d);
             cage.door = new Vector3(0f, 0f, d / 2f + 0.7f);
             cage.grill = grillLocal;
             var obstacle = root.AddComponent<NavMeshObstacle>();
@@ -58,7 +59,7 @@ namespace Porkour.EditorTools
             }
             Part(PrimitiveType.Cube, "Roof", look, new Vector3(0f, h + 0.04f, 0f), new Vector3(w + 0.1f, 0.08f, d + 0.1f), metal);
             Part(PrimitiveType.Cube, "Straw", look, new Vector3(0f, 0.02f, 0f), new Vector3(w - 0.1f, 0.04f, d - 0.1f), Mat("Hay", new Color(0.93f, 0.8f, 0.35f)));
-            Part(PrimitiveType.Cube, "Padlock", look, new Vector3(0.95f, 1.1f, d / 2f + 0.08f), new Vector3(0.25f, 0.3f, 0.12f), Mat("Padlock", new Color(0.85f, 0.65f, 0.2f)));
+            Part(PrimitiveType.Cube, "Padlock", look, new Vector3(1.4f, 1.1f, d / 2f + 0.08f), new Vector3(0.25f, 0.3f, 0.12f), Mat("Padlock", new Color(0.85f, 0.65f, 0.2f)));
             foreach (var tr in look.GetComponentsInChildren<Transform>()) GameObjectUtility.SetStaticEditorFlags(tr.gameObject, 0);
             var label = new GameObject("Label");
             label.transform.SetParent(root.transform, false);
@@ -116,36 +117,50 @@ namespace Porkour.EditorTools
             return SavePrefab(root, $"{PropDir}/{name}.prefab");
         }
 
-        /// <summary>The farm's big sliding road gate (Gate, channel FarmGate): opens for good when both gate plates are pressed.</summary>
-        static GameObject BuildFarmGatePrefab()
+        /// <summary>Red fuel can (KeyItem "fuel") in Bob's garage: carry it to the truck's fuel cap.</summary>
+        static GameObject BuildFuelCanPrefab()
         {
             EnsureFolder(PropDir);
-            const float w = 8f, h = 2.4f, t = 0.25f;
-            var wood = Mat("FarmGate", new Color(0.55f, 0.36f, 0.2f));
-            var dark = Mat("Beam", new Color(0.42f, 0.28f, 0.16f));
-            var root = new GameObject("FarmGate");
+            var red = Mat("FuelCan", new Color(0.85f, 0.15f, 0.1f));
+            var metal = Mat("FencePost", new Color(0.25f, 0.25f, 0.27f));
+            var root = new GameObject("FuelCan");
+            root.AddComponent<BoxCollider>().size = new Vector3(0.45f, 0.6f, 0.3f);
+            root.AddComponent<Rigidbody>().mass = 3f;
+            AddNetworkSync(root);
+            var key = root.AddComponent<KeyItem>();
+            key.keyId = "fuel";
+            key.labelText = "FUEL";
+            key.labelColor = new Color(1f, 0.55f, 0.3f);
+            Part(PrimitiveType.Cube, "Can", root.transform, Vector3.zero, new Vector3(0.45f, 0.6f, 0.3f), red);
+            Part(PrimitiveType.Cube, "Handle", root.transform, new Vector3(0.05f, 0.36f, 0f), new Vector3(0.25f, 0.08f, 0.06f), metal);
+            Part(PrimitiveType.Cylinder, "Spout", root.transform, new Vector3(-0.17f, 0.36f, 0f), new Vector3(0.08f, 0.08f, 0.08f), metal, new Vector3(0f, 0f, 30f));
+            return SavePrefab(root, $"{PropDir}/FuelCan.prefab");
+        }
+
+        /// <summary>The truck's fuel cap (KeySlot "fuel", channel Fuel) on a little post by the truck's west side.</summary>
+        static GameObject BuildFuelCapPrefab()
+        {
+            EnsureFolder(PropDir);
+            var root = new GameObject("FuelCap");
             var box = root.AddComponent<BoxCollider>();
-            box.size = new Vector3(w, h, t);
-            var rb = root.AddComponent<Rigidbody>();
-            rb.isKinematic = true;
-            rb.mass = 1000f;
+            box.size = new Vector3(0.35f, 1.1f, 0.35f);
+            box.center = new Vector3(0f, 0.55f, 0f);
             root.AddComponent<NetworkObject>();
-            var nt = root.AddComponent<Unity.Netcode.Components.NetworkTransform>();
-            nt.SyncScaleX = nt.SyncScaleY = nt.SyncScaleZ = false;
-            var gate = root.AddComponent<Gate>();
-            gate.openOffset = new Vector3(-w - 0.3f, 0f, 0f);
-            gate.speed = 2f;
-            var obstacle = root.AddComponent<NavMeshObstacle>();
-            obstacle.shape = NavMeshObstacleShape.Box;
-            obstacle.size = new Vector3(w, h, t);
-            obstacle.carving = true;
-            for (int i = 0; i < 4; i++)
-                Part(PrimitiveType.Cube, "Rail", root.transform, new Vector3(0f, -0.9f + i * 0.6f, 0f), new Vector3(w, 0.25f, 0.12f), wood);
-            foreach (float x in new[] { -w / 2f + 0.1f, 0f, w / 2f - 0.1f })
-                Part(PrimitiveType.Cube, "Post", root.transform, new Vector3(x, 0f, 0f), new Vector3(0.2f, h, 0.2f), dark);
-            Part(PrimitiveType.Cube, "Brace", root.transform, new Vector3(-w / 4f, 0f, 0.08f), new Vector3(0.18f, 4.3f, 0.08f), dark, new Vector3(0f, 0f, 60f));
-            Part(PrimitiveType.Cube, "Brace", root.transform, new Vector3(w / 4f, 0f, 0.08f), new Vector3(0.18f, 4.3f, 0.08f), dark, new Vector3(0f, 0f, -60f));
-            return SavePrefab(root, $"{PropDir}/FarmGate.prefab");
+            var slot = root.AddComponent<KeySlot>();
+            slot.acceptsKey = "fuel";
+            slot.channel = ChannelIds.Fuel;
+            slot.lockOffset = new Vector3(0f, 1.1f, 0f);
+            slot.radius = 1.4f;
+            Part(PrimitiveType.Cylinder, "Post", root.transform, new Vector3(0f, 0.5f, 0f), new Vector3(0.22f, 0.5f, 0.22f), Mat("Beam", new Color(0.42f, 0.28f, 0.16f)));
+            Part(PrimitiveType.Cylinder, "Funnel", root.transform, new Vector3(0f, 1.12f, 0f), new Vector3(0.5f, 0.12f, 0.5f), Mat("FuelCan", new Color(0.85f, 0.15f, 0.1f)));
+            var cap = new GameObject("Cap").transform; // pops up = tank filled
+            cap.SetParent(root.transform, false);
+            cap.localPosition = new Vector3(0f, 1.28f, 0f);
+            Part(PrimitiveType.Cylinder, "Lid", cap, Vector3.zero, new Vector3(0.3f, 0.05f, 0.3f), Mat("FencePost", new Color(0.25f, 0.25f, 0.27f)));
+            var lamp = Part(PrimitiveType.Sphere, "Lamp", root.transform, new Vector3(0f, 0.9f, 0.13f), Vector3.one * 0.16f, Mat("Lamp", Color.white));
+            slot.shackle = cap;
+            slot.lamp = lamp.GetComponent<Renderer>();
+            return SavePrefab(root, $"{PropDir}/FuelCap.prefab");
         }
 
         /// <summary>Loot (KeyItem with coins, no lock): worth its coins if it rides away in the truck.</summary>
