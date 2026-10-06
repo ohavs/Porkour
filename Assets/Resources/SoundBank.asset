@@ -1,0 +1,198 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 563f0c2623944102a4a849bb78d163cc, type: 3}
+  m_Name: SoundBank
+  m_EditorClassIdentifier: Assembly-CSharp::Porkour.SoundBank
+  effectsVolume: 0.8
+  musicVolume: 0.5
+  sounds:
+  - name: Jump
+    sound: 0
+    clips: []
+    volume: 1
+  - name: Land
+    sound: 1
+    clips: []
+    volume: 1
+  - name: Step
+    sound: 2
+    clips:
+    - {fileID: 8300000, guid: f986ed0a56da93d40a42c11c83c4341d, type: 3}
+    - {fileID: 8300000, guid: c7d71b458b12ef04888a3303a2dbc328, type: 3}
+    - {fileID: 8300000, guid: f26ceff58b849944da92a56d12af0c7d, type: 3}
+    - {fileID: 8300000, guid: 624c3065045abc8458784b243a563eca, type: 3}
+    volume: 1
+  - name: Fart
+    sound: 3
+    clips:
+    - {fileID: 8300000, guid: 31707ce2b0728f940b9bc9c4fa8d7400, type: 3}
+    - {fileID: 8300000, guid: 9d764184af928e64eb61f244e267a81f, type: 3}
+    volume: 1
+  - name: Dash
+    sound: 4
+    clips: []
+    volume: 1
+  - name: Slam
+    sound: 5
+    clips: []
+    volume: 1
+  - name: Boing
+    sound: 6
+    clips: []
+    volume: 1
+  - name: Rope
+    sound: 7
+    clips:
+    - {fileID: 8300000, guid: be50731c9b5e41b45828b391476946f3, type: 3}
+    - {fileID: 8300000, guid: 838e2535c4a5678489b34c3aedfd2df5, type: 3}
+    volume: 1
+  - name: Shoot
+    sound: 8
+    clips: []
+    volume: 1
+  - name: Suck
+    sound: 9
+    clips: []
+    volume: 1
+  - name: Smash
+    sound: 10
+    clips: []
+    volume: 1
+  - name: Splat
+    sound: 11
+    clips: []
+    volume: 1
+  - name: Bell
+    sound: 12
+    clips: []
+    volume: 1
+  - name: Ding
+    sound: 13
+    clips:
+    - {fileID: 8300000, guid: bd4983c7732dd9d408c9af514cc8fe29, type: 3}
+    - {fileID: 8300000, guid: aef90a62037f39d459110ac452fad28b, type: 3}
+    - {fileID: 8300000, guid: 7955de802e2e10b4a8357b5cbd7e0064, type: 3}
+    - {fileID: 8300000, guid: e0bc9841c87a53244a439091a086e5bb, type: 3}
+    volume: 1
+  - name: Click
+    sound: 14
+    clips:
+    - {fileID: 8300000, guid: 60ea4270a44a02842b9964be014ee395, type: 3}
+    - {fileID: 8300000, guid: 81c6190b9a2034142b2278042742f0f5, type: 3}
+    - {fileID: 8300000, guid: d62a21be9171afc4f96cc5f3ebf4be7a, type: 3}
+    - {fileID: 8300000, guid: 3746056f1bafc1c4d8302529307d1055, type: 3}
+    volume: 1
+  - name: Zap
+    sound: 15
+    clips: []
+    volume: 1
+  - name: Unlock
+    sound: 16
+    clips: []
+    volume: 1
+  - name: Engine
+    sound: 17
+    clips: []
+    volume: 1
+  - name: EngineLoop
+    sound: 18
+    clips: []
+    volume: 1
+  - name: Rumble
+    sound: 19
+    clips:
+    - {fileID: 8300000, guid: b767f7ae43de5e044b76c94748f33733, type: 3}
+    - {fileID: 8300000, guid: 43965638508f0fd4b85bc3fad03d0ccf, type: 3}
+    - {fileID: 8300000, guid: edb654cff32f9e54f8bf81d0a9957d3b, type: 3}
+    - {fileID: 8300000, guid: f9a4a4fe886c46044872b587b226f1d6, type: 3}
+    volume: 1
+  - name: Grab
+    sound: 20
+    clips: []
+    volume: 1
+  - name: Throw
+    sound: 21
+    clips: []
+    volume: 1
+  - name: GrillCall
+    sound: 22
+    clips: []
+    volume: 1
+  - name: Spotted
+    sound: 23
+    clips: []
+    volume: 1
+  - name: Caught
+    sound: 24
+    clips: []
+    volume: 1
+  - name: Bonk
+    sound: 25
+    clips: []
+    volume: 1
+  - name: Sizzle
+    sound: 26
+    clips: []
+    volume: 1
+  - name: Escape
+    sound: 27
+    clips: []
+    volume: 1
+  - name: Win
+    sound: 28
+    clips:
+    - {fileID: 8300000, guid: 16a40eeea666faa4e91e6a66ac947ab7, type: 3}
+    volume: 1
+  - name: Lose
+    sound: 29
+    clips:
+    - {fileID: 8300000, guid: 348fdbeb58bb71f4f9caf7d02d0b123c, type: 3}
+    - {fileID: 8300000, guid: 76ba9ced483c6b844ae992d635dfc1e9, type: 3}
+    - {fileID: 8300000, guid: fd1e97ec261ce5146af176371d179e3a, type: 3}
+    - {fileID: 8300000, guid: 4d3dc1641a1e36140b0a15ac89237143, type: 3}
+    volume: 1
+  - name: Tick
+    sound: 30
+    clips:
+    - {fileID: 8300000, guid: e2e4272bc42e4614fa9cfd52f03686be, type: 3}
+    - {fileID: 8300000, guid: d95ef189b4695be4f9b45e9dd46ac056, type: 3}
+    - {fileID: 8300000, guid: 731b0d9ad15c71a48b7e994cb8be31f2, type: 3}
+    volume: 1
+  - name: Cluck
+    sound: 31
+    clips: []
+    volume: 1
+  - name: Baa
+    sound: 32
+    clips: []
+    volume: 1
+  - name: Alarm
+    sound: 33
+    clips: []
+    volume: 1
+  music:
+  - name: Calm
+    mood: 1
+    clip: {fileID: 8300000, guid: 41f5ca568946cb34da7492e534896c69, type: 3}
+    volume: 0.6
+  - name: Danger
+    mood: 2
+    clip: {fileID: 0}
+    volume: 0.6
+  - name: Chase
+    mood: 3
+    clip: {fileID: 0}
+    volume: 0.6
+  - name: FinalHunt
+    mood: 4
+    clip: {fileID: 0}
+    volume: 0.6
