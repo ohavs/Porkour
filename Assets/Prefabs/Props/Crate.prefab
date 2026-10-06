@@ -35,7 +35,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 8176705971166968744}
+  - {fileID: 7884781389895382529}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &6953728466775459005
@@ -184,7 +184,7 @@ MonoBehaviour:
   UseRigidBodyForMotion: 0
   AutoUpdateKinematicState: 1
   AutoSetKinematicOnDespawn: 1
---- !u!1 &7014030603803458215
+--- !u!1 &7361008566836358331
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -192,7 +192,7 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 8176705971166968744}
+  - component: {fileID: 7884781389895382529}
   m_Layer: 0
   m_Name: Prop_Crate
   m_TagString: Untagged
@@ -200,29 +200,29 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &8176705971166968744
+--- !u!4 &7884781389895382529
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7014030603803458215}
+  m_GameObject: {fileID: 7361008566836358331}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -0.00000002148712, y: -0.50317246, z: 0.00000003716708}
   m_LocalScale: {x: 0.92286474, y: 0.9437696, z: 0.92286485}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7884781389895382529}
+  - {fileID: 6088946465017369413}
   m_Father: {fileID: 8689967424295948147}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &7703098867363762666
+--- !u!1001 &5983861076079834286
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 8176705971166968744}
+    m_TransformParent: {fileID: 7884781389895382529}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 572b324d2aa8e6d4b977774766e3ed89, type: 3}
       propertyPath: m_LocalPosition.x
@@ -273,8 +273,8 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 572b324d2aa8e6d4b977774766e3ed89, type: 3}
---- !u!4 &7884781389895382529 stripped
+--- !u!4 &6088946465017369413 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 572b324d2aa8e6d4b977774766e3ed89, type: 3}
-  m_PrefabInstance: {fileID: 7703098867363762666}
+  m_PrefabInstance: {fileID: 5983861076079834286}
   m_PrefabAsset: {fileID: 0}

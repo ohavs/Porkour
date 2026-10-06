@@ -242,6 +242,7 @@ MonoBehaviour:
   color: {r: 1, g: 0.5, b: 0.35, a: 1}
   characterSize: 0.035
   billboard: 1
+  showDistance: 14
 --- !u!1 &6108584325587871338
 GameObject:
   m_ObjectHideFlags: 0

@@ -221,7 +221,7 @@ MonoBehaviour:
   firstCallDelay: 45
   callInterval: {x: 95, y: 135}
   warningTime: 5
-  searchTime: 30
+  searchTime: 40
   rescueTime: 20
   stunTime: 3
   doorPosition: {x: 0, y: 0, z: -15.5}
@@ -229,8 +229,8 @@ MonoBehaviour:
   insidePoint: {x: 0, y: 0, z: -12}
   searchCenter: {x: 0, y: 0, z: 0}
   searchHalfSize: {x: 18, y: 13}
-  searchCenter2: {x: 0, y: 0, z: 52}
-  searchHalfSize2: {x: 45, y: 36}
+  searchCenter2: {x: 0, y: 0, z: 42}
+  searchHalfSize2: {x: 60, y: 56}
   doorChannel: 99
   carryPoint: {fileID: 4378432243827062280}
   walkSpeed: 3.2
@@ -301,13 +301,45 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4726916939168048674}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -0.025951931, z: 0, w: 0.9996632}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.0033318454, y: 0.15046203, z: -0.029533898}
   m_LocalScale: {x: 1.128978, y: 1.128978, z: 1.128978}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 6073520272520753232}
+  - {fileID: 7654286002755154198}
   m_Father: {fileID: 6195971696083528459}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &6327350805901392703
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7654286002755154198}
+  m_Layer: 0
+  m_Name: Turn
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7654286002755154198
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6327350805901392703}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: -0.025951931, z: 0, w: 0.9996632}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 6073520272520753232}
+  m_Father: {fileID: 8945838452266921376}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8468792209473500198
 GameObject:
@@ -347,7 +379,7 @@ PrefabInstance:
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 8945838452266921376}
+    m_TransformParent: {fileID: 7654286002755154198}
     m_Modifications:
     - target: {fileID: -8970423889881776096, guid: 352da5f8890e8ba42a076a3d6bf61941, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
