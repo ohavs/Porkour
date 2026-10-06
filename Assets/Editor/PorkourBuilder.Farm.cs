@@ -14,7 +14,7 @@ namespace Porkour.EditorTools
         static readonly Vector3 TruckPos = new(14f, 0f, 44f);
         /// <summary>From TruckPos: the ignition post by the cab door, the exhaust under the back.</summary>
         static readonly Vector3 IgnitionOffset = new(2.1f, 0f, 3.3f);
-        static readonly Vector3 TruckExhaust = new(1.1f, 0.35f, -2.3f);
+        static readonly Vector3 TruckExhaust = new(1.8f, 0.3f, -2.75f);
         /// <summary>Bob's chimney (west of the house) and where a pig pops out (the fireplace inside).</summary>
         static readonly Vector3 ChimneyTop = new(-20.85f, 5.72f, 35f);
         static readonly Vector3 ChimneyExit = new(-19.2f, 0.6f, 35.3f);
@@ -229,6 +229,8 @@ namespace Porkour.EditorTools
             var hider = roof.gameObject.AddComponent<RoofHider>();
             hider.center = new Vector3(xc, (top + 6f * k) / 2f, zc);
             hider.size = new Vector3(length + 1f, top + 6f * k + 1f, span + 1f);
+            hider.pigCenter = new Vector3(xc, top / 2f, zc); // a pig up on the roof doesn't count as inside
+            hider.pigSize = new Vector3(length + 0.2f, top + 0.5f, span + 0.2f);
         }
 
         /// <summary>The getaway truck (static), its bed = the EscapeZone. The ignition is network-spawned (FarmSpawnPoints).</summary>
@@ -254,7 +256,7 @@ namespace Porkour.EditorTools
                 Part(PrimitiveType.Cylinder, "Wheel", truck, o + new Vector3(x, 0.45f, z), new Vector3(0.9f, 0.15f, 0.9f), dark, new Vector3(0f, 0f, 90f));
             foreach (float x in new[] { -1.25f, 1.25f })
                 Part(PrimitiveType.Sphere, "Headlamp", truck, o + new Vector3(x, 0.95f, 5.95f), new Vector3(0.35f, 0.3f, 0.1f), Mat("Lamp", Color.white));
-            Part(PrimitiveType.Cylinder, "ExhaustPipe", truck, o + TruckExhaust + new Vector3(0f, 0f, 0.3f), new Vector3(0.12f, 0.3f, 0.12f), dark, new Vector3(90f, 0f, 0f));
+            Part(PrimitiveType.Cylinder, "ExhaustPipe", truck, o + TruckExhaust + new Vector3(0f, 0f, 0.25f), new Vector3(0.12f, 0.3f, 0.12f), dark, new Vector3(90f, 0f, 0f));
             // Tailgate down = ramp into the bed.
             const float rise = 0.9f, run = 2f;
             float angle = Mathf.Atan2(rise, run) * Mathf.Rad2Deg;
