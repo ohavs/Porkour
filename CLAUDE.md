@@ -27,7 +27,10 @@ Dead by Daylight, Party Animals.
 - Claude CAN run the game here: `cd web && npx vite build && npx vite preview --port 4173`, then headless Chromium via Playwright
   (`--use-angle=swiftshader`, `?auto=1&q=low`; software GL ≈ 10 fps so the sim runs slower than real time — wait on
   `window.__G.time`, not wall time). Test hooks: `window.__game` (`scripted` input override, `cam`, `local`, `pigs`, `farmer`,
-  `daynight`, `adminAction(...)`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`. URL: `?hour=21.5`, `?bob=0`, `?admin=1`.
+  `daynight`, `adminAction(...)`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`, `__online`, `__lobby`. URL: `?hour=21.5`, `?bob=0`, `?admin=1`.
+  Online tests: `cd server && npm test` (protocol); `DEBUG=1 PORT=8080 node server.js` + two Playwright contexts
+  (host creates via `#tOnline` → `[data-a=create]` → `[data-a=start]` (force click), player opens `?room=CODE`). Software GL is
+  very slow with 2 pages (first frame compiles shaders for a minute+): use small viewports and generous timeouts.
 
 ## Tech (`web/`)
 - TypeScript + Vite 6, **three 0.170**, **Rapier 0.14** (`@dimforge/rapier3d-compat`, gravity −20, fixed 60 Hz + render
@@ -37,8 +40,18 @@ Dead by Daylight, Party Animals.
   grass blades don't write depth (renderOrder 5) so they get no lines. Gradient sky dome (+ sun glow) + puffy toon clouds, stars,
   moon, hemisphere + key light (sun by day, moon at night; shadow map follows the player, texel-snapped). Lamps = point lights
   (never toggle `visible` on lights: it recompiles every material — set intensity). Quality switch is live (`Gfx.setQuality`).
-- Planned online: host-authoritative (host browser simulates, others send `PigInput`, get snapshots) over a small WebSocket relay
-  with room codes (copy the design of `ohavs/Nice-Crash-` `server/relay.js`); relay on Render free. `PigInput` already decouples input.
+- **Online (M4, `web/src/net/` + `server/`)**: host-authoritative like Human: Fall Flat / Gang Beasts — the host's browser runs
+  the whole sim; players send `PigInput` (~30 Hz, latched presses) and get binary snapshots 30 Hz (`sync.ts`: per-entity
+  delta vs last sent, field bitmasks, keyframe on join / gap / path switch), rendered ~70–300 ms in the past with
+  interpolation (adaptive to jitter). Every synced class has `netState(n, s)` / `netApply(n, s)` (+ `netPose`); entity order
+  = `entities()` (pigs, Bob, cage, critters, props); wolves by `netId`. Host records sounds / fx / shakes / `G.events` made
+  inside fixed steps (`G.rec`, `installRecorders`) and players replay them; `G.shakeFor(pig, amt)` for per-player shakes;
+  `G.mute` drops local side effects while applying. Transport (`online.ts`): WebRTC data channel host↔player (P2P,
+  STUN only) with fallback through the server relay. Server `server/server.js` (Node, `ws` + `jose`): Google ID-token
+  verification or guest, rooms (4-letter code, public list, quick play, kick, chat, outfit/name), relay; `render.yaml`
+  (Render free). Lobby UI `lobby.ts`; Google Identity Services in `auth.ts`; addresses in `config.ts` (`BUILT_IN_SERVER`,
+  `BUILT_IN_GOOGLE_CLIENT_ID` — empty until the user deploys, see `server/README.md`). Online never pauses; the host keeps
+  simulating in a hidden tab (worker ticks). Leaving = reload to `?lobby=1`. Invite link `?room=CODE`.
 - Assets: `web/tools/fetch_assets.sh` (models, idempotent) + `web/tools/fetch_sounds.sh` (audio) fetch from GitHub mirrors
   (asset websites are blocked from the sandbox, GitHub is not) into `web/public/assets/` (committed). Models: Kenney
   `ETdoFresh/kenney.nl`, KayKit `KayKit-Game-Assets/*` (Restaurant, Adventurers, Skeletons, Halloween), Quaternius
@@ -50,7 +63,8 @@ Dead by Daylight, Party Animals.
 ## Structure (`web/src`)
 | Path | What |
 |---|---|
-| `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, title (play / wardrobe / language), Esc → menu. |
+| `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, title (play / online / wardrobe / language), Esc → menu. |
+| `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
 | `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
 | `game/game.ts` | Game loop: fixed steps (clock, pigs, Bob, critters, wolves, physics, cage, pond cleans mud), render, camera, events → toasts, `adminAction`. |
 | `game/ctx.ts` | `G` shared context (time, hour/day/night, fx, audio, pigs, farmer, wolves, noises, clouds…), `ADMIN` switches, `SECS_PER_HOUR` 25 (day = 10 min). |
@@ -83,12 +97,19 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 2. ✅ **M2 Farmer Bob**: routine, suspicion, chase, grab, carry, cage + BBQ, rescue, poise, fart cough.
 3. ✅ **M3 Living farm (2026-11-12)**: real sounds, EN/ES, HUD cleanup + settings + admin, standing rework, Bob slap / dance /
    mower / night routine, day/night + lamps, wolves, round animals, wardrobe, farm dressing.
-4. **M4 Online** 4 players (relay + room codes, host-authoritative snapshots).
-5. **M5** loot / missions / round loop / weapons; then alert levels, dog helper, traps, modifiers, more farms, shop.
+4. ✅ **M4 Online (2026-11-12)** 4 players: server (Google / guest, rooms, relay), lobby, P2P + relay, host snapshots.
+   Waiting on the user: deploy the server on Render + create the Google Client ID (`server/README.md`), then fill `config.ts`.
+5. **M4.5 Real physics ("active ragdoll", user asked 2026-11-12)**: characters = several rigid bodies + joint motors that
+   chase the procedural animation pose (Gang Beasts / Human Fall Flat / Party Animals); grab = a joint at the contact point
+   (things hang / swing / drag by mass); throw = real arm swing; hit = motors go limp. Order: pigs → Bob → animals.
+   Sync: host only; snapshots then carry body parts. Also next for online: client-side prediction of your own pig.
+6. **M5** loot / missions / round loop / weapons; then alert levels, dog helper, traps, modifiers, more farms, shop.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
   feel on a real PC (wobble, slap chance 30 %, grip 24 mashes, wolves, night length).
+- 2026-11-12: M4 online built & tested locally (2 headless browsers: lobby, chat, P2P, start, late join, movement).
+  User feedback: don't base designs on Nice-Crash (a few-prompts game) — take inspiration from real games.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO

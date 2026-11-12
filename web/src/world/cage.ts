@@ -167,9 +167,23 @@ export class Cage {
       if (heat > 0.3) G.fx.bits(gp, { count: Math.ceil(heat * 3), color: 0xff8a2a, spread: 0.2, speed: 0.4, up: 1.5, grav: -1, life: 0.6, size: 0.06, grow: 0, alpha: 1 });
       if (heat > 0.5 && Math.random() < heat * 0.3) G.audio.play('crackle', { pos: gp, vol: 0.2 + heat * 0.3, rand: 0.2, minGap: 2.5 });
     }
-    // door swing
+    this.animate(dt);
+  }
+
+  /** Door swing (also run by online players). */
+  animate(dt: number) {
     this.doorAngle = damp(this.doorAngle, this.open ? -1.9 : 0, 7, dt);
     this.door.rotation.y = this.doorAngle;
+  }
+
+  netState(n: number[]) {
+    let m = 0; for (const p of this.pigs) m |= 1 << G.pigs.indexOf(p);
+    n.push(this.open ? 1 : 0, this.progress, m);
+  }
+  netApply(n: number[]) {
+    if (!n.length) return;
+    this.open = n[0] === 1; this.progress = n[1];
+    this.pigs = G.pigs.filter((_p: Pig, i: number) => n[2] & (1 << i));
   }
 }
 

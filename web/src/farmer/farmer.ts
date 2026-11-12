@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair } from '../core/physics';
 import { Synced } from '../core/synced';
-import { clamp, dampAngle } from '../core/util';
+import { clamp, dampAngle, wrapAngle } from '../core/util';
 import { G, ADMIN, type Holdable, type Cloud } from '../game/ctx';
 import type { Pig } from '../pig/pig';
 import type { Cage } from '../world/cage';
@@ -607,7 +607,7 @@ export class Farmer {
       G.audio.play('slap', { pos: p.pos, vol: 1.2, pitch: 1.1 });
       G.audio.play('squeal', { pos: p.pos, vol: 1 });
       G.fx.bits(v3.copy(p.pos).setY(p.pos.y + 0.4), { count: 16, color: 0xfff1a8, speed: 4, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });
-      if (p === G.localPig) G.fx.shake(0.5);
+      G.shakeFor(p, 0.5);
       G.events.push({ type: 'slapped', who: p, text: 'insult.' + Math.floor(Math.random() * 6) });
     }
     G.noise(this.pos, 12);
@@ -628,7 +628,7 @@ export class Farmer {
     G.audio.play('body', { pos: this.pos, vol: 1 });
     G.audio.play('squeal', { pos: p.pos, vol: 1 });
     this.voice('ha');
-    if (p === G.localPig) G.fx.shake(0.35);
+    G.shakeFor(p, 0.35);
     G.events.push({ type: 'caught', who: p });
     this.chaseRun = 0; this.shakeT = 0;
     this.go('carry'); this.path = [];
@@ -663,7 +663,7 @@ export class Farmer {
       this.shakeT = 0; this.shakeUntil = this.now + 0.35;
       p.escape = Math.max(0, p.escape - BOB.shakeLoss);
       this.voice('grr', 0.7);
-      if (p === G.localPig) G.fx.shake(0.25);
+      G.shakeFor(p, 0.25);
     }
     const d = this.moveTo(this.cage.front, BOB.carry, dt);
     if (d < 0.7) {
@@ -808,6 +808,29 @@ export class Farmer {
     if (kind === 'hey' || kind === 'grr') this.yell = 1;
   }
 
+  // ================================================================== online
+  /** Host → players: Bob's brain state as the visuals / HUD need it. */
+  netState(n: number[], s: string[]) {
+    n.push(this.stateT, this.yaw, this.vel.x, this.vel.y, this.vel.z, this.yell, this.lookYaw,
+      this.carrying ? G.pigs.indexOf(this.carrying) : -1, this.target ? G.pigs.indexOf(this.target) : -1,
+      this.riding ? 1 : 0, this.doing ? 1 : 0, this.choreIdx);
+    for (const p of this.pigs) n.push(this.sus.get(p) ?? 0);
+    s.push(this.state, this.activity, this.debugAnim ?? '');
+  }
+  netApply(n: number[], s: string[], nb: number[] = n, alpha = 0) {
+    if (!n.length) return;
+    this.state = s[0] as State; this.activity = s[1]; this.debugAnim = (s[2] || null) as FarmerAnim | null;
+    const lerpA = (a: number, b: number) => a + wrapAngle((b ?? a) - a) * alpha;
+    this.stateT = n[0]; this.yaw = lerpA(n[1], nb[1]); this.vel.set(n[2], n[3], n[4]); this.yell = n[5]; this.lookYaw = lerpA(n[6], nb[6]);
+    this.carrying = n[7] >= 0 ? G.pigs[n[7]] : null; this.target = n[8] >= 0 ? G.pigs[n[8]] : null;
+    const riding = n[9] === 1;
+    if (riding !== this.riding) { this.riding = riding; if (riding) this.mower.mount(this.visual.root); else this.mower.dismount(this.pos, this.yaw); }
+    this.doing = n[10] === 1; this.choreIdx = n[11];
+    this.pigs.forEach((p, i) => this.sus.set(p, n[12 + i] ?? 0));
+    this.visual.root.visible = !this.asleep;
+  }
+  netPose(p: THREE.Vector3) { this.pos.copy(p).setY(p.y - CENTER); }
+
   // ================================================================== render
   render(alpha: number, dt: number) {
     if (this.state === 'off' || this.state === 'sleep') { this.flash.intensity = 0; return; }
@@ -817,6 +840,7 @@ export class Farmer {
     const anim = this.animFor();
     const fl = this.flashlightOn && !this.riding;
     this.flash.intensity = fl ? 60 : 0;
+    if (this.riding && G.net === 'client') this.mower.showRide(this.pos, this.yaw, Math.hypot(this.vel.x, this.vel.z), dt);
     this.visual.update({
       speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase' || this.state === 'shoo', anim, at: this.now - this.stateT,
       t: this.now, dt, angry: this.chasing || this.state === 'carry' || this.state === 'fist' || this.state === 'shoo' ? 1 : this.state === 'suspect' ? 0.5 : 0,

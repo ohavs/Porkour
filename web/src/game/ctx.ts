@@ -43,6 +43,7 @@ export const ADMIN = {
   bbqTime: 90,          // seconds until a caged pig is grilled
   daySpeed: 1,          // × clock speed
   gameSpeed: 1,         // × simulation speed
+  netLag: 0,            // online test: extra delay (ms) on everything this browser sends
 };
 
 /** Shared game context (set up once in Game). */
@@ -66,6 +67,17 @@ export const G = {
   events: [] as GameEvent[],
   /** Times a pig got grilled this round. */
   grills: 0,
+  /** Online role of this browser: solo, host (runs the world) or client (shows the host's world). */
+  net: 'solo' as 'solo' | 'host' | 'client',
+  /** Host: sounds / particles / shakes of the current fixed step, recorded for the players. */
+  rec: null as null | { sounds: unknown[]; fx: unknown[]; ev: unknown[]; shakes: unknown[] },
+  /** Client: drop local side effects while a snapshot is applied. */
+  mute: false,
+  /** Screen shake for the player of this pig (sent over the network when it's someone else's pig). */
+  shakeFor(pig: unknown, amount: number) {
+    if (pig === this.localPig) this.fx.shake(amount);
+    else if (this.rec) { const i = this.pigs.indexOf(pig); if (i >= 0) this.rec.shakes.push([i, amount]); }
+  },
   noise(p: THREE.Vector3, radius: number) {
     this.noises.push({ x: p.x, y: p.y, z: p.z, radius, t: this.time });
     if (this.noises.length > 40) this.noises.shift();

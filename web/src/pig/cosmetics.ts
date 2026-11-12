@@ -375,6 +375,18 @@ export function randomOutfit(): Outfit {
   return o;
 }
 
+/** Online: an outfit sent by another player (JSON) → a safe Outfit with only known items. */
+export function parseOutfit(json: string): Outfit | null {
+  let o: any; try { o = JSON.parse(json); } catch { return null; }
+  if (!o || typeof o !== 'object') return null;
+  const out = defaultOutfit();
+  if (typeof o.skin === 'string' && SKINS[o.skin]) out.skin = o.skin;
+  for (const s of ['hat', 'hair', 'face', 'eyes', 'neck', 'back'] as const) {
+    if (o[s] === '' || ITEMS[s].some((i) => i.id === o[s])) out[s] = o[s];
+  }
+  return out;
+}
+
 /** Builds / rebuilds the outfit on a pig rig. Returns parts that animate (propeller, wings). */
 export function dress(rig: PigRig, o: Outfit, color: number, spots: THREE.Group) {
   for (const a of Object.values(rig.anchors)) for (const c of [...a.children]) if (c.userData.cosmetic) a.remove(c);

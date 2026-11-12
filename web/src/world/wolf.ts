@@ -31,6 +31,8 @@ export class Wolf {
   state: State = 'enter';
   stateT = 0;
   active = true;
+  /** Online id (host numbers wolves as they come). */
+  netId = 0;
   target: Pig | null = null;
   carrying: Pig | null = null;
   mass = 35; radius = R; heldBy = null;
@@ -209,7 +211,7 @@ export class Wolf {
     G.fx.bits(v1.copy(t.pos).setY(t.pos.y + 0.3), { count: 10, color: 0xffe08a, speed: 3, up: 2, life: 0.4, size: 0.12, grow: 0, alpha: 1 });
     this.carrying = t; t.caughtBy(this);
     ignorePair(this.body, t.body, true);
-    if (t === G.localPig) G.fx.shake(0.35);
+    G.shakeFor(t, 0.35);
     G.events.push({ type: 'wolfBit', who: t });
     this.go('drag');
     this.goal.copy(this.edgePoint(this.pos));
@@ -259,6 +261,15 @@ export class Wolf {
 
   postStep() { this.synced.capture(); }
 
+  netState(n: number[], s: string[]) {
+    n.push(this.vel.x, this.vel.y, this.vel.z, this.tumbleUntil, this.carrying ? G.pigs.indexOf(this.carrying) : -1);
+    s.push(this.state);
+  }
+  netApply(n: number[], s: string[]) {
+    this.vel.set(n[0], n[1], n[2]); this.tumbleUntil = n[3]; this.carrying = n[4] >= 0 ? G.pigs[n[4]] : null;
+    this.state = s[0] as State;
+  }
+
   render(alpha: number, dt: number) {
     if (!this.active) return;
     const r = this.visual.root;
@@ -274,7 +285,16 @@ export class Wolf {
 export class WolfPack {
   wolves: Wolf[] = [];
   private nextSpawn = 0;
+  private nextId = 1;
   constructor(private scene: THREE.Scene, private nav: Nav, private farm: Rect) {}
+
+  /** Online players: a wolf the host told us about. */
+  spawnAt(at: THREE.Vector3, id: number) {
+    const w = new Wolf(this.scene, at, this.nav, this.farm);
+    w.netId = id; w.body.setEnabled(false);
+    this.wolves.push(w); G.wolves = this.wolves;
+    return w;
+  }
 
   spawn() {
     const F = this.farm, m = 3.4;
@@ -284,6 +304,7 @@ export class WolfPack {
     const n = this.nav.nearestFree(x, z, 6);
     const at = new THREE.Vector3(n?.x ?? x, 0, n?.z ?? z); at.y = G.terrain.height(at.x, at.z);
     const w = new Wolf(this.scene, at, this.nav, this.farm);
+    w.netId = this.nextId++; if (this.nextId > 60000) this.nextId = 1;
     this.wolves.push(w); G.wolves = this.wolves;
     if (this.wolves.filter((k) => k.active).length === 1) G.events.push({ type: 'wolves' });
   }

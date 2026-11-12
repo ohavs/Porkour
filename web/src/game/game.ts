@@ -19,6 +19,9 @@ import { Menu } from './menu';
 import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
 import { t } from '../i18n';
+import { NetHost, NetClient } from '../net/sync';
+import { online, type Peer } from '../net/online';
+import { parseOutfit } from '../pig/cosmetics';
 
 export const PLAYER_COLORS = [0xffc934, 0x38c6f4, 0x8be04e, 0xb57bff];
 const FIXED = 1 / 60;
@@ -42,6 +45,9 @@ export class Game {
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
   scripted: Partial<PigInput> | null = null;
+  /** Online: host simulation + snapshots, or player view of the host's world. */
+  net: NetHost | NetClient | null = null;
+  private bgWorker: Worker | null = null;
 
   constructor(public gfx: Gfx, public audio: Audio, public input: Input) {
     this.cam = new CamRig(gfx.camera);
@@ -81,7 +87,7 @@ export class Game {
       if (code === 'KeyH') this.hud.toggleHelp();
       if (code === 'KeyM') this.menu.toggleSound();
       if (code === 'KeyP') this.menu.toggleQuality();
-      if (code === 'KeyR' && this.input.held.size === 0) this.local.respawn();
+      if (code === 'KeyR' && this.input.held.size === 0 && G.net !== 'client') this.local.respawn();
     };
     const h = new URLSearchParams(location.search).get('hour');
     if (h) this.daynight.setHour(parseFloat(h));
@@ -117,10 +123,13 @@ export class Game {
   }
 
   private fixed(withInput: boolean, first = false) {
+    const host = this.net instanceof NetHost ? this.net : null;
+    host?.beginStep();
     G.time += FIXED;
     this.daynight.tick(FIXED);
     for (const p of this.pigs) p.input = emptyInput();
-    if (withInput) this.local.input = this.buildInput(first);
+    if (withInput) this.local.input = this.menu.blocking && G.net === 'host' ? emptyInput() : this.buildInput(first);
+    if (host) this.pigs.forEach((p, i) => { if (p !== this.local && !p.absent) p.input = host.inputFor(i) ?? p.input; });
     for (const p of this.pigs) p.preStep(FIXED);
     this.farmer?.preStep(FIXED);
     for (const c of this.farm.critters) c.preStep(FIXED);
@@ -146,6 +155,7 @@ export class Game {
       if (p === this.local) this.hud.toast(t('s.clean'), 1.2);
     }
     G.clouds = G.clouds.filter((c) => c.until > G.time);
+    host?.endStep();
     if (this.scripted) { this.scripted.jumpP = this.scripted.fartP = this.scripted.sprintP = this.scripted.wallowP = this.scripted.standP = this.scripted.grabP = this.scripted.grabR = false; }
   }
 
@@ -181,6 +191,7 @@ export class Game {
 
   /** Admin panel buttons. */
   adminAction(a: string) {
+    if (G.net === 'client') { this.hud.toast(t('net.hostOnly'), 1.6); return; }
     const L = this.local, cage = this.farm.cage, f = this.farmer;
     const tp = (x: number, z: number) => { if (L.heldBy) L.heldBy.release(false); L.body.setTranslation({ x, y: G.terrain.height(x, z) + 1.2, z }, true); L.body.setLinvel({ x: 0, y: 0, z: 0 }, true); };
     switch (a) {
@@ -204,20 +215,84 @@ export class Game {
     }
   }
 
+  // ---------------------------------------------------------------- online
+  /** Start (or join) the online game: host simulates, players show the host's world. */
+  goOnline(role: 'host' | 'client') {
+    G.net = role;
+    const slot = online.mySlot();
+    this.local = this.pigs[slot]; G.localPig = this.local;
+    this.local.yaw = Math.PI;
+    if (role === 'host') {
+      this.net = new NetHost(this, online);
+      this.startBackgroundTicks();
+    } else {
+      this.wolves.clear();
+      this.net = new NetClient(this, online);
+    }
+    this.syncPeers();
+  }
+
+  /** Names, outfits, who is in the game (host decides presence; players get it in snapshots). */
+  syncPeers() {
+    const bySlot = new Map<number, Peer>();
+    for (const p of online.peers.values()) bySlot.set(p.slot, p);
+    this.pigs.forEach((pig, i) => {
+      const peer = bySlot.get(i);
+      if (peer) {
+        pig.label = peer.name;
+        if (pig !== this.local) { const o = parseOutfit(peer.outfit); if (o) pig.visual.setOutfit(o); }
+      }
+      if (G.net === 'host') pig.setPresent(!!peer || pig === this.local);
+    });
+  }
+  peerLeft(id: number) { if (this.net instanceof NetHost) this.net.dropPeer(id); this.syncPeers(); }
+
+  /**
+   * Browsers stop drawing hidden tabs (alt-tab, minimized). The host's world must keep running for everyone,
+   * so a tiny worker keeps ticking the simulation while the tab is hidden.
+   */
+  private startBackgroundTicks() {
+    if (this.bgWorker) return;
+    try {
+      const url = URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 16);'], { type: 'text/javascript' }));
+      this.bgWorker = new Worker(url);
+      this.bgWorker.onmessage = () => {
+        if (!document.hidden) return;
+        const now = performance.now(), dt = Math.min(0.1, (now - this.last) / 1000);
+        this.last = now;
+        this.simulate(dt);
+        this.handleEvents();
+      };
+    } catch { /* no workers: the game pauses while hidden */ }
+  }
+
+  /** Fixed simulation steps for the time that passed (solo / host). */
+  private simulate(dt: number) {
+    // settings menu / wardrobe pause the game (the admin panel doesn't: you test things live). Online never pauses.
+    const paused = G.net === 'solo' && (this.menu.menuOpen || this.wardrobeEl.classList.contains('show'));
+    if (this.running && !paused) {
+      this.acc += dt * (G.net === 'solo' ? ADMIN.gameSpeed : 1);
+      let first = true, n = 0;
+      while (this.acc >= FIXED && n++ < 12) { this.fixed(true, first); first = false; this.acc -= FIXED; }
+      if (n >= 12) this.acc = 0;
+    }
+  }
+
   frame = () => {
     const nowMs = performance.now();
     const dt = Math.min(0.1, (nowMs - this.last) / 1000);
     this.last = nowMs;
     this.input.poll();
-    // settings menu / wardrobe pause the game (the admin panel doesn't: you test things live)
-    const paused = this.menu.menuOpen || this.wardrobeEl.classList.contains('show');
-    if (this.running && !paused) {
-      this.acc += dt * ADMIN.gameSpeed;
-      let first = true, n = 0;
-      while (this.acc >= FIXED && n++ < 12) { this.fixed(true, first); first = false; this.acc -= FIXED; }
-      if (n >= 12) this.acc = 0;
+    let alpha: number;
+    if (this.net instanceof NetClient) {
+      if (this.running) this.net.sendInput(this.menu.blocking ? emptyInput() : this.buildInput(true));
+      alpha = Math.max(0, this.net.frame(dt));
+      this.farm.cage.animate(dt);
+    } else {
+      this.simulate(dt);
+      alpha = this.acc / FIXED;
     }
-    const alpha = this.acc / FIXED;
+    if (online.room) { online.tickStats(); if ((this.frames & 15) === 0) this.menu.netStats(); }
     for (const p of this.pigs) p.render(alpha, dt);
     for (const c of this.farm.critters) c.render(alpha, dt);
     for (const d of this.farm.decor) d.render(dt);
@@ -237,6 +312,7 @@ export class Game {
     this.frames++; this.fpsT += dt;
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
     this.hud.update(this.local, SETTINGS.fps ? this.fps : 0);
+    if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     if (this.farmer) {
       this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);
       this.audio.setMusicRate(this.farmer.chasing || this.farmer.state === 'carry' ? 1.12 : 1);
