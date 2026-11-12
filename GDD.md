@@ -70,7 +70,8 @@ Thief / Hitman (suspicion meter, noise, disguise ≈ mud).
 ## Tech
 - TypeScript + Vite, Three.js (render), Rapier (physics + ragdolls).
 - Online: host-authoritative (host browser simulates; others send input, get snapshots) through a tiny WebSocket relay
-  with 4-letter room codes (same design as Nice Crash `server/relay.js`). Solo = offline host.
+  with 4-letter room codes, public room list, quick play, invite links, Google sign-in or guest; players connect
+  peer-to-peer (WebRTC) to the host when possible, else through the server. Solo = offline host.
 - Characters: segmented → ragdoll. Pig = Kenney Cube Pets pig (body + 4 leg nodes, stands up on its hind legs);
   farmer = skinned bones driven by ragdoll bodies when knocked down.
 - Claude runs the game headless in Chromium (screenshots, bots, 4 players over a local relay) before every push.
@@ -79,7 +80,7 @@ Thief / Hitman (suspicion meter, noise, disguise ≈ mud).
 ## Assets
 - In repo: Kenney Cube Pets (GLB), Medieval Village MegaKit (glTF), Quaternius Farm Buildings (FBX → convert),
   Mixamo Bob + 8 animations (FBX → convert), fonts.
-- Claude fetches (CC0, GitHub mirrors as in Nice Crash `tools/fetch_assets.sh`): Kenney (Nature, Car = tractor/truck,
+- Claude fetches (CC0, GitHub mirrors, `web/tools/fetch_assets.sh`): Kenney (Nature, Car = tractor/truck,
   Furniture, Food, Fantasy Town, Castle, Graveyard, Platformer, particles, sounds), KayKit (Adventurers weapons,
   Restaurant, Furniture, Halloween), Quaternius (Stylized Nature MegaKit, Universal Animation Library 1+2, Furniture).
 - User downloads (sites blocked for Claude): Quaternius Ultimate Crops, Fantasy Props MegaKit, Ultimate Guns;

@@ -6,6 +6,7 @@ import { G, ADMIN, type Holdable, type Carrier } from '../game/ctx';
 import type { Cage } from '../world/cage';
 import { PigVisual } from './pigVisual';
 import type { Outfit } from './cosmetics';
+import { carrierCode, carrierFrom, holdableIndex, holdableFrom } from '../net/refs';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
 export interface PigInput {
@@ -30,6 +31,8 @@ export const PIG = {
 
 type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
 type Shape = 'four' | 'two' | 'rag';
+const MODES: Mode[] = ['normal', 'ragdoll', 'wallow', 'held'];
+const SHAPES: Shape[] = ['four', 'two', 'rag'];
 const QX90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -61,6 +64,10 @@ export class Pig implements Holdable {
   punchAt = -10; private punched = false;
   /** Grilled / taken by a wolf (HUD text). */
   outReason: 'grill' | 'wolf' = 'grill';
+  /** Online: no player in this slot (the pig isn't in the game). */
+  absent = false;
+  /** Online: escape mashes needed (players get it from the host). */
+  private netNeed = 0;
   private setVel = new THREE.Vector3();
   private stepT = 0;
   visual: PigVisual;
@@ -84,7 +91,7 @@ export class Pig implements Holdable {
   }
 
   get now() { return G.time; }
-  escapeNeed() { return this.heldBy?.escapeNeed?.(this) ?? 5; }
+  escapeNeed() { return G.net === 'client' ? this.netNeed : this.heldBy?.escapeNeed?.(this) ?? 5; }
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
@@ -243,7 +250,7 @@ export class Pig implements Holdable {
     if (hit) {
       G.audio.play('punch|body', { pos: this.pos, vol: 0.9 });
       G.fx.bits(v1.set(hx, hy + 0.3, hz), { count: 8, color: 0xfff1a8, speed: 3, up: 1.5, life: 0.35, size: 0.12, grow: 0, drag: 3, alpha: 1 });
-      if (this === G.localPig) G.fx.shake(0.2);
+      G.shakeFor(this, 0.2);
       G.noise(this.pos, 10);
     } else G.audio.play('whoosh', { pos: this.pos, vol: 0.4 });
   }
@@ -338,7 +345,7 @@ export class Pig implements Holdable {
     G.fx.puff(butt, { count: 14, color: 0xe2f58a, spread: 0.2, speed: 6, up: -1, life: 0.7, size: 0.9, grow: 3, drag: 4, alpha: 0.95 });
     G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3, until: this.now + 6 });
     G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
-    if (this === G.localPig) G.fx.shake(0.3);
+    G.shakeFor(this, 0.3);
     G.noise(this.pos, 22);
     // blast pushes everything nearby
     for (const h of G.holdables) {
@@ -380,7 +387,7 @@ export class Pig implements Holdable {
       this.sprintUntil = this.now;
       G.audio.play('punch|body', { pos: this.pos, vol: 1 });
       G.fx.bits(this.pos, { count: 12, color: 0xffe08a, speed: 4, up: 2, life: 0.5, size: 0.18, grow: 0, drag: 3, alpha: 1 });
-      if (this === G.localPig) G.fx.shake(0.45);
+      G.shakeFor(this, 0.45);
       G.noise(this.pos, 14);
     });
   }
@@ -410,7 +417,7 @@ export class Pig implements Holdable {
     const av = hit ? v2.set(hit.z, 0, -hit.x).multiplyScalar(0.7) : v2.set(r(), r(), r());
     this.body.setAngvel({ x: av.x + r() * 0.3, y: av.y + r() * 0.3, z: av.z + r() * 0.3 }, true);
     if (sound) { G.audio.play('thud|body', { pos: this.pos, vol: 0.8 }); if (Math.random() < 0.5) G.audio.play('squeal', { pos: this.pos, vol: 0.6, minGap: 0.5 }); }
-    if (this === G.localPig && hit) G.fx.shake(Math.min(0.6, hit.length() * 0.04));
+    if (hit) G.shakeFor(this, Math.min(0.6, hit.length() * 0.04));
   }
 
   private ragdollStep(dt: number) {
@@ -563,6 +570,50 @@ export class Pig implements Holdable {
       h.body.setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.yaw + Math.PI / 2, Math.PI / 2)), true);
     }
   }
+
+  // ------------------------------------------------------------------ online
+  /** Host: a player joined / left this slot. */
+  setPresent(on: boolean) {
+    if (on === !this.absent) return;
+    if (!on) {
+      if (this.held) this.release(false);
+      if (this.heldBy) this.heldBy.release(false);
+      if (this.cage) { this.cage.pigs = this.cage.pigs.filter((p) => p !== this); this.freed(); }
+      if (this.mode === 'ragdoll') this.getUp();
+      this.absent = true; this.out = true; this.outUntil = Infinity;
+      this.body.setEnabled(false); this.visual.root.visible = false;
+    } else {
+      this.absent = false; this.out = false; this.burntUntil = 0;
+      this.body.setEnabled(true); this.visual.root.visible = true;
+      this.respawn();
+    }
+  }
+  /** Host → players: everything the visuals and the HUD need (positions travel separately). */
+  netState(n: number[]) {
+    n.push(MODES.indexOf(this.mode), SHAPES.indexOf(this.shape),
+      (this.grounded ? 1 : 0) | (this.standing ? 2 : 0) | (this.out ? 4 : 0) | (this.outReason === 'wolf' ? 8 : 0) | (this.absent ? 16 : 0) | (this.cage ? 32 : 0),
+      this.vel.x, this.vel.y, this.vel.z, this.yaw, this.sprintUntil, this.sprintReady, this.fartReady, this.muddyUntil, this.burntUntil,
+      this.punchAt, this.chargeStart, this.outUntil === Infinity ? -1 : this.outUntil, this.grillAt, this.wobble, this.turnRate, this.escape,
+      this.heldBy ? this.escapeNeed() : 0, holdableIndex(this.held), carrierCode(this.heldBy));
+  }
+  netApply(n: number[]) {
+    if (!n.length) return;
+    this.mode = MODES[n[0]] ?? 'normal';
+    const shape = SHAPES[n[1]] ?? 'four';
+    if (shape !== this.shape) { this.shape = shape; this.visual.centerHeight = shape === 'two' ? 0.70 : shape === 'rag' ? 0.5 : 0.36; }
+    const f = n[2];
+    this.grounded = !!(f & 1); this.standing = !!(f & 2); this.out = !!(f & 4); this.outReason = f & 8 ? 'wolf' : 'grill'; this.absent = !!(f & 16);
+    this.cage = f & 32 ? G.cage : null;
+    this.visual.root.visible = !this.out;
+    this.vel.set(n[3], n[4], n[5]); this.yaw = n[6];
+    this.sprintUntil = n[7]; this.sprintReady = n[8]; this.fartReady = n[9]; this.muddyUntil = n[10]; this.burntUntil = n[11];
+    this.punchAt = n[12]; this.chargeStart = n[13]; this.outUntil = n[14] < 0 ? Infinity : n[14]; this.grillAt = n[15];
+    this.wobble = n[16]; this.turnRate = n[17]; this.escape = n[18]; this.netNeed = n[19];
+    this.held = holdableFrom(n[20]);
+    if (this.held) this.held.heldBy = this;
+    this.heldBy = carrierFrom(n[21]);
+  }
+  netPose(p: THREE.Vector3) { this.pos.copy(p); }
 
   // ------------------------------------------------------------------ render
   private vq = new THREE.Quaternion(); private tq = new THREE.Quaternion();

@@ -152,6 +152,25 @@ export class Hud {
     this.mark.classList.toggle('pulse', sym === '!');
   }
 
+  /** Online: player names over the other pigs (fade with distance, hidden behind the camera). */
+  private tags: HTMLElement[] = [];
+  updateTags(pigs: Pig[], local: Pig, cam: THREE.Camera) {
+    const box = document.getElementById('hud')!;
+    pigs.forEach((p, i) => {
+      let el = this.tags[i];
+      if (!el) { el = this.tags[i] = document.createElement('div'); el.className = 'tag txt'; box.appendChild(el); }
+      if (p === local || p.out || p.absent) { el.style.opacity = '0'; return; }
+      p.visual.root.getWorldPosition(v1); v1.y += p.standing ? 1.75 : 1.35;
+      const d = v1.distanceTo(cam.position);
+      v1.project(cam);
+      if (v1.z > 1 || d > 70) { el.style.opacity = '0'; return; }
+      const html = `<i style="background:#${p.color.toString(16).padStart(6, '0')}"></i>${p.label.replace(/[<>&]/g, '')}`;
+      if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
+      el.style.opacity = String(clamp(1.3 - d / 60, 0.35, 1));
+      el.style.transform = `translate(${((v1.x + 1) / 2) * innerWidth}px, ${((1 - v1.y) / 2) * innerHeight}px) translate(-50%, -100%) scale(${clamp(14 / d, 0.7, 1.1)})`;
+    });
+  }
+
   update(pig: Pig, fps: number) {
     this.ring('sprint', pig.readiness('sprint'), pig.sprinting);
     this.ring('fart', pig.readiness('fart'));

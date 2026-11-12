@@ -3,6 +3,8 @@ import { G, ADMIN } from './ctx';
 import { SETTINGS, saveSettings } from './settings';
 import { t, setLang, lang, LANGS, onLang, type Lang, type Key } from '../i18n';
 import { SVG } from './hud';
+import { online } from '../net/online';
+import { inviteLink } from '../net/lobby';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -16,6 +18,7 @@ export class Menu {
   private panel = $('menuPanel');
   private admin = $('admin');
   onWardrobe?: () => void;
+  onLeave?: () => void;
 
   constructor(private game: Game) {
     $('bSound').addEventListener('click', () => this.toggleSound());
@@ -74,7 +77,10 @@ export class Menu {
       f('menu.sens', slider('sens', SETTINGS.sens, 3, 0.1)) +
       f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) +
       `<div class="btns"><button class="chip" data-b="resume">${t('menu.resume')}</button><button class="chip" data-b="wardrobe">${t('menu.wardrobe')}</button>` +
-      `<button class="chip" data-b="admin">${t('menu.admin')}</button></div><div id="pausedHint">${t('help.keys')}</div>`;
+      `<button class="chip" data-b="admin">${t('menu.admin')}</button></div>` +
+      (online.room ? `<div class="btns"><span class="lw">${t('net.code')} <b>${online.room.code}</b></span><button class="chip" data-b="invite">${t('net.copyInvite')}</button>` +
+        `<button class="chip" data-b="leave">${t(online.isHost ? 'net.endGame' : 'net.leave')}</button></div>` : '') +
+      `<div id="pausedHint">${t(G.net === 'solo' ? 'help.keys' : 'net.notPaused')}</div>`;
     this.panel.querySelectorAll<HTMLElement>('[data-seg]').forEach((s) => s.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       const name = s.dataset.seg;
@@ -91,10 +97,21 @@ export class Menu {
       if (k === 'resume') this.close();
       if (k === 'wardrobe') { this.close(false); this.onWardrobe?.(); }
       if (k === 'admin') { this.close(false); this.toggleAdmin(); }
+      if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2));
+      if (k === 'leave') this.onLeave?.();
     }));
   }
 
   // ---------------------------------------------------------------- admin panel
+  /** Online numbers in the admin panel (role, ping, direct / relay, traffic). */
+  netStats() {
+    const el = document.getElementById('aNet'); if (!el || !ADMIN.open) return;
+    const g = this.game, n = g.net as any, o = online;
+    const peers = [...o.peers.values()].filter((p) => p.id !== o.myId).map((p) => `${p.name}: ${o.direct(p.id) ? 'P2P' : 'relay'}`).join(', ');
+    el.innerHTML = `${G.net} · ${o.room?.code ?? '-'} · server ${o.rtt | 0} ms` + (n?.rtt !== undefined ? ` · host ${n.rtt | 0} ms · delay ${(n.delay * 1000) | 0} ms` : '') +
+      `<br>↑ ${o.stats.upRate.toFixed(1)} kB/s ↓ ${o.stats.downRate.toFixed(1)} kB/s` + (n?.lastSize ? ` · snap ${n.lastSize} B` : '') + (peers ? `<br>${peers}` : '');
+  }
+
   toggleAdmin() {
     ADMIN.open = !ADMIN.open;
     this.admin.classList.toggle('show', ADMIN.open);
@@ -109,6 +126,7 @@ export class Menu {
       `<div class="field"><span>${t(label)} <b data-val="${k}">${v}</b></span><input type="range" data-r="${k}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
     const btn = (k: string, label: Key) => `<button data-a="${k}">${t(label)}</button>`;
     this.admin.innerHTML = `<h2>${t('a.title')}</h2><div class="hint">${t('a.hint')}</div>` +
+      (G.net !== 'solo' ? `<div class="sec">${t('a.online')}</div><div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) : '') +
       tog('bob', 'a.bob') + tog('bobSees', 'a.bobSee') + tog('god', 'a.godMode') + tog('easyEscape', 'a.escape') + tog('noCooldowns', 'a.cooldowns') +
       rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
       `<div class="grid">${btn('grill', 'a.grillNow')}${btn('free', 'a.freeAll')}${btn('catch', 'a.catchMe')}${btn('mud', 'a.mud')}` +

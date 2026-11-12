@@ -4,6 +4,7 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { dampAngle, Rng } from '../core/util';
 import { AnimalVisual, type AnimalKind } from './animalModels';
+import { carrierCode, carrierFrom } from '../net/refs';
 
 export interface CritterDef {
   kind: AnimalKind; mass: number; speed: number; flee: number; radius: number; label: string;
@@ -158,6 +159,15 @@ export class Critter implements Holdable {
   }
 
   postStep() { this.synced.capture(); }
+
+  netState(n: number[]) {
+    n.push(this.vel.x, this.vel.y, this.vel.z, this.tumbleUntil, this.eatUntil, this.fleeing ? 1 : 0, this.excite, carrierCode(this.heldBy));
+  }
+  netApply(n: number[]) {
+    if (!n.length) return;
+    this.vel.set(n[0], n[1], n[2]); this.tumbleUntil = n[3]; this.eatUntil = n[4]; this.fleeing = n[5] === 1; this.excite = n[6];
+    this.heldBy = carrierFrom(n[7]);
+  }
 
   render(alpha: number, dt: number) {
     const r = this.visual.root;

@@ -1,0 +1,12 @@
+# Render.com blueprint: the Porkour online server (free plan). Dashboard → New → Blueprint → this repo.
+# See server/README.md. Optional env vars: GOOGLE_CLIENT_ID (defaults to the one in server.js), ALLOWED_ORIGINS.
+services:
+  - type: web
+    name: porkour-server
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true

@@ -1,0 +1,11 @@
+{
+  "name": "porkour-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Porkour online: Google / guest identity, rooms and a data relay (the game runs in the host's browser)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "test": "node test.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "jose": "^5.9.6", "ws": "^8.18.0" }
+}

@@ -4,6 +4,7 @@ import { fitted, sizeOf } from '../core/assets';
 import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
+import { carrierCode, carrierFrom } from '../net/refs';
 
 export type PropShape = 'box' | 'ball' | 'cyl';
 export interface PropDef {
@@ -48,6 +49,9 @@ export class Prop implements Holdable {
   body: RAPIER.RigidBody;
   mass: number;
   label?: string;
+
+  netState(n: number[]) { n.push(carrierCode(this.heldBy)); }
+  netApply(n: number[]) { if (n.length) this.heldBy = carrierFrom(n[0]); }
 
   knock(dv: THREE.Vector3) {
     const lv = this.body.linvel();

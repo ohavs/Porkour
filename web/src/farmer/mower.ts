@@ -79,11 +79,7 @@ export class Mower {
   /** While ridden (fixed step): cut grass, clippings, knock pigs, noise. */
   ride(at: THREE.Vector3, yaw: number, speed: number, dt: number) {
     const f = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    this.pos.copy(at).addScaledVector(f, 0.15);
-    for (const w of this.wheels) w.rotation.x += speed * dt * 4;
-    this.engine?.setPos(this.pos);
-    this.engine?.setRate(0.9 + speed * 0.08);
-    this.onMow?.(this.pos.x, this.pos.z, 0.75);
+    this.showRide(at, yaw, speed, dt);
     if (speed > 0.3 && Math.random() < dt * 25) {
       const back = this.pos.clone().addScaledVector(f, -0.7); back.y += 0.3;
       G.fx.bits(back, { count: 2, color: Math.random() < 0.5 ? 0x6db33f : 0x8bcf52, spread: 0.2, speed: 2, up: 1.5, grav: 8, life: 0.7, size: 0.06, grow: 0, drag: 1, alpha: 1, dir: f.clone().negate() });
@@ -101,6 +97,15 @@ export class Mower {
     }
     this.noiseT -= dt;
     if (this.noiseT <= 0) { this.noiseT = 1; G.noise(this.pos, 0.1); }   // marker only (Bob is the one mowing)
+  }
+
+  /** The visible part of riding (wheels, engine sound, cut grass) — also run by online players for Bob's mower. */
+  showRide(at: THREE.Vector3, yaw: number, speed: number, dt: number) {
+    this.pos.set(at.x + Math.sin(yaw) * 0.15, at.y, at.z + Math.cos(yaw) * 0.15);
+    for (const w of this.wheels) w.rotation.x += speed * dt * 4;
+    this.engine?.setPos(this.pos);
+    this.engine?.setRate(0.9 + speed * 0.08);
+    this.onMow?.(this.pos.x, this.pos.z, 0.75);
   }
 
   /** Serpentine rows inside a rect, only through walkable cells. */
