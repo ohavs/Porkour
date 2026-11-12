@@ -16,7 +16,24 @@ const MODELS = [
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
 ];
 const SOUNDS = ['punch', 'punch2', 'thud', 'thud2', 'wood', 'wood2', 'plank', 'metal', 'step1', 'step2', 'step3', 'step4', 'cloth', 'grab',
-  'mudstep', 'throw', 'pop', 'denied', 'fart_short', 'fart_deep'];
+  'mudstep', 'throw', 'pop', 'denied', 'fart_short', 'fart_deep', 'latch', 'click', 'chop',
+  'jingle_alert', 'jingle_caught', 'jingle_grilled', 'jingle_free', 'jingle_knock'];
+
+/** Sounds made from code: cough (3 throaty noise bursts), grill sizzle (hiss + crackles). */
+function synthSounds(audio: Audio) {
+  let lp = 0, hp = 0;
+  audio.synth('cough', 0.8, (t) => {
+    const k = t % 0.26, env = k < 0.2 ? Math.exp(-k * 16) * (1 - Math.exp(-k * 400)) * (1 - t / 1.2) : 0;
+    lp += (Math.random() * 2 - 1 - lp) * 0.3;
+    return lp * env * 1.6 + Math.sin(t * 2 * Math.PI * (130 - k * 120)) * env * 0.25;
+  });
+  audio.synth('sizzle', 1.2, (t) => {
+    const n = Math.random() * 2 - 1, h = n - hp; hp = n;
+    const env = Math.min(1, t * 8) * Math.min(1, (1.2 - t) * 4);
+    const crackle = Math.random() < 0.004 ? (Math.random() * 2 - 1) * 0.9 : 0;
+    return (h * 0.22 * (0.7 + 0.3 * Math.sin(t * 37)) + crackle) * env;
+  });
+}
 
 const params = new URLSearchParams(location.search);
 const quality: Quality = params.get('q') === 'low' ? 'low' : 'high';
@@ -36,6 +53,7 @@ async function boot() {
     audio.load('music_level', './assets/music/level_music.ogg'),
     audio.load('music_theme', './assets/music/theme_song.ogg'),
   ]);
+  synthSounds(audio);
   go.textContent = 'Building the farm…';
   await new Promise((r) => setTimeout(r, 30));
   const app = document.getElementById('app')!;

@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { damp, clamp, lerp } from '../core/util';
 import { toonMat } from '../render/toon';
+import { G } from '../game/ctx';
 import { buildPig, PIVOT, type PigRig } from './pigModel';
 
 const STAND_POS = new THREE.Vector3(0, PIVOT.y + 0.1, PIVOT.z + 0.05);
 const STAND_ANGLE = 1.25;
-const MUD = new THREE.Color(0x6b4423);
+const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620);
 
 export interface PigPose {
   speed: number; grounded: boolean; vy: number; standing: boolean; mode: string;
-  sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number;
+  sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number; burnt?: number;
 }
 
 /**
@@ -97,6 +98,8 @@ export class PigVisual {
 
     // mud
     const m = clamp(p.muddy, 0, 1) * 0.8;
-    for (const s of R.skin) s.mat.color.copy(s.base).lerp(MUD, m);
+    const b = clamp(p.burnt ?? 0, 0, 1) * 0.75;
+    for (const s of R.skin) s.mat.color.copy(s.base).lerp(MUD, m).lerp(BURNT, b);
+    if (b > 0 && Math.random() < p.dt * 6 * b) G.fx.puff(this.root.position, { count: 1, color: 0x555555, spread: 0.2, speed: 0.2, up: 0.8, life: 1.2, size: 0.4, grow: 0.6, alpha: 0.35 });
   }
 }

@@ -5,7 +5,9 @@ import type { Audio } from '../core/audio';
 import { Gfx } from '../render/gfx';
 import { Grass } from '../render/grass';
 import { Fx } from '../render/fx';
-import { buildFarm1, type FarmBuild } from '../world/farm1';
+import { buildFarm1, FARM, type FarmBuild } from '../world/farm1';
+import { Farmer } from '../farmer/farmer';
+import { Nav } from '../farmer/nav';
 import { Pig, emptyInput, type PigInput } from '../pig/pig';
 import { Prop } from '../world/props';
 import { CamRig } from './camera';
@@ -22,6 +24,8 @@ export class Game {
   grass!: Grass;
   cam: CamRig;
   hud!: Hud;
+  farmer: Farmer | null = null;
+  nav!: Nav;
   private acc = 0;
   private last = performance.now();
   private frames = 0; private fpsT = 0; fps = 0;
@@ -45,6 +49,12 @@ export class Game {
     this.farm.pigSpawns.forEach((p, i) => this.pigs.push(new Pig(scene, p, PLAYER_COLORS[i], ['You', 'P2', 'P3', 'P4'][i])));
     this.local = this.pigs[0];
     G.localPig = this.local;
+    G.cage = this.farm.cage;
+    const t0 = performance.now();
+    this.nav = new Nav(FARM, terrain);
+    console.log(`nav grid ${this.nav.w}x${this.nav.h} in ${(performance.now() - t0) | 0} ms`);
+    if (new URLSearchParams(location.search).get('bob') !== '0')
+      this.farmer = new Farmer(scene, this.farm.farmerSpawn, this.nav, this.farm.chores, this.farm.cage, this.pigs, this.farm.zones);
     (window as any).__G = G;
     this.local.yaw = Math.PI;
     this.hud = new Hud();
@@ -83,12 +93,15 @@ export class Game {
     for (const p of this.pigs) p.input = emptyInput();
     if (withInput) this.local.input = this.buildInput(first);
     for (const p of this.pigs) p.preStep(FIXED);
+    this.farmer?.preStep(FIXED);
     for (const c of this.farm.critters) c.preStep(FIXED);
     for (const pr of this.farm.props) pr.synced.beforeStep();
     step((h1, h2, force) => {
       for (const h of [h1, h2]) { const o = owners.get(h); if (o instanceof Prop) o.impact(force); }
     });
     for (const p of this.pigs) p.postStep(FIXED);
+    this.farmer?.postStep();
+    this.farm.cage.update(FIXED, this.pigs);
     for (const c of this.farm.critters) c.postStep();
     for (const pr of this.farm.props) {
       pr.synced.capture();
@@ -97,6 +110,22 @@ export class Game {
     }
     G.clouds = G.clouds.filter((c) => c.until > G.time);
     if (this.scripted) { this.scripted.jumpP = this.scripted.fartP = this.scripted.sprintP = this.scripted.wallowP = this.scripted.standP = this.scripted.grabP = this.scripted.grabR = false; }
+  }
+
+  private handleEvents() {
+    for (const e of G.events) {
+      const me = e.who === this.local;
+      if (e.type === 'alarm' && me) this.hud.toast('He saw you! RUN!', 1.6);
+      if (e.type === 'caught') this.hud.toast(me ? 'Caught!' : `${e.who?.label} got caught!`, 1.6);
+      if (e.type === 'escaped' && me) this.hud.toast('Wriggled free!', 1.2);
+      if (e.type === 'caged' && me) this.hud.toast('Into the cage…', 1.6);
+      if (e.type === 'cage-open') this.hud.toast(this.local.cage === null && e.why ? 'Cage open — run!' : 'Cage open!', 1.6);
+      if (e.type === 'grilled') this.hud.toast(me ? 'GRILLED!' : `${e.who?.label} got grilled!`, 2);
+      if (e.type === 'knockdown') this.hud.toast('KNOCKOUT!', 1.4);
+      if (e.type === 'stagger') this.hud.toast('Bob is staggering!', 1.2);
+      if (e.type === 'grilled' && G.grills >= 3) { this.hud.toast('Bob wins this round!', 3); G.grills = 0; }
+    }
+    G.events.length = 0;
   }
 
   frame = () => {
@@ -112,6 +141,7 @@ export class Game {
     const alpha = this.acc / FIXED;
     for (const p of this.pigs) p.render(alpha, dt);
     for (const c of this.farm.critters) c.render(alpha, dt);
+    this.farmer?.render(alpha, dt);
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     for (const m of this.farm.mixers) m.update(dt);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
@@ -124,6 +154,11 @@ export class Game {
     this.frames++; this.fpsT += dt;
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
     this.hud.update(this.local, this.fps);
+    if (this.farmer) {
+      this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);
+      this.audio.setMusicRate(this.farmer.chasing || this.farmer.state === 'carry' ? 1.12 : 1);
+    }
+    this.handleEvents();
     this.gfx.render(dt);
     requestAnimationFrame(this.frame);
   };

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { raycast, L } from '../core/physics';
+import { raycast, L, owners } from '../core/physics';
 import { clamp, damp } from '../core/util';
 import { G } from './ctx';
 
@@ -29,7 +29,7 @@ export class CamRig {
     this.focus.y = damp(this.focus.y, fy, 9, dt);
     const want = this.dist + (standing ? 0.4 : 0);
     const dir = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
-    const hit = raycast(this.focus, dir, want + 0.3, L.STATIC);
+    const hit = raycast(this.focus, dir, want + 0.3, L.STATIC, undefined, (c) => owners.get(c.handle)?.kind !== 'cage');
     const d = hit ? Math.max(0.6, hit.dist - 0.3) : want;
     this.cur = d < this.cur ? d : damp(this.cur, d, 4, dt);
     this.camera.position.copy(this.focus).addScaledVector(dir, this.cur);

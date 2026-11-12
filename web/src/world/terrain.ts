@@ -22,6 +22,7 @@ export class Terrain {
   private data!: Uint8ClampedArray;
   private noGrassRects: Rect[] = [];
   mudZones: { x: number; z: number; rx: number; rz: number }[] = [];
+  collider!: RAPIER.Collider;
 
   constructor(farm: Rect) {
     this.farm = farm;
@@ -144,6 +145,6 @@ export class Terrain {
     const verts = new Float32Array(pos.array as ArrayLike<number>);
     const idx = new Uint32Array(geo.index!.array as ArrayLike<number>);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    world.createCollider(RAPIER.ColliderDesc.trimesh(verts, idx).setFriction(0.8).setCollisionGroups(groups(L.STATIC)), body);
+    this.collider = world.createCollider(RAPIER.ColliderDesc.trimesh(verts, idx).setFriction(0.8).setCollisionGroups(groups(L.STATIC)), body);
   }
 }

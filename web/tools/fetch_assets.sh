@@ -43,7 +43,8 @@ grab() { # grab <dest subdir> <src dir> <tex> names...
 pack https://github.com/ETdoFresh/kenney.nl kenney \
   '/kenney_natureKit_2.1/Models/GLTF format/' '/fantasy-town-kit-1.0/Models/GLTF format/' \
   '/carkit_v1.4/Models/GLTF format/' '/kenney_platformerkit/Models/GLTF format/' \
-  '/kenney_impactsounds/' '/kenney_rpgaudio/' '/kenney_interfacesounds/' '/particlePack_1.1/PNG (Transparent)/'
+  '/kenney_impactsounds/' '/kenney_rpgaudio/' '/kenney_interfacesounds/' '/particlePack_1.1/PNG (Transparent)/' \
+  '/kenney_musicjingles/'
 K=$CACHE/kenney
 grab kenney "$K/kenney_natureKit_2.1/Models/GLTF format" 512 \
   fence_simple fence_simpleHigh fence_gate fence_planks fence_planksDouble fence_corner \
@@ -98,6 +99,12 @@ snd "$A/footstep_grass_000.ogg" step1; snd "$A/footstep_grass_001.ogg" step2
 snd "$A/footstep_grass_002.ogg" step3; snd "$A/footstep_grass_003.ogg" step4
 snd "$K/kenney_rpgaudio/Audio/cloth1.ogg" cloth; snd "$K/kenney_rpgaudio/Audio/handleSmallLeather.ogg" grab
 snd "$K/kenney_rpgaudio/Audio/footstep05.ogg" mudstep
+snd "$K/kenney_rpgaudio/Audio/metalLatch.ogg" latch; snd "$K/kenney_rpgaudio/Audio/metalClick.ogg" click
+snd "$K/kenney_rpgaudio/Audio/chop.ogg" chop
+J="$K/kenney_musicjingles/Audio"   # stings for the farmer (picked by pitch contour)
+snd "$J/Hit jingles/jingles_HIT03.ogg" jingle_alert; snd "$J/Pizzicato jingles/jingles_PIZZI01.ogg" jingle_caught
+snd "$J/Sax jingles/jingles_SAX01.ogg" jingle_grilled; snd "$J/Pizzicato jingles/jingles_PIZZI10.ogg" jingle_free
+snd "$J/Sax jingles/jingles_SAX04.ogg" jingle_knock
 snd "$K/kenney_interfacesounds/Audio/drop_002.ogg" throw; snd "$K/kenney_interfacesounds/Audio/pluck_001.ogg" pop
 snd "$K/kenney_interfacesounds/Audio/error_004.ogg" denied
 AU="$REPO/Assets/Audio"

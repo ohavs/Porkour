@@ -25,6 +25,8 @@ coins + XP → shop later. Inspirations: Untitled Goose Game, Burglin' Gnomes, H
 ## Tech (`web/`)
 - TypeScript + Vite 6, **three 0.170**, **Rapier 0.14** (`@dimforge/rapier3d-compat`, gravity −20, fixed 60 Hz + render
   interpolation via `Synced`), **postprocessing 6.36** (ink outline → bloom / hue / NEUTRAL tone map / vignette → SMAA). N8AO installed, unused.
+- Bob is procedural (the Mixamo "Boss" FBX in `Assets/Art/Characters` looked realistic/ugly → not used).
+- Sounds: Kenney jingles (alert / caught / grilled / free / knock, picked by pitch contour), cough + sizzle synthesized in `main.ts`.
 - Cartoon rendering: every loaded model is `toonify`-ed (MeshToonMaterial + 3-band `RAMP`), `InkOutline` = depth-Laplacian edges;
   grass blades don't write depth (renderOrder 5) so they get no lines. Gradient sky dome + puffy toon clouds, hemisphere + sun
   (shadow map follows the player, texel-snapped). `?q=low` = smaller shadows / less grass / pixel ratio 1; **P** toggles.
@@ -47,10 +49,14 @@ coins + XP → shop later. Inspirations: Untitled Goose Game, Burglin' Gnomes, H
 | `pig/pigModel.ts` | Procedural cartoon pig (pear body, head, snout, eyes, blush, floppy ears, curly tail, stubby legs) → rig. |
 | `pig/pigVisual.ts` | Procedural animation: trot, stand-up hinge (`PIVOT` hind hips, front legs → arms), wallow roll, flail, ears / tail / blink, squash & stretch, mud tint, party hat (player colour). |
 | `world/farm1.ts` | **Farm 1** layout (north = −z, farm x −64..64, z −110..20, fence + hedge + invisible walls, gate south): sty (start, x 24..37 z 2..14, mud, hut), big barn (walk-in), farmhouse, garage, silo, chicken pen, cow pasture, garden, orchard, corn field, windmills, well, hay shed; props, critters, trees. Buildings use trimesh colliders from their mesh. |
+| `world/cage.ts` | Bob's cage + kettle BBQ grill (yard, x −8 z −35): static walls/roof, door collider toggled; latch (pigs hold LMB: outside 1.1 s, inside 9 s / muddy 6 s), ram any wall = door bursts; `BBQ_TIME` 90 s → grilled (pig out 8 s, back in the sty burnt), `G.grills`. |
 | `world/terrain.ts` | Ground: heightfield (flat farm, hills outside), canvas splat map (paths / dirt / mud), toon shader + patchwork fields outside the fence, trimesh collider, `mudAt`, `isBare`. |
 | `world/nature.ts` | Instanced cartoon trees / bushes / hedges from smooth blobs; procedural hay bale. |
 | `world/props.ts` | `Prop` (dynamic, holdable, impact sounds) + `PROPS` table (crates, veggie crates, barrels, pumpkins, melons, logs, wheel, hay, sword…). |
 | `world/animals.ts` | `Critter` (Cube Pets models + their animations: wander, flee pigs, tumble when hit, small ones holdable), `decorAnimal`. |
+| `farmer/farmer.ts` | **Farmer Bob** brain (tune in `BOB`): states routine (chores from `farm1` `CHORES`) / investigate+search (noises) / suspect "?" / chase / windup→lunge (dodgeable) / carry → cage / dust / guard (2+ caged) / fist (pig unreachable) / pant (stamina) / cough (fart cloud) / stagger / down. Suspicion per pig: only un-piggy acts (2 legs, carrying, sprint, flying, garden, near the cage); view cone by activity (busy / nap / alert), LOS raycast, mud halves range. Poise: hits stack (ram 60, thrown objects mass×speed/4); ≥100 stagger, ≥160 knock-down (drops the pig, belly = trampoline). `debugAnim` test hook. |
+| `farmer/farmerModel.ts`, `farmerVisual.ts` | Procedural cartoon farmer (overalls, straw hat, moustache, tools: bucket, can, axe, mug, hammer) + damped procedural poses for every state. Bob's voice = synthesized gibberish (`audio.voice`). |
+| `farmer/nav.ts` | 0.5 m walk grid baked by sampling static colliders (~0.3 s headless), A* + string pulling, `los`, `nearestFree`. |
 | `render/` | `gfx.ts` renderer / sky / lights / post, `toon.ts` (RAMP, toonify, InkOutline), `grass.ts` (instanced wind blades, pushed by pigs), `fx.ts` (pooled point-sprite particles + shake), `textures.ts` (canvas textures). |
 | `core/` | `physics.ts` (world, layers `L`, owners map, ignore-pair hook for held objects, static box / cylinder / trimesh, raycast), `input.ts` (keyboard / mouse / gamepad, latched presses), `audio.ts` (WebAudio, 3D one-shots, music crossfade), `assets.ts` (GLTF preload, `instance`, `fitted`), `synced.ts`, `util.ts`. |
 
@@ -64,14 +70,16 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 
 ## Roadmap (web)
 1. ✅ **M1 (2026-11-12)**: web skeleton, cartoon Farm 1, procedural pig with all moves + ragdoll, props, critters, HUD, Pages workflow.
-2. **M2 Farmer Bob**: routine (chores at places), suspicion per pig (4 legs + empty mouth = "just a pig"), noise (`G.noises`),
-   chase, grab windup, carry to the cage, BBQ timer, poise (stacked strong hits → drop / knockdown ragdoll). Bob = Mixamo FBX in the
-   Unity folder → convert (fbx2gltf) + toonify; style check vs. the cartoon look.
+2. ✅ **M2 Farmer Bob (2026-11-12)**: procedural cartoon Bob, 8-chore routine, suspicion + "?"/"!" marker, noises, chase with
+   nav, grab windup/lunge, carry, cage + BBQ timer, lock-picking / latch / ram rescue, poise → stagger / knock-down, fart cough.
 3. **M3 Online** 4 players (relay + room codes, host-authoritative snapshots).
 4. **M4** loot / missions / round loop / weapons (KayKit sword / axe, rocks, rifle pack from the user).
 5. **M5** alert levels, dog, traps, modifiers, more farms, shop.
 
 ## Status / next step
+- 2026-11-12: **M2 done** & checked headless (routine walk, "?"→"!"→chase around obstacles→catch→carry→cage→lock-pick open,
+  escape mash, cough, stagger→knock-down, grilled→respawn). Test scripts: scratchpad `t2.cjs` style (Playwright, `window.__game.farmer`).
+  Not tuned on a real PC yet: suspicion speed, Bob run 5.7 vs pig 4.8, escape 15 mashes, BBQ 90 s.
 - 2026-11-12: M1 built & checked in headless Chromium (screenshots: cartoon look, round pig, stand / wallow / fart / ram / throw work).
   Pushed on the session branch. **User to do**: make the repo public, Settings → Pages → Source "GitHub Actions", merge the PR →
   game at `https://ohavs.github.io/Porkour/`. Then feedback on feel → M2.
@@ -79,6 +87,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   bales (cylinder collider along x), glossier mud.
 
 ## Known issues / TODO
+- Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
+- Bob has no ragdoll physics (knock-down is an animation + lying capsule). Untested: guard mode (2 caged), fist (unreachable pig).
 - Never tested on a real GPU: check FPS (grass density 16/m² high), shadows, outline thickness.
 - `fart_short` / `fart_deep` / music come from the user's Unity `Assets/Audio` (license as downloaded by the user).
 - Bob (Mixamo) in a public repo: fine for a game, avoid redistributing raw FBX elsewhere.

@@ -6,6 +6,8 @@ import { Terrain, type Rect } from './terrain';
 import { Prop, PROPS } from './props';
 import { Critter, CRITTERS, decorAnimal } from './animals';
 import { Forest, type TreeKind } from './nature';
+import { Cage } from './cage';
+import type { Chore } from '../farmer/farmer';
 
 /**
  * Farm 1 — Bob's family farm. North = −z. Everything placed from code (art-agnostic: missing models → magenta box).
@@ -17,7 +19,20 @@ export const FARM: Rect = { x0: -64, x1: 64, z0: -110, z1: 20 };
 export interface FarmBuild {
   props: Prop[]; critters: Critter[]; mixers: THREE.AnimationMixer[]; spinners: { obj: THREE.Object3D; speed: number }[];
   pigSpawns: THREE.Vector3[];
+  cage: Cage; chores: Chore[]; farmerSpawn: THREE.Vector3; zones: { garden: Rect[] };
 }
+
+/** Bob's day on farm 1 (in order, then it loops). Stand points are snapped to walkable cells. */
+const CHORES: Chore[] = [
+  { id: 'pigs', label: 'feeding the pigs', at: [26, 0.5], look: [26, 4], anim: 'pour', dur: 12, view: 'busy' },
+  { id: 'chickens', label: 'feeding the chickens', at: [21, -22.5], look: [24, -26], anim: 'feed', dur: 20, view: 'busy' },
+  { id: 'cows', label: 'checking the cows', at: [20.7, -59], look: [30, -59], anim: 'lean', dur: 16, view: 'normal' },
+  { id: 'nap', label: 'napping in the hay shed', at: [38, -81], look: [38, -74], anim: 'nap', dur: 32, view: 'nap' },
+  { id: 'garden', label: 'watering the garden', at: [-36, -58.5], look: [-41, -58.5], anim: 'water', dur: 22, view: 'busy' },
+  { id: 'coffee', label: 'having coffee by the grill', at: [-4.5, -30.5], look: [0, -20], anim: 'coffee', dur: 22, view: 'busy' },
+  { id: 'wood', label: 'chopping wood', at: [-40.4, 10.4], look: [-40.4, 9], anim: 'chop', dur: 20, view: 'busy' },
+  { id: 'tractor', label: 'fixing the tractor', at: [6.8, 6.6], look: [9, 9], anim: 'fix', dur: 18, view: 'busy' },
+];
 
 export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: Terrain) => FarmBuild } {
   const terrain = new Terrain(FARM);
@@ -43,7 +58,13 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
   terrain.mud(-6, -66, 2.4, 1.8); terrain.mud(38, -64, 2.5, 2); terrain.mud(-52, 10, 2, 1.6);
 
   const build = (t: Terrain): FarmBuild => {
-    const out: FarmBuild = { props: [], critters: [], mixers: [], spinners: [], pigSpawns: [] };
+    const garden = { x0: -50, x1: -30, z0: -66, z1: -52 };
+    const out: FarmBuild = {
+      props: [], critters: [], mixers: [], spinners: [], pigSpawns: [],
+      cage: new Cage(scene, V3(-8, t.height(-8, -35), -35), 0), chores: CHORES,
+      farmerSpawn: V3(-4, t.height(-4, -28), -28), zones: { garden: [garden] },
+    };
+    t.noGrass({ x0: -11, x1: -2, z0: -38, z1: -32 });
     const rng = new Rng(2026);
     const blocked: Rect[] = [];
     const y = (x: number, z: number) => t.height(x, z);
@@ -120,11 +141,12 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     // sty shelter
     building('farm/ChickenCoop', 34.5, 11.2, 2.8, Math.PI); // the pigs' hut
 
+    blocked.push({ x0: -12, x1: -1, z0: -39, z1: -28 });               // cage + grill + Bob's coffee spot
     // ---------------------------------------------------------------- pens & fences
     pen({ x0: 24, x1: 37, z0: 2, z1: 14 }, 'w', 2.6);                   // sty
     pen({ x0: 16, x1: 30, z0: -32, z1: -18 }, 's', 2.4);                // chickens
     pen({ x0: 22, x1: 52, z0: -76, z1: -50 }, 'w', 3.5, 'kenney/fence_planks'); // pasture
-    pen({ x0: -50, x1: -30, z0: -66, z1: -52 }, 'e', 2.4);              // garden
+    pen(garden, 'e', 2.4);                                                // garden
     // outer farm fence (gate gap at the south road)
     const F = FARM, m = 0.5;
     fence(F.x0 + m, F.z1 - m, -3, F.z1 - m, 'kenney/fence_planks'); fence(3, F.z1 - m, F.x1 - m, F.z1 - m, 'kenney/fence_planks');
@@ -157,7 +179,6 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     decor('kenney/log_stackLarge', -36, 4, { height: 1.4, yaw: 1.57, collide: 'box' });
     decor('kenney/stall', -30, -36, { height: 2.6, yaw: 0.3, collide: 'box' });
     decor('kenney/sign', 3, 17, { height: 1.4, yaw: 0 });
-    decor('kenney/campfire_logs', -4, -34, { height: 0.5 });
     for (let i = 0; i < 4; i++) decor('kenney/stump_round', -42 + i * 1.6, 9 + rng.range(-0.3, 0.3), { height: 0.5, collide: 'box' });
     // trough in the sty
     decor('kit/Prop_Crate', 26, 4, { height: 0.5, scale: undefined, collide: 'box', yaw: 0 });
@@ -170,7 +191,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (const [x, z] of [[-36, -50], [-38, -49.4]] as const) prop('melon', x, z);
     prop('veggieCrate', -26, -34.5); prop('potatoCrate', -28, -34); prop('tomatoCrate', -31, -34.2); prop('cheese', -21, -33);
     prop('ham', -29.5, -35.2, 0, 1.2);
-    prop('pot', -18, -33); prop('mug', -3.8, -32.6);
+    prop('pot', -18, -33); prop('mug', -2.6, -31.8);
     for (const [x, z] of [[-39, 6], [-40.5, 7], [-38, 7.6]] as const) prop('log', x, z);
     prop('wheel', -12, 6, 0.4);
     prop('sword', 36, -84);

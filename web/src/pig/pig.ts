@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair, HOOKS } from '../core/physics';
 import { Synced } from '../core/synced';
 import { clamp, dampAngle, wrapAngle } from '../core/util';
-import { G, type Holdable } from '../game/ctx';
+import { G, type Holdable, type Carrier } from '../game/ctx';
+import type { Cage } from '../world/cage';
 import { PigVisual } from './pigVisual';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
@@ -36,7 +37,11 @@ export class Pig implements Holdable {
   collider!: RAPIER.Collider;
   shape: Shape = 'four';
   mass = PIG.mass; radius = 0.5;
-  heldBy: Pig | null = null;
+  heldBy: Carrier | null = null;
+  /** Locked in Bob's cage (grill timer running). */
+  cage: Cage | null = null; grillAt = 0;
+  /** Grilled: out of the game until outUntil, then back in the sty. */
+  out = false; outUntil = 0; burntUntil = 0;
   held: Holdable | null = null;
   input = emptyInput();
   yaw = 0;
@@ -45,7 +50,7 @@ export class Pig implements Holdable {
   grounded = false; groundNormal = new THREE.Vector3(0, 1, 0);
   private coyote = 0; private jumpBuf = 0; private ownJump = false;
   sprintUntil = 0; sprintReady = 0; fartReady = 0; wallowUntil = 0; muddyUntil = 0;
-  private ragSince = 0; private still = 0; private escape = 0;
+  private ragSince = 0; private still = 0; escape = 0;
   chargeStart = -1;
   private rammed = new Set<unknown>();
   private setVel = new THREE.Vector3();
@@ -71,6 +76,7 @@ export class Pig implements Holdable {
   }
 
   get now() { return G.time; }
+  escapeNeed() { return this.heldBy?.escapeNeed?.(this) ?? 5; }
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
@@ -104,11 +110,19 @@ export class Pig implements Holdable {
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     this.synced.beforeStep();
 
+    if (this.out) {
+      if (this.now > this.outUntil) this.backFromGrill();
+      return;
+    }
     if (this.pos.y < -25) this.respawn();
 
     if (this.heldBy) {
       this.mode = 'held';
-      if (inp.jumpP && ++this.escape >= 5) { this.heldBy.release(false); this.escape = 0; this.vel.y = 6; this.body.setLinvel(this.vel, true); }
+      this.escape = Math.max(0, this.escape - dt * 0.8);
+      if (inp.fartP) this.tryFart();
+      if (inp.jumpP && (this.escape += 1) >= this.escapeNeed()) {
+        this.heldBy.release(false); this.escape = 0; this.vel.y = 6; this.body.setLinvel(this.vel, true);
+      }
       return;
     }
     if (this.mode === 'held') this.mode = 'ragdoll', this.startRagdoll(null, false);
@@ -235,6 +249,16 @@ export class Pig implements Holdable {
   private tryFart() {
     if (this.now < this.fartReady || this.mode === 'wallow') return;
     this.fartReady = this.now + PIG.fartCd;
+    if (this.heldBy?.fartedOn) {      // carried by Bob: stink in his face, wriggle a lot
+      this.escape += 5;
+      const b = v1.copy(this.pos);
+      G.fx.puff(b, { count: 40, color: 0x9ccf4f, spread: 0.5, speed: 2.5, up: 0.3, life: 3, size: 1.8, grow: 2.2, drag: 2.2, alpha: 0.8 });
+      G.clouds.push({ x: b.x, y: b.y, z: b.z, r: 3, until: this.now + 6 });
+      G.audio.play('fart_short|fart_deep', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
+      G.noise(this.pos, 22);
+      this.heldBy.fartedOn(this);
+      return;
+    }
     if (this.heldBy) this.heldBy.release(false);
     const f = this.forward.clone();
     const butt = v1.copy(this.pos).addScaledVector(f, this.standing ? -0.2 : -0.5).setY(this.pos.y + (this.standing ? -0.3 : 0.05));
@@ -305,6 +329,7 @@ export class Pig implements Holdable {
 
   // ------------------------------------------------------------------ ragdoll
   knock(impulse: THREE.Vector3, ragdoll: boolean) {
+    if (this.heldBy?.kind === 'farmer' || this.out) return;   // only poise-breaking hits free a pig from Bob
     if (this.heldBy) this.heldBy.release(false);
     if (ragdoll && this.mode !== 'ragdoll') this.startRagdoll(null, true);
     const lv = this.body.linvel();
@@ -347,6 +372,29 @@ export class Pig implements Holdable {
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x * 0.3, y: 3.5, z: lv.z * 0.3 }, true);
     this.setVel.set(lv.x * 0.3, 3.5, lv.z * 0.3);
+  }
+
+  // ------------------------------------------------------------------ farmer: caught / caged / grilled
+  caughtBy(by: Carrier) {
+    if (this.held) this.release(false);         // Bob confiscates the loot
+    if (this.heldBy) this.heldBy.release(false);
+    this.heldBy = by; this.mode = 'held'; this.escape = 0;
+    this.standing = false; this.sprintUntil = 0; this.chargeStart = -1;
+  }
+  enterCage(cage: Cage, grillAt: number) { this.cage = cage; this.grillAt = grillAt; }
+  freed() { this.cage = null; this.grillAt = 0; }
+  grilled() {
+    this.cage = null; this.out = true; this.outUntil = this.now + 8;
+    if (this.held) this.release(false);
+    this.body.setEnabled(false);
+    this.visual.root.visible = false;
+  }
+  private backFromGrill() {
+    this.out = false; this.burntUntil = this.now + 20;
+    this.body.setEnabled(true);
+    this.visual.root.visible = true;
+    this.respawn();
+    if (this.mode !== 'normal') { this.mode = 'normal'; this.setShape('four'); this.body.lockRotations(true, true); }
   }
 
   respawn() {
@@ -447,6 +495,7 @@ export class Pig implements Holdable {
   // ------------------------------------------------------------------ render
   private vq = new THREE.Quaternion(); private tq = new THREE.Quaternion();
   render(alpha: number, dt: number) {
+    if (this.out) return;
     const r = this.visual.root;
     this.synced.pos(alpha, r.position);
     this.synced.rot(alpha, this.tq);
@@ -456,6 +505,7 @@ export class Pig implements Holdable {
     this.visual.update({
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
+      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1),
     });
     // dust while sprinting, mud drips
     if (this.sprinting && this.grounded && Math.random() < dt * 30)
