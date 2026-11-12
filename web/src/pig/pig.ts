@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair, HOOKS } from '../core/physics';
 import { Synced } from '../core/synced';
 import { clamp, dampAngle, wrapAngle } from '../core/util';
-import { G, type Holdable, type Carrier } from '../game/ctx';
+import { G, ADMIN, type Holdable, type Carrier } from '../game/ctx';
 import type { Cage } from '../world/cage';
 import { PigVisual } from './pigVisual';
+import type { Outfit } from './cosmetics';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
 export interface PigInput {
@@ -19,10 +20,12 @@ export const emptyInput = (): PigInput => ({
 
 /** Tuning (all pigs are equal). */
 export const PIG = {
-  mass: 30, walk: 4.8, standWalk: 3.1, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
-  jump: 7.6, standJump: 6.4, fartUp: 9.8, fartFwd: 6, fartCd: 6, sprintCd: 5, sprintDur: 1.6,
+  mass: 30, walk: 4.8, standWalk: 3.5, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
+  jump: 7.6, standJump: 7.0, fartUp: 9.8, fartFwd: 6, fartCd: 6, sprintCd: 5, sprintDur: 1.6,
   wallowDur: 1.1, mudTime: 60, hitSpeed: 9.5, landSpeed: 13, ragMin: 1.0, ragMax: 4,
   liftMax: 26, dragMax: 90, throwMin: 5, throwMax: 16, grabRange: 1.7,
+  // standing on two legs: strong hooves (punch, lift, throw, latch) but wobbly
+  liftMaxStand: 50, throwStand: 1.35, punchCd: 0.45, punchRange: 1.15, punchPoise: 34, wobbleFall: 1,
 };
 
 type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
@@ -53,6 +56,11 @@ export class Pig implements Holdable {
   private ragSince = 0; private still = 0; escape = 0;
   chargeStart = -1;
   private rammed = new Set<unknown>();
+  /** Standing balance: 0 steady … 1 falls over. */
+  wobble = 0; private lastYaw = 0; turnRate = 0;
+  punchAt = -10; private punched = false;
+  /** Grilled / taken by a wolf (HUD text). */
+  outReason: 'grill' | 'wolf' = 'grill';
   private setVel = new THREE.Vector3();
   private stepT = 0;
   visual: PigVisual;
@@ -62,13 +70,13 @@ export class Pig implements Holdable {
   pos = new THREE.Vector3();
   vel = new THREE.Vector3();
 
-  constructor(scene: THREE.Scene, at: THREE.Vector3, public color: number, name: string) {
+  constructor(scene: THREE.Scene, at: THREE.Vector3, public color: number, name: string, outfit?: Outfit) {
     this.label = name;
     this.spawn = at.clone();
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + 0.6, at.z)
       .setCcdEnabled(true).setCanSleep(false).lockRotations());
     this.setShape('four');
-    this.visual = new PigVisual(color);
+    this.visual = new PigVisual(color, outfit);
     this.visual.centerHeight = 0.36;
     scene.add(this.visual.root);
     this.synced = new Synced(this.body);
@@ -80,6 +88,9 @@ export class Pig implements Holdable {
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  get liftMax() { return this.standing ? PIG.liftMaxStand : PIG.liftMax; }
+  /** 0..1 jab progress (visual). */
+  get punchT() { const k = (this.now - this.punchAt) / 0.28; return k >= 0 && k <= 1 ? k : 0; }
   /** 0..1 how ready an ability is (HUD). */
   readiness(which: 'fart' | 'sprint') {
     const [ready, cd] = which === 'fart' ? [this.fartReady, PIG.fartCd] : [this.sprintReady, PIG.sprintCd];
@@ -118,7 +129,7 @@ export class Pig implements Holdable {
 
     if (this.heldBy) {
       this.mode = 'held';
-      this.escape = Math.max(0, this.escape - dt * 0.8);
+      this.escape = Math.max(0, this.escape - dt * (this.heldBy.kind === 'farmer' ? 2.4 : 0.8));
       if (inp.fartP) this.tryFart();
       if (inp.jumpP && (this.escape += 1) >= this.escapeNeed()) {
         this.heldBy.release(false); this.escape = 0; this.vel.y = 6; this.body.setLinvel(this.vel, true);
@@ -162,7 +173,7 @@ export class Pig implements Holdable {
     const moving = mx * mx + mz * mz > 0.01;
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
-    if (this.held) speed *= 1 - clamp(this.held.mass / (PIG.liftMax * 2.5), 0, 0.55);
+    if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
     if (this.muddy > 0) speed *= 0.95;
     const tx = mx * speed, tz = mz * speed;
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
@@ -179,13 +190,62 @@ export class Pig implements Holdable {
     if (this.jumpBuf > 0 && this.coyote > 0) {
       this.vel.y = this.standing ? PIG.standJump : PIG.jump;
       this.jumpBuf = 0; this.coyote = 0; this.ownJump = true;
-      G.audio.play('cloth', { pos: this.pos, vol: 0.35, pitch: 1.4 });
+      G.audio.play('whoosh', { pos: this.pos, vol: 0.25, pitch: 1.3 });
     }
     // short hop when jump released early
     if (this.ownJump && !inp.jump && this.vel.y > 2) this.vel.y -= 40 * dt;
 
     if (this.sprinting) this.ramStep();
+    if (this.standing) this.balanceStep(dt); else this.wobble = Math.max(0, this.wobble - dt * 2);
+    if (this.punchAt > 0 && !this.punched && this.now - this.punchAt > 0.12) { this.punched = true; this.punchHit(); }
     this.finishStep();
+  }
+
+  /** Two legs: turning fast, speeding, landing hard or carrying heavy things builds wobble → falls over. */
+  private balanceStep(dt: number) {
+    const dYaw = wrapAngle(this.yaw - this.lastYaw), turn = Math.abs(dYaw) / Math.max(dt, 1e-3);
+    this.lastYaw = this.yaw;
+    this.turnRate = clamp(dYaw / Math.max(dt, 1e-3) / 6, -1, 1);
+    const sp = Math.hypot(this.vel.x, this.vel.z);
+    let gain = Math.max(0, turn - 2.2) * sp * 0.035 + (sp > PIG.standWalk * 0.8 ? 0.09 : 0);
+    if (this.held) gain += clamp(this.held.mass / 60, 0, 0.5) * 0.25 * (sp > 1 ? 1 : 0.3);
+    if (!this.grounded) gain += 0.05;
+    gain += Math.max(0, Math.sin(this.now * 1.7) * Math.sin(this.now * 0.63)) * 0.08 * (sp > 0.5 ? 1 : 0);  // random teeter
+    this.wobble += gain * dt;
+    if (sp < 1 && this.grounded) this.wobble -= dt * 0.55;
+    this.wobble = clamp(this.wobble, 0, 1.2);
+    if (this.wobble >= PIG.wobbleFall) {
+      this.wobble = 0;
+      this.startRagdoll(v1.set(Math.sin(this.yaw) * 2, 0.5, Math.cos(this.yaw) * 2), true);
+      G.audio.play('grunt', { pos: this.pos, vol: 0.8 });
+      G.events.push({ type: 'fell', who: this });
+    }
+  }
+
+  /** Standing + empty hooves: jab whatever is in front (counts on Bob's poise). */
+  private punchHit() {
+    const f = this.forward;
+    const hx = this.pos.x + f.x * 0.7, hz = this.pos.z + f.z * 0.7, hy = this.pos.y + 0.3;
+    const dir = v1.set(f.x, 0.35, f.z).normalize();
+    let hit = false;
+    const farmer = G.farmer;
+    if (farmer && Math.hypot(farmer.pos.x - hx, farmer.pos.z - hz) < PIG.punchRange && Math.abs(farmer.pos.y + 1 - hy) < 1.4) { farmer.punched?.(dir); hit = true; }
+    for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < PIG.punchRange * 0.9) { w.knock(v2.copy(dir).multiplyScalar(6)); hit = true; }
+    for (const h of G.holdables) {
+      if (h === this || h === this.held || h.heldBy) continue;
+      const p = h.body.translation();
+      if (Math.hypot(p.x - hx, p.z - hz) - h.radius > 0.55 || Math.abs(p.y - hy) > 1) continue;
+      const dv = Math.min(7, 160 / Math.max(h.mass, 4));
+      if (h.knock) h.knock(v2.copy(dir).multiplyScalar(dv), h.kind === 'pig');
+      else h.body.applyImpulse(v2.copy(dir).multiplyScalar(dv * h.mass), true);
+      hit = true;
+    }
+    if (hit) {
+      G.audio.play('punch|body', { pos: this.pos, vol: 0.9 });
+      G.fx.bits(v1.set(hx, hy + 0.3, hz), { count: 8, color: 0xfff1a8, speed: 3, up: 1.5, life: 0.35, size: 0.12, grow: 0, drag: 3, alpha: 1 });
+      if (this === G.localPig) G.fx.shake(0.2);
+      G.noise(this.pos, 10);
+    } else G.audio.play('whoosh', { pos: this.pos, vol: 0.4 });
   }
 
   private finishStep() {
@@ -203,7 +263,9 @@ export class Pig implements Holdable {
     const dvx = lv.x - this.setVel.x, dvz = lv.z - this.setVel.z;
     const dvy = lv.y - (this.setVel.y - 20 * dt);
     const side = Math.hypot(dvx, dvz);
-    if (side > PIG.hitSpeed || dvy > PIG.landSpeed || dvy < -PIG.hitSpeed) {
+    const k = this.standing ? 0.6 : 1;           // two legs: easier to knock over
+    if (this.standing && dvy > 6) this.wobble += dvy * 0.06;   // hard landing on two legs
+    if (side > PIG.hitSpeed * k || dvy > PIG.landSpeed * (this.standing ? 0.75 : 1) || dvy < -PIG.hitSpeed * k) {
       this.startRagdoll(v1.set(dvx, Math.max(dvy, 0), dvz), true);
       return;
     }
@@ -214,8 +276,8 @@ export class Pig implements Holdable {
       const ov = (o as any).synced?.preVel as THREE.Vector3 | undefined;
       if (!ov) return;
       const rel = v2.copy(ov).sub(this.vel).length();
-      if (rel > 8 && o.mass >= 3 && ov.length() > 6) {
-        G.audio.play('punch|punch2', { pos: this.pos, vol: 0.8 });
+      if (rel > (this.standing ? 6 : 8) && o.mass >= 3 && ov.length() > 6) {
+        G.audio.play('body', { pos: this.pos, vol: 0.8 });
         this.startRagdoll(v1.copy(ov).multiplyScalar(0.5), true);
       }
     });
@@ -227,7 +289,8 @@ export class Pig implements Holdable {
     const p = this.body.translation();
     if (this.standing) this.body.setTranslation({ x: p.x, y: p.y + 0.36, z: p.z }, true);
     this.setShape(this.standing ? 'two' : 'four');
-    G.audio.play('cloth', { pos: this.pos, vol: 0.5, pitch: this.standing ? 1.2 : 0.9 });
+    this.wobble = this.standing ? 0.15 : 0; this.lastYaw = this.yaw;
+    G.audio.play('grunt', { pos: this.pos, vol: 0.5, pitch: this.standing ? 1.15 : 0.9 });
   }
 
   private startWallow() {
@@ -239,22 +302,22 @@ export class Pig implements Holdable {
     if (mud > 0.3) {
       this.muddyUntil = this.now + PIG.mudTime;
       G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: 26, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });
-      G.audio.play('thud|thud2', { pos: this.pos, vol: 0.9, pitch: 0.7 });
+      G.audio.play('splat', { pos: this.pos, vol: 0.9 });
     } else {
       G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 8, color: 0xcbb48c, speed: 1.2, up: 0.5, life: 0.9, size: 0.7, alpha: 0.5 });
-      G.audio.play('thud2', { pos: this.pos, vol: 0.5 });
+      G.audio.play('thud', { pos: this.pos, vol: 0.5 });
     }
   }
 
   private tryFart() {
     if (this.now < this.fartReady || this.mode === 'wallow') return;
-    this.fartReady = this.now + PIG.fartCd;
-    if (this.heldBy?.fartedOn) {      // carried by Bob: stink in his face, wriggle a lot
-      this.escape += 5;
+    this.fartReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.fartCd);
+    if (this.heldBy?.fartedOn) {      // carried: stink in his face, wriggle
+      this.escape += this.heldBy.kind === 'farmer' ? 3 : 5;
       const b = v1.copy(this.pos);
       G.fx.puff(b, { count: 40, color: 0x9ccf4f, spread: 0.5, speed: 2.5, up: 0.3, life: 3, size: 1.8, grow: 2.2, drag: 2.2, alpha: 0.8 });
       G.clouds.push({ x: b.x, y: b.y, z: b.z, r: 3, until: this.now + 6 });
-      G.audio.play('fart_short|fart_deep', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
+      G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
       G.noise(this.pos, 22);
       this.heldBy.fartedOn(this);
       return;
@@ -274,7 +337,7 @@ export class Pig implements Holdable {
     G.fx.puff(butt, { count: 46, color: 0x9ccf4f, spread: 0.45, speed: 3.2, up: -0.8, life: 3.2, size: 1.9, grow: 2.4, drag: 2.0, alpha: 0.8, dir: v3.copy(f).negate().setY(-0.5) });
     G.fx.puff(butt, { count: 14, color: 0xe2f58a, spread: 0.2, speed: 6, up: -1, life: 0.7, size: 0.9, grow: 3, drag: 4, alpha: 0.95 });
     G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3, until: this.now + 6 });
-    G.audio.play('fart_short|fart_deep', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
+    G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
     if (this === G.localPig) G.fx.shake(0.3);
     G.noise(this.pos, 22);
     // blast pushes everything nearby
@@ -294,10 +357,10 @@ export class Pig implements Holdable {
 
   private startSprint() {
     this.sprintUntil = this.now + PIG.sprintDur;
-    this.sprintReady = this.now + PIG.sprintCd;
+    this.sprintReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.sprintCd);
     if (this.standing) { this.standing = false; this.setShape('four'); }
     G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 10, color: 0xd8c29a, speed: 2, up: 0.8, life: 0.8, size: 0.8, alpha: 0.6 });
-    G.audio.play('cloth', { pos: this.pos, vol: 0.6, pitch: 0.7 });
+    G.audio.play('grunt', { pos: this.pos, vol: 0.6 });
     G.noise(this.pos, 8);
   }
 
@@ -315,7 +378,7 @@ export class Pig implements Holdable {
       else o.body.applyImpulse(dir.multiplyScalar(dv * o.mass), true);
       this.vel.x *= -0.25; this.vel.z *= -0.25; this.vel.y = 3;
       this.sprintUntil = this.now;
-      G.audio.play('punch', { pos: this.pos, vol: 1 });
+      G.audio.play('punch|body', { pos: this.pos, vol: 1 });
       G.fx.bits(this.pos, { count: 12, color: 0xffe08a, speed: 4, up: 2, life: 0.5, size: 0.18, grow: 0, drag: 3, alpha: 1 });
       if (this === G.localPig) G.fx.shake(0.45);
       G.noise(this.pos, 14);
@@ -323,7 +386,7 @@ export class Pig implements Holdable {
   }
 
   private oink() {
-    G.audio.play('pop', { pos: this.pos, vol: 0.7, pitch: 0.6 });
+    G.audio.play('oink', { pos: this.pos, vol: 0.9, minGap: 0.25 });
     G.noise(this.pos, 15);
   }
 
@@ -346,7 +409,7 @@ export class Pig implements Holdable {
     const r = () => (Math.random() * 2 - 1) * 6;
     const av = hit ? v2.set(hit.z, 0, -hit.x).multiplyScalar(0.7) : v2.set(r(), r(), r());
     this.body.setAngvel({ x: av.x + r() * 0.3, y: av.y + r() * 0.3, z: av.z + r() * 0.3 }, true);
-    if (sound) G.audio.play('thud|thud2', { pos: this.pos, vol: 0.8 });
+    if (sound) { G.audio.play('thud|body', { pos: this.pos, vol: 0.8 }); if (Math.random() < 0.5) G.audio.play('squeal', { pos: this.pos, vol: 0.6, minGap: 0.5 }); }
     if (this === G.localPig && hit) G.fx.shake(Math.min(0.6, hit.length() * 0.04));
   }
 
@@ -383,14 +446,16 @@ export class Pig implements Holdable {
   }
   enterCage(cage: Cage, grillAt: number) { this.cage = cage; this.grillAt = grillAt; }
   freed() { this.cage = null; this.grillAt = 0; }
+  /** Dragged off the farm by a wolf: out for a bit, back in the sty. */
+  takenByWolf() { this.grilled(); this.outReason = 'wolf'; this.burntUntil = 0; }
   grilled() {
-    this.cage = null; this.out = true; this.outUntil = this.now + 8;
+    this.cage = null; this.out = true; this.outUntil = this.now + 8; this.outReason = 'grill';
     if (this.held) this.release(false);
     this.body.setEnabled(false);
     this.visual.root.visible = false;
   }
   private backFromGrill() {
-    this.out = false; this.burntUntil = this.now + 20;
+    this.out = false; this.burntUntil = this.outReason === 'grill' ? this.now + 20 : 0;
     this.body.setEnabled(true);
     this.visual.root.visible = true;
     this.respawn();
@@ -409,7 +474,11 @@ export class Pig implements Holdable {
   private grabStep(inp: PigInput) {
     if (inp.grabP) {
       if (this.held) this.chargeStart = this.now;
-      else if (this.mode === 'normal') { const t = this.findGrabTarget(); if (t) this.grab(t); }
+      else if (this.mode === 'normal') {
+        const t = this.findGrabTarget();
+        if (t) this.grab(t);
+        else if (this.standing && this.now - this.punchAt > PIG.punchCd && !this.cageLatchNear()) { this.punchAt = this.now; this.punched = false; this.wobble += 0.06; }
+      }
     }
     if (inp.grabR && this.held && this.chargeStart >= 0) {
       const c = this.charge();
@@ -417,6 +486,7 @@ export class Pig implements Holdable {
       this.throwHeld(c);
     }
   }
+  private cageLatchNear() { const c = this.cage ?? G.cage; return !!c && !c.open && Math.hypot(this.pos.x - c.latch.x, this.pos.z - c.latch.z) < 1.3; }
   charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart) / 0.9, 0, 1); }
 
   findGrabTarget(): Holdable | null {
@@ -442,7 +512,7 @@ export class Pig implements Holdable {
     ignorePair(this.body, h.body, true);
     h.onGrabbed?.(this);
     if (h.kind === 'pig') (h as Pig).mode = 'held';
-    G.audio.play('grab', { pos: this.pos, vol: 0.8 });
+    G.audio.play('bite', { pos: this.pos, vol: 0.7 });
     G.noise(this.pos, 4);
   }
 
@@ -456,14 +526,16 @@ export class Pig implements Holdable {
 
   private throwHeld(c: number) {
     const h = this.held; if (!h) return;
-    const heavy = h.mass > PIG.liftMax;
+    const heavy = h.mass > this.liftMax;
     const pitch = clamp(-this.input.pitch, -0.3, 0.7) + 0.32;
     const dir = v1.set(Math.sin(this.input.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(this.input.yaw) * Math.cos(pitch));
-    const sp = (PIG.throwMin + (PIG.throwMax - PIG.throwMin) * c) * Math.sqrt(clamp(14 / Math.max(h.mass, 6), 0.2, 1.4)) * (heavy ? 0.35 : 1);
+    const sp = (PIG.throwMin + (PIG.throwMax - PIG.throwMin) * c) * Math.sqrt(clamp(14 / Math.max(h.mass, 6), 0.2, 1.4)) * (heavy ? 0.35 : 1)
+      * (this.standing ? PIG.throwStand : 1);
     this.release(true);
     h.body.setLinvel({ x: dir.x * sp + this.vel.x * 0.5, y: dir.y * sp + Math.max(this.vel.y, 0) * 0.5, z: dir.z * sp + this.vel.z * 0.5 }, true);
     h.body.setAngvel({ x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 8 }, true);
-    G.audio.play('throw', { pos: this.pos, vol: 0.4 + c * 0.6, pitch: 1.2 - c * 0.4 });
+    G.audio.play('throw|whoosh', { pos: this.pos, vol: 0.4 + c * 0.6, pitch: 1.2 - c * 0.4 });
+    if (this.standing) this.wobble += 0.12 + c * 0.15;
     G.noise(this.pos, 6 + c * 8);
   }
 
@@ -471,7 +543,7 @@ export class Pig implements Holdable {
   private holdStep() {
     const h = this.held; if (!h) return;
     const hp = h.body.translation();
-    const heavy = h.mass > PIG.liftMax;
+    const heavy = h.mass > this.liftMax;
     const f = this.forward;
     const reach = this.radius + h.radius + (this.standing ? 0.05 : 0.1);
     const target = v1.copy(this.pos).addScaledVector(f, reach);
@@ -505,7 +577,7 @@ export class Pig implements Holdable {
     this.visual.update({
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
-      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1),
+      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, turn: this.turnRate,
     });
     // dust while sprinting, mud drips
     if (this.sprinting && this.grounded && Math.random() < dt * 30)

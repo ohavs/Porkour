@@ -1,18 +1,19 @@
 import * as THREE from 'three';
-import { damp, clamp } from '../core/util';
+import { damp, clamp, dampAngle, wrapAngle } from '../core/util';
 import { G } from '../game/ctx';
 import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
 
 export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
-  | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust';
+  | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
+  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
-  angry: number; yell: number; lookYaw: number; carrying: boolean;
+  angry: number; yell: number; lookYaw: number; carrying: boolean; flashlight?: boolean;
 }
 
-const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer' };
+const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
 const GREEN = new THREE.Color(0x9ccf4f);
 const v1 = new THREE.Vector3();
 
@@ -101,7 +102,7 @@ export class FarmerVisual {
         if (k > 0.67 && k < 0.72 && this.fxT <= 0) {
           this.fxT = 0.5;
           const h = this.tipOf('axe', v1);
-          G.audio.play('chop', { pos: h, vol: 0.8 });
+          G.audio.play('wood', { pos: h, vol: 0.8, pitch: 0.8 });
           G.fx.bits(h, { count: 8, color: 0xc8955a, speed: 3, up: 2.5, grav: 12, life: 0.6, size: 0.08, grow: 0, alpha: 1 });
         }
         break;
@@ -136,7 +137,7 @@ export class FarmerVisual {
         if (k < 0.08 && this.fxT <= 0) {
           this.fxT = 0.25;
           const h = this.tipOf('hammer', v1);
-          G.audio.play('metal', { pos: h, vol: 0.35, pitch: 1.6, rand: 0.15 });
+          G.audio.play('metal', { pos: h, vol: 0.3, pitch: 1.5, rand: 0.15, minGap: 0.2 });
           if (Math.random() < 0.4) G.fx.bits(h, { count: 3, color: 0xffe08a, speed: 2, up: 1.5, grav: 8, life: 0.3, size: 0.05, grow: 0, alpha: 1 });
         }
         break;
@@ -204,13 +205,68 @@ export class FarmerVisual {
         T.lsx = T.rsx = -0.9; T.lex = T.rex = -1.0; T.lsz = 0.05 - k * 0.25; T.rsz = -0.05 + k * 0.25;
         break;
       }
+      case 'ride':   // sitting on the mower, hands on the wheel
+        T.hipY = -HIP + 0.72; T.ltx = T.rtx = -1.35; T.lkx = T.rkx = 1.2; T.lsz = 0.12; T.rsz = -0.12;
+        T.lsx = T.rsx = -1.05; T.lex = T.rex = -0.7; T.lean = 0.1 + Math.sin(t * 9) * 0.02; T.headY = Math.sin(t * 0.7) * 0.25;
+        T.hipZ = Math.sin(t * 13) * 0.015;   // engine rumble
+        break;
+      case 'slapWind':   // right hand raised way back
+        T.rsx = -1.0; T.rsz = -1.7; T.rex = -0.6; T.twist = 0.55; T.lean = -0.05; T.lsz = 0.4; T.lex = -1.2; T.headX = -0.1;
+        T.ltx = -0.2; T.rtx = 0.2;
+        break;
+      case 'slap': {   // big backhand swing across
+        const k = clamp(a / 0.18, 0, 1);
+        T.rsx = -1.4; T.rsz = -1.7 + k * 2.6; T.rex = -0.2; T.twist = 0.55 - k * 1.1; T.lean = 0.2; T.lsz = 0.5; T.lex = -1.3;
+        T.ltx = -0.5; T.lkx = 0.4; T.rtx = 0.3;
+        break;
+      }
+      case 'taunt': {   // belly laugh, pointing at the pig
+        const k = Math.sin(t * 22);
+        T.rsx = -1.5; T.rsz = -0.1; T.rex = -0.05;                     // pointing
+        T.lsz = 0.5; T.lsx = 0.1; T.lex = -1.6;                       // hand on the belly
+        T.lean = -0.25 + k * 0.05; T.headX = -0.35 + k * 0.08; T.hipY = k * 0.015;
+        R.belly.scale.y += k * 0.04;
+        break;
+      }
+      case 'dance': {   // a little farm jig: four moves, two seconds each
+        const move = Math.floor(a / 2) % 4, b = a * 7;
+        if (move === 0) {          // disco point
+          const up = Math.sin(b) > 0;
+          T.rsx = up ? -2.6 : -0.4; T.rsz = up ? -0.4 : -0.6; T.rex = 0; T.lsz = 0.5; T.lex = -1.6;
+          T.hipZ = Math.sin(b) * 0.12; T.roll = -Math.sin(b) * 0.08; T.headY = up ? 0.3 : -0.2;
+        } else if (move === 1) {   // chicken dance
+          const fl = Math.abs(Math.sin(b * 1.2));
+          T.lsz = 0.4 + fl * 0.9; T.rsz = -0.4 - fl * 0.9; T.lex = T.rex = -1.9; T.lsx = T.rsx = -0.2;
+          T.hipY = -0.08 - fl * 0.08; T.lkx = T.rkx = 0.3 + fl * 0.3; T.ltx = T.rtx = -0.2 - fl * 0.2; T.headX = Math.sin(b * 2.4) * 0.2;
+        } else if (move === 2) {   // jig: kicks
+          const kk = Math.sin(b);
+          T.ltx = kk > 0 ? -1.0 * kk : 0; T.rtx = kk < 0 ? 1.0 * kk : 0; T.lkx = Math.max(0, kk) * 0.4; T.rkx = Math.max(0, -kk) * 0.4;
+          T.hipY = Math.abs(kk) * 0.06; T.lsz = 0.9; T.rsz = -0.9; T.lex = T.rex = -0.4; T.lsx = T.rsx = Math.sin(b * 2) * 0.4;
+          T.tiltY = Math.sin(a * 2) * 0.6;
+        } else {                   // hat tip + belly wobble
+          T.rsx = -2.4; T.rex = -1.8; T.rsz = -0.2; T.lsz = 0.6; T.lex = -1.5;
+          T.hipZ = Math.sin(b * 0.8) * 0.15; T.roll = Math.sin(b * 0.8) * 0.12; T.lean = -0.08; T.tiltY = wrapAngle(a * 3);
+        }
+        break;
+      }
+      case 'read':   // sitting, newspaper up
+        T.hipY = -HIP + 0.48; T.ltx = T.rtx = -1.45; T.lkx = T.rkx = 1.4; T.lsz = 0.2; T.rsz = -0.2;
+        T.lsx = T.rsx = -1.15; T.lex = T.rex = -1.0; T.lean = -0.12; T.headX = 0.15 + Math.sin(t * 0.5) * 0.05;
+        T.headY = Math.sin(t * 0.9) * 0.18;
+        break;
+      case 'laundry': {   // pegging a shirt on the line
+        const k = (a % 4) / 4, up = k < 0.5 ? Math.sin(k * Math.PI * 2) : 0;
+        T.lsx = T.rsx = -2.3 - up * 0.3; T.lex = T.rex = -0.4; T.lsz = 0.2; T.rsz = -0.2; T.lean = -0.12; T.headX = -0.4;
+        break;
+      }
     }
     if (moving && (p.anim === 'carry' || p.anim === 'suspect')) { T.ltx = -s * 0.55 * amp; T.rtx = s * 0.55 * amp; }
+    if (p.flashlight && !TOOL[p.anim] && p.anim !== 'carry') { T.rsx = -1.25; T.rex = -0.25; T.rsz = -0.05; }
     // ---------------------------------------------------------------- apply (damped)
     const C = this.cur, k = p.anim === 'down' || p.anim === 'lunge' || p.anim === 'stagger' ? 26 : 14;
     for (const key of Object.keys(T) as (keyof Targets)[]) C[key] = damp(C[key], T[key], key === 'tiltX' ? 40 : k, dt);
     const breath = Math.sin(t * (p.anim === 'pant' ? 9 : 2.2)) * (p.anim === 'pant' ? 0.04 : 0.015);
-    R.tilt.rotation.set(C.tiltX, 0, 0); R.tilt.position.y = -C.tiltX / (Math.PI / 2) * 0.38; // lying on the back: body rests on the belly radius
+    R.tilt.rotation.set(C.tiltX, p.anim === 'dance' ? T.tiltY : dampAngle(R.tilt.rotation.y, 0, 8, dt), 0); R.tilt.position.y = -C.tiltX / (Math.PI / 2) * 0.38; // lying on the back: body rests on the belly radius
     R.hips.position.y = HIP + C.hipY; R.hips.rotation.z = C.hipZ;
     R.torso.rotation.set(C.lean, C.twist, C.roll);
     R.belly.scale.set(1 + breath, 1 + breath * 0.6, 1 + breath);
@@ -233,7 +289,7 @@ export class FarmerVisual {
     // hat flies a little when knocked
     R.hat.position.y = 0.36 + (p.anim === 'down' ? Math.max(0, 0.25 - Math.abs(a - 0.3)) * 0.8 : 0);
     // tools
-    const want = TOOL[p.anim] ?? '';
+    const want = TOOL[p.anim] ?? (p.flashlight && p.anim !== 'carry' ? 'flashlight' : '');
     if (want !== this.shown) {
       for (const [n, o] of Object.entries(R.tools)) o.visible = n === want;
       this.shown = want;

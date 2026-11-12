@@ -1,20 +1,25 @@
 import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair } from '../core/physics';
 import { Synced } from '../core/synced';
-import { clamp, dampAngle, wrapAngle } from '../core/util';
-import { G, type Holdable, type Cloud } from '../game/ctx';
+import { clamp, dampAngle } from '../core/util';
+import { G, ADMIN, type Holdable, type Cloud } from '../game/ctx';
 import type { Pig } from '../pig/pig';
 import type { Cage } from '../world/cage';
 import type { Rect } from '../world/terrain';
+import type { Wolf } from '../world/wolf';
 import { Nav } from './nav';
+import { Mower } from './mower';
 import { FarmerVisual, type FarmerAnim } from './farmerVisual';
 
 /** Tuning. */
 export const BOB = {
-  mass: 95, walk: 2.5, run: 5.7, carry: 3.6, accel: 22,
+  mass: 95, walk: 2.5, run: 5.7, carry: 3.6, mow: 2.2, accel: 22,
   grabReach: 1.9, windup: 0.42, lunge: 0.3, lungeSpeed: 7, catchR: 1.15, recover: 0.85,
-  escapeNeed: 15, escapeNeedMuddy: 8,
-  poiseWindow: 3, stagger: 100, knockdown: 160, ram: 60, staggerTime: 1.5, downTime: 3.4,
+  // grip: lots of mashing, progress drains fast, and he shakes the pig every few seconds
+  escapeNeed: 24, escapeNeedMuddy: 14, shakeEvery: 2.2, shakeLoss: 4,
+  slapChance: 0.3, slapWind: 0.35, slap: 0.3, slapReach: 1.75, taunt: 2.2,
+  danceChance: 0.18, danceTime: 7,
+  poiseWindow: 3, stagger: 100, knockdown: 160, ram: 60, punch: 34, staggerTime: 1.5, downTime: 3.4,
   cough: 3, loseSight: 4.5, search: 4, stamina: 14, pant: 2.6, fistGiveUp: 6,
 };
 
@@ -24,22 +29,28 @@ const VIEW = {
   busy: { cos: Math.cos(0.7), range: 13 },
   nap: { cos: 2, range: 0 },
   alert: { cos: Math.cos(1.25), range: 26 },
+  flashlight: { cos: Math.cos(0.42), range: 16 },
 };
 type View = keyof typeof VIEW;
 
-export interface Chore { id: string; label: string; at: [number, number]; look: [number, number]; anim: FarmerAnim; dur: number; view: View }
+export type ChorePhase = 'day' | 'evening' | 'night';
+export interface Chore {
+  id: string; at: [number, number]; look: [number, number]; anim: FarmerAnim; dur: number; view: View;
+  phase?: ChorePhase;
+}
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
-  | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard';
+  | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off';
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
 const HALF = 0.55, RAD = 0.38, CENTER = HALF + RAD;   // capsule; body centre height above the feet
 
 /**
- * Farmer Bob: daily routine of chores (Untitled Goose Game), per-pig suspicion (only un-piggy behaviour counts:
- * standing, carrying, sprinting, flying, trespassing), hears noises, chases, grab windup + lunge (dodgeable), carries
- * the pig to the cage by the BBQ. Strong hits stack (poise) → stagger / knock-down, which drops the pig.
+ * Farmer Bob: daily routine of chores (Untitled Goose Game) on a clock — day chores, flashlight patrol in the evening,
+ * sleeps in the house at night. Per-pig suspicion (only un-piggy behaviour counts), hears noises, chases,
+ * grabs (windup + lunge, dodgeable) or slaps, carries the pig to the cage by the BBQ. Strong hits stack (poise) →
+ * stagger / knock-down. Dances now and then, mows the lawn, chases wolves away.
  */
 export class Farmer {
   kind = 'farmer' as const;
@@ -60,7 +71,9 @@ export class Farmer {
   carrying: Pig | null = null;
   choreIdx = 0;
   doing = false;
-  activity = '';
+  /** i18n key of what he's doing (HUD). */
+  activity = 'chore.walk';
+  mower: Mower;
   private choreUntil = 0;
   private path: THREE.Vector3[] = [];
   private pathGoal = new THREE.Vector3(1e9, 0, 0);
@@ -81,17 +94,31 @@ export class Farmer {
   private yell = 0;
   private stepT = 0;
   private unreachableT = 0;
+  private shakeT = 0; private shakeUntil = 0;
+  private slapDone = false; private slapped: Pig[] = []; forceSlap = false;
+  private danceUntil = 0;
+  private shooWolf: Wolf | null = null;
+  private mowPath: THREE.Vector3[] = []; private mowIdx = 0; private riding = false;
+  private flash: THREE.SpotLight;
+  private sleepT = 0;
   /** Test hook: freeze the brain and show this animation. */
   debugAnim: FarmerAnim | null = null;
 
   constructor(scene: THREE.Scene, at: THREE.Vector3, public nav: Nav, public chores: Chore[], public cage: Cage,
-    public pigs: Pig[], public zones: { garden: Rect[] }) {
+    public pigs: Pig[], public zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3 }) {
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + CENTER + 0.05, at.z)
       .lockRotations().setCanSleep(false).setCcdEnabled(true));
     this.setCollider(false);
     this.synced = new Synced(this.body);
     scene.add(this.visual.root);
     this.pos.copy(at);
+    this.mower = new Mower(scene, zones.mowerAt, Math.PI / 2);
+    // flashlight (evening patrol / woken up at night)
+    this.flash = new THREE.SpotLight(0xfff2c8, 0, 24, 0.45, 0.45, 1.3);
+    this.flash.position.set(-0.3, 1.25, 0.35);
+    this.flash.target.position.set(0, 0, 9);
+    this.visual.root.add(this.flash, this.flash.target);
+    G.farmer = this;
   }
 
   private setCollider(lying: boolean) {
@@ -110,14 +137,39 @@ export class Farmer {
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
   /** Highest suspicion over all pigs (HUD). */
   get alarm() { let m = 0; for (const v of this.sus.values()) m = Math.max(m, v); return m; }
-  get chasing() { return ['chase', 'windup', 'lunge', 'recover', 'fist', 'pant'].includes(this.state); }
-  escapeNeed(p: Pig) { return p.muddy > 0 ? BOB.escapeNeedMuddy : BOB.escapeNeed; }
+  get chasing() { return ['chase', 'windup', 'lunge', 'recover', 'fist', 'pant', 'slapWind', 'slap'].includes(this.state); }
+  get asleep() { return this.state === 'sleep' || this.state === 'off'; }
+  get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down'; }
+  escapeNeed(p: Pig) { return ADMIN.easyEscape && p === G.localPig ? 1 : p.muddy > 0 ? BOB.escapeNeedMuddy : BOB.escapeNeed; }
 
   private go(s: State) { this.state = s; this.stateT = this.now; }
+  private phaseNow(): ChorePhase { const h = G.hour; return h >= 5.5 && h < 20 ? 'day' : h >= 20 && h < 22.5 ? 'evening' : 'night'; }
+
+  // ================================================================== admin
+  setEnabled(on: boolean) {
+    if (on === (this.state !== 'off')) return;
+    if (!on) {
+      if (this.carrying) this.release(false);
+      this.stopRiding();
+      this.go('off'); this.target = null;
+      this.body.setEnabled(false); this.visual.root.visible = false;
+    } else {
+      this.body.setEnabled(true); this.visual.root.visible = true;
+      this.body.setTranslation({ x: this.zones.door.x, y: this.zones.door.y + CENTER + 0.1, z: this.zones.door.z }, true);
+      this.go('routine'); this.doing = false; this.path = [];
+    }
+  }
+  forceDance() { if (this.calm()) { this.stopRiding(); this.doing = false; this.dance(BOB.danceTime); } }
+  forceMow() { const i = this.chores.findIndex((c) => c.id === 'mow'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
+  forceBed() { const i = this.chores.findIndex((c) => c.id === 'bed'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
+  slapMe(p: Pig) { if (this.state === 'sleep') this.wake(); this.forceSlap = true; this.stopRiding(); this.alarmed(p); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
     this.synced.beforeStep();
+    if (this.state === 'off') return;
+    if (this.state === 'sleep') { this.sleepStep(dt); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     if (p.y < -20) { this.body.setTranslation({ x: 0, y: 3, z: -30 }, true); return; }
@@ -142,6 +194,7 @@ export class Farmer {
       case 'routine': want = this.routine(dt); break;
       case 'guard': want = this.guard(dt); break;
       case 'investigate': {
+        this.activity = 'bob.heard';
         const d = this.moveTo(this.searchAt, BOB.walk, dt);
         want = BOB.walk;
         if (d < 1.2 || this.now - this.stateT > 15) { this.go('search'); }
@@ -164,7 +217,7 @@ export class Farmer {
       case 'windup': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 14);
-        if (this.now - this.stateT > BOB.windup) { this.go('lunge'); G.audio.play('cloth', { pos: this.pos, vol: 0.8, pitch: 0.6 }); }
+        if (this.now - this.stateT > BOB.windup) { this.go('lunge'); G.audio.play('whoosh', { pos: this.pos, vol: 0.8, pitch: 0.6 }); }
         break;
       }
       case 'lunge': {
@@ -175,13 +228,38 @@ export class Farmer {
         else if (this.now - this.stateT > BOB.lunge) { this.go('recover'); this.voice('grr', 0.8); }
         break;
       }
+      case 'slapWind': {
+        const t = this.target;
+        if (t) this.face(t.pos, dt, 16);
+        if (this.now - this.stateT > BOB.slapWind) { this.go('slap'); this.slapDone = false; G.audio.play('whoosh', { pos: this.pos, vol: 1, pitch: 0.8 }); }
+        break;
+      }
+      case 'slap':
+        if (!this.slapDone && this.now - this.stateT > 0.08) { this.slapDone = true; this.slapHit(); }
+        if (this.now - this.stateT > BOB.slap) {
+          if (this.slapped.length) { this.go('taunt'); this.voice('ha'); } else { this.go('recover'); this.voice('grr', 0.8); }
+        }
+        break;
+      case 'taunt':
+        if (this.slapped[0]) this.face(this.slapped[0].pos, dt, 4);
+        if (this.now - this.stateT > BOB.taunt) {
+          for (const s of this.slapped) this.sus.set(s, 0.4);
+          this.slapped = []; this.target = null; this.chaseRun = 0;
+          this.backToWork();
+        }
+        break;
       case 'recover':
         if (this.now - this.stateT > BOB.recover) this.go(this.target ? 'chase' : 'routine');
         break;
       case 'carry': want = this.carry(dt); break;
       case 'dust':
-        if (this.now - this.stateT > 1.4) this.backToWork();
+        if (this.now - this.stateT > 1.4) { if (Math.random() < 0.5 && G.night < 0.5) this.dance(5); else this.backToWork(); }
         break;
+      case 'dance':
+        this.activity = 'bob.dance';
+        if (this.now > this.danceUntil) this.backToWork();
+        break;
+      case 'shoo': want = this.shoo(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -205,20 +283,21 @@ export class Farmer {
     if (dl > mx) { this.vel.x += (dx / dl) * mx; this.vel.z += (dz / dl) * mx; } else { this.vel.x = target.x; this.vel.z = target.z; }
     this.body.setLinvel(this.vel, true);
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    if (sp > 0.4 && this.state !== 'stagger' && this.state !== 'lunge') this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), 8, dt);
+    if (sp > 0.4 && this.state !== 'stagger' && this.state !== 'lunge') this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), this.riding ? 4 : 8, dt);
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(UP, this.yaw), true);
     this.holdCarried(dt);
+    if (this.riding) this.mower.ride(this.pos, this.yaw, sp, dt);
     // footsteps
-    if (sp > 0.8 && !this.lying) {
+    if (sp > 0.8 && !this.lying && !this.riding) {
       this.stepT += dt * sp * (sp > 4 ? 0.62 : 0.85);
-      if (this.stepT > 1) { this.stepT = 0; G.audio.play('step1|step2|step3|step4', { pos: this.pos, vol: sp > 4 ? 0.8 : 0.45, pitch: 0.75 }); }
+      if (this.stepT > 1) { this.stepT = 0; G.audio.play('boot', { pos: this.pos, vol: sp > 4 ? 0.9 : 0.55, pitch: 0.85 }); }
     }
   }
   private moveVel = new THREE.Vector3();
 
   postStep() {
     this.synced.capture();
-    if (this.state === 'down') return;
+    if (this.state === 'down' || this.asleep) return;
     // hard objects hitting him (thrown crates, pigs, pumpkins…)
     world.contactPairsWith(this.collider, (c) => {
       const o = owners.get(c.handle) as (Holdable & { synced?: Synced }) | undefined;
@@ -231,9 +310,42 @@ export class Farmer {
     });
   }
 
+  // ================================================================== sleeping in the house
+  private sleep() {
+    this.stopRiding();
+    this.go('sleep'); this.activity = 'bob.sleep';
+    this.body.setEnabled(false); this.visual.root.visible = false;
+    this.sleepT = 0;
+  }
+  private wake(at?: THREE.Vector3) {
+    if (this.state !== 'sleep') return;
+    const d = this.zones.door;
+    this.body.setEnabled(true); this.visual.root.visible = true;
+    this.body.setTranslation({ x: d.x, y: d.y + CENTER + 0.1, z: d.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.pos.copy(d);
+    this.doing = false; this.path = [];
+    if (at) { this.searchAt.copy(at); this.go('investigate'); this.voice('huh'); G.events.push({ type: 'bobWakes' }); }
+    else { this.choreIdx = this.chores.findIndex((c) => (c.phase ?? 'day') === 'day'); this.go('routine'); this.voice('yawn', 0.7); }
+  }
+  private sleepStep(dt: number) {
+    this.sleepT += dt;
+    if (this.phaseNow() === 'day') { this.wake(); return; }
+    if (Math.random() < dt * 0.3) G.audio.play('snore', { pos: this.zones.door, vol: 0.6, minGap: 2 });
+    for (const n of G.noises) {
+      if (n.t <= this.noiseT) continue;
+      this.noiseT = n.t;
+      if (this.sleepT < 3) continue;
+      const d = Math.hypot(n.x - this.zones.door.x, n.z - this.zones.door.z);
+      if (d < Math.min(30, n.radius * 0.9)) { this.wake(new THREE.Vector3(n.x, n.y, n.z)); return; }
+    }
+  }
+
   // ================================================================== perception
   private view(): View {
+    if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
+    if (this.state === 'dance') return 'busy';
     if (this.state === 'routine' || this.state === 'dust' || this.state === 'carry') return 'normal';
     return 'alert';
   }
@@ -241,6 +353,7 @@ export class Farmer {
   /** How un-piggy is this pig right now (0 = just a pig). */
   private suspicious(p: Pig): number {
     if (p.out || p.cage || p.heldBy) return 0;
+    if (p === G.localPig && (!ADMIN.bobSees || ADMIN.god)) return 0;
     let w = 0;
     if (p.held) w = 1;
     if (p.standing) w = Math.max(w, 0.55);
@@ -253,11 +366,12 @@ export class Farmer {
   }
 
   private eye = new THREE.Vector3();
-  private canSee(p: Pig, v: { cos: number; range: number }) {
+  private canSee(p: { pos: THREE.Vector3; standing?: boolean; muddy?: number }, v: { cos: number; range: number }) {
     this.eye.copy(this.pos).setY(this.pos.y + 1.7);
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, d = Math.hypot(dx, dz);
     let range = v.range * (p.standing ? 1.25 : 1);
-    if (p.muddy > 0) range *= G.terrain.isBare(p.pos.x, p.pos.z) ? 0.5 : 0.75;   // mud = camouflage
+    if ((p.muddy ?? 0) > 0) range *= G.terrain.isBare(p.pos.x, p.pos.z) ? 0.5 : 0.75;   // mud = camouflage
+    if (G.night > 0.5 && this.state === 'chase') range *= 0.75;
     if (d > range && d > 2.2) return 0;
     if (d > 2.2) {   // inside 2.2 m he notices you anyway
       const look = this.yaw + this.lookYaw;
@@ -285,21 +399,32 @@ export class Farmer {
       if (p.out || p.cage) s = 0;
       this.sus.set(p, s);
       // reactions
-      const calm = this.state === 'routine' || this.state === 'investigate' || this.state === 'search' || this.state === 'guard' || this.state === 'suspect' || this.state === 'dust';
-      if (!calm) continue;
+      if (!this.calm() || this.state === 'shoo') continue;
       if (s >= 1) { this.alarmed(p); return; }
       if (s >= 0.3 && this.state !== 'suspect') {
+        this.stopRiding();
         this.target = p; this.go('suspect'); this.voice('huh'); this.yell = 0.5;
       }
     }
+    // wolves on his farm: chase them off
+    if (this.calm() && this.state !== 'suspect' && !this.carrying) {
+      for (const w of G.wolves as Wolf[]) {
+        if (!w.active || w.state === 'flee' || w.state === 'leave') continue;
+        if (Math.hypot(w.pos.x - this.pos.x, w.pos.z - this.pos.z) > 18 || !this.canSee(w, VIEW.alert)) continue;
+        this.stopRiding(); this.doing = false;
+        this.shooWolf = w; this.go('shoo'); this.voice('hey'); this.path = [];
+        return;
+      }
+    }
     // noises
-    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard') {
+    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance') {
       for (const n of G.noises) {
         if (n.t <= this.noiseT) continue;
         this.noiseT = n.t;
         const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
         const asleep = this.view() === 'nap';
-        if (d > n.radius * (asleep ? 0.6 : 1)) continue;
+        if (d > n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1)) continue;
+        this.stopRiding();
         this.searchAt.set(n.x, n.y, n.z);
         this.voice(asleep ? 'yawn' : 'huh');
         this.doing = false;
@@ -310,12 +435,12 @@ export class Farmer {
   }
 
   private alarmed(p: Pig) {
+    this.stopRiding();
     this.target = p; this.sus.set(p, 1);
     this.lastSeen.copy(p.pos); this.lastSeenT = this.now;
     this.doing = false;
     this.go('chase'); this.path = [];
     this.voice('hey'); this.yell = 1;
-    if (p === G.localPig) G.audio.play('jingle_alert', { vol: 0.7 });
     G.events.push({ type: 'alarm', who: p });
   }
 
@@ -327,36 +452,80 @@ export class Farmer {
   }
 
   private backToWork() {
-    this.target = null; this.lookYaw = 0;
+    this.target = null; this.lookYaw = 0; this.shooWolf = null;
     this.go(this.cage.pigs.length >= 2 ? 'guard' : 'routine');
     this.path = [];
   }
 
-  // ================================================================== routine
+  private dance(secs: number) {
+    this.go('dance'); this.danceUntil = this.now + secs;
+    G.audio.play('banjo', { pos: this.pos, vol: 0.8 });
+    this.voice('ha', 0.6);
+  }
+
+  // ================================================================== routine (clock-driven)
   private routine(dt: number) {
-    const c = this.chores[this.choreIdx];
-    this.activity = c.label;
+    const phase = this.phaseNow();
+    let c = this.chores[this.choreIdx];
+    if ((c.phase ?? 'day') !== phase && !(this.doing && c.id === 'mow')) {
+      this.stopRiding();
+      this.choreIdx = this.chores.findIndex((k) => (k.phase ?? 'day') === phase);
+      this.doing = false; this.path = [];
+      c = this.chores[this.choreIdx];
+    }
+    this.activity = 'chore.' + c.id;
+    if (c.id === 'mow') return this.mowChore(c, dt);
     if (!this.doing) {
       const goal = v2.set(c.at[0], 0, c.at[1]);
       const d = this.moveTo(goal, BOB.walk, dt);
       if (d < 0.5 || (d < 2.2 && this.stuck >= 2)) {
         this.stuck = 0;
+        if (c.id === 'bed') { this.sleep(); return 0; }
         this.doing = true; this.choreUntil = this.now + c.dur;
       }
       return BOB.walk;
     }
     this.face(v2.set(c.look[0], 0, c.look[1]), dt, 4);
     if (c.anim === 'nap' && Math.random() < dt * 0.25) this.voice('snore', 0.5);
-    if (this.now > this.choreUntil) {
-      this.doing = false; this.choreIdx = (this.choreIdx + 1) % this.chores.length; this.path = [];
-      if (Math.random() < 0.5) this.voice('mutter', 0.5);
-    }
+    if (this.now > this.choreUntil) this.nextChore();
     return 0;
+  }
+  private nextChore() {
+    const phase = this.phaseNow();
+    this.doing = false; this.path = [];
+    const n = this.chores.length;
+    for (let k = 1; k <= n; k++) { const i = (this.choreIdx + k) % n; if ((this.chores[i].phase ?? 'day') === phase) { this.choreIdx = i; break; } }
+    if (phase === 'day' && Math.random() < BOB.danceChance) this.dance(BOB.danceTime);
+    else if (Math.random() < 0.4) this.voice('mutter', 0.5);
+  }
+
+  /** Lawn mowing: walk to the mower, ride serpentine rows over the lawn, park. */
+  private mowChore(c: Chore, dt: number) {
+    if (!this.doing) {
+      const d = this.moveTo(this.mower.pos, BOB.walk, dt);
+      if (d < 1.3 || (d < 2.5 && this.stuck >= 2)) {
+        this.stuck = 0;
+        this.mower.mount(this.visual.root); this.riding = true;
+        this.mowPath = Mower.lawnPath(this.nav, this.zones.lawn); this.mowIdx = 0;
+        this.doing = true; this.choreUntil = this.now + c.dur;
+      }
+      return BOB.walk;
+    }
+    const wp = this.mowPath[this.mowIdx];
+    if (!wp || this.now > this.choreUntil) { this.stopRiding(); this.nextChore(); return 0; }
+    if (this.moveTo(wp, BOB.mow, dt) < 0.9) { this.mowIdx++; this.path = []; }
+    return BOB.mow;
+  }
+  private stopRiding() {
+    if (!this.riding) return;
+    this.riding = false;
+    this.mower.dismount(this.pos, this.yaw);
+    if (this.state === 'routine' && this.chores[this.choreIdx]?.id === 'mow') this.doing = false;
   }
 
   /** Two or more pigs caged: Bob stands by the grill with his eyes open. */
   private guard(dt: number) {
-    this.activity = 'guarding the BBQ';
+    this.activity = 'chore.guard';
     if (this.cage.pigs.length < 2) { this.go('routine'); return 0; }
     const spot = v2.copy(this.cage.front).addScaledVector(v3.copy(this.cage.front).sub(this.cage.center).setY(0).normalize(), 1.5);
     const d = this.moveTo(spot, BOB.walk, dt);
@@ -364,7 +533,17 @@ export class Farmer {
     return BOB.walk;
   }
 
-  // ================================================================== chase / grab
+  private shoo(dt: number) {
+    const w = this.shooWolf;
+    this.activity = 'bob.shoo';
+    if (!w || !w.active || w.state === 'flee' || w.state === 'leave' || this.now - this.stateT > 10) { this.backToWork(); return 0; }
+    const d = this.moveTo(w.pos, BOB.run * 0.9, dt, 0.5);
+    if (Math.random() < dt * 0.7) this.voice('hey');
+    if (d < 4.5) { w.scare(); this.go('fist'); this.target = null; this.stateT = this.now - BOB.fistGiveUp + 1.2; }
+    return BOB.run * 0.9;
+  }
+
+  // ================================================================== chase / grab / slap
   private reachable(p: Pig) {
     const ground = G.terrain.height(p.pos.x, p.pos.z);
     if (p.pos.y - ground > 1.9) return false;
@@ -374,8 +553,8 @@ export class Farmer {
 
   private chase(dt: number) {
     const t = this.target;
-    this.activity = 'CHASING';
-    if (!t || t.out || t.cage || (t.heldBy && t.heldBy !== this)) { this.giveUp(); return 0; }
+    this.activity = 'bob.chaseYou';
+    if (!t || t.out || t.cage || (t.heldBy && t.heldBy !== this) || (t === G.localPig && ADMIN.god)) { this.giveUp(); return 0; }
     if (this.now - this.lastSeenT > BOB.loseSight) {        // lost it: search where it was last seen
       this.searchAt.copy(this.lastSeen); this.sus.set(t, 0.6); this.target = null;
       this.voice('huh'); this.go('investigate'); this.path = [];
@@ -386,7 +565,10 @@ export class Farmer {
     const dx = t.pos.x - this.pos.x, dz = t.pos.z - this.pos.z, d = Math.hypot(dx, dz), dy = t.pos.y - this.pos.y;
     if (d < BOB.grabReach && dy < 1.7 && dy > -0.8) {
       this.face(t.pos, dt, 16);
-      this.go('windup'); this.yell = 0.8;
+      // sometimes he doesn't bother grabbing: a big humiliating slap instead
+      if (this.forceSlap || Math.random() < BOB.slapChance) { this.forceSlap = false; this.go('slapWind'); this.voice('grr', 0.7); }
+      else this.go('windup');
+      this.yell = 0.8;
       return 0;
     }
     if (!this.reachable(t)) {
@@ -404,22 +586,51 @@ export class Farmer {
     const hx = this.pos.x + f.x * 0.75, hz = this.pos.z + f.z * 0.75, hy = this.pos.y + 0.8;
     let best: Pig | null = null, bd = BOB.catchR;
     for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy) continue;
+      if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
       const d = Math.hypot(p.pos.x - hx, (p.pos.y - hy) * 0.6, p.pos.z - hz);
       if (d < bd) { bd = d; best = p; }
     }
     return best;
   }
 
+  /** The slap: every pig in front of his right hand flies sideways, spinning. */
+  private slapHit() {
+    const f = this.forward, right = v1.set(-f.z, 0, f.x);
+    const hx = this.pos.x + f.x * 0.9, hz = this.pos.z + f.z * 0.9;
+    this.slapped = [];
+    for (const p of this.pigs) {
+      if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
+      if (Math.hypot(p.pos.x - hx, p.pos.z - hz) > BOB.slapReach || Math.abs(p.pos.y - this.pos.y - 0.4) > 1.4) continue;
+      const imp = v2.copy(right).multiplyScalar(-9).addScaledVector(f, 4); imp.y = 6.5;
+      p.knock(imp, true);
+      this.slapped.push(p);
+      G.audio.play('slap', { pos: p.pos, vol: 1.2, pitch: 1.1 });
+      G.audio.play('squeal', { pos: p.pos, vol: 1 });
+      G.fx.bits(v3.copy(p.pos).setY(p.pos.y + 0.4), { count: 16, color: 0xfff1a8, speed: 4, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });
+      if (p === G.localPig) G.fx.shake(0.5);
+      G.events.push({ type: 'slapped', who: p, text: 'insult.' + Math.floor(Math.random() * 6) });
+    }
+    G.noise(this.pos, 12);
+  }
+
+  /** Admin / pig punch: a hoof jab. */
+  punched(dir: THREE.Vector3) {
+    if (this.asleep) return;
+    if ((this.hitBy.get('punch') ?? -10) > this.now - 0.3) return;
+    this.hitBy.set('punch', this.now);
+    this.hit(BOB.punch, dir);
+  }
+
   private pickUp(p: Pig) {
     this.carrying = p; this.target = p;
     p.caughtBy(this);
     ignorePair(this.body, p.body, true);
-    G.audio.play('grab', { pos: this.pos, vol: 1, pitch: 0.7 });
+    G.audio.play('body', { pos: this.pos, vol: 1 });
+    G.audio.play('squeal', { pos: p.pos, vol: 1 });
     this.voice('ha');
-    if (p === G.localPig) { G.audio.play('jingle_caught', { vol: 0.7 }); G.fx.shake(0.35); }
+    if (p === G.localPig) G.fx.shake(0.35);
     G.events.push({ type: 'caught', who: p });
-    this.chaseRun = 0;
+    this.chaseRun = 0; this.shakeT = 0;
     this.go('carry'); this.path = [];
   }
 
@@ -444,8 +655,16 @@ export class Farmer {
 
   private carry(dt: number) {
     const p = this.carrying;
-    this.activity = 'taking a pig to the BBQ';
+    this.activity = 'bob.carryPig';
     if (!p) { this.backToWork(); return 0; }
+    // a firm grip: every few seconds he gives the pig a good shake (loses escape progress)
+    this.shakeT += dt;
+    if (this.shakeT > BOB.shakeEvery) {
+      this.shakeT = 0; this.shakeUntil = this.now + 0.35;
+      p.escape = Math.max(0, p.escape - BOB.shakeLoss);
+      this.voice('grr', 0.7);
+      if (p === G.localPig) G.fx.shake(0.25);
+    }
     const d = this.moveTo(this.cage.front, BOB.carry, dt);
     if (d < 0.7) {
       this.carrying = null;
@@ -469,13 +688,15 @@ export class Farmer {
     if (d.length() > 3) { p.body.setTranslation(tgt, true); d.set(0, 0, 0); }
     const vv = d.multiplyScalar(18).add(v3.copy(this.vel));
     p.body.setLinvel(vv, true);
-    p.body.setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.yaw + Math.PI / 2, Math.PI / 2 + Math.sin(this.now * 14) * 0.25)), true);
+    const shake = this.now < this.shakeUntil ? Math.sin(this.now * 60) * 0.7 : Math.sin(this.now * 14) * 0.25;
+    p.body.setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(shake * 0.4, this.yaw + Math.PI / 2, Math.PI / 2 + shake)), true);
     void dt;
   }
 
   // ================================================================== getting hurt
   /** Pig ram (via Pig.ramStep → knock). */
   knock(dv: THREE.Vector3, _ragdoll: boolean) {
+    if (this.asleep) return;
     if ((this.hitBy.get('ram') ?? -10) > this.now - 0.4) return;
     this.hitBy.set('ram', this.now);
     this.hit(BOB.ram, dv);
@@ -483,9 +704,10 @@ export class Farmer {
 
   private hit(dmg: number, dir: THREE.Vector3) {
     if (this.state === 'down') return;
-    const winded = this.state === 'pant' || this.state === 'cough' ? 1.5 : 1;
+    this.stopRiding();
+    const winded = this.state === 'pant' || this.state === 'cough' || this.state === 'dance' ? 1.5 : 1;
     this.poise += dmg * winded; this.poiseT = this.now;
-    G.audio.play('punch|punch2', { pos: this.pos, vol: 1 });
+    G.audio.play('punch|body', { pos: this.pos, vol: 1 });
     this.voice('oof', 0.9);
     G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.2), { count: 10, color: 0xfff1a8, speed: 3.5, up: 1.5, life: 0.4, size: 0.14, grow: 0, drag: 3, alpha: 1 });
     G.fx.shake(0.15);
@@ -495,7 +717,7 @@ export class Farmer {
     // he's mad now: the nearest free pig did it
     let best: Pig | null = null, bd = 12;
     for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy) continue;
+      if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
       const d = p.pos.distanceTo(this.pos);
       if (d < bd) { bd = d; best = p; }
     }
@@ -508,10 +730,11 @@ export class Farmer {
 
   private stun(kind: 'down' | 'stagger' | 'cough', secs: number) {
     if (kind !== 'cough' && this.carrying) this.release(false);
+    this.stopRiding();
     if (kind === 'down') {
       this.setCollider(true);
-      G.audio.play('thud|thud2', { pos: this.pos, vol: 1, pitch: 0.6 });
-      G.audio.play('jingle_knock', { vol: 0.6 });
+      G.audio.play('thud|body', { pos: this.pos, vol: 1, pitch: 0.7 });
+      G.audio.play('bob_down', { pos: this.pos, vol: 1 });
       G.fx.shake(0.4);
       G.events.push({ type: 'knockdown' });
       this.poise = 0;
@@ -525,6 +748,7 @@ export class Farmer {
     if (this.state === 'down' || this.state === 'stagger') return;
     this.stun('cough', BOB.cough);
     G.audio.play('cough', { pos: this.pos, vol: 0.9, rand: 0.1 });
+    if (!G.audio.has('cough')) this.voice('oof', 0.7);
   }
 
   private checkClouds() {
@@ -573,29 +797,37 @@ export class Farmer {
     this.yaw = dampAngle(this.yaw, Math.atan2(p.x - this.pos.x, p.z - this.pos.z), k, dt);
   }
 
+  /** Bob's voice: real recorded grunts / laugh (+ optional extra recordings the user can drop in). */
   private voice(kind: string, vol = 1) {
-    G.audio.voice(kind, v1.copy(this.pos).setY(this.pos.y + 1.7), { vol });
+    const at = v1.copy(this.pos).setY(this.pos.y + 1.7);
+    const map: Record<string, string> = {
+      huh: 'bob_huh', hey: 'bob_hey|bob_oof', grr: 'bob_oof', oof: 'bob_oof', ha: 'bob_laugh', yawn: 'yawn', snore: 'snore', mutter: '',
+    };
+    const s = map[kind];
+    if (s) G.audio.play(s, { pos: at, vol, minGap: 0.35, pitch: kind === 'hey' ? 1.05 : 1 });
     if (kind === 'hey' || kind === 'grr') this.yell = 1;
   }
 
   // ================================================================== render
   render(alpha: number, dt: number) {
+    if (this.state === 'off' || this.state === 'sleep') { this.flash.intensity = 0; return; }
     const r = this.visual.root;
     this.synced.pos(alpha, r.position); r.position.y -= CENTER;
     r.rotation.y = this.yaw;
     const anim = this.animFor();
+    const fl = this.flashlightOn && !this.riding;
+    this.flash.intensity = fl ? 60 : 0;
     this.visual.update({
-      speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase', anim, at: this.now - this.stateT,
-      t: this.now, dt, angry: this.chasing || this.state === 'carry' || this.state === 'fist' ? 1 : this.state === 'suspect' ? 0.5 : 0,
-      yell: this.yell, lookYaw: this.lookYaw, carrying: !!this.carrying,
+      speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase' || this.state === 'shoo', anim, at: this.now - this.stateT,
+      t: this.now, dt, angry: this.chasing || this.state === 'carry' || this.state === 'fist' || this.state === 'shoo' ? 1 : this.state === 'suspect' ? 0.5 : 0,
+      yell: this.yell, lookYaw: this.lookYaw, carrying: !!this.carrying, flashlight: fl,
     });
-    void wrapAngle;
   }
 
   private animFor(): FarmerAnim {
     if (this.debugAnim) return this.debugAnim;
     switch (this.state) {
-      case 'routine': return this.doing ? this.chores[this.choreIdx].anim : 'idle';
+      case 'routine': return this.riding ? 'ride' : this.doing ? this.chores[this.choreIdx].anim : 'idle';
       case 'search': return 'look';
       case 'suspect': return 'suspect';
       case 'windup': return 'windup';
@@ -608,6 +840,10 @@ export class Farmer {
       case 'cough': return 'cough';
       case 'fist': return 'fist';
       case 'pant': return 'pant';
+      case 'slapWind': return 'slapWind';
+      case 'slap': return 'slap';
+      case 'taunt': return 'taunt';
+      case 'dance': return 'dance';
       default: return 'idle';
     }
   }

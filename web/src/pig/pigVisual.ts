@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { damp, clamp, lerp } from '../core/util';
-import { toonMat } from '../render/toon';
 import { G } from '../game/ctx';
 import { buildPig, PIVOT, type PigRig } from './pigModel';
+import { dress, defaultOutfit, type Outfit } from './cosmetics';
 
 const STAND_POS = new THREE.Vector3(0, PIVOT.y + 0.1, PIVOT.z + 0.05);
 const STAND_ANGLE = 1.25;
@@ -11,29 +11,39 @@ const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620);
 export interface PigPose {
   speed: number; grounded: boolean; vy: number; standing: boolean; mode: string;
   sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number; burnt?: number;
+  /** 0..1 how close a standing pig is to falling over; punch 0..1 (jab progress). */
+  wobble?: number; punch?: number; turn?: number;
 }
 
 /**
  * Procedurally animated cartoon pig: trot, stand up on the hind legs (front legs become arms), wallow on the back,
- * flail when ragdolled / carried, floppy ears, wiggly tail, blinking, squash & stretch, party hat in the player colour.
+ * flail when ragdolled / carried, floppy ears, wiggly tail, blinking, squash & stretch, wobble on two legs,
+ * hoof punch, outfit (hat, hair, glasses…).
  */
 export class PigVisual {
   root = new THREE.Group();
   private roll = new THREE.Group();
   private base = new THREE.Group();
-  private rig: PigRig;
+  private sway = new THREE.Group();
+  rig: PigRig;
+  private spots = new THREE.Group();
+  private animParts: THREE.Object3D[] = [];
   private phase = 0; private standT = 0; private rollT = 0; private squash = 0;
   private lastGrounded = true; private blinkAt = 2;
+  private wob = 0;
   centerHeight = 0.36;
+  outfit: Outfit = defaultOutfit();
 
-  constructor(color: number) {
-    this.root.add(this.roll); this.roll.add(this.base);
+  constructor(public color: number, outfit?: Outfit) {
+    this.root.add(this.sway); this.sway.add(this.roll); this.roll.add(this.base);
     this.rig = buildPig(this.base);
-    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.32, 18), toonMat(color));
-    hat.position.y = 0.14; hat.castShadow = true;
-    const pom = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), toonMat(0xffffff)); pom.position.y = 0.17; hat.add(pom);
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.022, 8, 24), toonMat(0xffffff)); band.rotation.x = Math.PI / 2; band.position.y = -0.14; hat.add(band);
-    this.rig.hatAnchor.add(hat);
+    this.spots.position.copy(PIVOT).negate(); this.rig.upper.add(this.spots);
+    this.setOutfit(outfit ?? defaultOutfit());
+  }
+
+  setOutfit(o: Outfit) {
+    this.outfit = { ...o };
+    this.animParts = dress(this.rig, this.outfit, this.color, this.spots);
   }
 
   update(p: PigPose) {
@@ -57,9 +67,15 @@ export class PigVisual {
     const breath = Math.sin(p.t * 2.6) * 0.018;
     this.base.scale.set(1 + this.squash * 0.6 - stretch * 0.5, 1 - this.squash + stretch + breath, 1 + this.squash * 0.3);
 
+    // wobble on two legs: sway the whole pig around its feet, more when close to falling
+    const w = clamp(p.wobble ?? 0, 0, 1);
+    this.wob = damp(this.wob, sT * (0.05 + w * 0.3), 6, dt);
+    this.sway.rotation.z = Math.sin(p.t * (3 + w * 6)) * this.wob + (p.turn ?? 0) * 0.12 * sT;
+    this.sway.rotation.x = Math.sin(p.t * 2.3 + 1) * this.wob * 0.6;
+
     // hinge
     R.upper.position.lerpVectors(PIVOT, STAND_POS, sT);
-    R.upper.rotation.x = -STAND_ANGLE * sT + (moving ? Math.sin(this.phase * 2) * 0.04 * amp : 0);
+    R.upper.rotation.x = -STAND_ANGLE * sT + (moving ? Math.sin(this.phase * 2) * 0.04 * amp : 0) + (p.punch ? Math.sin(p.punch * Math.PI) * 0.15 * sT : 0);
     R.upper.rotation.z = moving ? Math.sin(this.phase) * 0.06 * amp * (sT * 2 + 0.6) : 0;
     this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0);
 
@@ -79,8 +95,14 @@ export class PigVisual {
       const arm = lerp(0, (p.holding ? 0.2 : 1.05) * STAND_ANGLE, sT);
       const swing = sT > 0.5 ? (p.holding ? 0 : 0.6) : 1;
       let fl = arm + s2 * amp * swing, fr = arm + s1 * amp * swing;
+      let zl = sT * 0.15, zr = -sT * 0.15;
       if (p.charging > 0) { fl = fr = arm - p.charging * 1.3; }
-      set(R.frontL, fl, sT * 0.15); set(R.frontR, fr, -sT * 0.15);
+      if (w > 0.45 && sT > 0.5) {   // windmilling arms: about to fall
+        const k = (w - 0.45) / 0.55;
+        fl = arm + Math.sin(p.t * 16) * 1.4 * k; fr = arm + Math.sin(p.t * 16 + Math.PI) * 1.4 * k; zl = 0.6 * k + 0.15; zr = -0.6 * k - 0.15;
+      }
+      if (p.punch && sT > 0.5) { const k = Math.sin(clamp(p.punch, 0, 1) * Math.PI); fr = arm + 1.0 * k; zr = -0.15 + 0.35 * k; }
+      set(R.frontL, fl, zl, p.punch ? 40 : 22); set(R.frontR, fr, zr, p.punch ? 40 : 22);
     }
     R.hindL.position.x = 0.2 * (1 + sT * 0.15); R.hindR.position.x = -0.2 * (1 + sT * 0.15);
 
@@ -96,7 +118,13 @@ export class PigVisual {
     this.roll.rotation.z = this.rollT * Math.PI * (1 + Math.sin(p.t * 9) * 0.04 * this.rollT);
     this.roll.position.y = this.rollT * 0.12;
 
-    // mud
+    // outfit animation
+    for (const a of this.animParts) {
+      if (a.name === 'spin') a.rotation.y += dt * (8 + p.speed * 6);
+      else a.rotation.y = (a.name === 'wingL' ? -1 : 1) * (0.15 + Math.sin(p.t * (moving || air ? 18 : 3)) * (moving || air ? 0.45 : 0.1));
+    }
+
+    // mud / burnt tint
     const m = clamp(p.muddy, 0, 1) * 0.8;
     const b = clamp(p.burnt ?? 0, 0, 1) * 0.75;
     for (const s of R.skin) s.mat.color.copy(s.base).lerp(MUD, m).lerp(BURNT, b);

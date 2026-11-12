@@ -122,7 +122,7 @@ export function buildFarmer(root: THREE.Group): FarmerRig {
 
   // ---------------------------------------------------------------- tools (held in the right hand, shown per chore)
   const tools: Record<string, THREE.Object3D> = {};
-  const tool = (name: string, build: (g: THREE.Group) => void, parent = R.hand) => {
+  const tool = (name: string, build: (g: THREE.Group) => void, parent: THREE.Object3D = R.hand) => {
     const g = new THREE.Group(); build(g); g.visible = false; parent.add(g); tools[name] = g;
   };
   const metal = toonMat(0xaab4bd), wood = toonMat(0x9a6a3c), green = toonMat(0x58a64a), grain = toonMat(0xf2d27a);
@@ -150,6 +150,24 @@ export function buildFarmer(root: THREE.Group): FarmerRig {
     const h = new THREE.Group(); h.rotation.x = Math.PI / 2; g.add(h);
     mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.36, 8), wood, [0, 0.08, 0], h);
     mesh(new THREE.BoxGeometry(0.06, 0.06, 0.16), metal, [0, 0.26, 0], h);
+  });
+
+  tool('paper', (g) => {
+    const paper = toonMat(0xf4f1e8, { side: THREE.DoubleSide }), ink = toonMat(0x9a9a9a);
+    for (const s of [-1, 1]) {
+      const page = mesh(new THREE.PlaneGeometry(0.26, 0.34), paper, [s * 0.12, 0.05, 0.12], g, undefined, [0, -s * 0.35, 0]);
+      for (let i = 0; i < 5; i++) mesh(new THREE.PlaneGeometry(0.18, 0.018), ink, [0, 0.1 - i * 0.05, 0.002 * -s], page).castShadow = false;
+    }
+  }, L.hand);
+  tool('flashlight', (g) => {
+    const h = new THREE.Group(); h.rotation.x = Math.PI / 2; g.add(h);
+    mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 10), toonMat(0x2b2b2b), [0, 0.05, 0], h);
+    mesh(new THREE.CylinderGeometry(0.045, 0.032, 0.06, 12), toonMat(0x2b2b2b), [0, 0.17, 0], h);
+    mesh(new THREE.CircleGeometry(0.04, 12), new THREE.MeshBasicMaterial({ color: 0xfff2b0 }), [0, 0.201, 0], h, undefined, [-Math.PI / 2, 0, 0]);
+  });
+  tool('shirt', (g) => {
+    mesh(new THREE.BoxGeometry(0.3, 0.32, 0.02), toonMat(0x6fb3e0), [0, 0.1, 0.12], g);
+    for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.12, 0.08, 0.02), toonMat(0x6fb3e0), [s * 0.2, 0.2, 0.12], g, undefined, [0, 0, -s * 0.4]);
   });
 
   return {
