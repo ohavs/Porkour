@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Porkour</title>
+<style>
+  @font-face { font-family: Title; src: url(./fonts/TitleFont.ttf); font-display: block; }
+  @font-face { font-family: Body; src: url(./fonts/BodyFont.ttf); font-display: block; }
+  :root { --cream:#fff6e6; --ink:#3b2412; --pink:#ff8fb1; --gold:#ffd166; --mud:#7a4b25; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#9ccbe8; font-family: Body, system-ui, sans-serif; color: var(--cream); user-select:none; }
+  #app { position:fixed; inset:0; }
+  #app canvas { display:block; width:100%; height:100%; }
+  .txt { text-shadow: 0 2px 0 rgba(40,20,5,.85), 0 0 6px rgba(40,20,5,.6); }
+  /* loading / title */
+  #title { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at 50% 40%, rgba(255,214,170,.15), rgba(30,15,5,.55)); cursor:pointer; transition: opacity .4s; z-index:10; }
+  #title h1 { font-family: Title; font-size: clamp(56px, 11vw, 140px); margin:0; color: var(--pink); letter-spacing: 2px;
+    text-shadow: 0 6px 0 #a3405f, 0 10px 18px rgba(0,0,0,.45); transform: rotate(-3deg); }
+  #title .sub { font-size: clamp(16px, 2.2vw, 24px); margin-top: 6px; }
+  #title .go { font-family: Title; font-size: clamp(22px, 3vw, 34px); margin-top: 36px; color: var(--gold); animation: pulse 1.2s ease-in-out infinite; }
+  #bar { width: min(420px, 70vw); height: 12px; border-radius: 8px; background: rgba(0,0,0,.35); margin-top: 28px; overflow:hidden; }
+  #bar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--pink), var(--gold)); transition: width .2s; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+  /* HUD */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #abilities { position:absolute; left:50%; bottom:22px; transform:translateX(-50%); display:flex; gap:14px; }
+  .ab { position:relative; width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background: rgba(40,22,8,.45); box-shadow: inset 0 0 0 3px rgba(255,246,230,.85); font-size:30px; }
+  .ab .cd { position:absolute; inset:0; border-radius:50%; }
+  .ab .key { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); font-family: Title; font-size:14px; color: var(--gold);
+    background: rgba(40,22,8,.8); padding: 1px 7px 0; border-radius: 8px; white-space:nowrap; }
+  .ab.ready { animation: ready .35s ease-out; }
+  .ab.active { box-shadow: inset 0 0 0 3px var(--gold), 0 0 14px var(--gold); }
+  @keyframes ready { 40% { transform: scale(1.25); } }
+  #charge { position:absolute; left:50%; bottom:118px; width:180px; height:10px; transform:translateX(-50%); border-radius:6px;
+    background: rgba(0,0,0,.4); overflow:hidden; opacity:0; transition: opacity .15s; }
+  #charge > div { height:100%; width:0%; background: linear-gradient(90deg, #fff, var(--gold), #ff6b4a); }
+  #prompt { position:absolute; left:50%; top:62%; transform:translateX(-50%); font-size:20px; }
+  #status { position:absolute; left:22px; bottom:22px; font-size:18px; line-height:1.35; }
+  #toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); font-family: Title; font-size: 40px; color: var(--gold); opacity:0; transition: opacity .3s; white-space:nowrap; }
+  #help { position:absolute; right:22px; top:20px; font-size:16px; line-height:1.5; text-align:right; }
+  #help b { font-family: Title; font-weight:normal; color: var(--gold); letter-spacing:.5px; }
+  #fps { position:absolute; right:8px; bottom:6px; font-size:12px; opacity:.6; }
+  #paused { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:8; font-family:Title; font-size:44px;
+    background: rgba(20,10,3,.35); pointer-events:auto; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div id="help" class="txt"></div>
+  <div id="status" class="txt"></div>
+  <div id="prompt" class="txt"></div>
+  <div id="toast" class="txt"></div>
+  <div id="charge"><div></div></div>
+  <div id="abilities"></div>
+  <div id="fps" class="txt"></div>
+</div>
+<div id="paused" class="txt">Click to play</div>
+<div id="title">
+  <h1>PORKOUR</h1>
+  <div class="sub txt">Four pigs. One farmer. Zero shame.</div>
+  <div id="bar"><div></div></div>
+  <div class="go txt" id="go">Loading…</div>
+</div>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>

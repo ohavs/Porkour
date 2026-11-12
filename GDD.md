@@ -8,6 +8,10 @@ Up to 4 pig burglars vs one farmer. Goofy physics stealth-heist: the farm runs i
 the pigs steal and wreck things while the farmer works. Get noticed → he chases, grabs, carries you
 to the cage by his BBQ. Teammates bash him to drop you or break you out before the grill is hot.
 
+## Look
+Cartoon (cel shading + ink outlines, saturated colours, puffy clouds). Pigs = round, fat, long cartoon pigs (procedural model),
+party hat in the player colour. Each level = one fenced farm compound (not open world), patchwork farmland around it.
+
 ## Pigs (all equal)
 | Action | What it does |
 |---|---|
