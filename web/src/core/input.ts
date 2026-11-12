@@ -21,6 +21,7 @@ export class Input {
   private padPrev: boolean[] = [];
   locked = false;
   sensitivity = 0.0024;
+  invertY = false;
   onKey?: (code: string) => void;
 
   constructor(private el: HTMLElement) {
@@ -48,7 +49,7 @@ export class Input {
     const k = (c: string) => this.keys.has(c);
     let x = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
     let y = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0);
-    this.lookX = this.mdx * this.sensitivity; this.lookY = this.mdy * this.sensitivity;
+    this.lookX = this.mdx * this.sensitivity; this.lookY = this.mdy * this.sensitivity * (this.invertY ? -1 : 1);
     this.mdx = this.mdy = 0;
     const pad = navigator.getGamepads?.().find((p) => p && p.connected);
     if (pad) {

@@ -9,10 +9,12 @@ import { Rng } from '../core/util';
 export type Quality = 'high' | 'low';
 
 const SKY_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }`;
-const SKY_FRAG = `varying vec3 vDir; uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uBottom;
+const SKY_FRAG = `varying vec3 vDir; uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uBottom; uniform vec3 uSunDir; uniform vec3 uGlow;
 void main() {
   float h = vDir.y;
   vec3 c = h > 0.0 ? mix(uHorizon, uTop, pow(smoothstep(0.0, 0.6, h), 0.8)) : mix(uHorizon, uBottom, smoothstep(0.0, -0.2, h));
+  float s = max(dot(normalize(vDir), uSunDir), 0.0);
+  c += uGlow * (pow(s, 6.0) * 0.55 + pow(s, 600.0) * 2.5);   // warm glow around the sun + the disc
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -27,6 +29,12 @@ export class Gfx {
   composer: EffectComposer;
   quality: Quality;
   clouds = new THREE.Group();
+  skyMat!: THREE.ShaderMaterial;
+  hemi!: THREE.HemisphereLight;
+  stars!: THREE.Points;
+  moon!: THREE.Mesh;
+  cloudMat!: THREE.MeshToonMaterial;
+  outline!: InkOutline;
 
   constructor(container: HTMLElement, quality: Quality) {
     this.quality = quality;
@@ -44,8 +52,12 @@ export class Gfx {
 
     const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), new THREE.ShaderMaterial({
       vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { uTop: { value: new THREE.Color(0x3d9be9) }, uHorizon: { value: new THREE.Color(0xbfe6ff) }, uBottom: { value: new THREE.Color(0x9fd27a) } },
+      uniforms: {
+        uTop: { value: new THREE.Color(0x3d9be9) }, uHorizon: { value: new THREE.Color(0xbfe6ff) }, uBottom: { value: new THREE.Color(0x9fd27a) },
+        uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uGlow: { value: new THREE.Color(0xfff1c0) },
+      },
     }));
+    this.skyMat = sky.material as THREE.ShaderMaterial;
     sky.renderOrder = -10; sky.frustumCulled = false;
     this.scene.add(sky);
     this.scene.background = new THREE.Color(0xbfe6ff);
@@ -60,11 +72,14 @@ export class Gfx {
     const c = this.sun.shadow.camera; c.left = -40; c.right = 40; c.top = 40; c.bottom = -40; c.near = 1; c.far = 220;
     this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.04;
     this.scene.add(this.sun, this.sun.target);
-    this.scene.add(new THREE.HemisphereLight(0xd8efff, 0x7aa64a, 1.15));
+    this.hemi = new THREE.HemisphereLight(0xd8efff, 0x7aa64a, 1.15);
+    this.scene.add(this.hemi);
+    this.makeStars();
 
     this.composer = new EffectComposer(r, { frameBufferType: THREE.HalfFloatType });
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.composer.addPass(new EffectPass(this.camera, new InkOutline(quality === 'high' ? 1.4 : 1.1)));
+    this.outline = new InkOutline(quality === 'high' ? 1.4 : 1.1);
+    this.composer.addPass(new EffectPass(this.camera, this.outline));
     this.composer.addPass(new EffectPass(this.camera,
       new BloomEffect({ intensity: 0.35, luminanceThreshold: 0.9, luminanceSmoothing: 0.15, mipmapBlur: true }),
       new HueSaturationEffect({ saturation: 0.12 }),
@@ -78,6 +93,7 @@ export class Gfx {
   private makeClouds() {
     const rng = new Rng(77);
     const mat = toonMat(0xffffff, { emissive: new THREE.Color(0x8fa7bf) });
+    this.cloudMat = mat;
     const blob = new THREE.IcosahedronGeometry(1, 3);
     for (let i = 0; i < 16; i++) {
       const g = new THREE.Group();
@@ -94,6 +110,35 @@ export class Gfx {
       g.rotation.y = rng.range(0, 6.28);
       this.clouds.add(g);
     }
+  }
+
+  private makeStars() {
+    const rng = new Rng(31);
+    const pos: number[] = [];
+    for (let i = 0; i < 900; i++) {
+      const u = rng.range(0.04, 1), a = rng.range(0, Math.PI * 2), r = Math.sqrt(1 - u * u);
+      pos.push(Math.cos(a) * r * 450, u * 450, Math.sin(a) * r * 450);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff8e0, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    this.stars.renderOrder = -9; this.stars.frustumCulled = false;
+    this.scene.add(this.stars);
+    this.moon = new THREE.Mesh(new THREE.SphereGeometry(14, 24, 16), new THREE.MeshBasicMaterial({ color: 0xfff6d8, fog: false, transparent: true }));
+    const crater = new THREE.MeshBasicMaterial({ color: 0xe8dcb4, fog: false, transparent: true });
+    for (const [x, y, r] of [[-4, 3, 3.5], [5, -2, 2.6], [1, -6, 2]]) { const c = new THREE.Mesh(new THREE.CircleGeometry(r, 16), crater); c.position.set(x, y, 13.6); this.moon.add(c); }
+    this.moon.renderOrder = -9;
+    this.scene.add(this.moon);
+  }
+
+  /** Live quality switch (no reload). */
+  setQuality(q: Quality) {
+    this.quality = q;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, q === 'high' ? 1.5 : 1));
+    const S = q === 'high' ? 3072 : 1536;
+    this.sun.shadow.mapSize.set(S, S);
+    this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null;
+    (this.outline.uniforms.get('uThick') as THREE.Uniform).value = q === 'high' ? 1.4 : 1.1;
+    this.resize();
   }
 
   resize() {

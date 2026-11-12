@@ -4,10 +4,12 @@ import { staticBox, staticCylinder, staticTrimesh } from '../core/physics';
 import { Rng, V3 } from '../core/util';
 import { Terrain, type Rect } from './terrain';
 import { Prop, PROPS } from './props';
-import { Critter, CRITTERS, decorAnimal } from './animals';
+import { Critter, CRITTERS, DecorAnimal } from './animals';
 import { Forest, type TreeKind } from './nature';
 import { Cage } from './cage';
 import type { Chore } from '../farmer/farmer';
+import type { DayNight } from './daynight';
+import { buildDecor } from './decor';
 
 /**
  * Farm 1 — Bob's family farm. North = −z. Everything placed from code (art-agnostic: missing models → magenta box).
@@ -17,24 +19,41 @@ import type { Chore } from '../farmer/farmer';
 export const FARM: Rect = { x0: -64, x1: 64, z0: -110, z1: 20 };
 
 export interface FarmBuild {
-  props: Prop[]; critters: Critter[]; mixers: THREE.AnimationMixer[]; spinners: { obj: THREE.Object3D; speed: number }[];
+  props: Prop[]; critters: Critter[]; decor: DecorAnimal[]; spinners: { obj: THREE.Object3D; speed: number }[];
+  updaters: ((dt: number, t: number) => void)[];
   pigSpawns: THREE.Vector3[];
-  cage: Cage; chores: Chore[]; farmerSpawn: THREE.Vector3; zones: { garden: Rect[] };
+  cage: Cage; chores: Chore[]; farmerSpawn: THREE.Vector3;
+  zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3 };
+  inWater: (x: number, z: number) => boolean;
 }
 
-/** Bob's day on farm 1 (in order, then it loops). Stand points are snapped to walkable cells. */
+/**
+ * Bob's day on farm 1. Day chores loop in order (05:30–20:00), evening = flashlight patrol (20:00–22:30),
+ * night = bed (he sleeps in the house until dawn). Stand points are snapped to walkable cells.
+ */
 const CHORES: Chore[] = [
-  { id: 'pigs', label: 'feeding the pigs', at: [26, 0.5], look: [26, 4], anim: 'pour', dur: 12, view: 'busy' },
-  { id: 'chickens', label: 'feeding the chickens', at: [21, -22.5], look: [24, -26], anim: 'feed', dur: 20, view: 'busy' },
-  { id: 'cows', label: 'checking the cows', at: [20.7, -59], look: [30, -59], anim: 'lean', dur: 16, view: 'normal' },
-  { id: 'nap', label: 'napping in the hay shed', at: [38, -81], look: [38, -74], anim: 'nap', dur: 32, view: 'nap' },
-  { id: 'garden', label: 'watering the garden', at: [-36, -58.5], look: [-41, -58.5], anim: 'water', dur: 22, view: 'busy' },
-  { id: 'coffee', label: 'having coffee by the grill', at: [-4.5, -30.5], look: [0, -20], anim: 'coffee', dur: 22, view: 'busy' },
-  { id: 'wood', label: 'chopping wood', at: [-40.4, 10.4], look: [-40.4, 9], anim: 'chop', dur: 20, view: 'busy' },
-  { id: 'tractor', label: 'fixing the tractor', at: [6.8, 6.6], look: [9, 9], anim: 'fix', dur: 18, view: 'busy' },
+  { id: 'pigs', at: [26, 0.5], look: [26, 4], anim: 'pour', dur: 12, view: 'busy' },
+  { id: 'chickens', at: [21, -22.5], look: [24, -26], anim: 'feed', dur: 18, view: 'busy' },
+  { id: 'mow', at: [0, 0], look: [0, 0], anim: 'ride', dur: 55, view: 'busy' },
+  { id: 'cows', at: [20.7, -59], look: [30, -59], anim: 'lean', dur: 14, view: 'normal' },
+  { id: 'laundry', at: [-31.5, -27.2], look: [-31.5, -28.6], anim: 'laundry', dur: 14, view: 'busy' },
+  { id: 'nap', at: [38, -81], look: [38, -74], anim: 'nap', dur: 28, view: 'nap' },
+  { id: 'garden', at: [-36, -58.5], look: [-41, -58.5], anim: 'water', dur: 20, view: 'busy' },
+  { id: 'paper', at: [-15.3, -29.2], look: [-12, -22], anim: 'read', dur: 22, view: 'busy' },
+  { id: 'coffee', at: [-4.5, -30.5], look: [0, -20], anim: 'coffee', dur: 18, view: 'busy' },
+  { id: 'wood', at: [-40.4, 10.4], look: [-40.4, 9], anim: 'chop', dur: 18, view: 'busy' },
+  { id: 'tractor', at: [6.8, 6.6], look: [9, 9], anim: 'fix', dur: 16, view: 'busy' },
+  // evening: flashlight round
+  { id: 'patrol', at: [20, 0], look: [30, 6], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  { id: 'patrol', at: [12, -24], look: [22, -26], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  { id: 'patrol', at: [6, -58], look: [26, -62], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  { id: 'patrol', at: [-28, -52], look: [-40, -58], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  { id: 'patrol', at: [-6, -18], look: [-8, -35], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  // night
+  { id: 'bed', at: [-17.6, -33.4], look: [-24, -40], anim: 'idle', dur: 1, view: 'normal', phase: 'night' },
 ];
 
-export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: Terrain) => FarmBuild } {
+export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: Terrain, daynight: DayNight) => FarmBuild } {
   const terrain = new Terrain(FARM);
   // ---- ground paint (before terrain.build)
   const P = (pts: [number, number][], w = 3) => terrain.path(pts, w);
@@ -57,12 +76,18 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
   terrain.mud(9, -28, 2.2, 1.6); terrain.mud(-30, -12, 2.6, 2); terrain.mud(42, -8, 1.8, 1.5);
   terrain.mud(-6, -66, 2.4, 1.8); terrain.mud(38, -64, 2.5, 2); terrain.mud(-52, 10, 2, 1.6);
 
-  const build = (t: Terrain): FarmBuild => {
+  terrain.dirt({ x0: -36, x1: -26, z0: -29, z1: -26 }, 1);          // under the laundry line
+  terrain.dirt({ x0: -64, x1: -50, z0: -52, z1: -34 }, 1.5);       // sheep pen
+  const POND = { x: 50, z: -2, r: 5.2 };
+
+  const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: -50, x1: -30, z0: -66, z1: -52 };
     const out: FarmBuild = {
-      props: [], critters: [], mixers: [], spinners: [], pigSpawns: [],
+      props: [], critters: [], decor: [], spinners: [], updaters: [], pigSpawns: [],
       cage: new Cage(scene, V3(-8, t.height(-8, -35), -35), 0), chores: CHORES,
-      farmerSpawn: V3(-4, t.height(-4, -28), -28), zones: { garden: [garden] },
+      farmerSpawn: V3(-4, t.height(-4, -28), -28),
+      zones: { garden: [garden], lawn: { x0: -28, x1: -12, z0: -25, z1: -14 }, door: V3(-17.6, t.height(-17.6, -33.4), -33.4), mowerAt: V3(-31, t.height(-31, -16), -16) },
+      inWater: (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r - 0.3,
     };
     t.noGrass({ x0: -11, x1: -2, z0: -38, z1: -32 });
     const rng = new Rng(2026);
@@ -147,6 +172,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     pen({ x0: 16, x1: 30, z0: -32, z1: -18 }, 's', 2.4);                // chickens
     pen({ x0: 22, x1: 52, z0: -76, z1: -50 }, 'w', 3.5, 'kenney/fence_planks'); // pasture
     pen(garden, 'e', 2.4);                                                // garden
+    pen({ x0: -63, x1: -50, z0: -52, z1: -34 }, 'e', 2.6, 'kenney/fence_planks'); // sheep
     // outer farm fence (gate gap at the south road)
     const F = FARM, m = 0.5;
     fence(F.x0 + m, F.z1 - m, -3, F.z1 - m, 'kenney/fence_planks'); fence(3, F.z1 - m, F.x1 - m, F.z1 - m, 'kenney/fence_planks');
@@ -168,7 +194,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     }
     // corn field
     for (let x = -60; x < -36; x += 1.6) for (let z = -104; z < -94; z += 1.6)
-      decor('kenney/crops_cornStageD', x + rng.range(-0.2, 0.2), z + rng.range(-0.2, 0.2), { scale: 2.6, yaw: rng.range(0, 6) });
+      if (Math.hypot(x - -48, z - -99) > 1.8) decor('kenney/crops_cornStageD', x + rng.range(-0.2, 0.2), z + rng.range(-0.2, 0.2), { scale: 2.6, yaw: rng.range(0, 6) });
     t.noGrass({ x0: -61, x1: -36, z0: -105, z1: -93 });
 
     // ---------------------------------------------------------------- yard dressing (static)
@@ -198,15 +224,23 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (let i = 0; i < 4; i++) prop('crate', 34 + (i % 2) * 1.05, -84 + Math.floor(i / 2) * 1.05, 0);
 
     // ---------------------------------------------------------------- animals
-    for (let i = 0; i < 7; i++) critter('chick', rng.range(18, 28), rng.range(-30, -20), 4.5);
+    const coop = V3(22.5, y(22.5, -27), -27);
+    for (let i = 0; i < 6; i++) critter('hen', rng.range(18, 28), rng.range(-30, -20), 4.5);
+    for (let i = 0; i < 4; i++) critter('chick', rng.range(19, 27), rng.range(-29, -21), 3);
+    for (const c of out.critters) c.roost = coop;
     for (let i = 0; i < 4; i++) critter('cow', rng.range(28, 46), rng.range(-70, -56), 9);
+    for (let i = 0; i < 5; i++) critter('sheep', rng.range(-60, -52), rng.range(-50, -36), 5);
     critter('dog', -16, -30, 5);
-    critter('cat', -4, 6, 6);
-    critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6);
-    for (let i = 0; i < 3; i++) { const mx = decorAnimal(scene, 'pets/chick', V3(31 + i * 0.6, 3.3, -84.5), 0.3, 0.3); if (mx) out.mixers.push(mx); }
+    critter('cat', -4, 6, 6); critter('cat', -20, -36, 4);
+    critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6); critter('bunny', 12, -76, 5);
+    for (let i = 0; i < 3; i++) critter('duck', POND.x + rng.range(-3, 3), POND.z + rng.range(-3, 3), 3.5);
+    for (let i = 0; i < 3; i++) out.decor.push(new DecorAnimal(scene, 'hen', V3(31 + i * 0.7, 3.3, -84.5), 0.3));
 
     // ---------------------------------------------------------------- pigs start in the sty
     out.pigSpawns.push(V3(28, y(28, 5) + 0.5, 5), V3(33, y(33, 5) + 0.5, 5), V3(27, y(27, 12) + 0.5, 12), V3(31, y(31, 12.5) + 0.5, 12.5));
+
+    // ---------------------------------------------------------------- more life: lamps, pond, laundry, scarecrow, bees…
+    buildDecor({ scene, t, rng, out, daynight, decor, prop, blocked, POND, F });
 
     // ---------------------------------------------------------------- nature (cartoon, instanced)
     const forest = new Forest();

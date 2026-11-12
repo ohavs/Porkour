@@ -1,0 +1,307 @@
+/**
+ * Translations. `en` is the source of keys; every other language MUST define every key
+ * (TypeScript enforces it: `es` is typed as Record<Key, string>). Placeholders: {name}.
+ * Rule (CLAUDE.md): every new UI string gets an English AND a Spanish entry in the same change.
+ */
+const en = {
+  // title / boot
+  'title.sub': 'Four pigs. One farmer. Zero shame.',
+  'title.loading': 'Loading…',
+  'title.building': 'Building the farm…',
+  'title.play': 'Click to play',
+  'title.wardrobe': 'Wardrobe',
+  'title.error': 'Error: {msg}',
+  'paused.title': 'Paused',
+  'paused.resume': 'Click to keep playing',
+  // top-right buttons / menu
+  'btn.sound': 'Sound (M)',
+  'btn.settings': 'Settings (Esc)',
+  'btn.help': 'Controls (H)',
+  'toast.soundOff': 'Sound off',
+  'toast.soundOn': 'Sound on',
+  'toast.qualityHigh': 'Graphics: high',
+  'toast.qualityLow': 'Graphics: low (faster)',
+  'menu.settings': 'Settings',
+  'menu.language': 'Language',
+  'menu.quality': 'Graphics',
+  'menu.qualityHigh': 'High',
+  'menu.qualityLow': 'Low (faster)',
+  'menu.sfx': 'Effects volume',
+  'menu.music': 'Music volume',
+  'menu.ambience': 'Nature sounds',
+  'menu.sens': 'Mouse sensitivity',
+  'menu.invert': 'Invert mouse Y',
+  'menu.resume': 'Back to the game',
+  'menu.wardrobe': 'Wardrobe',
+  'menu.admin': 'Admin mode',
+  'menu.close': 'Close',
+  'menu.on': 'On', 'menu.off': 'Off',
+  // help (controls card)
+  'help.title': 'Controls',
+  'help.move': 'Move', 'help.look': 'Look', 'help.jump': 'Jump',
+  'help.grab': 'Grab · hold to throw', 'help.punch': 'Punch (standing, empty hooves)',
+  'help.sprint': 'Sprint = ram!', 'help.fart': 'Fart', 'help.wallow': 'Wallow · hold = play dead',
+  'help.stand': 'Stand on 2 legs', 'help.oink': 'Oink',
+  'help.tip1': 'Act like a pig: on 4 legs with an empty mouth, Bob ignores you.',
+  'help.tip2': 'Mud = camouflage. Standing = strong hooves but wobbly.',
+  'help.keys': 'H controls · M sound · P graphics · Esc menu',
+  'key.mouse': 'Mouse', 'key.space': 'SPACE', 'key.lmb': 'LMB', 'key.shift': 'SHIFT',
+  // abilities (ring labels)
+  'ab.grab': 'Grab', 'ab.sprint': 'Ram', 'ab.fart': 'Fart', 'ab.wallow': 'Mud', 'ab.stand': 'Stand',
+  // Bob chip
+  'bob.doing': 'Bob is {what}',
+  'bob.carryYou': 'Bob is taking YOU to the BBQ!',
+  'bob.carryPig': 'Bob caught a pig!',
+  'bob.chaseYou': 'Bob is CHASING you!',
+  'bob.chasePig': 'Bob is chasing a pig!',
+  'bob.pant': 'Bob is out of breath…',
+  'bob.suspect': 'Bob is suspicious…',
+  'bob.heard': 'Bob heard something…',
+  'bob.down': 'Bob is knocked out!',
+  'bob.stagger': 'Bob is staggering!',
+  'bob.cough': 'Bob is coughing!',
+  'bob.fist': 'Bob can\'t reach you!',
+  'bob.slap': 'Bob is handing out slaps!',
+  'bob.dance': 'Bob is dancing!',
+  'bob.sleep': 'Bob is asleep… zzz',
+  'bob.shoo': 'Bob is chasing the wolves!',
+  'bob.off': 'Bob is off (admin)',
+  // chores
+  'chore.pigs': 'feeding the pigs', 'chore.chickens': 'feeding the chickens', 'chore.cows': 'checking the cows',
+  'chore.nap': 'napping in the hay shed', 'chore.garden': 'watering the garden', 'chore.coffee': 'having coffee by the grill',
+  'chore.wood': 'chopping wood', 'chore.tractor': 'fixing the tractor', 'chore.mow': 'mowing the lawn',
+  'chore.paper': 'reading the paper on the porch', 'chore.laundry': 'hanging the laundry',
+  'chore.patrol': 'patrolling with a flashlight', 'chore.bed': 'going to bed', 'chore.guard': 'guarding the BBQ',
+  'chore.walk': 'walking around',
+  // prompts
+  'p.grilled': 'GRILLED!', 'p.backIn': 'back in the sty in {n}…',
+  'p.bobGotYou': 'Bob got you! Mash {space} ({n}/{need}) · {q} fart in his face',
+  'p.wolfGotYou': 'A wolf has you! Mash {space} ({n}/{need})',
+  'p.ragdoll': '{space} mash to get up',
+  'p.held': '{space} mash to wriggle free',
+  'p.caged': 'Hold {lmb} at the red latch to pick the lock — standing is faster',
+  'p.holding': 'Holding {what} · hold {lmb} to throw',
+  'p.grabThing': '{lmb} {verb} {what}',
+  'p.verbGrab': 'grab', 'p.verbDrag': 'drag',
+  'p.punch': '{lmb} punch',
+  'p.opening': 'Opening the cage…',
+  'p.wobbly': 'Wobbly! Slow down or you\'ll fall',
+  'p.dragged': 'Dragged off by a wolf… back in the sty in {n}…',
+  // status
+  's.muddy': 'Muddy {n}s', 's.playDead': 'Playing dead…', 's.caged': 'CAGED! BBQ in {n}s', 's.grills': 'Grilled {n}/3',
+  's.caught': 'Caught! Muddy pigs slip out faster', 's.clean': 'Squeaky clean!',
+  // toasts / events
+  'e.alarm': 'He saw you! RUN!', 'e.caughtMe': 'Caught!', 'e.caughtOther': '{who} got caught!', 'e.escaped': 'Wriggled free!',
+  'e.caged': 'Into the cage…', 'e.cageOpenRun': 'Cage open — run!', 'e.cageOpen': 'Cage open!',
+  'e.grilledMe': 'GRILLED!', 'e.grilledOther': '{who} got grilled!', 'e.knockdown': 'KNOCKOUT!', 'e.stagger': 'Bob is staggering!',
+  'e.bobWins': 'Bob wins this round!', 'e.slapped': 'SLAPPED!', 'e.fell': 'Oops! Pigs aren\'t made for two legs',
+  'e.night': 'Night falls… watch out for wolves!', 'e.dawn': 'A new day on the farm', 'e.wolves': 'Wolves on the farm!',
+  'e.wolfBit': 'A wolf got you!', 'e.wolfScared': 'The wolf ran away!', 'e.lostToWolf': '{who} was dragged off by a wolf!',
+  'e.bobWakes': 'Bob woke up!',
+  // insults when Bob slaps (random)
+  'insult.0': '"Back to the mud, bacon!"', 'insult.1': '"Who taught you to walk, a sausage?"', 'insult.2': '"Not today, pork chop!"',
+  'insult.3': '"Go wash your snout!"', 'insult.4': '"Shoo! Shoo, you ham!"', 'insult.5': '"I\'ve seen smarter turnips!"',
+  // names
+  'name.you': 'You', 'name.p': 'P{n}', 'name.bob': 'Bob',
+  // props
+  'item.hay': 'Hay bale', 'item.crate': 'Crate', 'item.carrots': 'Carrots', 'item.potatoes': 'Potatoes', 'item.tomatoes': 'Tomatoes',
+  'item.cheese': 'Cheese', 'item.ham': 'Ham', 'item.barrel': 'Barrel', 'item.pot': 'Pot', 'item.pumpkin': 'Pumpkin',
+  'item.melon': 'Melon', 'item.log': 'Log', 'item.wheel': 'Wheel', 'item.mug': 'Mug', 'item.sword': 'Sword', 'item.bucket': 'Bucket',
+  'item.chick': 'Chicken', 'item.hen': 'Hen', 'item.bunny': 'Bunny', 'item.cat': 'Cat', 'item.dog': 'Dog', 'item.duck': 'Duck',
+  'item.lamb': 'Lamb', 'item.pig': 'Pig', 'item.watermelon': 'Watermelon', 'item.lantern': 'Lantern',
+  // clock
+  'clock.day': 'Day {n}',
+  // wardrobe
+  'w.title': 'Wardrobe', 'w.done': 'Done', 'w.random': 'Surprise me!', 'w.none': 'None',
+  'w.cat.skin': 'Skin', 'w.cat.hat': 'Hats', 'w.cat.hair': 'Hair', 'w.cat.face': 'Beards', 'w.cat.eyes': 'Glasses',
+  'w.cat.neck': 'Neck', 'w.cat.back': 'Back',
+  'skin.pink': 'Pink', 'skin.rose': 'Rose', 'skin.peach': 'Peach', 'skin.tan': 'Tan', 'skin.brown': 'Brown', 'skin.black': 'Black',
+  'skin.spotted': 'Spotted', 'skin.boar': 'Wild boar', 'skin.gold': 'Golden', 'skin.mint': 'Mint', 'skin.lilac': 'Lilac',
+  'hat.party': 'Party hat', 'hat.top': 'Top hat', 'hat.cowboy': 'Cowboy hat', 'hat.sombrero': 'Sombrero', 'hat.chef': 'Chef hat',
+  'hat.crown': 'Crown', 'hat.propeller': 'Propeller cap', 'hat.cap': 'Baseball cap', 'hat.beanie': 'Beanie', 'hat.straw': 'Straw hat',
+  'hat.flowers': 'Flower crown', 'hat.wizard': 'Wizard hat', 'hat.viking': 'Bear pelt hat', 'hat.knight': 'Knight helmet',
+  'hat.skull': 'Skull helmet', 'hat.darkWizard': 'Dark wizard hat', 'hat.hood': 'Hood', 'hat.pumpkin': 'Pumpkin head',
+  'hair.mohawk': 'Mohawk', 'hair.curls': 'Curly mop', 'hair.bunches': 'Bunches', 'hair.fringe': 'Emo fringe', 'hair.afro': 'Afro',
+  'hair.bun': 'Top bun',
+  'face.handlebar': 'Handlebar moustache', 'face.walrus': 'Walrus moustache', 'face.goatee': 'Goatee', 'face.beard': 'Big beard',
+  'face.chops': 'Mutton chops',
+  'eyes.round': 'Round glasses', 'eyes.shades': 'Sunglasses', 'eyes.monocle': 'Monocle', 'eyes.hearts': 'Heart glasses',
+  'eyes.stars': 'Star glasses', 'eyes.goggles': 'Goggles',
+  'neck.bowtie': 'Bow tie', 'neck.scarf': 'Scarf', 'neck.bandana': 'Bandana', 'neck.bell': 'Cow bell', 'neck.chain': 'Gold chain',
+  'neck.pearls': 'Pearls',
+  'back.capeKnight': 'Knight cape', 'back.capeMage': 'Mage cape', 'back.capeBarbarian': 'Barbarian cape', 'back.capeRogue': 'Rogue cape',
+  'back.wings': 'Angel wings', 'back.backpack': 'Backpack',
+  // admin
+  'a.title': 'Admin mode', 'a.bob': 'Farmer Bob', 'a.bobSee': 'Bob can see me', 'a.bbq': 'BBQ timer (s)', 'a.grillNow': 'Grill now',
+  'a.freeAll': 'Open the cage', 'a.catchMe': 'Get caught', 'a.escape': 'Easy escape', 'a.time': 'Time of day',
+  'a.timeSpeed': 'Day speed', 'a.freeze': 'Freeze time', 'a.toDay': 'Morning', 'a.toNight': 'Night', 'a.wolves': 'Spawn wolves',
+  'a.noWolves': 'Remove wolves', 'a.teleport': 'Teleport', 'a.sty': 'Sty', 'a.cage': 'Cage', 'a.house': 'House', 'a.barn': 'Barn',
+  'a.pasture': 'Pasture', 'a.gameSpeed': 'Game speed', 'a.godMode': 'Nobody can catch me', 'a.cooldowns': 'No cooldowns',
+  'a.mud': 'Make me muddy', 'a.bobDance': 'Bob: dance', 'a.bobSlap': 'Bob: slap me', 'a.bobMow': 'Bob: mow the lawn',
+  'a.bobSleep': 'Bob: go to bed', 'a.fps': 'Show FPS', 'a.hint': 'Toggle with the ` key (left of 1)',
+} as const;
+
+export type Key = keyof typeof en;
+
+const es: Record<Key, string> = {
+  'title.sub': 'Cuatro cerdos. Un granjero. Cero vergüenza.',
+  'title.loading': 'Cargando…',
+  'title.building': 'Construyendo la granja…',
+  'title.play': 'Haz clic para jugar',
+  'title.wardrobe': 'Vestuario',
+  'title.error': 'Error: {msg}',
+  'paused.title': 'Pausa',
+  'paused.resume': 'Haz clic para seguir jugando',
+  'btn.sound': 'Sonido (M)',
+  'btn.settings': 'Ajustes (Esc)',
+  'btn.help': 'Controles (H)',
+  'toast.soundOff': 'Sonido apagado',
+  'toast.soundOn': 'Sonido encendido',
+  'toast.qualityHigh': 'Gráficos: altos',
+  'toast.qualityLow': 'Gráficos: bajos (más rápido)',
+  'menu.settings': 'Ajustes',
+  'menu.language': 'Idioma',
+  'menu.quality': 'Gráficos',
+  'menu.qualityHigh': 'Altos',
+  'menu.qualityLow': 'Bajos (más rápido)',
+  'menu.sfx': 'Volumen de efectos',
+  'menu.music': 'Volumen de música',
+  'menu.ambience': 'Sonidos de la naturaleza',
+  'menu.sens': 'Sensibilidad del ratón',
+  'menu.invert': 'Invertir eje Y del ratón',
+  'menu.resume': 'Volver al juego',
+  'menu.wardrobe': 'Vestuario',
+  'menu.admin': 'Modo administrador',
+  'menu.close': 'Cerrar',
+  'menu.on': 'Sí', 'menu.off': 'No',
+  'help.title': 'Controles',
+  'help.move': 'Moverse', 'help.look': 'Mirar', 'help.jump': 'Saltar',
+  'help.grab': 'Agarrar · mantén para lanzar', 'help.punch': 'Puñetazo (de pie, pezuñas libres)',
+  'help.sprint': 'Correr = ¡embestir!', 'help.fart': 'Pedo', 'help.wallow': 'Revolcarse · mantén = hacerse el muerto',
+  'help.stand': 'Ponerse a dos patas', 'help.oink': 'Gruñir',
+  'help.tip1': 'Actúa como un cerdo: a cuatro patas y con la boca vacía, Bob no te hace caso.',
+  'help.tip2': 'El barro camufla. De pie = pezuñas fuertes, pero te tambaleas.',
+  'help.keys': 'H controles · M sonido · P gráficos · Esc menú',
+  'key.mouse': 'Ratón', 'key.space': 'ESPACIO', 'key.lmb': 'CLIC IZQ.', 'key.shift': 'MAYÚS',
+  'ab.grab': 'Agarrar', 'ab.sprint': 'Embestir', 'ab.fart': 'Pedo', 'ab.wallow': 'Barro', 'ab.stand': 'De pie',
+  'bob.doing': 'Bob está {what}',
+  'bob.carryYou': '¡Bob TE lleva a la barbacoa!',
+  'bob.carryPig': '¡Bob atrapó a un cerdo!',
+  'bob.chaseYou': '¡Bob te PERSIGUE!',
+  'bob.chasePig': '¡Bob persigue a un cerdo!',
+  'bob.pant': 'Bob se quedó sin aliento…',
+  'bob.suspect': 'Bob sospecha algo…',
+  'bob.heard': 'Bob oyó algo…',
+  'bob.down': '¡Bob está noqueado!',
+  'bob.stagger': '¡Bob se tambalea!',
+  'bob.cough': '¡Bob está tosiendo!',
+  'bob.fist': '¡Bob no te alcanza!',
+  'bob.slap': '¡Bob está repartiendo bofetadas!',
+  'bob.dance': '¡Bob está bailando!',
+  'bob.sleep': 'Bob está dormido… zzz',
+  'bob.shoo': '¡Bob está espantando a los lobos!',
+  'bob.off': 'Bob está desactivado (admin)',
+  'chore.pigs': 'dando de comer a los cerdos', 'chore.chickens': 'dando de comer a las gallinas', 'chore.cows': 'revisando las vacas',
+  'chore.nap': 'echando una siesta en el pajar', 'chore.garden': 'regando el huerto', 'chore.coffee': 'tomando café junto a la parrilla',
+  'chore.wood': 'cortando leña', 'chore.tractor': 'arreglando el tractor', 'chore.mow': 'cortando el césped',
+  'chore.paper': 'leyendo el periódico en el porche', 'chore.laundry': 'tendiendo la ropa',
+  'chore.patrol': 'patrullando con una linterna', 'chore.bed': 'yéndose a la cama', 'chore.guard': 'vigilando la barbacoa',
+  'chore.walk': 'dando un paseo',
+  'p.grilled': '¡A LA PARRILLA!', 'p.backIn': 'vuelves a la pocilga en {n}…',
+  'p.bobGotYou': '¡Bob te atrapó! Pulsa {space} sin parar ({n}/{need}) · {q} pedo en su cara',
+  'p.wolfGotYou': '¡Un lobo te tiene! Pulsa {space} sin parar ({n}/{need})',
+  'p.ragdoll': 'Pulsa {space} para levantarte',
+  'p.held': 'Pulsa {space} para soltarte',
+  'p.caged': 'Mantén {lmb} en el cerrojo rojo para forzarlo — de pie es más rápido',
+  'p.holding': 'Llevas {what} · mantén {lmb} para lanzar',
+  'p.grabThing': '{lmb} {verb} {what}',
+  'p.verbGrab': 'agarrar', 'p.verbDrag': 'arrastrar',
+  'p.punch': '{lmb} puñetazo',
+  'p.opening': 'Abriendo la jaula…',
+  'p.wobbly': '¡Te tambaleas! Frena o te caerás',
+  'p.dragged': 'Un lobo se te llevó… vuelves a la pocilga en {n}…',
+  's.muddy': 'Embarrado {n}s', 's.playDead': 'Haciéndote el muerto…', 's.caged': '¡ENJAULADO! Barbacoa en {n}s', 's.grills': 'Asados {n}/3',
+  's.caught': '¡Atrapado! Los cerdos embarrados se escapan antes', 's.clean': '¡Limpio como una patena!',
+  'e.alarm': '¡Te vio! ¡CORRE!', 'e.caughtMe': '¡Atrapado!', 'e.caughtOther': '¡Atraparon a {who}!', 'e.escaped': '¡Te soltaste!',
+  'e.caged': 'A la jaula…', 'e.cageOpenRun': '¡Jaula abierta, corre!', 'e.cageOpen': '¡Jaula abierta!',
+  'e.grilledMe': '¡A LA PARRILLA!', 'e.grilledOther': '¡{who} acabó en la parrilla!', 'e.knockdown': '¡KO!', 'e.stagger': '¡Bob se tambalea!',
+  'e.bobWins': '¡Bob gana esta ronda!', 'e.slapped': '¡BOFETADA!', 'e.fell': '¡Ups! Los cerdos no están hechos para ir a dos patas',
+  'e.night': 'Cae la noche… ¡cuidado con los lobos!', 'e.dawn': 'Un nuevo día en la granja', 'e.wolves': '¡Hay lobos en la granja!',
+  'e.wolfBit': '¡Te pilló un lobo!', 'e.wolfScared': '¡El lobo salió huyendo!', 'e.lostToWolf': '¡Un lobo se llevó a {who}!',
+  'e.bobWakes': '¡Bob se despertó!',
+  'insult.0': '"¡Vuelve al barro, beicon!"', 'insult.1': '"¿Quién te enseñó a andar, una salchicha?"', 'insult.2': '"¡Hoy no, chuleta!"',
+  'insult.3': '"¡Ve a lavarte el hocico!"', 'insult.4': '"¡Fuera, fuera, jamón!"', 'insult.5': '"¡He visto nabos más listos!"',
+  'name.you': 'Tú', 'name.p': 'J{n}', 'name.bob': 'Bob',
+  'item.hay': 'Fardo de paja', 'item.crate': 'Caja', 'item.carrots': 'Zanahorias', 'item.potatoes': 'Patatas', 'item.tomatoes': 'Tomates',
+  'item.cheese': 'Queso', 'item.ham': 'Jamón', 'item.barrel': 'Barril', 'item.pot': 'Olla', 'item.pumpkin': 'Calabaza',
+  'item.melon': 'Melón', 'item.log': 'Tronco', 'item.wheel': 'Rueda', 'item.mug': 'Taza', 'item.sword': 'Espada', 'item.bucket': 'Cubo',
+  'item.chick': 'Pollito', 'item.hen': 'Gallina', 'item.bunny': 'Conejito', 'item.cat': 'Gato', 'item.dog': 'Perro', 'item.duck': 'Pato',
+  'item.lamb': 'Cordero', 'item.pig': 'Cerdo', 'item.watermelon': 'Sandía', 'item.lantern': 'Farol',
+  'clock.day': 'Día {n}',
+  'w.title': 'Vestuario', 'w.done': 'Listo', 'w.random': '¡Sorpréndeme!', 'w.none': 'Nada',
+  'w.cat.skin': 'Piel', 'w.cat.hat': 'Sombreros', 'w.cat.hair': 'Pelo', 'w.cat.face': 'Barbas', 'w.cat.eyes': 'Gafas',
+  'w.cat.neck': 'Cuello', 'w.cat.back': 'Espalda',
+  'skin.pink': 'Rosa', 'skin.rose': 'Rosado', 'skin.peach': 'Melocotón', 'skin.tan': 'Canela', 'skin.brown': 'Marrón', 'skin.black': 'Negro',
+  'skin.spotted': 'Con manchas', 'skin.boar': 'Jabalí', 'skin.gold': 'Dorado', 'skin.mint': 'Menta', 'skin.lilac': 'Lila',
+  'hat.party': 'Gorro de fiesta', 'hat.top': 'Sombrero de copa', 'hat.cowboy': 'Sombrero vaquero', 'hat.sombrero': 'Sombrero mexicano',
+  'hat.chef': 'Gorro de chef', 'hat.crown': 'Corona', 'hat.propeller': 'Gorra con hélice', 'hat.cap': 'Gorra de béisbol',
+  'hat.beanie': 'Gorro de lana', 'hat.straw': 'Sombrero de paja', 'hat.flowers': 'Corona de flores', 'hat.wizard': 'Sombrero de mago',
+  'hat.viking': 'Gorro de piel de oso', 'hat.knight': 'Yelmo de caballero', 'hat.skull': 'Casco de calavera', 'hat.darkWizard': 'Sombrero de mago oscuro',
+  'hat.hood': 'Capucha', 'hat.pumpkin': 'Cabeza de calabaza',
+  'hair.mohawk': 'Cresta', 'hair.curls': 'Rizos', 'hair.bunches': 'Coletas', 'hair.fringe': 'Flequillo emo', 'hair.afro': 'Afro',
+  'hair.bun': 'Moño',
+  'face.handlebar': 'Bigote manillar', 'face.walrus': 'Bigote de morsa', 'face.goatee': 'Perilla', 'face.beard': 'Barba enorme',
+  'face.chops': 'Patillas',
+  'eyes.round': 'Gafas redondas', 'eyes.shades': 'Gafas de sol', 'eyes.monocle': 'Monóculo', 'eyes.hearts': 'Gafas de corazón',
+  'eyes.stars': 'Gafas de estrella', 'eyes.goggles': 'Gafas de aviador',
+  'neck.bowtie': 'Pajarita', 'neck.scarf': 'Bufanda', 'neck.bandana': 'Pañuelo', 'neck.bell': 'Cencerro', 'neck.chain': 'Cadena de oro',
+  'neck.pearls': 'Collar de perlas',
+  'back.capeKnight': 'Capa de caballero', 'back.capeMage': 'Capa de mago', 'back.capeBarbarian': 'Capa de bárbaro', 'back.capeRogue': 'Capa de pícaro',
+  'back.wings': 'Alas de ángel', 'back.backpack': 'Mochila',
+  'a.title': 'Modo administrador', 'a.bob': 'Granjero Bob', 'a.bobSee': 'Bob puede verme', 'a.bbq': 'Temporizador de barbacoa (s)',
+  'a.grillNow': 'Asar ya', 'a.freeAll': 'Abrir la jaula', 'a.catchMe': 'Que me atrapen', 'a.escape': 'Escapar fácil',
+  'a.time': 'Hora del día', 'a.timeSpeed': 'Velocidad del día', 'a.freeze': 'Congelar el tiempo', 'a.toDay': 'Mañana', 'a.toNight': 'Noche',
+  'a.wolves': 'Soltar lobos', 'a.noWolves': 'Quitar lobos', 'a.teleport': 'Teletransporte', 'a.sty': 'Pocilga', 'a.cage': 'Jaula',
+  'a.house': 'Casa', 'a.barn': 'Granero', 'a.pasture': 'Pradera', 'a.gameSpeed': 'Velocidad del juego',
+  'a.godMode': 'Nadie puede atraparme', 'a.cooldowns': 'Sin tiempos de recarga', 'a.mud': 'Embarrarme',
+  'a.bobDance': 'Bob: bailar', 'a.bobSlap': 'Bob: abofetéame', 'a.bobMow': 'Bob: cortar el césped', 'a.bobSleep': 'Bob: a la cama',
+  'a.fps': 'Mostrar FPS', 'a.hint': 'Se abre con la tecla ` (a la izquierda del 1)',
+};
+
+export const LANGS = { en: 'English', es: 'Español' } as const;
+export type Lang = keyof typeof LANGS;
+const DICTS: Record<Lang, Record<Key, string>> = { en, es };
+
+let current: Lang = 'en';
+const listeners: (() => void)[] = [];
+
+export function initLang(): Lang {
+  let l: string | null = new URLSearchParams(location.search).get('lang');
+  if (!l) try { l = localStorage.getItem('porkour.lang'); } catch { /* private mode */ }
+  if (!l || !(l in LANGS)) l = navigator.language?.toLowerCase().startsWith('es') ? 'es' : 'en';
+  current = l as Lang;
+  document.documentElement.lang = current;
+  return current;
+}
+export function lang() { return current; }
+export function setLang(l: Lang) {
+  current = l;
+  try { localStorage.setItem('porkour.lang', l); } catch { /* ignore */ }
+  document.documentElement.lang = l;
+  applyDom();
+  for (const f of listeners) f();
+}
+export function onLang(f: () => void) { listeners.push(f); }
+
+/** Translate a key; {vars} are substituted. Unknown keys (e.g. dynamic) fall back to the key. */
+export function t(key: Key | string, vars: Record<string, string | number> = {}): string {
+  let s = (DICTS[current] as Record<string, string>)[key] ?? (en as Record<string, string>)[key] ?? key;
+  for (const k in vars) s = s.split(`{${k}}`).join(String(vars[k]));
+  return s;
+}
+
+/** Elements with data-i18n="key" get their text replaced. */
+export function applyDom(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n as Key); });
+  root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle as Key); });
+}

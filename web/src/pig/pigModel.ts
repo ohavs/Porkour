@@ -10,7 +10,10 @@ export interface PigRig {
   hindL: THREE.Group; hindR: THREE.Group; frontL: THREE.Group; frontR: THREE.Group;
   earL: THREE.Group; earR: THREE.Group; tail: THREE.Group; eyes: THREE.Group[];
   hatAnchor: THREE.Group;
+  /** Cosmetic anchors (children of upper): head top, glasses, snout (moustache), chin (beard), neck, back. */
+  anchors: Record<'head' | 'eyes' | 'snout' | 'chin' | 'neck' | 'back' | 'party', THREE.Group>;
   skin: { mat: THREE.MeshToonMaterial; base: THREE.Color }[];
+  bodyMat: THREE.MeshToonMaterial; snoutMat: THREE.MeshToonMaterial;
 }
 
 const PINK = 0xffa9c2, SNOUT = 0xff8fb0, HOOF = 0x6b4048, DARK = 0x5b2234;
@@ -84,5 +87,19 @@ export function buildPig(base: THREE.Group): PigRig {
   const frontL = leg(0.19, 0.3, upper, true), frontR = leg(-0.19, 0.3, upper, true);
   const hindL = leg(0.2, -0.3, base, false), hindR = leg(-0.2, -0.3, base, false);
   const hatAnchor = new THREE.Group(); hatAnchor.position.set(...U(0.06, 0.88, 0.4)); hatAnchor.rotation.set(0.15, 0, -0.3); upper.add(hatAnchor);
-  return { upper, hindL, hindR, frontL, frontR, earL, earR, tail, eyes, hatAnchor, skin };
+  const anchor = (p: [number, number, number], r: [number, number, number] = [0, 0, 0]) => {
+    const g = new THREE.Group(); g.position.set(...U(...p)); g.rotation.set(...r); upper.add(g); return g;
+  };
+  const anchors = {
+    party: hatAnchor,
+    head: anchor([0, 0.885, 0.41], [0.12, 0, 0]),
+    eyes: anchor([0, 0.745, 0.665]),
+    snout: anchor([0, 0.53, 0.765]),
+    chin: anchor([0, 0.43, 0.58]),
+    neck: anchor([0, 0.5, 0.33], [-0.35, 0, 0]),
+    back: anchor([0, 0.83, 0.12]),
+  };
+  anchors.head.scale.setScalar(1.5);   // items are modelled at ~2/3 of the head: scale the whole slot
+  anchors.neck.scale.setScalar(1.4);
+  return { upper, hindL, hindR, frontL, frontR, earL, earR, tail, eyes, hatAnchor, anchors, skin, bodyMat: body, snoutMat: snoutM };
 }

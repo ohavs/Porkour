@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners } from '../core/physics';
 import { toonMat } from '../render/toon';
 import { clamp, damp } from '../core/util';
-import { G } from '../game/ctx';
+import { G, ADMIN } from '../game/ctx';
 import type { Pig } from '../pig/pig';
 
 const W = 1.9, D = 1.9, H = 1.45;           // inner size of the cage
@@ -101,15 +101,18 @@ export class Cage {
     this.open = open;
     this.doorCollider.setEnabled(!open);
     this.progress = 0;
-    G.audio.play('latch', { pos: this.latch, vol: 0.9, pitch: open ? 1 : 0.8 });
-    G.audio.play('metal', { pos: this.latch, vol: 0.6, pitch: open ? 0.8 : 1.1 });
+    G.audio.play('unlock', { pos: this.latch, vol: 0.9, pitch: open ? 1 : 0.8 });
+    G.audio.play('creak', { pos: this.latch, vol: 0.7, pitch: open ? 1 : 1.2 });
     if (open) {
       for (const p of this.pigs) p.freed();
-      if (this.pigs.length) G.audio.play('jingle_free', { vol: 0.6 });
+      if (this.pigs.length) G.audio.play('fanfare', { vol: 0.45 });
       this.pigs = [];
       G.events.push({ type: 'cage-open', why });
     }
   }
+
+  /** Admin: grill everyone inside now. */
+  grillNow() { for (const p of this.pigs) p.grillAt = G.time; }
 
   /** Bob locks a pig inside. */
   lock(pig: Pig) {
@@ -117,7 +120,7 @@ export class Cage {
     pig.body.setTranslation({ x: this.inside.x, y: this.inside.y, z: this.inside.z }, true);
     pig.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     if (!this.pigs.includes(pig)) this.pigs.push(pig);
-    pig.enterCage(this, G.time + BBQ_TIME);
+    pig.enterCage(this, G.time + ADMIN.bbqTime);
   }
 
   update(dt: number, pigs: Pig[]) {
@@ -128,11 +131,12 @@ export class Cage {
         if (!p.input.grab || p.mode !== 'normal' || p.out) continue;
         const d = Math.hypot(p.pos.x - this.latch.x, p.pos.z - this.latch.z);
         if (d > 1.25) continue;
-        rate = Math.max(rate, this.pigs.includes(p) ? (p.muddy > 0 ? 1 / 6 : 1 / 9) : 1 / 1.1);
+        // hooves work better: standing pigs pick / open the latch twice as fast
+        rate = Math.max(rate, (this.pigs.includes(p) ? (p.muddy > 0 ? 1 / 6 : 1 / 9) : 1 / 1.1) * (p.standing ? 2 : 1));
       }
       if (rate > 0) {
         this.progress += rate * dt;
-        if (G.time - this.lastPick > 0.35) { this.lastPick = G.time; G.audio.play('click', { pos: this.latch, vol: 0.5, rand: 0.3 }); }
+        if (G.time - this.lastPick > 0.35) { this.lastPick = G.time; G.audio.play('unlock', { pos: this.latch, vol: 0.3, pitch: 1.6, rand: 0.3 }); }
         if (this.progress >= 1) this.setOpen(true, 'latch');
       } else this.progress = Math.max(0, this.progress - dt * 0.05);
     }
@@ -147,21 +151,21 @@ export class Cage {
       G.fx.puff(v1.copy(p.pos), { count: 30, color: 0x444444, spread: 0.6, speed: 2, up: 2, life: 2.5, size: 1.4, grow: 1.5, alpha: 0.7 });
       G.fx.bits(v1, { count: 25, color: 0xff7a1a, spread: 0.4, speed: 4, up: 3, grav: 6, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
       G.audio.play('sizzle', { pos: p.pos, vol: 1 });
-      if (p === G.localPig) G.audio.play('jingle_grilled', { vol: 0.8 });
+      G.audio.play('pigcry', { pos: p.pos, vol: 1 });
       p.grilled();
       G.grills++;
       G.events.push({ type: 'grilled', who: p });
     }
     // grill: smoke grows as the BBQ heats up
     let heat = 0;
-    for (const p of this.pigs) heat = Math.max(heat, 1 - clamp((p.grillAt - G.time) / BBQ_TIME, 0, 1));
+    for (const p of this.pigs) heat = Math.max(heat, 1 - clamp((p.grillAt - G.time) / Math.max(ADMIN.bbqTime, 1), 0, 1));
     this.smokeT -= dt;
     if (this.smokeT <= 0) {
       this.smokeT = 0.5 - heat * 0.4;
       const gp = v1.copy(this.grillPos); gp.y += 1.05;
       G.fx.puff(gp, { count: 1, color: heat > 0.7 ? 0x6b6b6b : 0xd9d9d9, spread: 0.15, speed: 0.2, up: 1.2 + heat, life: 2.2, size: 0.4 + heat * 0.5, grow: 0.8, drag: 0.6, alpha: 0.35 + heat * 0.3 });
       if (heat > 0.3) G.fx.bits(gp, { count: Math.ceil(heat * 3), color: 0xff8a2a, spread: 0.2, speed: 0.4, up: 1.5, grav: -1, life: 0.6, size: 0.06, grow: 0, alpha: 1 });
-      if (heat > 0.5 && Math.random() < heat) G.audio.play('sizzle', { pos: gp, vol: 0.25 + heat * 0.4, rand: 0.2, minGap: 0.2 });
+      if (heat > 0.5 && Math.random() < heat * 0.3) G.audio.play('crackle', { pos: gp, vol: 0.2 + heat * 0.3, rand: 0.2, minGap: 2.5 });
     }
     // door swing
     this.doorAngle = damp(this.doorAngle, this.open ? -1.9 : 0, 7, dt);

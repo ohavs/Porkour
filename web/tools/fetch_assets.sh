@@ -4,7 +4,8 @@
 #   Kenney     github.com/ETdoFresh/kenney.nl (mirror of kenney.nl)
 #   KayKit     github.com/KayKit-Game-Assets/*
 #   Quaternius github.com/tilakpatell/tilakverse-assets (Stylized Nature MegaKit, UAL)
-#   repo       ../Assets/Art (Cube Pets, Quaternius Farm Buildings FBX, Mixamo Bob FBX), ../Assets/Audio
+#   repo       ../Assets/Art (Quaternius Farm Buildings FBX, Medieval kit)
+#   KayKit hats / capes are extracted from the character GLBs with tools/extract_nodes.mjs
 # Usage: cd web && bash tools/fetch_assets.sh      (idempotent; output is committed)
 set -euo pipefail
 WEB=$(cd "$(dirname "$0")/.." && pwd)
@@ -43,8 +44,7 @@ grab() { # grab <dest subdir> <src dir> <tex> names...
 pack https://github.com/ETdoFresh/kenney.nl kenney \
   '/kenney_natureKit_2.1/Models/GLTF format/' '/fantasy-town-kit-1.0/Models/GLTF format/' \
   '/carkit_v1.4/Models/GLTF format/' '/kenney_platformerkit/Models/GLTF format/' \
-  '/kenney_impactsounds/' '/kenney_rpgaudio/' '/kenney_interfacesounds/' '/particlePack_1.1/PNG (Transparent)/' \
-  '/kenney_musicjingles/'
+  '/kenney_impactsounds/License.txt' '/particlePack_1.1/PNG (Transparent)/' 
 K=$CACHE/kenney
 grab kenney "$K/kenney_natureKit_2.1/Models/GLTF format" 512 \
   fence_simple fence_simpleHigh fence_gate fence_planks fence_planksDouble fence_corner \
@@ -68,6 +68,26 @@ pack $KK/KayKit-Character-Pack-Adventures-1.0 kk-adv '/addons/kaykit_character_p
 grab kaykit "$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Assets/gltf" 1024 \
   sword_1handed axe_1handed dagger shield_round mug_full crossbow_2handed
 
+# ---------------------------------------------------------------- KayKit hats / capes for the pig wardrobe (extracted mesh nodes)
+pack $KK/KayKit-Character-Pack-Skeletons-1.0 kk-skel '/addons/kaykit_character_pack_skeletons/Characters/gltf/'
+pack $KK/KayKit-Character-Pack-Adventures-1.0 kk-adv '/addons/kaykit_character_pack_adventures/Assets/gltf/' '/addons/kaykit_character_pack_adventures/Characters/gltf/'
+CH="$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Characters/gltf"; SK="$CACHE/kk-skel/addons/kaykit_character_pack_skeletons/Characters/gltf"
+node_x() { # node_x <src.glb> <dest name> <node>...
+  local src=$1 dst="$OUT/cosm/$2.glb"; shift 2
+  [ -f "$dst" ] && return 0
+  mkdir -p "$OUT/cosm"; node "$WEB/tools/extract_nodes.mjs" "$src" "$dst" "$@"
+  "$GT" resize "$dst" "$dst" --width 256 --height 256 >/dev/null; "$GT" webp "$dst" "$dst" >/dev/null
+}
+node_x "$CH/Mage.glb" wizard_hat Mage_Hat;            node_x "$CH/Barbarian.glb" viking_helmet Barbarian_Hat
+node_x "$CH/Knight.glb" knight_helmet Knight_Helmet;  node_x "$SK/Skeleton_Warrior.glb" skull_helmet Skeleton_Warrior_Helmet
+node_x "$SK/Skeleton_Mage.glb" dark_wizard_hat Skeleton_Mage_Hat; node_x "$SK/Skeleton_Rogue.glb" hood Skeleton_Rogue_Hood
+node_x "$CH/Knight.glb" cape_knight Knight_Cape;      node_x "$CH/Mage.glb" cape_mage Mage_Cape
+node_x "$CH/Barbarian.glb" cape_barbarian Barbarian_Cape; node_x "$CH/Rogue.glb" cape_rogue Rogue_Cape
+# ---------------------------------------------------------------- KayKit Halloween Bits: lanterns + pumpkins for the farm (CC0)
+pack $KK/KayKit-Halloween-Bits-1.0 kk-halloween '/addons/kaykit_halloween_bits/Assets/gltf/'
+grab kaykit "$CACHE/kk-halloween/addons/kaykit_halloween_bits/Assets/gltf" 512 \
+  lantern_standing lantern_hanging post_lantern pumpkin_orange pumpkin_orange_small pumpkin_orange_jackolantern pumpkin_yellow
+
 # ---------------------------------------------------------------- Quaternius Stylized Nature MegaKit (CC0)
 pack https://github.com/tilakpatell/tilakverse-assets quaternius '/quaternius/stylized-nature-megakit/glTF/'
 grab nature "$CACHE/quaternius/quaternius/stylized-nature-megakit/glTF" 512 \
@@ -77,8 +97,7 @@ grab nature "$CACHE/quaternius/quaternius/stylized-nature-megakit/glTF" 512 \
   Rock_Big_1 Pebble_Round_1 Plant_1_Big
 
 # ---------------------------------------------------------------- repo art
-CP="$REPO/Assets/Art/Animals/kenney_cube-pets_1.0/Models/GLB format"
-for a in pig hog cow chick dog cat bunny; do glb "$CP/animal-$a.glb" "$OUT/pets/$a.glb" 256; done
+# (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)
 FB="$REPO/Assets/Art/Farm/Farm Buildings by Quaternius/FBX"
 mkdir -p "$OUT/farm"
 for b in Barn BigBarn SmallBarn OpenBarn ChickenCoop Silo Silo_House TowerWindmill Windmill WaterTower Well Fence Fence2; do
@@ -87,32 +106,7 @@ done
 MK="$REPO/Assets/Art/Farm/Medieval Village MegaKit[Standard]/Medieval Village MegaKit[Standard]/glTF"
 grab kit "$MK" 512 Prop_Crate Prop_Wagon Prop_Chimney Prop_WoodenFence_Single Prop_WoodenFence_Extension1
 
-# ---------------------------------------------------------------- sounds (ogg)
-S="$OUT/sfx"; mkdir -p "$S"
-snd() { [ -f "$S/$2.ogg" ] || ffmpeg -loglevel error -y -i "$1" -ac 1 -c:a libvorbis -q:a 4 "$S/$2.ogg"; }
-A=$K/kenney_impactsounds/Audio
-snd "$A/impactPunch_heavy_000.ogg" punch; snd "$A/impactPunch_medium_001.ogg" punch2
-snd "$A/impactSoft_heavy_001.ogg" thud; snd "$A/impactSoft_medium_002.ogg" thud2
-snd "$A/impactWood_heavy_000.ogg" wood; snd "$A/impactWood_medium_002.ogg" wood2
-snd "$A/impactPlank_medium_000.ogg" plank; snd "$A/impactMetal_medium_000.ogg" metal
-snd "$A/footstep_grass_000.ogg" step1; snd "$A/footstep_grass_001.ogg" step2
-snd "$A/footstep_grass_002.ogg" step3; snd "$A/footstep_grass_003.ogg" step4
-snd "$K/kenney_rpgaudio/Audio/cloth1.ogg" cloth; snd "$K/kenney_rpgaudio/Audio/handleSmallLeather.ogg" grab
-snd "$K/kenney_rpgaudio/Audio/footstep05.ogg" mudstep
-snd "$K/kenney_rpgaudio/Audio/metalLatch.ogg" latch; snd "$K/kenney_rpgaudio/Audio/metalClick.ogg" click
-snd "$K/kenney_rpgaudio/Audio/chop.ogg" chop
-J="$K/kenney_musicjingles/Audio"   # stings for the farmer (picked by pitch contour)
-snd "$J/Hit jingles/jingles_HIT03.ogg" jingle_alert; snd "$J/Pizzicato jingles/jingles_PIZZI01.ogg" jingle_caught
-snd "$J/Sax jingles/jingles_SAX01.ogg" jingle_grilled; snd "$J/Pizzicato jingles/jingles_PIZZI10.ogg" jingle_free
-snd "$J/Sax jingles/jingles_SAX04.ogg" jingle_knock
-snd "$K/kenney_interfacesounds/Audio/drop_002.ogg" throw; snd "$K/kenney_interfacesounds/Audio/pluck_001.ogg" pop
-snd "$K/kenney_interfacesounds/Audio/error_004.ogg" denied
-AU="$REPO/Assets/Audio"
-snd "$AU/Short Fart.wav" fart_short; snd "$AU/Deep Fart.mp3" fart_deep
-M="$OUT/music"; mkdir -p "$M"
-for t in "Theme Song" "Level Music" "Winner"; do
-  f=$(echo "$t" | tr 'A-Z ' 'a-z_'); [ -f "$M/$f.ogg" ] || ffmpeg -loglevel error -y -i "$AU/$t.mp3" -c:a libvorbis -q:a 3 "$M/$f.ogg"
-done
+# sounds: see tools/fetch_sounds.sh (real recordings, no Kenney / synth)
 P="$OUT/fx"; mkdir -p "$P"
 for n in smoke_04 smoke_07 dirt_02 star_06 circle_05; do cp "$K/particlePack_1.1/PNG (Transparent)/$n.png" "$P/"; done
 cp "$K/kenney_impactsounds/License.txt" "$OUT/LICENSE-kenney.txt"

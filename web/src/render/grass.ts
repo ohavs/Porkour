@@ -9,24 +9,37 @@ import { RAMP } from './toon';
  */
 export class Grass {
   private chunks: THREE.InstancedMesh[] = [];
+  /** Mowed grass (0..255 per 0.5 m cell), regrows slowly. */
+  private mowData: Uint8Array; private mowTex: THREE.DataTexture; private mowW: number; private mowH: number;
+  private mowDirty = false; private mowT = 0; private regrowT = 0;
   private uniforms = {
     uTime: { value: 0 },
+    uMow: { value: null as unknown as THREE.Texture }, uMowRect: { value: new THREE.Vector4() },
     uPushers: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -999, 0, 0)) },
   };
   range = 48;
 
-  constructor(scene: THREE.Scene, terrain: Terrain, density: number) {
+  constructor(scene: THREE.Scene, private terrain: Terrain, density: number) {
+    const f0 = terrain.farm;
+    this.mowW = Math.ceil((f0.x1 - f0.x0) / 0.5); this.mowH = Math.ceil((f0.z1 - f0.z0) / 0.5);
+    this.mowData = new Uint8Array(this.mowW * this.mowH);
+    this.mowTex = new THREE.DataTexture(this.mowData, this.mowW, this.mowH, THREE.RedFormat, THREE.UnsignedByteType);
+    this.mowTex.magFilter = this.mowTex.minFilter = THREE.LinearFilter; this.mowTex.needsUpdate = true;
+    this.uniforms.uMow.value = this.mowTex;
+    this.uniforms.uMowRect.value.set(f0.x0, f0.z0, 1 / (f0.x1 - f0.x0), 1 / (f0.z1 - f0.z0));
     const geo = this.blade();
     const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: RAMP, side: THREE.DoubleSide, depthWrite: false });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', `#include <common>
-          uniform float uTime; uniform vec4 uPushers[8]; varying float vH;`)
+          uniform float uTime; uniform vec4 uPushers[8]; varying float vH; uniform sampler2D uMow; uniform vec4 uMowRect;`)
         .replace('#include <begin_vertex>', `
           vec3 transformed = vec3(position);
           vH = position.y;
           vec4 wp = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+          float mown = texture2D(uMow, (wp.xz - uMowRect.xy) * uMowRect.zw).r;
+          transformed.y *= mix(1.0, 0.18, mown);
           float h2 = position.y * position.y;
           float w = sin(uTime * 1.7 + wp.x * 0.35 + wp.z * 0.21) * 0.5 + sin(uTime * 3.1 + wp.x * 1.3) * 0.18;
           vec3 bend = vec3(w * 0.22, 0.0, w * 0.12) * h2;
@@ -102,7 +115,26 @@ export class Grass {
     return g;
   }
 
+  /** Cut the grass in a circle (Bob's mower). */
+  mow(x: number, z: number, r: number) {
+    const f = this.terrain.farm, c = 0.5;
+    const i0 = Math.max(0, Math.floor((x - r - f.x0) / c)), i1 = Math.min(this.mowW - 1, Math.ceil((x + r - f.x0) / c));
+    const j0 = Math.max(0, Math.floor((z - r - f.z0) / c)), j1 = Math.min(this.mowH - 1, Math.ceil((z + r - f.z0) / c));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const cx = f.x0 + (i + 0.5) * c, cz = f.z0 + (j + 0.5) * c;
+      if ((cx - x) ** 2 + (cz - z) ** 2 < r * r) { this.mowData[j * this.mowW + i] = 255; this.mowDirty = true; }
+    }
+  }
+
   update(t: number, cam: THREE.Vector3, pushers: THREE.Vector3[]) {
+    // upload mowing at most 5×/s, regrow a notch every 4 s (~ 8 minutes to full height)
+    if (t - this.mowT > 0.2 && this.mowDirty) { this.mowT = t; this.mowDirty = false; this.mowTex.needsUpdate = true; }
+    if (t - this.regrowT > 4) {
+      this.regrowT = t;
+      let any = false;
+      for (let i = 0; i < this.mowData.length; i++) if (this.mowData[i]) { this.mowData[i] = Math.max(0, this.mowData[i] - 2); any = true; }
+      if (any) this.mowTex.needsUpdate = true;
+    }
     this.uniforms.uTime.value = t;
     const pu = this.uniforms.uPushers.value;
     for (let i = 0; i < 8; i++) {

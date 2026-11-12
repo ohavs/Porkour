@@ -62,7 +62,7 @@ export class Prop implements Holdable {
     const vol = Math.min(1, force / (this.mass * 600));
     if (vol < 0.08) return;
     const p = this.body.translation();
-    G.audio.play(this.def.sound ?? 'wood|wood2', { pos: new THREE.Vector3(p.x, p.y, p.z), vol, minGap: 0.03 });
+    G.audio.play(this.def.sound ?? 'wood', { pos: new THREE.Vector3(p.x, p.y, p.z), vol, minGap: 0.03 });
     if (vol > 0.4) G.noise(new THREE.Vector3(p.x, p.y, p.z), 10 * vol);
   }
 }
@@ -76,19 +76,20 @@ function made(o: THREE.Object3D) {
 }
 
 export const PROPS: Record<string, PropDef> = {
-  hay: { make: hayBale, mass: 22, shape: 'box', sound: 'thud|thud2', label: 'Hay bale', friction: 0.9 },
-  crate: { model: 'kit/Prop_Crate', height: 0.8, mass: 12, sound: 'wood|wood2|plank', label: 'Crate' },
-  veggieCrate: { model: 'kaykit/crate_carrots', height: 0.55, mass: 9, sound: 'wood|wood2|plank', label: 'Carrots' },
-  potatoCrate: { model: 'kaykit/crate_potatoes', height: 0.55, mass: 9, sound: 'wood|wood2|plank', label: 'Potatoes' },
-  tomatoCrate: { model: 'kaykit/crate_tomatoes', height: 0.55, mass: 9, sound: 'wood|wood2|plank', label: 'Tomatoes' },
-  cheese: { model: 'kaykit/crate_cheese', height: 0.55, mass: 10, sound: 'wood|wood2', label: 'Cheese' },
-  ham: { model: 'kaykit/food_ingredient_ham', height: 0.3, mass: 3, shape: 'ball', sound: 'thud2', label: 'Ham' },
-  barrel: { model: 'kenney/barrel', height: 0.95, mass: 20, shape: 'cyl', sound: 'wood|plank', label: 'Barrel' },
-  pot: { model: 'kenney/pot_large', height: 0.7, mass: 14, shape: 'cyl', sound: 'metal', label: 'Pot' },
-  pumpkin: { model: 'kenney/crop_pumpkin', height: 0.42, mass: 5, shape: 'ball', sound: 'thud|thud2', label: 'Pumpkin', bounce: 0.3 },
-  melon: { model: 'kenney/crop_melon', height: 0.35, mass: 4, shape: 'ball', sound: 'thud|thud2', label: 'Melon', bounce: 0.3 },
-  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'Log' },
-  wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'Wheel' },
-  mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'Mug' },
-  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'Sword' },
+  hay: { make: hayBale, mass: 22, shape: 'box', sound: 'thud', label: 'item.hay', friction: 0.9 },
+  crate: { model: 'kit/Prop_Crate', height: 0.8, mass: 12, sound: 'wood', label: 'item.crate' },
+  veggieCrate: { model: 'kaykit/crate_carrots', height: 0.55, mass: 9, sound: 'wood', label: 'item.carrots' },
+  potatoCrate: { model: 'kaykit/crate_potatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.potatoes' },
+  tomatoCrate: { model: 'kaykit/crate_tomatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.tomatoes' },
+  cheese: { model: 'kaykit/crate_cheese', height: 0.55, mass: 10, sound: 'wood', label: 'item.cheese' },
+  ham: { model: 'kaykit/food_ingredient_ham', height: 0.3, mass: 3, shape: 'ball', sound: 'squish', label: 'item.ham' },
+  barrel: { model: 'kenney/barrel', height: 0.95, mass: 20, shape: 'cyl', sound: 'wood', label: 'item.barrel' },
+  pot: { model: 'kenney/pot_large', height: 0.7, mass: 14, shape: 'cyl', sound: 'metal', label: 'item.pot' },
+  pumpkin: { model: 'kenney/crop_pumpkin', height: 0.42, mass: 5, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.3 },
+  bigPumpkin: { model: 'kaykit/pumpkin_orange', height: 0.62, mass: 12, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25 },
+  melon: { model: 'kenney/crop_melon', height: 0.35, mass: 4, shape: 'ball', sound: 'squish|thud', label: 'item.melon', bounce: 0.3 },
+  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log' },
+  wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'item.wheel' },
+  mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'item.mug' },
+  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword' },
 };
