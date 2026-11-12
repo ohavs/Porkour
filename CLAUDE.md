@@ -3,6 +3,14 @@
 > Update this file at every milestone and **before** asking the user to `/clear` or start a new chat.
 > Keep it short: status + decisions + what's next. Details belong in code.
 
+> **NEW DIRECTION (2026-11-12): browser game.** User dropped Steam/Unity for now → rewrite as a web game
+> (TypeScript + Vite + Three.js + Rapier, host-authoritative online via a WebSocket relay) in `web/`, with new
+> gameplay: 4 equal pigs (fart / sprint / mud wallow, stand on 2 legs), heist on a living farm with a routine-driven
+> farmer, weapons, ragdoll, several farms. Design draft = **`GDD.md`** (waiting for user approval + answers:
+> hosting public/Render, Cube Pets pig, keep Bob). Asset sources reachable from the sandbox: GitHub mirrors
+> `ETdoFresh/kenney.nl`, `KayKit-Game-Assets/*`, `tilakpatell/tilakverse-assets` (Quaternius) — see
+> `ohavs/Nice-Crash-` `tools/fetch_assets.sh`. Everything below describes the old Unity project (`Assets/`, kept as reference).
+
 ## The game (GDD summary — evolves as we build)
 - 3D physics co-op party comedy, stylized low-poly. Round = ~12 min escaping one of farmer **Bob**'s farms before his BBQ. **Bob owns a huge area with many farms — each farm is a level** (Farm 1 built; `SceneBuildInfo.levelNumber/levelName`).
 - **Online only**: up to **4 players on 4 PCs**, each with own pig and own **third-person camera** (pure 3D). No local co-op / split-screen / Remote Play Together.
