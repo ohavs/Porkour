@@ -2,13 +2,14 @@
  * Keyboard + mouse + gamepad → one Controls snapshot per frame.
  * Button presses are latched until a fixed physics step consumes them (no lost presses at high FPS).
  */
-export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'oink';
+/** grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold). */
+export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink';
 
 const KEYS: Record<string, Button> = {
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyQ: 'fart', KeyE: 'stand',
   KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink',
 };
-const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 7: 'grab', 4: 'sprint', 10: 'sprint', 5: 'oink' };
+const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'oink' };
 
 export class Input {
   moveX = 0; moveY = 0;        // -1..1, y = forward
@@ -23,6 +24,8 @@ export class Input {
   sensitivity = 0.0024;
   invertY = false;
   onKey?: (code: string) => void;
+  /** Every button press as it happens (UI that needs exact timing, e.g. the lock-pick). */
+  onPress?: (b: Button) => void;
 
   constructor(private el: HTMLElement) {
     addEventListener('keydown', (e) => {
@@ -34,14 +37,15 @@ export class Input {
     });
     addEventListener('keyup', (e) => { this.keys.delete(e.code); const b = KEYS[e.code]; if (b) this.up(b); });
     addEventListener('blur', () => { this.keys.clear(); for (const b of [...this.held]) this.up(b); });
-    el.addEventListener('mousedown', (e) => { if (e.button === 0) this.down('grab'); });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.up('grab'); });
+    // the click that locks the pointer is not an attack
+    el.addEventListener('mousedown', (e) => { if (!this.locked) return; if (e.button === 0) this.down('attack'); if (e.button === 2) this.down('grab'); });
+    addEventListener('mouseup', (e) => { if (e.button === 0) this.up('attack'); if (e.button === 2) this.up('grab'); });
     addEventListener('mousemove', (e) => { if (this.locked) { this.mdx += e.movementX; this.mdy += e.movementY; } });
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === this.el; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
   lock() { if (this.locked) return; try { (this.el.requestPointerLock?.() as any)?.catch?.(() => {}); } catch { /* needs a user gesture */ } }
-  private down(b: Button) { if (!this.held.has(b)) { this.held.add(b); this.pressed.add(b); } }
+  private down(b: Button) { if (!this.held.has(b)) { this.held.add(b); this.pressed.add(b); this.onPress?.(b); } }
   private up(b: Button) { if (this.held.has(b)) { this.held.delete(b); this.released.add(b); } }
 
   /** Call once per rendered frame. */
@@ -69,6 +73,8 @@ export class Input {
     if (len > 1) { x /= len; y /= len; }
     this.moveX = x; this.moveY = y;
   }
+  /** Drop latched presses (a UI swallowed them). */
+  clearPresses() { this.pressed.clear(); this.released.clear(); }
   /** Read & clear latched edges (called by the first fixed step of a frame). */
   consume(): { pressed: Set<Button>; released: Set<Button> } {
     const r = { pressed: this.pressed, released: this.released };

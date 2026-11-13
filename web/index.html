@@ -25,7 +25,12 @@
   #titleBtns.show { display:flex; }
   .chip { background: var(--panel); border: 2px solid rgba(255,246,230,.35); border-radius: 14px; padding: 8px 16px; font-size: 17px; }
   .chip:hover { border-color: var(--gold); color: var(--gold); }
-  select.chip { appearance:none; padding-right: 16px; }
+  .langPick { display:flex; padding: 3px; gap: 3px; border-radius: 14px; background: var(--panel); border: 2px solid rgba(255,246,230,.35); }
+  .langPick button { display:flex; align-items:center; gap: 7px; border: 0; border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 16px;
+    background: transparent; color: rgba(255,246,230,.7); cursor: pointer; transition: background .15s, color .15s; }
+  .langPick button:hover { color: var(--gold); }
+  .langPick button.on { background: var(--gold); color: #3b2412; }
+  .langPick svg { width: 20px; height: 14px; border-radius: 3px; box-shadow: 0 0 0 1.5px rgba(0,0,0,.25); flex: none; }
   #bar { width: min(420px, 70vw); height: 12px; border-radius: 8px; background: rgba(0,0,0,.35); margin-top: 28px; overflow:hidden; }
   #bar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--pink), var(--gold)); transition: width .2s; }
   @keyframes pulse { 50% { transform: scale(1.08); } }
@@ -47,6 +52,9 @@
   #wobble { position:absolute; left:50%; bottom:132px; width:120px; height:8px; transform:translateX(-50%); border-radius:6px;
     background: rgba(0,0,0,.4); overflow:hidden; opacity:0; transition: opacity .2s; }
   #wobble > div { height:100%; width:0%; background: linear-gradient(90deg, #b6e36a, var(--gold), #ff6b4a); }
+  #clickHint { position:absolute; left:50%; top:40%; transform:translate(-50%,-50%); font-family: Title; font-size: 30px; color: var(--gold);
+    padding: 10px 22px; border-radius: 14px; background: var(--panel); opacity:0; pointer-events:none; transition: opacity .2s; }
+  #clickHint.show { opacity: 1; }
   #prompt { position:absolute; left:50%; top:62%; transform:translateX(-50%); font-size:20px; text-align:center; }
   #prompt b { color: var(--gold); }
   #status { position:absolute; left:22px; bottom:22px; font-size:18px; line-height:1.35; }
@@ -160,8 +168,14 @@
   #wTabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom: 10px; }
   #wTabs button { background: rgba(255,246,230,.08); border: 2px solid transparent; border-radius: 10px; padding: 5px 10px; }
   #wTabs button.on { border-color: var(--gold); color: var(--gold); }
-  #wItems { flex:1; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; align-content:start; padding-right: 4px; }
-  #wItems button { background: rgba(255,246,230,.07); border: 2px solid rgba(255,246,230,.15); border-radius: 12px; padding: 10px 8px; min-height: 46px; text-align:center; }
+  #wItems { flex:1; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; align-content:start; padding-right: 4px; }
+  #wItems button { background: rgba(255,246,230,.07); border: 2px solid rgba(255,246,230,.15); border-radius: 12px; padding: 6px 6px 7px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap: 4px; }
+  #wItems button:hover { border-color: rgba(255,209,102,.6); }
+  #wItems .th { width: 100%; aspect-ratio: 1; border-radius: 9px; background: radial-gradient(circle at 50% 40%, #fff3df, #f0c9a2); overflow:hidden; display:block; }
+  #wItems .th img { width:100%; height:100%; display:block; object-fit: contain; }
+  #wItems .th img:not([src]) { visibility: hidden; }
+  #wItems .nm { font-size: 14px; line-height: 1.15; }
   #wItems button.on { border-color: var(--gold); background: rgba(255,209,102,.18); color: var(--gold); }
   #wItems .sw { display:inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin-right: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
   #wBottom { display:flex; gap:10px; justify-content:flex-end; margin-top: 10px; }
@@ -186,6 +200,7 @@
   <div id="fps" class="txt"></div>
   <div id="bob" class="txt"></div>
   <div id="bobmark" class="txt"></div>
+  <div id="clickHint" class="txt" data-i18n="hud.click">Click to keep playing</div>
 </div>
 <div id="admin" class="txt"></div>
 <div id="menu" class="overlay"><div class="panel txt" id="menuPanel"></div></div>
@@ -207,7 +222,7 @@
   <div id="titleBtns">
     <button class="chip txt" id="tOnline" data-i18n="title.online">Play online</button>
     <button class="chip txt" id="tWardrobe" data-i18n="title.wardrobe">Wardrobe</button>
-    <select class="chip txt" id="tLang"></select>
+    <div class="langPick txt" id="tLang"></div>
   </div>
 </div>
 <script type="module" src="./src/main.ts"></script>

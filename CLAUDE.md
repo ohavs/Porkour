@@ -108,6 +108,8 @@ Dead by Daylight, Party Animals.
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
 | `world/animalGlb.ts`, `render/googly.ts` | Pack animals (Quaternius Ultimate Animated Animals: cow, dog = Shiba, wolf, 2 horses, donkey, alpaca): one vertex-coloured SkinnedMesh each, mixer clips, neck + upper legs = ragdoll parts, goofy (`GLB_ANIMALS`: head scale, eye size, recolours). Googly eyes for every animal = 2 InstancedMeshes (pupils slide with gravity / inertia). |
+| `game/markers.ts`, `game/lockpick.ts` | **Markers** (2026-11-13 s4): bobbing arrows over loot (gold, value ≥ 25, bigger ≥ 60) and over what an open prank is about (pink), seen through walls, one `Points` draw call; waypoints (where the thing you hold goes) live in `round.ts` (`targetFor` / `wherePos`). **Lock-pick**: the cage latch is a pin-tumbler timing puzzle on the player's screen (RMB at the latch; LMB / Space when the pin hits the gold band; a slip = loud clank + `G.noise`); result → input press `pickP` / `pickFailP`, host opens (`Cage.canPick` / `pickOpts`: inside = 6 pins, standing = wider band). |
+| `world/landmarks.ts`, `world/funProps.ts` | Big places (s4): hedge maze NE (colliders, trophy on a plinth), sunflower field N (soft cover 2.4 m), junkyard SW (Kenney car kit sedan / van / delivery / truck + tyre stacks), greenhouse W (glass = `SEE_THROUGH`, 8 flower pots). Procedural prank props: egg, gnome, Bob's undies, pie, flower pot. Breakables: `PropDef.fragile` (m/s) → `Prop.smash()` (hidden like banked, `smashed` event). |
 | `game/round.ts` | **M5 round**: stash pit in the sty (loot dropped there is banked: `Prop.value`, hidden, synced), quota (400 + 200 / extra player; solo = you only), 2 required + 2 bonus pranks from a pool, escape phase (all pigs to the stash), timer (`ADMIN.roundMins`, 10), 3 grills = busted, results (stars, coins → `SETTINGS.coins/xp`), `Game.restartRound()` resets the farm. Synced as an entity (`entities()` after the cage). |
 | `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. |
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
@@ -119,8 +121,11 @@ Dead by Daylight, Party Animals.
 | `core/` | `physics.ts`, `input.ts`, `audio.ts` (buses sfx / ambience / music, loops), `sounds.ts` (sound manifest + OPTIONAL list), `assets.ts`, `synced.ts`, `util.ts`. |
 
 ## Controls
-WASD move · mouse look · Space jump · LMB grab / hold to throw / punch (standing) · Shift sprint · Q fart · C wallow (hold = play dead) ·
-E stand · F oink · H controls · M sound · P next graphics preset · Esc menu (Settings → Advanced graphics) · `` ` `` admin. Gamepad: A jump, B fart, X wallow, Y stand, RT grab, LB/L3 sprint.
+WASD move · mouse look · Space jump · **RMB grab / drop** (user 2026-11-13) · **LMB click = hit** (punch standing, headbutt on four legs,
+weapon whack, bash with what you hold) · **LMB hold = wind up + throw** what you hold · Shift sprint · Q fart · C wallow (hold = play dead) ·
+E stand · F oink · H controls · M sound · P next graphics preset · Esc menu / **closes any open overlay** · `` ` `` admin.
+Gamepad: A jump, B fart, X wallow, Y stand, LT grab, RT hit / throw, LB/L3 sprint. Input `Button`s `grab` (RMB) + `attack` (LMB); `PigInput`
+has `attack*` + `pickP` / `pickFailP` (12 press bits on the wire).
 
 ## Legacy
 The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as reference. Its art/audio is reused by the fetch scripts. Don't edit it.
@@ -141,8 +146,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 6. 🟡 **M5 (2026-11-13)**: ✅ loot + stash + missions + round loop + results (coins saved). Left: weapons, Bob tidies loot back,
    more pranks; then alert levels, dog helper, traps, modifiers, more farms, shop (coins are already saved).
    2026-11-13 (session 3): ✅ hiding spots + Bob hunt/search, ✅ Bob tidies loot back, ✅ weapons (pan / shovel / sword / axe:
-   standing + click = whack, poise 50–60, break after 3–4 hits on Bob), ✅ pranks: sheep out, hay bale in pond, lose Bob,
-   whack Bob, hen in pond. Next: alert levels 0–3 (GDD), dog helper, traps (bear-trap models already in `assets/cover`).
+   click = whack, poise 50–60, break after 3–4 hits on Bob), ✅ pranks: sheep out, hay bale in pond, lose Bob,
+   whack Bob, hen in pond. Session 4: ✅ markers / waypoints, lock-pick puzzle, landmarks, 8 more pranks, breakables.
+   Next: alert levels 0–3 (GDD), dog helper, traps (bear-trap models already in `assets/cover`).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -178,9 +184,23 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   fixed per model (`PALETTE` in `core/assets.ts`: teal corn → green, white wheat → gold, peach rocks → grey). Admin →
   Hiding: "Show when Bob sees me", "Bob: lose me + search", teleport into a bush / the wheat. Checked headless (sight tests,
   hunt, tidy, weapons, 2-browser online). Ask the user: is hiding fun, is the farm too full / still too open, hunt length (~16 s).
+- 2026-11-13 (session 4, user feedback): Esc closes every overlay (menu, admin, wardrobe, lobby, lock-pick, controls card;
+  "click to keep playing" hint when the mouse can't be re-locked); RMB / LMB controls; lock-pick puzzle; loot + prank arrows
+  + "where to" waypoints; Bob stuck at night FIXED (a scared wolf fled to the fence 1 m away, came straight back, Bob
+  shoo→fist→shoo forever: scared wolves now slip out and despawn, Bob ignores a wolf he shooed for 15 s; wolf bodies are
+  freed on despawn); **standing rework** (`BAL` in pig.ts: inverted-pendulum lean, saturating self-righting, stumble steps
+  toward the lean, falls past 0.62 rad; the visual leans around the feet exactly as the physics says — the old sway used
+  `sin(t × changing freq)` = jumpy phase = the "laggy" look); landmarks + 8 new pranks (smash pots, smash melons, eggs on
+  Bob, gnome in the pond, undies down the well, steal the pie, muddy porch, maze trophy) with counted progress; language
+  pills with flags on the title; wardrobe item thumbnails (offscreen renderer, cached, freed on close).
+  **Crash report (user: the game closed mid-play several times)**: JS heap / bodies stable over a full simulated day/night
+  (~104 MB); added WebGL context-loss handling (note + reload) and a 5 s heartbeat in localStorage — after an unexpected
+  end the admin panel shows the last numbers ("Last session ended unexpectedly"). Ask the user for that screenshot.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
+- Session 4 not tested online with 2 browsers yet (input bits, lock-pick press, round progress, pig lean in the snapshot are
+  wired the same way as before). The cause of the user's crashes isn't confirmed (likely GPU / driver: watch the admin crash note).
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
 - Your own pig is invisible inside a big bush (only the HUD says "Hidden"); maybe an outline / x-ray later.
 - Bob walks through bushes / corn (not in his nav grid) — fine for a cartoon, he "pokes" into them while searching.

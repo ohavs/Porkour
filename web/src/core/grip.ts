@@ -25,6 +25,8 @@ export class Grip {
     world.createCollider(RAPIER.ColliderDesc.ball(0.05).setMass(Grip.MASS).setCollisionGroups(groups(L.LIMB, 0)), this.hand);
   }
   get pos() { return this.hand.translation(); }
+  /** Owner gone for good: free the hand body (and its joint). */
+  dispose() { if (this.joint) this.detach(); world.removeRigidBody(this.hand); }
 
   /** Hold `body` at the point of it nearest to `from` (world), or at `at` (body space) when given (a pig's scruff). */
   attach(body: RAPIER.RigidBody, from: THREE.Vector3, at?: THREE.Vector3) {

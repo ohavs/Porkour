@@ -54,7 +54,7 @@ grab kenney "$K/kenney_natureKit_2.1/Models/GLTF format" 512 \
   plant_bushLarge plant_bush campfire_logs bridge_wood
 grab kenney "$K/fantasy-town-kit-1.0/Models/GLTF format" 512 cart cartHigh wheel stall stallRed lantern \
   fountainRound planks
-grab kenney "$K/carkit_v1.4/Models/GLTF format" 512 tractor truck truckFlat
+grab kenney "$K/carkit_v1.4/Models/GLTF format" 512 tractor truck truckFlat sedan van delivery
 grab kenney "$K/kenney_platformerkit/Models/GLTF format" 512 crate barrel
 
 # ---------------------------------------------------------------- KayKit (CC0)

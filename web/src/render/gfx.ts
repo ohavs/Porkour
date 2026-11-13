@@ -42,6 +42,9 @@ export class Gfx {
   moon!: THREE.Mesh;
   cloudMat!: THREE.MeshToonMaterial;
   outline!: InkOutline;
+  /** WebGL context lost (driver reset) — nothing is drawn until it comes back. */
+  lost = false;
+  onLost?: () => void; onRestored?: () => void;
 
   constructor(container: HTMLElement, opts: GfxOpts) {
     this.opts = { ...opts };
@@ -54,6 +57,9 @@ export class Gfx {
     r.toneMapping = THREE.NoToneMapping;
     container.appendChild(r.domElement);
     this.renderer = r;
+    // the graphics driver can reset (GPU hang, driver update, too much video memory): keep the page, ask for the context back
+    r.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; this.onLost?.(); });
+    r.domElement.addEventListener('webglcontextrestored', () => { this.lost = false; this.resize(); this.onRestored?.(); });
 
     this.camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 900);
 
@@ -220,6 +226,7 @@ export class Gfx {
   }
 
   render(dt: number) {
+    if (this.lost) return;
     this.clouds.rotation.y += dt * 0.004;
     this.composer.render(dt);
   }
