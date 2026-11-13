@@ -64,9 +64,6 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | mudstep1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | mudstep2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | mudstep3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
-| rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
-| rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
-| rustle3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | munch.ogg | VoxeLibre mobs_mc, CC0 |
 | neigh1.ogg | GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0 |
 | neigh2.ogg | ERH (freesound 32043) via VoxeLibre, CC BY 3.0 |
@@ -79,9 +76,15 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | punch1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | punch2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rooster.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| rustle3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| shot1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| shot2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | sizzle.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | slap1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | slap2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| snap.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | splat1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | splat2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | squawk.ogg | VoxeLibre mobs_mc, CC0 |

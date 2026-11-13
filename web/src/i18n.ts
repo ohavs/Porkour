@@ -211,6 +211,19 @@ const en = {
   'net.err.kicked': 'You were removed from the room.', 'net.err.hello': 'Connection problem, try again.', 'net.err.version': 'Refresh the page (F5).',
   'a.online': 'Online',
   'a.netLag': 'Fake lag (ms)', 'a.predict': 'Move my pig right away (prediction)',
+  // alert levels / gun / traps / guard dog (M5 s5)
+  'alert.title': 'Alert', 'alert.0': 'Calm', 'alert.1': 'Wary', 'alert.2': 'On alert', 'alert.3': 'FURIOUS',
+  'e.alert1': 'Bob is getting wary', 'e.alert1b': 'He hears and sees further now.',
+  'e.alert2': 'Bob is on alert!', 'e.alert2b': 'Pitchfork out, guard dog off the leash, bear traps where he caught you.',
+  'e.alert3': 'Bob is FURIOUS!', 'e.alert3b': 'Rock-salt shotgun! Stay out of his sight.', 'e.alertDown': 'Bob is calming down…',
+  'e.aim': 'Bob is aiming at you — dodge!', 'e.shotHit': 'Rock salt! Ouch!',
+  'e.trapped': 'SNAP! A bear trap!', 'e.trappedOther': '{who} is stuck in a bear trap!', 'e.trapFreed': 'The trap is open!',
+  'p.trapGotYou': 'A trap has your leg! Mash {space} ({n}/{need}) — or a friend opens it',
+  'p.freeTrap': '{rmb} open the trap ({who} is stuck)',
+  'bob.trap': 'Bob is setting a bear trap', 'bob.aim': 'Bob is AIMING!',
+  'e.dogFound': 'The dog sniffed you out!', 'e.dogBone': 'The dog is busy with the bone!',
+  'item.bone': 'Bone', 'p.bone': 'Throw it near the guard dog to keep it busy', 's.trapNear': 'Careful: a bear trap right here!',
+  'a.alert': 'Bob alert level', 'a.trapMe': 'Bear trap in front of me', 'a.dogMe': 'Guard dog: sniff me out', 'a.bringBone': 'Bring a bone',
 } as const;
 
 export type Key = keyof typeof en;
@@ -409,6 +422,19 @@ const es: Record<Key, string> = {
   'net.err.kicked': 'Te sacaron de la sala.', 'net.err.hello': 'Problema de conexión, inténtalo de nuevo.', 'net.err.version': 'Recarga la página (F5).',
   'a.online': 'En línea',
   'a.netLag': 'Retraso simulado (ms)', 'a.predict': 'Mover mi cerdo al instante (predicción)',
+  // niveles de alerta / escopeta / trampas / perro guardián (M5 s5)
+  'alert.title': 'Alerta', 'alert.0': 'Tranquilo', 'alert.1': 'Mosqueado', 'alert.2': 'En alerta', 'alert.3': 'FURIOSO',
+  'e.alert1': 'Bob empieza a mosquearse', 'e.alert1b': 'Ahora oye y ve más lejos.',
+  'e.alert2': '¡Bob está en alerta!', 'e.alert2b': 'Saca la horca, suelta al perro guardián y pone cepos donde te pilló.',
+  'e.alert3': '¡Bob está FURIOSO!', 'e.alert3b': '¡Escopeta de sal gruesa! Que no te vea.', 'e.alertDown': 'Bob se está calmando…',
+  'e.aim': '¡Bob te está apuntando! ¡Esquiva!', 'e.shotHit': '¡Sal gruesa! ¡Ay!',
+  'e.trapped': '¡ZAS! ¡Un cepo!', 'e.trappedOther': '¡{who} ha caído en un cepo!', 'e.trapFreed': '¡El cepo está abierto!',
+  'p.trapGotYou': '¡Un cepo te tiene la pata! Pulsa {space} sin parar ({n}/{need}) — o que un amigo lo abra',
+  'p.freeTrap': '{rmb} abrir el cepo ({who} está atrapado)',
+  'bob.trap': 'Bob está poniendo un cepo', 'bob.aim': '¡Bob está APUNTANDO!',
+  'e.dogFound': '¡El perro te ha olfateado!', 'e.dogBone': '¡El perro está entretenido con el hueso!',
+  'item.bone': 'Hueso', 'p.bone': 'Tíralo cerca del perro guardián para entretenerlo', 's.trapNear': '¡Cuidado: hay un cepo aquí mismo!',
+  'a.alert': 'Nivel de alerta de Bob', 'a.trapMe': 'Cepo delante de mí', 'a.dogMe': 'Perro guardián: olfatéame', 'a.bringBone': 'Traer un hueso',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

@@ -189,6 +189,8 @@ export const PROPS: Record<string, PropDef> = {
   backpack: { model: 'loot/Backpack', height: 0.5, mass: 4, sound: 'thud', label: 'item.backpack', value: 30 },
   shovel: { model: 'loot/Shovel', height: 1.1, mass: 3, sound: 'metal', label: 'item.shovel', value: 20, weapon: 55, breaks: 3 },
   trashcan: { model: 'loot/Trashcan', height: 0.8, mass: 9, shape: 'cyl', sound: 'metal', label: 'item.trashcan', value: 10 },
+  // the guard dog drops everything for a bone (KayKit Halloween, CC0)
+  bone: { model: 'kaykit/bone_A', height: 0.13, mass: 0.6, shape: 'box', sound: 'thud', label: 'item.bone', friction: 0.8 },
 };
 for (const k in PROPS) PROPS[k].id = k;
 export const LOOT_MODELS = Object.values(PROPS).map((d) => d.model).filter((m): m is string => !!m && m.startsWith('loot/'));

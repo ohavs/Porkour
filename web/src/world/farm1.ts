@@ -238,6 +238,8 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     prop('gasCan', 7.6, 11.6); prop('propane', -2.6, -29.6, 0); prop('pan', -4.2, -29.2);
     prop('firstAid', 4.5, 7.2); prop('backpack', -3.5, 7.4);
     prop('shovel', -23.8, -59.5, 1.2); prop('trashcan', -13.2, -26.8, 0);
+    // bones for the guard dog: by the trash can, in the junk by the garage, at the barn
+    prop('bone', -12.2, -25.9); prop('bone', -40, 4.4); prop('bone', 4.4, 6.2); prop('bone', 24, -40);
     // pranks: the pie on the picnic table, Bob's undies (fell off the laundry line), a garden gnome, eggs by the coop,
     // flower pots on the porch, more melons by the garden
     prop('pie', 8.79, -47.59, 0, 0.84);

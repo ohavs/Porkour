@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { RAPIER, world, groups, L, owners, HOOKS, raycast } from '../core/physics';
+import { RAPIER, world, groups, L, owners, HOOKS, raycast, SEE_THROUGH } from '../core/physics';
 import { Synced } from '../core/synced';
 import { Ragdoll, type LimbDef, type Tone } from '../core/ragdoll';
 import type { AnimalRig } from './animalModels';
-import { G, type Holdable } from '../game/ctx';
+import { G, ADMIN, type Holdable } from '../game/ctx';
 import { dampAngle, Rng } from '../core/util';
 import { type AnimalKind } from './animalModels';
 import { animalVisual, GlbAnimalVisual, type AnyAnimalVisual } from './animalGlb';
@@ -29,6 +29,8 @@ export const CRITTERS: Record<string, CritterDef> = {
 };
 
 const rng = new Rng(99);
+/** Guard dog off the leash (Bob's alert 2+): the whole farm is its beat. Smell range in the open / into a bush (m). */
+const DOG = { patrol: { x: 0, z: -40, r: 46 }, smell: 11, smellHidden: 4, give: 12, skip: 10, chew: 14, boneSee: 14, boneSkip: 45, tipEvery: 3 };
 const v1 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
@@ -73,6 +75,10 @@ export class Critter implements Holdable {
   private soundT = rng.range(2, 20);
   private fleeing = false;
   private excite = 0;
+  // guard dog: chewing a bone until, bones it's done with, the pig it's onto (since), pigs it gave up on, bark / tip-off clocks
+  private chewUntil = 0; private chewing: Holdable | null = null; private boneSkip = new WeakMap<object, number>(); private bones: Holdable[] | null = null;
+  private sniffAt = 0; private sniffPig: any = null; private sniffSince = 0; private pigSkip = new Map<unknown, number>();
+  private barkAt = 0; private tipAt = 0; private scaredUntil = 0; private scaredFrom = new THREE.Vector3();
   label: string;
   height: number;
   /** Night roost (hens → coop). */
@@ -111,6 +117,7 @@ export class Critter implements Holdable {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
     this.parts.snap(); this.synced.capture(); this.synced.capture();
+    this.sniffPig = null; this.chewUntil = 0; this.chewing = null; this.scaredUntil = 0; this.sicUntil = 0; this.pigSkip.clear();
   }
 
   get pos() { return this.synced.currP; }
@@ -175,20 +182,23 @@ export class Critter implements Holdable {
       this.nextThink = G.time + 0.5; this.eatUntil = 0;
       if (this.def.scared && rng.next() < dt * 0.7) G.audio.play(this.def.scared, { pos: v1.set(p.x, p.y, p.z), vol: 0.45, minGap: 0.6 });
     }
-    // dog: barks at wolves (wakes Bob up) and gets excited near pigs
+    // dog: barks at wolves (wakes Bob up); loves bones; Bob's guard dog when he's on alert
     if (this.def.kind === 'dog') {
       this.excite = Math.max(0, this.excite - dt);
+      let busy = false;
       for (const w of G.wolves) if (w.active && Math.hypot(p.x - w.pos.x, p.z - w.pos.z) < 16) {
         if (rng.next() < dt * 1.5) { G.audio.play('bark', { pos: v1.set(p.x, p.y, p.z), vol: 1, minGap: 0.4 }); G.noise(v1, 40); }
-        this.excite = 1; this.target.set(w.pos.x, p.y, w.pos.z); this.nextThink = G.time + 0.5;
+        this.excite = 1; this.target.set(w.pos.x, p.y, w.pos.z); this.nextThink = G.time + 0.5; busy = true;
       }
+      if (!busy) this.dogBrain(p, dt);
     }
     const night = G.night > 0.6 && this.roost;
     if (!this.fleeing && G.time > this.nextThink) {
       if (night) { this.target.copy(this.roost!).add(v1.set(rng.range(-0.8, 0.8), 0, rng.range(-0.8, 0.8))); this.nextThink = G.time + 6; }
       else {
-        const a = rng.range(0, 6.28), r = Math.sqrt(rng.next()) * this.home.r;
-        this.target.set(this.home.x + Math.cos(a) * r, p.y, this.home.z + Math.sin(a) * r);
+        const home = this.def.kind === 'dog' && (G.farmer?.level ?? 0) >= 2 ? DOG.patrol : this.home;   // off the leash
+        const a = rng.range(0, 6.28), r = Math.sqrt(rng.next()) * home.r;
+        this.target.set(home.x + Math.cos(a) * r, p.y, home.z + Math.sin(a) * r);
         this.nextThink = G.time + rng.range(2.5, 7);
         if (rng.next() < 0.35) { this.eatUntil = G.time + rng.range(2, 4); this.target.set(p.x, p.y, p.z); }
       }
@@ -211,6 +221,96 @@ export class Critter implements Holdable {
       if (!(night && this.def.mass < 150)) G.audio.play(this.def.sound, { pos: v1.set(p.x, p.y, p.z), vol: this.def.mass > 150 ? 0.8 : 0.5, rand: 0.1 });
     }
   }
+
+  /**
+   * The dog (host). A fart in its face → runs off yelping. A bone in sight → fetch + chew it for a while (any alert
+   * level; a pig carrying a bone is followed like a friend). Bob on alert (2+) → guard dog: sniffs out pigs (11 m in the
+   * open, 4 m into a bush, walls block it beyond 4 m), runs at the pig and stands next to it barking, and every few
+   * seconds Bob gets told where (he comes to look). Gives up on a pig after 12 s. Sprint away (dog 5.2 m/s, pig 10.5).
+   */
+  private dogBrain(p: { x: number; y: number; z: number }, dt: number) {
+    const now = G.time;
+    for (const c of G.clouds) if (Math.hypot(c.x - p.x, c.z - p.z) < c.r + 0.6 && now > this.scaredUntil - 3) {
+      this.scaredUntil = now + 5; this.scaredFrom.set(c.x, 0, c.z); this.sniffPig = null;
+      G.audio.play('yelp', { pos: v1.set(p.x, p.y, p.z), vol: 0.9, minGap: 0.5 });
+    }
+    if (now < this.scaredUntil) {
+      const dx = p.x - this.scaredFrom.x, dz = p.z - this.scaredFrom.z, d = Math.hypot(dx, dz) || 1;
+      this.target.set(p.x + (dx / d) * 5, p.y, p.z + (dz / d) * 5); this.nextThink = now + 0.5; this.fleeing = true;
+      return;
+    }
+    // bones
+    if (now < this.chewUntil && this.chewing) {
+      const cb = this.chewing.body.translation();
+      if (Math.hypot(cb.x - p.x, cb.z - p.z) > 1.4) { this.chewUntil = 0; this.boneSkip.delete(this.chewing); this.chewing = null; }   // a pig took it: follow!
+    }
+    if (now < this.chewUntil) {
+      this.eatUntil = now + 0.4; this.target.set(p.x, p.y, p.z); this.nextThink = now + 0.5;
+      if (rng.next() < dt * 0.7) G.audio.play('munch', { pos: v1.set(p.x, p.y, p.z), vol: 0.6, minGap: 0.6 });
+      return;
+    }
+    this.bones ??= G.holdables.filter((h) => (h as { def?: { id?: string } }).def?.id === 'bone');
+    let bone: Holdable | null = null, bd = DOG.boneSee;
+    for (const b of this.bones) {
+      if ((b as { banked?: boolean }).banked || (this.boneSkip.get(b) ?? 0) > now) continue;
+      if (!b.heldBy && ((b as { homeDist?: () => number }).homeDist?.() ?? 9) < 1.5) continue;   // only bones a pig brought / threw
+      const bp = b.body.translation(), d = Math.hypot(bp.x - p.x, bp.z - p.z);
+      if (d < bd) { bd = d; bone = b; }
+    }
+    if (bone) {
+      const bp = bone.body.translation();
+      this.excite = 1; this.nextThink = now + 0.5; this.sniffPig = null;
+      if (bone.heldBy) { this.target.set(bp.x, p.y, bp.z); if (bd < 1.6) this.target.set(p.x, p.y, p.z); return; }   // follows the pig that has it
+      this.target.set(bp.x, p.y, bp.z);
+      if (bd < 0.9) {
+        this.chewUntil = now + DOG.chew; this.boneSkip.set(bone, now + DOG.boneSkip); this.chewing = bone;
+        G.audio.play('munch', { pos: v1.set(p.x, p.y, p.z), vol: 0.9 });
+        G.events.push({ type: 'dogBone' });
+      }
+      return;
+    }
+    // guard dog
+    const bob = G.farmer;
+    if (!bob || (bob.level ?? 0) < 2 || bob.state === 'off') { this.sniffPig = null; return; }
+    if (now > this.sniffAt) {
+      this.sniffAt = now + 0.3;
+      let best: any = null, bdist = 1e9;
+      for (const pig of G.pigs) {
+        if (pig.out || pig.cage || pig.heldBy?.kind === 'farmer' || (this.pigSkip.get(pig) ?? 0) > now) continue;
+        if (pig === G.localPig && (ADMIN.god || !ADMIN.bobSees)) continue;
+        const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
+        if (d > (G.cover.at(pig.pos) ? DOG.smellHidden : DOG.smell) || d > bdist) continue;
+        if (d > DOG.smellHidden) {
+          const dir = v1.set(pig.pos.x - p.x, pig.pos.y - p.y, pig.pos.z - p.z); const len = dir.length(); dir.divideScalar(len);
+          const hit = raycast({ x: p.x, y: p.y + 0.2, z: p.z } as THREE.Vector3, dir, len, L.STATIC, this.body, (c) => !SEE_THROUGH.has(c.handle));
+          if (hit && hit.dist < len - 0.5) continue;
+        }
+        best = pig; bdist = d;
+      }
+      if (best !== this.sniffPig) {
+        if (this.sicUntil > now && this.sniffPig && !best) best = this.sniffPig;   // admin "sniff me": keeps on it
+        if (best && this.sniffPig && best !== this.sniffPig) this.pigSkip.set(this.sniffPig, now + 3);
+        if (best !== this.sniffPig) this.sniffSince = now;
+        this.sniffPig = best;
+      }
+      if (best && now - this.sniffSince < 0.01) { G.events.push({ type: 'dogFound', who: best }); this.tipAt = now + 1; }
+    }
+    const pig = this.sniffPig;
+    if (!pig) return;
+    if (now - this.sniffSince > DOG.give || pig.out || pig.cage) { this.pigSkip.set(pig, now + DOG.skip); this.sniffPig = null; return; }
+    const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
+    this.excite = 1; this.nextThink = now + 0.5;
+    if (d > 1.4) this.target.set(pig.pos.x, p.y, pig.pos.z); else this.target.set(p.x, p.y, p.z);
+    if (d > 0.5) this.yaw = dampAngle(this.yaw, Math.atan2(pig.pos.x - p.x, pig.pos.z - p.z), 8, dt);
+    if (d < 8 && now > this.barkAt) {
+      this.barkAt = now + 0.5 + rng.next() * 0.35;
+      G.audio.play('bark', { pos: v1.set(p.x, p.y, p.z), vol: 1, minGap: 0.3 });
+    }
+    if (now > this.tipAt) { this.tipAt = now + DOG.tipEvery; bob.tipOff(pig, pig.pos); }
+  }
+  /** Admin: sniff this pig out now. */
+  sicEm(pig: unknown) { this.sniffPig = pig; this.sniffSince = G.time; this.sicUntil = G.time + DOG.give; this.pigSkip.delete(pig); this.chewUntil = 0; this.tipAt = G.time + 1; }
+  private sicUntil = 0;
 
   postStep() { this.synced.capture(); }
 

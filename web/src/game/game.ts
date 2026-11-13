@@ -16,6 +16,7 @@ import { randomOutfit, defaultOutfit } from '../pig/cosmetics';
 import { Prop } from '../world/props';
 import { DayNight } from '../world/daynight';
 import { WolfPack } from '../world/wolf';
+import { Traps } from '../world/traps';
 import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
@@ -48,6 +49,7 @@ export class Game {
   nav!: Nav;
   daynight!: DayNight;
   wolves!: WolfPack;
+  traps!: Traps;
   private acc = 0;
   private last = performance.now();
   private frames = 0; private fpsT = 0; fps = 0;
@@ -94,6 +96,7 @@ export class Game {
     this.farmer.mower.onMow = (x, z, r) => this.grass.mow(x, z, r);
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
     this.wolves = new WolfPack(scene, this.nav, FARM);
+    this.traps = new Traps(scene);
     this.round = new Round(scene, this, new THREE.Vector3(30, terrain.height(30, 7.5), 7.5));
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
@@ -193,6 +196,7 @@ export class Game {
     });
     for (const p of this.pigs) p.postStep(FIXED);
     this.farmer?.postStep();
+    this.traps.step(FIXED);
     this.farm.cage.update(FIXED, this.pigs);
     for (const c of this.farm.critters) c.postStep();
     for (const w of this.wolves.wolves) w.postStep();
@@ -261,6 +265,19 @@ export class Game {
         case 'splatBob': this.hud.toast(t('e.splat'), 1.2); break;
         case 'roundEscape': this.hud.toast(t('e.roundEscape'), 3.5, t('e.roundEscape2')); break;
         case 'lastMinute': this.hud.toast(t('e.lastMinute'), 2); break;
+        case 'alert': {
+          const l = Number(e.why ?? 0);
+          if (e.text === 'up' && l > 0) { this.hud.toast(t(('e.alert' + l) as Key), 3, t(('e.alert' + l + 'b') as Key)); G.audio.play(l >= 3 ? 'bob_oof' : 'bob_huh', { vol: 0.5 }); }
+          else if (e.text === 'down' && l < 2) this.hud.toast(t('e.alertDown'), 1.6);
+          this.hud.alertFlash();
+          break;
+        }
+        case 'aim': if (me) this.hud.toast(t('e.aim'), 1.2); break;
+        case 'shotHit': if (me) this.hud.toast(t('e.shotHit'), 1.2); break;
+        case 'trapped': this.hud.toast(me ? t('e.trapped') : t('e.trappedOther', { who }), 1.8); break;
+        case 'trapFreed': if (me) this.hud.toast(t('e.trapFreed'), 1.2); break;
+        case 'dogFound': if (me) this.hud.toast(t('e.dogFound'), 1.6); break;
+        case 'dogBone': this.hud.toast(t('e.dogBone'), 1.8); break;
         case 'roundEnd': break;
       }
     }
@@ -278,6 +295,7 @@ export class Game {
     for (const c of this.farm.critters) c.reset();
     for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
     this.wolves.clear();
+    this.traps.clear();
     this.daynight.setHour(ROUND_START_HOUR);
     G.grills = 0;
     cage.setOpen(false);
@@ -335,8 +353,19 @@ export class Game {
       case 'tp:junkyard': tp(-50, 5); break;
       case 'tp:greenhouse': tp(-37, -77); break;
       case 'pick': { tp(cage.latch.x + 0.4, cage.latch.z + 0.9); this.menu.toggleAdmin(); setTimeout(() => { if (cage.canPick(L)) this.lockpick.open(cage.pickOpts(L)); else this.hud.toast(t('a.pickNo'), 1.4); }, 300); break; }
-      case 'bringPot': case 'bringEgg': case 'bringGnome': {
-        const id = a === 'bringPot' ? 'flowerPot' : a === 'bringEgg' ? 'egg' : 'gnome';
+      case 'alert:0': case 'alert:1': case 'alert:2': case 'alert:3': f?.setAlert(Number(a.slice(6))); break;
+      case 'trapMe': { const fw = L.forward; this.traps.place(new THREE.Vector3(L.pos.x + fw.x * 2, 0, L.pos.z + fw.z * 2)); break; }
+      case 'dogMe': {
+        const dog = this.farm.critters.find((c) => c.def.kind === 'dog');
+        if (!dog || !f) break;
+        if (f.level < 2) f.setAlert(2);
+        const fw = L.forward, x = L.pos.x - fw.x * 7, z = L.pos.z - fw.z * 7;
+        dog.body.setTranslation({ x, y: G.terrain.height(x, z) + 0.6, z }, true);
+        dog.sicEm(L);
+        break;
+      }
+      case 'bringPot': case 'bringEgg': case 'bringGnome': case 'bringBone': {
+        const id = a === 'bringPot' ? 'flowerPot' : a === 'bringEgg' ? 'egg' : a === 'bringBone' ? 'bone' : 'gnome';
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
         const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
         if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
@@ -500,7 +529,8 @@ export class Game {
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     if (this.farmer) {
       this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);
-      this.audio.setMusicRate(this.farmer.chasing || this.farmer.state === 'carry' ? 1.12 : 1);
+      // music: a little faster per alert level, fastest in a chase
+      this.audio.setMusicRate(this.farmer.chasing || this.farmer.state === 'carry' ? 1.12 + this.farmer.level * 0.02 : 1 + this.farmer.level * 0.03);
     }
     this.handleEvents();
     this.gfx.render(dt);

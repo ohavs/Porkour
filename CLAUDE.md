@@ -111,11 +111,12 @@ Dead by Daylight, Party Animals.
 | `game/markers.ts`, `game/lockpick.ts` | **Markers** (2026-11-13 s4): bobbing arrows over loot (gold, value ≥ 25, bigger ≥ 60) and over what an open prank is about (pink), seen through walls, one `Points` draw call; waypoints (where the thing you hold goes) live in `round.ts` (`targetFor` / `wherePos`). **Lock-pick**: the cage latch is a pin-tumbler timing puzzle on the player's screen (RMB at the latch; LMB / Space when the pin hits the gold band; a slip = loud clank + `G.noise`); result → input press `pickP` / `pickFailP`, host opens (`Cage.canPick` / `pickOpts`: inside = 6 pins, standing = wider band). |
 | `world/landmarks.ts`, `world/funProps.ts` | Big places (s4): hedge maze NE (colliders, trophy on a plinth), sunflower field N (soft cover 2.4 m), junkyard SW (Kenney car kit sedan / van / delivery / truck + tyre stacks), greenhouse W (glass = `SEE_THROUGH`, 8 flower pots). Procedural prank props: egg, gnome, Bob's undies, pie, flower pot. Breakables: `PropDef.fragile` (m/s) → `Prop.smash()` (hidden like banked, `smashed` event). |
 | `game/round.ts` | **M5 round**: stash pit in the sty (loot dropped there is banked: `Prop.value`, hidden, synced), quota (400 + 200 / extra player; solo = you only), 2 required + 2 bonus pranks from a pool, escape phase (all pigs to the stash), timer (`ADMIN.roundMins`, 10), 3 grills = busted, results (stars, coins → `SETTINGS.coins/xp`), `Game.restartRound()` resets the farm. Synced as an entity (`entities()` after the cage). |
-| `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. |
+| `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. **Guard dog** (`dogBrain`, `DOG`): alert 2+ = off the leash (patrols the farm), sniffs pigs (11 m open / 4 m in a bush, rail fences don't block), stands next to the pig barking, `Farmer.tipOff` every 3 s, gives up after 12 s; a fart scares it off; a **bone** prop a pig moved / carries → fetch + chew 14 s (take it → it follows you). |
+| `world/traps.ts` | **Bear traps** (pool of 4, one synced entity after the round): a `Carrier` (code 20+i) — snaps a pig by a hind leg (grip joint), mash Space (10, muddy 6) or a teammate RMB/LMB next to it; things thrown on it set it off; sprung traps vanish after 20 s; `G.traps`. |
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
 | `world/cage.ts` | Bob's cage + BBQ (`ADMIN.bbqTime`, default 90 s); latch (standing ×2), ram bursts the door. |
 | `world/terrain.ts`, `nature.ts`, `props.ts` | Ground (splat map, `mudAt`), instanced trees/bushes/hedges, `Prop` + `PROPS`. |
-| `farmer/farmer.ts` | **Bob** brain (tune in `BOB`): clock routine, suspicion (only un-piggy acts he SEES raise it; drains slowly out of sight), noises, chase → lost you → **hunt** (`search` state: checks where he lost you + nearby hiding spots, looks around, recognises you ≤9 m, gives up when suspicion < 0.3), **tidy** (puts stolen loot he sees lying around back home), chase, grab (windup/lunge) **or slap** (30 %, insult toast, taunt), carry (grip: 24 mashes, drains, shakes every 2.2 s), cage, dance (random / after caging), lawn mowing, flashlight at night, sleeps in the house (noises wake him), shoos wolves, poise → stagger / knock-down. |
+| `farmer/farmer.ts` | **Bob** brain (tune in `BOB`): clock routine, suspicion (only un-piggy acts he SEES raise it; drains slowly out of sight), noises, chase → lost you → **hunt** (`search` state: checks where he lost you + nearby hiding spots, looks around, recognises you ≤9 m, gives up when suspicion < 0.3), **tidy** (puts stolen loot he sees lying around back home), **alert level** (`ALERT`: heat 0–100 from alarms / hits / pranks / escapes, drains when quiet; 1 wary = hears / sees / hunts more, 2 = pitchfork reach + guard dog + bear traps at hot spots (`setTrap`) + patrols all night, 3 = rock-salt shotgun `aim`→`shoot` cone knock-back + runs faster; round floor 2 in the last 2 min; HUD meter under his chip, red face, music rate), chase, grab (windup/lunge) **or slap** (30 %, insult toast, taunt), carry (grip: 24 mashes, drains, shakes every 2.2 s), cage, dance (random / after caging), lawn mowing, flashlight at night, sleeps in the house (noises wake him), shoos wolves, poise → stagger / knock-down. |
 | `farmer/farmerModel.ts`, `farmerVisual.ts`, `mower.ts`, `nav.ts` | Procedural Bob + tools (bucket, can, axe, mug, hammer, paper, flashlight, shirt) + poses (ride, slap, taunt, 4 dance moves, read, laundry…); ride-on mower (cuts `Grass` via a mow texture, regrows); nav grid + A*. |
 | `render/` | `gfx.ts` (renderer / sky / stars / moon / lights / post, `apply(opts)`, dynamic resolution), `quality.ts` (presets, GPU detect), `batch.ts` (`instanceStatic`, `rigidSkin`, `cullDetail`), `toon.ts`, `grass.ts` (wind, pushers, mowing, `setLevel`), `fx.ts`, `textures.ts`. |
 | `core/` | `physics.ts`, `input.ts`, `audio.ts` (buses sfx / ambience / music, loops), `sounds.ts` (sound manifest + OPTIONAL list), `assets.ts`, `synced.ts`, `util.ts`. |
@@ -148,7 +149,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    2026-11-13 (session 3): ✅ hiding spots + Bob hunt/search, ✅ Bob tidies loot back, ✅ weapons (pan / shovel / sword / axe:
    click = whack, poise 50–60, break after 3–4 hits on Bob), ✅ pranks: sheep out, hay bale in pond, lose Bob,
    whack Bob, hen in pond. Session 4: ✅ markers / waypoints, lock-pick puzzle, landmarks, 8 more pranks, breakables.
-   Next: alert levels 0–3 (GDD), dog helper, traps (bear-trap models already in `assets/cover`).
+   Session 5: ✅ alert levels 0–3, guard dog + bone, bear traps, pitchfork, rock-salt shotgun.
+   Next: modifiers (rain / market day / bad mood), geese / rooster alarms, Bob locks doors / repairs, more farms, shop.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -196,11 +198,17 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   **Crash report (user: the game closed mid-play several times)**: JS heap / bodies stable over a full simulated day/night
   (~104 MB); added WebGL context-loss handling (note + reload) and a 5 s heartbeat in localStorage — after an unexpected
   end the admin panel shows the last numbers ("Last session ended unexpectedly"). Ask the user for that screenshot.
+- 2026-11-13 (session 5, user away from the PC: "continue to the next stages"): **alert levels** (meter: Bob's face + 3 pips
+  + name, toasts), **pitchfork** (lvl 2, longer grab), **rock-salt shotgun** (lvl 3; Quaternius Survival `Shotgun_1`; Wesnoth
+  thunderstick / gunshot = `shot`), **guard dog** + **bones** (KayKit `bone_A`, 4 on the farm), **bear traps** (Wesnoth
+  pincers = `snap`), HUD "trap right here" warning, admin → "Bob alert level" (0–3, trap in front of me, dog sniffs me, bring
+  a bone). Checked headless solo (each feature) + 2 browsers online (level, trap catch / escape, gun visible on the player).
+  Ask the user: is level 3 too harsh (gun every 5.5 s), heat speed (calm after ~1.5 min), dog too clingy, traps visible enough.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
-- Session 4 not tested online with 2 browsers yet (input bits, lock-pick press, round progress, pig lean in the snapshot are
-  wired the same way as before). The cause of the user's crashes isn't confirmed (likely GPU / driver: watch the admin crash note).
+- Lock-pick / round progress online still only covered by the session-5 smoke test (lobby → start → snapshots fine).
+- Guard dog walks straight lines (no nav grid): it can get stuck on buildings when a pig is behind one. The cause of the user's crashes isn't confirmed (likely GPU / driver: watch the admin crash note).
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
 - Your own pig is invisible inside a big bush (only the HUD says "Hidden"); maybe an outline / x-ray later.
 - Bob walks through bushes / corn (not in his nav grid) — fine for a cartoon, he "pokes" into them while searching.
