@@ -85,7 +85,7 @@ Dead by Daylight, Party Animals.
   `ETdoFresh/kenney.nl`, KayKit `KayKit-Game-Assets/*` (Restaurant, Adventurers, Skeletons, Halloween), Quaternius
   `tilakpatell/tilakverse-assets` + `trebeljahr/quaternius-showcase` (GLBs: animals, RPG items, Survival, Ultimate Crops, house
   interior, weapons, buildings… — check it first for new content; `chibifire-stages/quaternius-stage` has every pack as .usda), repo art (Quaternius Farm Buildings FBX → GLB via `fbx2gltf`, Medieval kit) via `gltf-transform`.
-  KayKit hats / capes are cut out of the character GLBs by `tools/extract_nodes.mjs`. Sounds: VoxeLibre (CC0 / MIT), 0 A.D.
+  KayKit hats / capes are cut out of the character GLBs by `tools/extract_nodes.mjs`. Sounds: VoxeLibre (CC0 / MIT; rustle = mcl_sounds grass, CC BY 3.0), 0 A.D.
   (CC BY-SA 3.0), horse / donkey / sheep (VoxeLibre, CC BY 3.0 / CC0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), user's own
   farts + music (`Assets/Audio`). Credits: `public/assets/sfx/CREDITS.md`. User drop-ins: `web/sfx_user/` → `fetch_sounds.sh`.
 
@@ -104,6 +104,7 @@ Dead by Daylight, Party Animals.
 | `pig/pig.ts` | **Pig** (tune in `PIG`, grip targets in `GRIP`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
 | `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
+| `world/cover.ts`, `world/hideouts.ts` | **Hiding (2026-11-13)**: `G.cover` = soft cover (bushes / corn / wheat: no collider, pigs walk in; Bob's sight ray through it is blocked, a pig inside is found only ≤1.7 m, or ≤5 m if moving; standing pigs poke their head over wheat / small bushes — `sightPoint`). Fast moves inside rustle (sound + leaves + `G.noise`). `hideouts.ts` places big bush clusters (`Forest` 'bigBush'), the east wheat field, a 2nd corn patch, climbable straw-bale stacks, log piles / crate stacks / sacks / fallen logs / farm stands (Quaternius CC0, `assets/cover`). Rail fences are `SEE_THROUGH` for Bob. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
 | `world/animalGlb.ts`, `render/googly.ts` | Pack animals (Quaternius Ultimate Animated Animals: cow, dog = Shiba, wolf, 2 horses, donkey, alpaca): one vertex-coloured SkinnedMesh each, mixer clips, neck + upper legs = ragdoll parts, goofy (`GLB_ANIMALS`: head scale, eye size, recolours). Googly eyes for every animal = 2 InstancedMeshes (pupils slide with gravity / inertia). |
@@ -112,7 +113,7 @@ Dead by Daylight, Party Animals.
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
 | `world/cage.ts` | Bob's cage + BBQ (`ADMIN.bbqTime`, default 90 s); latch (standing ×2), ram bursts the door. |
 | `world/terrain.ts`, `nature.ts`, `props.ts` | Ground (splat map, `mudAt`), instanced trees/bushes/hedges, `Prop` + `PROPS`. |
-| `farmer/farmer.ts` | **Bob** brain (tune in `BOB`): clock routine, suspicion, noises, chase, grab (windup/lunge) **or slap** (30 %, insult toast, taunt), carry (grip: 24 mashes, drains, shakes every 2.2 s), cage, dance (random / after caging), lawn mowing, flashlight at night, sleeps in the house (noises wake him), shoos wolves, poise → stagger / knock-down. |
+| `farmer/farmer.ts` | **Bob** brain (tune in `BOB`): clock routine, suspicion (only un-piggy acts he SEES raise it; drains slowly out of sight), noises, chase → lost you → **hunt** (`search` state: checks where he lost you + nearby hiding spots, looks around, recognises you ≤9 m, gives up when suspicion < 0.3), **tidy** (puts stolen loot he sees lying around back home), chase, grab (windup/lunge) **or slap** (30 %, insult toast, taunt), carry (grip: 24 mashes, drains, shakes every 2.2 s), cage, dance (random / after caging), lawn mowing, flashlight at night, sleeps in the house (noises wake him), shoos wolves, poise → stagger / knock-down. |
 | `farmer/farmerModel.ts`, `farmerVisual.ts`, `mower.ts`, `nav.ts` | Procedural Bob + tools (bucket, can, axe, mug, hammer, paper, flashlight, shirt) + poses (ride, slap, taunt, 4 dance moves, read, laundry…); ride-on mower (cuts `Grass` via a mow texture, regrows); nav grid + A*. |
 | `render/` | `gfx.ts` (renderer / sky / stars / moon / lights / post, `apply(opts)`, dynamic resolution), `quality.ts` (presets, GPU detect), `batch.ts` (`instanceStatic`, `rigidSkin`, `cullDetail`), `toon.ts`, `grass.ts` (wind, pushers, mowing, `setLevel`), `fx.ts`, `textures.ts`. |
 | `core/` | `physics.ts`, `input.ts`, `audio.ts` (buses sfx / ambience / music, loops), `sounds.ts` (sound manifest + OPTIONAL list), `assets.ts`, `synced.ts`, `util.ts`. |
@@ -139,6 +140,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Bob stagger as physics, grabs predicted on the player's side (held things still answer at host speed).
 6. 🟡 **M5 (2026-11-13)**: ✅ loot + stash + missions + round loop + results (coins saved). Left: weapons, Bob tidies loot back,
    more pranks; then alert levels, dog helper, traps, modifiers, more farms, shop (coins are already saved).
+   2026-11-13 (session 3): ✅ hiding spots + Bob hunt/search, ✅ Bob tidies loot back, ✅ weapons (pan / shovel / sword / axe:
+   standing + click = whack, poise 50–60, break after 3–4 hits on Bob), ✅ pranks: sheep out, hay bale in pond, lose Bob,
+   whack Bob, hen in pond. Next: alert levels 0–3 (GDD), dog helper, traps (bear-trap models already in `assets/cover`).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -169,10 +173,18 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   too thin → kept Kenney corn). Tripo: user will sign up later → then `request_credential` (Tripo API host, Bearer) and make
   Bob + pigs **goofy** (big heads / googly-friendly), split onto the same physics pivots. Ask the user: round length (10 min),
   quota (400 solo), are the pranks fun, should Bob put loot back.
+- 2026-11-13 (session 3): user asked to fill the farm (not bigger) with places to hide + slow suspicion decay out of sight
+  + only stealing / standing etc. raise suspicion → done (see `cover.ts` / `hideouts.ts` / Bob hunt). Kenney nature-kit colours
+  fixed per model (`PALETTE` in `core/assets.ts`: teal corn → green, white wheat → gold, peach rocks → grey). Admin →
+  Hiding: "Show when Bob sees me", "Bob: lose me + search", teleport into a bush / the wheat. Checked headless (sight tests,
+  hunt, tidy, weapons, 2-browser online). Ask the user: is hiding fun, is the farm too full / still too open, hunt length (~16 s).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
+- Your own pig is invisible inside a big bush (only the HUD says "Hidden"); maybe an outline / x-ray later.
+- Bob walks through bushes / corn (not in his nav grid) — fine for a cartoon, he "pokes" into them while searching.
+- A caged pig's noises keep Bob investigating near the cage (pre-existing loop, acts like guarding).
 - Untested: guard mode (2 caged), fist (unreachable pig). Bob's HUD marker sits low while he lies ragdolled (pos = torso).
 - Sim cost +20–35 % vs before M4.5 (grip hands / joints); parts cost nothing while in control (bodies + joints off).
 - Prediction: the player's pig collides with others where the snapshot shows them (~100 ms in the past); own jump / fart

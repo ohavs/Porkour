@@ -4,6 +4,7 @@ import { clamp } from '../core/util';
 import type { Farmer } from '../farmer/farmer';
 import { G, ADMIN } from './ctx';
 import { t, onLang, type Key } from '../i18n';
+import { sightPoint } from '../world/cover';
 
 const v1 = new THREE.Vector3();
 
@@ -69,7 +70,7 @@ export class Hud {
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.lmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
       row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') +
-      `<div class="tip">${t('help.tip1')}<br>${t('help.tip2')}</div><div class="keys">${t('help.keys')}</div>`;
+      `<div class="tip">${t('help.tip1')}<br>${t('help.tip2')}<br>${t('help.tip3')}</div><div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
@@ -118,6 +119,7 @@ export class Hud {
     else if (st === 'slapWind' || st === 'slap' || st === 'taunt') { txt = t('bob.slap'); cls = 'red'; }
     else if (bob.chasing) { txt = onMe ? t('bob.chaseYou') : t('bob.chasePig'); cls = 'red'; if (st === 'pant') txt = t('bob.pant'); }
     else if (st === 'suspect') { txt = t('bob.suspect'); cls = 'yellow'; }
+    else if (st === 'search' && bob.hunt) { txt = bob.hunt === pig ? t('bob.searchYou') : t('bob.searchPig'); cls = 'yellow'; }
     else if (st === 'investigate' || st === 'search') { txt = t('bob.heard'); cls = 'yellow'; }
     else if (st === 'down') { txt = t('bob.down'); cls = 'green'; }
     else if (st === 'stagger') { txt = t('bob.stagger'); cls = 'green'; }
@@ -189,7 +191,9 @@ export class Hud {
     else if (pig.mode === 'ragdoll') p = t('p.ragdoll', keys);
     else if (pig.mode === 'held') p = t('p.held', keys);
     else if (pig.cage) p = t('p.caged', keys);
-    else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` }) + (val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
+    else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
+      + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
+      + (val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
     else {
       const tg = pig.findGrabTarget();
       if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') + val(tg) });
@@ -211,6 +215,9 @@ export class Hud {
     const st: string[] = [];
     if (pig.muddy > 0) st.push(`<span style="color:#d9a066">${t('s.muddy', { n: Math.ceil(pig.muddyUntil - pig.now) })}</span>`);
     if (pig.mode === 'wallow') st.push(t('s.playDead'));
+    if (ADMIN.showSight && G.farmer) st.push(G.farmer.sees(pig) ? `<span style="color:#ff7a4a">${t('s.seen')}</span>` : t('s.unseen'));
+    if (!pig.out && !pig.cage && !pig.heldBy && G.cover.at(pig.pos))
+      st.push(G.cover.at(sightPoint(pig, v1)) ? `<span style="color:#9be36a">${t('s.hidden')}</span>` : `<span style="color:#ffd166">${t('s.peek')}</span>`);
     if (pig.cage) st.push(`<span class="${pig.grillAt - pig.now < 20 ? 'flash' : ''}" style="color:#ff7a4a;font-size:24px">${t('s.caged', { n: Math.max(0, Math.ceil(pig.grillAt - pig.now)) })}</span>`);
     if (G.grills) st.push(`<span style="color:#ffb38a">${t('s.grills', { n: G.grills })}</span>`);
     if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') st.push(`<span style="color:#ff7a4a">${t('s.caught')}</span>`);

@@ -50,6 +50,8 @@ const MODES: Mode[] = ['normal', 'ragdoll', 'wallow', 'held'];
 const SHAPES: Shape[] = ['four', 'two', 'rag'];
 const QX90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
+/** Poise damage of a held weapon (0 = not a weapon). */
+const weaponOf = (h: Holdable) => (h as { def?: { weapon?: number } }).def?.weapon ?? 0;
 const DOWN = new THREE.Vector3(0, -1, 0);
 
 export class Pig implements Holdable {
@@ -85,6 +87,8 @@ export class Pig implements Holdable {
   private netNeed = 0;
   private setVel = new THREE.Vector3();
   private stepT = 0;
+  /** Next time pushing through a bush may rustle (game.ts). */
+  rustleAt = 0;
   visual: PigVisual;
   synced: Synced;
   /** Head + legs as real bodies (active ragdoll) and the grip hand. */
@@ -295,15 +299,19 @@ export class Pig implements Holdable {
     }
   }
 
-  /** Standing + empty hooves: jab whatever is in front (counts on Bob's poise). */
+  /** Standing: jab whatever is in front with the hooves, or whack it with the weapon held (counts on Bob's poise). */
   private punchHit() {
     const f = this.forward;
-    const hx = this.pos.x + f.x * 0.7, hz = this.pos.z + f.z * 0.7, hy = this.pos.y + 0.3;
+    const wpn = this.held ? weaponOf(this.held) : 0, reach = PIG.punchRange + (wpn ? 0.6 : 0);
+    const hx = this.pos.x + f.x * (wpn ? 0.95 : 0.7), hz = this.pos.z + f.z * (wpn ? 0.95 : 0.7), hy = this.pos.y + 0.3;
     const dir = v1.set(f.x, 0.35, f.z).normalize();
     let hit = false;
     const farmer = G.farmer;
-    if (farmer && Math.hypot(farmer.pos.x - hx, farmer.pos.z - hz) < PIG.punchRange && Math.abs(farmer.pos.y + 1 - hy) < 1.4) { farmer.punched?.(dir); hit = true; }
-    for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < PIG.punchRange * 0.9) { w.knock(v2.copy(dir).multiplyScalar(6)); hit = true; }
+    if (farmer && Math.hypot(farmer.pos.x - hx, farmer.pos.z - hz) < reach && Math.abs(farmer.pos.y + 1 - hy) < 1.4) {
+      if (wpn) { farmer.whacked?.(dir, wpn); this.weaponHit(); } else farmer.punched?.(dir);
+      hit = true;
+    }
+    for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < reach * 0.9) { w.knock(v2.copy(dir).multiplyScalar(wpn ? 9 : 6)); hit = true; }
     for (const h of G.holdables) {
       if (h === this || h === this.held || h.heldBy) continue;
       const p = h.body.translation();
@@ -314,7 +322,7 @@ export class Pig implements Holdable {
       hit = true;
     }
     if (hit) {
-      G.audio.play('punch|body', { pos: this.pos, vol: 0.9 });
+      G.audio.play(wpn ? 'metal' : 'punch|body', { pos: this.pos, vol: wpn ? 1 : 0.9, pitch: wpn ? 0.9 : 1 });
       G.fx.bits(v1.set(hx, hy + 0.3, hz), { count: 8, color: 0xfff1a8, speed: 3, up: 1.5, life: 0.35, size: 0.12, grow: 0, drag: 3, alpha: 1 });
       G.shakeFor(this, 0.2);
       G.noise(this.pos, 10);
@@ -581,6 +589,11 @@ export class Pig implements Holdable {
     if (inp.grabR && this.held && this.chargeStart >= 0) {
       const c = this.charge();
       this.chargeStart = -1;
+      // standing with a weapon: a click swings it (hold = throw as usual)
+      if (this.standing && weaponOf(this.held) && c < 0.3) {
+        if (this.now - this.punchAt > PIG.punchCd) { this.punchAt = this.now; this.punched = false; this.wobble += 0.08; G.audio.play('whoosh', { pos: this.pos, vol: 0.6, pitch: 0.8 }); }
+        return;
+      }
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
       if (this.held.mass > this.liftMax) this.throwHeld(c);
       else { this.swingT = 0; this.swingC = c; }
@@ -589,6 +602,19 @@ export class Pig implements Holdable {
       if (!this.held) this.swingT = -1;
       else if ((this.swingT += 1 / 60) >= PIG.swing) { this.swingT = -1; this.throwHeld(this.swingC); }
     }
+  }
+  /** A weapon wears out on Bob's head: after a few hits it breaks (gone until the next round). */
+  private weaponHit() {
+    const h = this.held as (Holdable & { uses?: number; def?: { breaks?: number }; bank?: () => void }) | null;
+    if (!h || h.uses === undefined) return;
+    h.uses++;
+    if (h.uses < (h.def?.breaks ?? 3)) return;
+    const at = v2.copy(this.pos).setY(this.pos.y + 0.6);
+    this.release(false);
+    h.bank?.();
+    G.audio.play('wood|metal', { pos: at, vol: 1, pitch: 0.7 });
+    G.fx.bits(at, { count: 14, color: 0xc9c2b8, speed: 4, up: 3, life: 0.6, size: 0.12, grow: 0, drag: 2, alpha: 1 });
+    G.events.push({ type: 'weaponBroke', who: this, text: h.label });
   }
   private cageLatchNear() { const c = this.cage ?? G.cage; return !!c && !c.open && Math.hypot(this.pos.x - c.latch.x, this.pos.z - c.latch.z) < 1.3; }
   charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart) / 0.9, 0, 1); }

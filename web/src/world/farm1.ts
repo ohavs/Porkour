@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fitted, sizeOf, has } from '../core/assets';
-import { staticBox, staticCylinder, staticTrimesh } from '../core/physics';
+import { staticBox, staticCylinder, staticTrimesh, SEE_THROUGH } from '../core/physics';
 import { Rng, V3 } from '../core/util';
 import { Terrain, type Rect } from './terrain';
 import { Prop, PROPS } from './props';
@@ -10,6 +10,8 @@ import { Cage } from './cage';
 import type { Chore } from '../farmer/farmer';
 import type { DayNight } from './daynight';
 import { buildDecor } from './decor';
+import { buildHideouts } from './hideouts';
+import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 
 /**
@@ -135,7 +137,8 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
         m.position.set(x, y(x, z) - 0.05, z); m.rotation.y = yaw; scene.add(m); out.statics.push(m);
       }
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      staticBox(V3(cx, y(cx, cz) + 0.6, cz), V3(len / 2, 0.65, 0.12), yaw);
+      const b = staticBox(V3(cx, y(cx, cz) + 0.6, cz), V3(len / 2, 0.65, 0.12), yaw);
+      if (model === 'kenney/fence_simple') SEE_THROUGH.add(b.collider(0).handle);   // rails: Bob sees through
     };
     const pen = (r: Rect, gate: 'n' | 's' | 'e' | 'w', gw = 2.4, model?: string) => {
       const gx = (r.x0 + r.x1) / 2, gz = (r.z0 + r.z1) / 2;
@@ -225,7 +228,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     prop('pot', -18, -33); prop('mug', -2.6, -31.8);
     for (const [x, z] of [[-39, 6], [-40.5, 7], [-38, 7.6]] as const) prop('log', x, z);
     prop('wheel', -12, 6, 0.4);
-    prop('sword', 36, -84);
+    prop('sword', 36, -84); prop('axe', -38.6, 9.4, 0.3, 0.55);   // the axe lies on the chopping stumps
     // valuables (M5 loot): Bob's porch, the picnic table, the BBQ, the barn, the garage, the garden
     prop('chest', -14.2, -30.4, 2.4); prop('chalice', -15.6, -30.0); prop('necklace', -12.8, -31.6);
     prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.1, -47.7, 0.3, 0.84);
@@ -265,6 +268,8 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       forest.add(kind, x, y(x, z), z, s);
       if (collide) staticCylinder(V3(x, y(x, z) + 1.5, z), 1.5, 0.3 * s);
     };
+    // hiding spots: big bushes, wheat + corn, bale stacks, log piles, crates…
+    buildHideouts({ scene, t, rng, out, blocked, forest, decor });
     // hedge along the inside of the farm fence (gap at the gate)
     const hedgeRun = (x0: number, z0: number, x1: number, z1: number) => {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.floor(len / 3.4), yaw = Math.atan2(z1 - z0, x1 - x0);
@@ -302,7 +307,9 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (let i = 0, n = 0; i < 500 && n < 45; i++) {
       const x = rng.range(F.x0 + 4, F.x1 - 4), z = rng.range(F.z0 + 4, F.z1 - 4);
       if (!free(x, z, 1)) continue;
-      forest.add(rng.next() < 0.4 ? 'flowerBush' : 'bush', x, y(x, z), z, rng.range(0.9, 1.4)); n++;
+      const s = rng.range(0.9, 1.4);
+      forest.add(rng.next() < 0.4 ? 'flowerBush' : 'bush', x, y(x, z), z, s); n++;
+      G.cover.circle('bush', x, z, 0.95 * s, y(x, z), 1.2 * s);
     }
     forest.finish(scene);
     // flowers, rocks, mushrooms
@@ -319,7 +326,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       }
     }
     // hay bales (rollable!)
-    for (const [x, z] of [[30, -78], [32, -79.5], [40, -80], [-4, -14], [-2.5, -15.2], [12, 14], [-30, 0], [44, -20]] as const) prop('hay', x, z);
+    for (const [x, z] of [[30, -78], [32, -79.5], [40, -80], [-4, -14], [-2.5, -15.2], [12, 14], [-30, 0], [38, -10]] as const) prop('hay', x, z);
     // one draw call per repeated static part instead of hundreds (same look)
     const n = instanceStatic(scene, out.statics, new Set(out.spinners.map((s) => s.obj)));
     console.log(`static meshes instanced: ${n}`);

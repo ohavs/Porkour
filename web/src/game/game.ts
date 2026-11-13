@@ -179,6 +179,16 @@ export class Game {
       p.muddyUntil = G.time; G.audio.play('mudstep', { pos: p.pos, vol: 0.8 });
       if (p === this.local) this.hud.toast(t('s.clean'), 1.2);
     }
+    // bushes / crops rustle when a pig pushes through them fast: a sound Bob can hear
+    for (const p of this.pigs) {
+      if (p.out || p.cage || p.heldBy || G.time < p.rustleAt) continue;
+      const sp = Math.hypot(p.vel.x, p.vel.z);
+      if (sp < 2.4 || !G.cover.at(p.pos)) continue;
+      p.rustleAt = G.time + (sp > 5 ? 0.3 : 0.55);
+      G.audio.play('rustle', { pos: p.pos, vol: Math.min(1, 0.4 + sp * 0.08), pitch: 0.9 + Math.random() * 0.25 });
+      G.fx.bits(p.pos, { count: 5, color: 0x5cb83d, speed: 2.2, up: 2.2, life: 0.6, size: 0.12, grow: 0, drag: 2, alpha: 1 });
+      G.noise(p.pos, sp > 5 ? 10 : 6);
+    }
     G.clouds = G.clouds.filter((c) => c.until > G.time);
     if (G.net !== 'client') {
       this.round.step(FIXED);
@@ -195,6 +205,10 @@ export class Game {
       const who = e.who?.label ?? '';
       switch (e.type) {
         case 'alarm': if (me) this.hud.toast(t('e.alarm'), 1.6); break;
+        case 'bobLost': if (me) this.hud.toast(t('e.lost'), 1.8); break;
+        case 'bobGaveUp': if (me) this.hud.toast(t('e.gaveUp'), 1.6); break;
+        case 'weaponBroke': if (me) this.hud.toast(t('e.broke', { what: e.text ? t(e.text as Key) : '?' }), 1.4); break;
+        case 'tidied': this.hud.toast(t('e.tidied', { what: e.text ? t(e.text as Key) : '?' }), 1.8); break;
         case 'caught': this.hud.toast(me ? t('e.caughtMe') : t('e.caughtOther', { who }), 1.6); break;
         case 'escaped': if (me) this.hud.toast(t('e.escaped'), 1.2); break;
         case 'caged': if (me) this.hud.toast(t('e.caged'), 1.6); break;
@@ -274,6 +288,13 @@ export class Game {
       case 'roundEnd': this.round.end(this.round.missions.every((m) => !m.req || m.done), 'time'); break;
       case 'loot100': this.round.banked += 100; break;
       case 'roundNew': this.restartRound(); break;
+      case 'bobHunt': if (f && ADMIN.bob && !L.out && !L.cage) f.loseMe(L); break;
+      case 'tp:bush': {
+        const b = G.cover.list.filter((c) => c.kind === 'bush' && c.r > 1.2).sort((a, b) => Math.hypot(a.x - L.pos.x, a.z - L.pos.z) - Math.hypot(b.x - L.pos.x, b.z - L.pos.z))[0];
+        if (b) tp(b.x, b.z);
+        break;
+      }
+      case 'tp:wheat': tp(46, -22); break;
       case 'tp:sty': tp(30, 6); break;
       case 'tp:cage': tp(cage.front.x + 1.5, cage.front.z + 1.5); break;
       case 'tp:house': tp(this.farm.zones.door.x + 1, this.farm.zones.door.z + 2); break;

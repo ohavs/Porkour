@@ -15,14 +15,17 @@ import type { Game } from './game';
  */
 export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 40, stashR: 2.3 };
 
-export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell';
-const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash'];
-const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', ...REQ_POOL];
+export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell'
+  | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond';
+const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob'];
+const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean }
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
 
 const COOP = { x0: 16, x1: 30, z0: -32, z1: -18 };
+const SHEEP_PEN = { x0: -63, x1: -50, z0: -52, z1: -34 };
+const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const WELL = { x: 0, z: -56 };
 const v1 = new THREE.Vector3();
 
@@ -117,6 +120,8 @@ export class Round {
     if (type === 'stagger') this.done('staggerBob');
     if (type === 'bobCough') this.done('fartBob');
     if (type === 'wolfScared') this.done('wolfScare');
+    if (type === 'bobGaveUp') this.done('loseBob');
+    if (type === 'whacked') this.done('whackBob');
   }
 
   step(dt: number) {
@@ -143,6 +148,9 @@ export class Round {
     if (this.wants('hensOut')) this.check('hensOut', critters.filter((c) => c.def.kind === 'hen' && !(c.pos.x > COOP.x0 && c.pos.x < COOP.x1 && c.pos.z > COOP.z0 && c.pos.z < COOP.z1)).length >= 3);
     if (this.wants('pumpkinWell')) this.check('pumpkinWell', props.some((p) => (p.def === PROPS.pumpkin || p.def === PROPS.bigPumpkin) && !p.banked && !p.heldBy
       && Math.hypot(p.synced.currP.x - WELL.x, p.synced.currP.z - WELL.z) < 1.6 && p.synced.currP.y > G.terrain.height(WELL.x, WELL.z) + 0.9));
+    if (this.wants('sheepOut')) this.check('sheepOut', critters.filter((c) => c.def.kind === 'sheep' && !inRect(SHEEP_PEN, c.pos)).length >= 2);
+    if (this.wants('hayPond')) this.check('hayPond', props.some((p) => p.def === PROPS.hay && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
+    if (this.wants('henPond')) this.check('henPond', critters.some((c) => c.def.kind === 'hen' && inWater(c.pos.x, c.pos.z)));
     this.check('quota', this.banked >= this.quota);
     // phases
     const reqDone = this.missions.every((m) => !m.req || m.done);

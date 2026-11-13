@@ -11,6 +11,9 @@ export const L = { STATIC: 1, PIG: 2, PROP: 4, CRITTER: 8, FARMER: 16, LIMB: 32 
 const ALL = 0xffff;
 export const groups = (member: number, filter = ALL) => (member << 16) | filter;
 
+/** Colliders Bob's eyes ignore (rail fences: you can see through them). */
+export const SEE_THROUGH = new Set<number>();
+
 /** Anything a collider belongs to (pig, prop, critter…). */
 export const owners = new Map<number, any>();
 

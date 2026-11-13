@@ -14,6 +14,7 @@ import { online } from './net/online';
 import { G } from './game/ctx';
 import { GLB_MODELS } from './world/animalGlb';
 import { LOOT_MODELS } from './world/props';
+import { COVER_MODELS } from './world/hideouts';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -21,12 +22,13 @@ const MODELS = [
     'crops_wheatStageB', 'crop_pumpkin', 'crop_melon', 'tractor', 'truckFlat', 'cart', 'log', 'log_stackLarge', 'stall', 'sign', 'campfire_logs',
     'stump_round', 'barrel', 'pot_large', 'wheel'].map((n) => 'kenney/' + n),
   'kit/Prop_Crate', 'kit/Prop_Wagon',
-  ...['crate_carrots', 'crate_potatoes', 'crate_tomatoes', 'crate_cheese', 'food_ingredient_ham', 'mug_full', 'sword_1handed',
+  ...['crate_carrots', 'crate_potatoes', 'crate_tomatoes', 'crate_cheese', 'food_ingredient_ham', 'mug_full', 'sword_1handed', 'axe_1handed',
     'post_lantern', 'pumpkin_orange', 'pumpkin_orange_jackolantern'].map((n) => 'kaykit/' + n),
   ...['wizard_hat', 'viking_helmet', 'knight_helmet', 'skull_helmet', 'dark_wizard_hat', 'hood', 'cape_knight', 'cape_mage', 'cape_barbarian', 'cape_rogue'].map((n) => 'cosm/' + n),
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
   ...GLB_MODELS, ...LOOT_MODELS, 'loot/Coin',
   ...['Carrot_4', 'Lettuce_4', 'Tomato_4', 'Beet_4', 'BushBerries_4', 'Watermelon_4'].map((n) => 'crops/' + n),
+  ...COVER_MODELS,
 ];
 
 loadSettings();

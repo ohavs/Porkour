@@ -4,7 +4,7 @@ import { toonMat } from '../render/toon';
 import { Rng } from '../core/util';
 
 /** Cartoon vegetation built from smooth blobs (cel shaded, instanced: one draw call per variant). */
-export type TreeKind = 'oak' | 'pine' | 'apple' | 'poplar' | 'bush' | 'flowerBush' | 'hedge';
+export type TreeKind = 'oak' | 'pine' | 'apple' | 'poplar' | 'bush' | 'flowerBush' | 'hedge' | 'bigBush';
 
 const rng = new Rng(4242);
 function part(g: THREE.BufferGeometry, color: number, m: THREE.Matrix4) {
@@ -50,6 +50,18 @@ function variant(kind: TreeKind): THREE.BufferGeometry {
   } else if (kind === 'poplar') {
     parts.push(part(TRUNK, 0x8a5a35, M(0, 1, 0, 0.8, 2, 0.8)));
     parts.push(part(BLOB, g(), M(0, 3.6, 0, 1.15, 2.6, 1.15)));
+  } else if (kind === 'bigBush') {
+    // a fat hiding bush (≈ 3.2 m wide, 1.5 m tall): a pig fits inside (soft cover, no collider)
+    const n = rng.int(6, 7);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 6.28 + rng.range(-0.2, 0.2), r = i === 0 ? 0 : rng.range(0.75, 0.95);
+      const s = i === 0 ? 0.9 : rng.range(0.62, 0.78);
+      parts.push(part(BLOB, g(), M(Math.cos(a) * r, 0.55 + (i === 0 ? 0.35 : rng.range(0, 0.15)), Math.sin(a) * r, s, s * 0.85, s)));
+    }
+    if (rng.next() < 0.5) for (let i = 0; i < 8; i++) {
+      const d = new THREE.Vector3(rng.range(-1, 1), rng.range(0.2, 1), rng.range(-1, 1)).normalize();
+      parts.push(part(BALL, 0xd9473b, M(d.x * 1.25, 0.6 + d.y * 0.75, d.z * 1.25, 0.08)));   // berries
+    }
   } else if (kind === 'hedge') {
     for (let i = 0; i < 4; i++) parts.push(part(BLOB, g(), M((i - 1.5) * 0.9, 0.6 + rng.range(-0.05, 0.15), rng.range(-0.1, 0.1), 0.75, 0.75, 0.7)));
   } else {
