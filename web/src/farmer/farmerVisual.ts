@@ -7,7 +7,7 @@ import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
 export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
   | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
-  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry';
+  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
@@ -16,10 +16,14 @@ export interface FarmerPose {
   limp?: boolean; rel?: THREE.Quaternion[];
   /** Grip hand (model space) while he holds a pig: both arms reach for it. */
   hand?: THREE.Vector3 | null;
+  /** Alert level gear (pitchfork / shotgun) and how furious he is 0..1 (red face). */
+  weapon?: '' | 'fork' | 'gun'; fury?: number;
 }
 
 const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
-const GREEN = new THREE.Color(0x9ccf4f);
+const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a);
+/** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
+const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
@@ -204,6 +208,18 @@ export class FarmerVisual {
       case 'fist':
         T.rsx = -2.7; T.rsz = -0.35; T.rex = -0.9 + Math.sin(t * 18) * 0.35; T.lsz = 0.5; T.lex = -1.6; T.lean = -0.05; T.headX = -0.25;
         break;
+      case 'aim': {   // shotgun up to the shoulder, left hand on the barrel, squinting
+        const sway = Math.sin(t * 7) * 0.03;
+        T.rsx = -1.45 + sway; T.rsz = -0.12; T.rex = -0.15; T.lsx = -1.35 + sway; T.lsz = 0.45; T.lex = -0.5;
+        T.lean = 0.08; T.headX = 0.12; T.headY = -0.08; T.hipY = -0.05; T.ltx = -0.3; T.lkx = 0.25; T.rtx = 0.25; T.rkx = 0.15;
+        break;
+      }
+      case 'shoot': {   // BOOM: kicks back
+        const k = Math.exp(-a * 9);
+        T.rsx = -1.45 - 0.9 * k; T.rsz = -0.12; T.rex = -0.15 - 0.3 * k; T.lsx = -1.35 - 0.8 * k; T.lsz = 0.45; T.lex = -0.5;
+        T.lean = 0.08 - 0.35 * k; T.headX = 0.12 - 0.4 * k; T.hipY = -0.05; T.ltx = -0.3; T.lkx = 0.25; T.rtx = 0.25 + 0.3 * k; T.rkx = 0.15;
+        break;
+      }
       case 'pant':
         T.lean = 0.7 + Math.sin(t * 9) * 0.05; T.hipY = -0.1; T.lsx = T.rsx = -0.85; T.lex = T.rex = -0.05; T.lsz = 0.25; T.rsz = -0.25;
         T.ltx = T.rtx = -0.25; T.lkx = T.rkx = 0.45; T.headX = -0.45;
@@ -312,17 +328,23 @@ export class FarmerVisual {
     if (t > this.blinkAt) this.blinkAt = t + 2 + Math.random() * 3;
     const shut = p.anim === 'nap' || p.anim === 'down' || p.anim === 'cough' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = damp(e.scale.y, shut, 30, dt);
-    const green = p.anim === 'cough' ? 0.55 : 0;
-    for (const f of R.face) f.mat.color.copy(f.base).lerp(GREEN, green);
+    const green = p.anim === 'cough' ? 0.55 : 0, red = (p.fury ?? 0) * 0.42 * (0.85 + Math.sin(t * 5) * 0.15 * (p.fury ?? 0));
+    for (const f of R.face) f.mat.color.copy(f.base).lerp(RED, red).lerp(GREEN, green);
     // hat flies a little when knocked
     R.hat.position.y = 0.36 + (p.anim === 'down' ? Math.max(0, 0.25 - Math.abs(a - 0.3)) * 0.8 : 0);
     // tools
-    const want = TOOL[p.anim] ?? (p.flashlight && p.anim !== 'carry' ? 'flashlight' : '');
+    const gear = p.weapon && !NO_GEAR.has(p.anim) && !p.hand && !p.limp ? p.weapon : '';
+    const want = p.anim === 'aim' || p.anim === 'shoot' ? 'gun' : TOOL[p.anim]
+      ?? (gear && (p.run || !p.flashlight || p.anim === 'windup' || p.anim === 'lunge') ? gear : p.flashlight && p.anim !== 'carry' ? 'flashlight' : '');
     if (want !== this.shown) {
       for (const [n, o] of Object.entries(R.tools)) o.visible = n === want;
       this.shown = want;
     }
     if (want === 'can') R.tools.can.rotation.x = 0.55 + Math.sin(a * 0.9) * 0.1;
+    if (want === 'fork') {   // lowered, tines forward; straight out along the arm in the lunge
+      const tilt = R.tools.fork.children[0];
+      tilt.rotation.x = damp(tilt.rotation.x, p.anim === 'lunge' || p.anim === 'windup' ? -0.15 : p.run ? -1.25 : Math.PI - 0.12, 12, dt);
+    }
     this.fxT -= dt;
     this.root.updateMatrixWorld();
   }

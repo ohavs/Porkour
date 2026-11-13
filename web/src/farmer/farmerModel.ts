@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toonMat } from '../render/toon';
+import { fitted, has } from '../core/assets';
 
 /** Hip height (m). Bob faces +z, origin between the boots on the ground. */
 export const HIP = 0.86;
@@ -168,6 +169,26 @@ export function buildFarmer(root: THREE.Group): FarmerRig {
   tool('shirt', (g) => {
     mesh(new THREE.BoxGeometry(0.3, 0.32, 0.02), toonMat(0x6fb3e0), [0, 0.1, 0.12], g);
     for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.12, 0.08, 0.02), toonMat(0x6fb3e0), [s * 0.2, 0.2, 0.12], g, undefined, [0, 0, -s * 0.4]);
+  });
+
+  // alert 2: a pitchfork, held low with the tines forward (the visual tilts it per pose)
+  tool('fork', (g) => {
+    const h = new THREE.Group(); h.name = 'forkTilt'; h.rotation.x = Math.PI - 0.12; g.add(h);
+    mesh(new THREE.CylinderGeometry(0.032, 0.036, 1.5, 8), wood, [0, -0.2, 0], h);
+    mesh(new THREE.BoxGeometry(0.26, 0.05, 0.045), metal, [0, -0.96, 0], h);
+    for (const x of [-0.11, 0, 0.11]) {
+      mesh(new THREE.CylinderGeometry(0.018, 0.005, 0.36, 6), metal, [x, -1.16, 0], h);
+    }
+  });
+  // alert 3: rock-salt shotgun (Quaternius Survival, CC0), barrel along the arm (−y) so it points where the arm points
+  tool('gun', (g) => {
+    if (has('loot/Shotgun_1')) {
+      const m = fitted('loot/Shotgun_1', { width: 1.05 });
+      m.rotation.z = -Math.PI / 2; m.position.set(0.0, -0.18, 0.03); g.add(m);
+    } else {
+      mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.8, 10), metal, [0, -0.35, 0], g);
+      mesh(new THREE.BoxGeometry(0.06, 0.3, 0.09), wood, [0, 0.1, 0], g);
+    }
   });
 
   return {

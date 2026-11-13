@@ -191,6 +191,7 @@ export class Round {
     if (G.grills >= 3) return this.end(false, 'grill');
     if (this.timeLeft <= 0) return this.end(reqDone, 'time');
     if (!this.lastMin && this.timeLeft < 60) { this.lastMin = true; G.events.push({ type: 'lastMinute' }); }
+    G.farmer?.setFloor(this.timeLeft < 120 ? 2 : 0);   // the last 2 minutes: at least "on alert"
   }
 
   private atWell(p: THREE.Vector3) { return Math.hypot(p.x - WELL.x, p.z - WELL.z) < 1.6 && p.y > G.terrain.height(WELL.x, WELL.z) + 0.9; }
@@ -209,6 +210,7 @@ export class Round {
     if (!m || m.done) return;
     m.done = true;
     G.events.push({ type: 'missionDone', text: 'm.' + id });
+    G.farmer?.raise('prank');   // he notices the mess: the farm gets more alert
     G.audio.play('fanfare', { vol: 0.5 });
   }
   bankProp(pr: Prop) {

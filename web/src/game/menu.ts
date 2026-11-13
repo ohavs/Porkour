@@ -191,6 +191,8 @@ export class Menu {
       `${btn('dance', 'a.bobDance')}${btn('slap', 'a.bobSlap')}${btn('mow', 'a.bobMow')}${btn('bed', 'a.bobSleep')}</div>` +
       `<div class="sec">${t('a.stealth')}</div>` + tog('showSight', 'a.showSight') +
       `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${btn('tp:wheat', 'a.tpWheat')}</div>` +
+      `<div class="sec">${t('a.alert')}</div><div class="grid">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}">${l} · ${t(('alert.' + l) as Key)}</button>`).join('')}` +
+      `${btn('trapMe', 'a.trapMe')}${btn('dogMe', 'a.dogMe')}${btn('bringBone', 'a.bringBone')}</div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +

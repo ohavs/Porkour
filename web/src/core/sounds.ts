@@ -19,6 +19,7 @@ export const SOUND_SETS: Record<string, string[]> = {
   bob_oof: n('bob_oof', 4), bob_down: n('bob_down', 3), bob_laugh: ['bob_laugh'], bob_huh: ['bob_huh'],
   // cage / grill / misc
   unlock: ['unlock'], creak: ['creak'], sizzle: ['sizzle'], crackle: ['crackle'], fanfare: ['fanfare'], coins: ['coins'],
+  shot: n('shot', 2), snap: ['snap'],
   // animals
   moo: n('moo', 2), neigh: n('neigh', 2), bray: n('bray', 2), baa: ['baa1'], llama: ['llama'], cluck: n('cluck', 3), squawk: ['squawk'], bark: n('bark', 3), growl: n('growl', 4), yelp: n('yelp', 2),
   howl: ['howl'], meow: ['meow'], munch: ['munch'],

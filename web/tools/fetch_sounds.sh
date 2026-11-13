@@ -47,7 +47,7 @@ pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night
   '/data/core/sounds/bite-small.ogg' '/data/core/sounds/club.ogg' '/data/core/sounds/dwarf-laugh.wav' '/data/core/sounds/fanfare-short.wav' \
   '/data/core/sounds/fist.ogg' '/data/core/sounds/gold.ogg' '/data/core/sounds/groan.wav' '/data/core/sounds/human-old-*' \
   '/data/core/sounds/miss-*' '/data/core/sounds/mud-*' '/data/core/sounds/open-chest.wav' '/data/core/sounds/squishy-*' \
-  '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
+  '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
@@ -94,6 +94,9 @@ snd "$OA/attack/fire/sz11.ogg" sizzle -4 0 "$OAc"
 snd "$OA/attack/fire/c_11.ogg" crackle -6 0 "$OAc"
 snd "$WS/fanfare-short.wav" fanfare -4 0 "$WSg"
 snd "$WS/gold.ogg" coins -4 0 "$WSg"
+# Bob furious: rock-salt blunderbuss; bear trap snapping shut
+snd "$WS/thunderstick.ogg" shot1 -1 0 "$WSg"; snd "$WS/gunshot.wav" shot2 -1 0 "$WSg"
+snd "$WS/pincers.ogg" snap -1 0 "$WSg"
 # ---------------------------------------------------------------- animals
 snd "$VL/mobs_mc_cow.ogg" moo1 -3 0 "$VLc"; snd "$OA/actor/fauna/animal/cattle_02.ogg" moo2 -3 0 "$OAc"
 snd "$VL/mobs_mc_horse_random.1.ogg" neigh1 -3 0 "GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0"

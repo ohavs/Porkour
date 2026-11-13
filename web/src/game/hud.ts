@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Pig } from '../pig/pig';
 import { clamp } from '../core/util';
-import type { Farmer } from '../farmer/farmer';
+import { ALERT, type Farmer } from '../farmer/farmer';
 import { G, ADMIN } from './ctx';
 import { t, onLang, type Key } from '../i18n';
 import { sightPoint } from '../world/cover';
@@ -40,6 +40,8 @@ export class Hud {
   private mark = document.getElementById('bobmark')!;
   private helpTimer = 0;
   showHelp = true;
+  /** Farm alert meter under Bob's chip: his face (redder per level), 3 pips filling toward the next level, the level name. */
+  private alertEl: HTMLElement; private alertKey = '';
 
   constructor() {
     const box = document.getElementById('abilities')!;
@@ -54,6 +56,8 @@ export class Hud {
     document.getElementById('bMenu')!.insertAdjacentHTML('afterbegin', SVG.menu);
     this.renderHelp();
     onLang(() => this.renderHelp());
+    this.alertEl = document.createElement('div'); this.alertEl.id = 'alert'; this.alertEl.className = 'txt l0';
+    document.getElementById('hud')!.appendChild(this.alertEl);
     // hidden on the title screen (it covered the logo); shown when the game starts (flashHelp)
     this.showHelp = false; this.help.classList.add('hide');
   }
@@ -109,9 +113,28 @@ export class Hud {
     this.clockEl.querySelector('span')!.textContent = txt;
   }
 
+  alertFlash() { this.alertEl.classList.remove('flash'); void this.alertEl.offsetWidth; this.alertEl.classList.add('flash'); }
+  private updateAlert(bob: Farmer) {
+    const l = bob.level, at = ALERT.at;
+    const fills = [1, 2, 3].map((k) => (l >= k ? 1 : clamp((bob.heat - at[k - 1]) / (at[k] - at[k - 1]), 0, 1)));
+    const key = l + ':' + fills.map((f) => Math.round(f * 20)).join(',') + ':' + t('alert.' + l);
+    if (key === this.alertKey) return;
+    this.alertKey = key;
+    // Bob's face: brows angle down and the face reddens per level
+    const skin = ['#f3b38f', '#f5a07e', '#f7835f', '#ff5a3c'][l], b = [0, 0.18, 0.4, 0.62][l] * 10;
+    const face = `<svg class="face" viewBox="0 0 26 26"><path d="M3 11h20l-3-4H6z" fill="#f0cb6c"/><rect x="7" y="4" width="12" height="5" rx="2" fill="#f0cb6c"/>`
+      + `<circle cx="13" cy="16" r="8" fill="${skin}"/><circle cx="10" cy="15" r="1.4" fill="#1b1010"/><circle cx="16" cy="15" r="1.4" fill="#1b1010"/>`
+      + `<path d="M7.5 ${12 - b * 0.15}l4 ${b * 0.3}M18.5 ${12 - b * 0.15}l-4 ${b * 0.3}" stroke="#7a4a2a" stroke-width="1.6" stroke-linecap="round"/>`
+      + `<ellipse cx="13" cy="19.3" rx="4.2" ry="1.6" fill="#7a4a2a"/><circle cx="13" cy="17.4" r="1.6" fill="#ec8f78"/></svg>`;
+    this.alertEl.className = 'txt l' + l + (this.alertEl.classList.contains('flash') ? ' flash' : '');
+    this.alertEl.innerHTML = face + `<div class="pips">${fills.map((f) => `<i><b style="width:${Math.round(f * 100)}%"></b></i>`).join('')}</div><span>${t('alert.' + l)}</span>`;
+  }
+
   /** Bob's activity chip + the ? / ! marker over his head (clamped to the screen edge when he's off-screen). */
   updateFarmer(bob: Farmer, pig: Pig, cam: THREE.Camera) {
+    this.alertEl.style.display = ADMIN.bob ? '' : 'none';
     if (!ADMIN.bob) { this.bob.textContent = t('bob.off'); this.bob.className = 'txt'; this.mark.style.opacity = '0'; return; }
+    this.updateAlert(bob);
     const s = bob.sus.get(pig) ?? 0;
     const onMe = bob.target === pig && bob.chasing;
     let txt = t('bob.doing', { what: t(bob.activity) }), cls = '';
@@ -130,6 +153,8 @@ export class Hud {
     else if (st === 'dance') { txt = t('bob.dance'); cls = 'green'; }
     else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; }
+    else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; }
+    if (st === 'aim' || st === 'shoot') { txt = t('bob.aim'); cls = 'red'; }
     this.bob.textContent = txt; this.bob.className = 'txt ' + cls;
     // marker
     let sym = '', col = '#ffd166', fill = 0;
@@ -187,17 +212,22 @@ export class Hud {
     const keys = { space: K(t('key.space')), lmb: K(t('key.lmb')), rmb: K(t('key.rmb')), q: K('Q') };
     // prompt
     let p = '';
+    const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
+      && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     if (pig.out) p = pig.outReason === 'wolf' ? t('p.dragged', { n: Math.ceil(pig.outUntil - pig.now) })
       : `<b style="color:#ff7a4a;font-size:30px">${t('p.grilled')}</b><br>${t('p.backIn', { n: Math.ceil(pig.outUntil - pig.now) })}`;
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = t('p.bobGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'wolf') p = t('p.wolfGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
+    else if (pig.mode === 'held' && pig.heldBy?.kind === 'trap') p = t('p.trapGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
     else if (pig.mode === 'ragdoll') p = t('p.ragdoll', keys);
     else if (pig.mode === 'held') p = t('p.held', keys);
     else if (pig.cage) p = G.cage?.canPick(pig) ? t('p.pickLock', keys) : t('p.caged', keys);
     else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
       + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
+      + ((pig.held as { def?: { id?: string } }).def?.id === 'bone' ? `<br><span style="color:#ffd166">${t('p.bone')}</span>` : '')
       + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
     else if (G.cage?.canPick(pig)) p = t('p.pickLock', keys);
+    else if (stuck) p = t('p.freeTrap', { ...keys, who: stuck.holding!.label.replace(/[<>&]/g, '') });
     else {
       const tg = pig.findGrabTarget();
       if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') + val(tg) });
@@ -214,6 +244,8 @@ export class Hud {
     const st: string[] = [];
     if (pig.muddy > 0) st.push(`<span style="color:#d9a066">${t('s.muddy', { n: Math.ceil(pig.muddyUntil - pig.now) })}</span>`);
     if (pig.mode === 'wallow') st.push(t('s.playDead'));
+    if (!pig.out && !pig.heldBy && G.traps?.list.some((tr: { active: boolean; armed: boolean; pos: THREE.Vector3 }) => tr.active && tr.armed
+      && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 3.5)) st.push(`<span style="color:#ff9a3c">${t('s.trapNear')}</span>`);
     if (ADMIN.showSight && G.farmer) st.push(G.farmer.sees(pig) ? `<span style="color:#ff7a4a">${t('s.seen')}</span>` : t('s.unseen'));
     if (!pig.out && !pig.cage && !pig.heldBy && G.cover.at(pig.pos))
       st.push(G.cover.at(sightPoint(pig, v1)) ? `<span style="color:#9be36a">${t('s.hidden')}</span>` : `<span style="color:#ffd166">${t('s.peek')}</span>`);

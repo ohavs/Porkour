@@ -83,6 +83,14 @@
   #clock .dial { width: 30px; height: 30px; }
   #bob { position:absolute; left:50%; top:14px; transform:translateX(-50%); font-size:19px; padding:4px 14px; border-radius:14px;
     background: rgba(40,22,8,.42); white-space:nowrap; transition: color .2s; }
+  #alert { position:absolute; left:50%; top:50px; transform:translateX(-50%); display:flex; align-items:center; gap:7px; padding:2px 11px 2px 4px;
+    border-radius:12px; background: rgba(40,22,8,.42); font-size:14px; white-space:nowrap; color:#b6e36a; transition: color .3s; }
+  #alert .face { width:24px; height:24px; display:block; }
+  #alert .pips { display:flex; gap:3px; } #alert .pips i { width:18px; height:7px; border-radius:4px; background: rgba(255,246,230,.18); position:relative; overflow:hidden; }
+  #alert .pips b { position:absolute; left:0; top:0; bottom:0; background: currentColor; border-radius:4px; transition: width .4s; }
+  #alert.l1 { color: var(--gold); } #alert.l2 { color:#ff9a3c; } #alert.l3 { color:#ff4a3a; font-family: Title; letter-spacing:.5px; }
+  #alert.flash { animation: alertPulse .5s ease-in-out 4; }
+  @keyframes alertPulse { 50% { transform: translateX(-50%) scale(1.18); } }
   #bob.yellow { color: var(--gold); } #bob.red { color:#ff6a4a; font-family: Title; letter-spacing:.5px; } #bob.green { color:#b6e36a; } #bob.blue { color:#a8c8ff; }
   #bobmark { position:absolute; left:0; top:0; font-family: Title; font-size:46px; line-height:1; opacity:0; transition: opacity .2s;
     width:40px; height:52px; display:flex; align-items:center; justify-content:center; }

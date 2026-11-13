@@ -70,6 +70,8 @@ export const G = {
   farmer: null as any,
   wolves: [] as any[],
   cage: null as any,
+  /** Bob's bear traps (world/traps.ts). */
+  traps: null as any,
   events: [] as GameEvent[],
   /** Times a pig got grilled this round. */
   grills: 0,
