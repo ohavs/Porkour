@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { damp, clamp, lerp } from '../core/util';
 import { G } from '../game/ctx';
 import { buildPig, PIVOT, STAND_POS, STAND_ANGLE, NECK, SNOUT_TIP, type PigRig } from './pigModel';
@@ -44,6 +45,7 @@ export class PigVisual {
   constructor(public color: number, outfit?: Outfit) {
     this.root.add(this.sway); this.sway.add(this.roll); this.roll.add(this.base);
     this.rig = buildPig(this.base);
+    rigidSkin(this.base, undefined, new Set(this.rig.skin.map((s) => s.mat)));   // one draw call per skin colour, not ~40 meshes
     this.spots.position.copy(PIVOT).negate(); this.rig.upper.add(this.spots);
     this.setOutfit(outfit ?? defaultOutfit());
   }

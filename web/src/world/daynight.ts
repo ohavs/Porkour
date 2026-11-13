@@ -22,7 +22,7 @@ const KEYS: Key[] = [
 const ca = new THREE.Color(), cb = new THREE.Color();
 const mix = (out: THREE.Color, a: number, b: number, t: number) => out.copy(ca.setHex(a)).lerp(cb.setHex(b), t);
 
-export interface Lamp { light: THREE.PointLight; glow: THREE.Mesh; base: number }
+export interface Lamp { at: THREE.Vector3; glow: THREE.Mesh; base: number; distance: number; d2: number }
 
 /**
  * Day / night: moves the sun and moon, blends sky / light / fog / cloud colours through dawn, day, dusk and night,
@@ -30,6 +30,13 @@ export interface Lamp { light: THREE.PointLight; glow: THREE.Mesh; base: number 
  */
 export class DayNight {
   lamps: Lamp[] = [];
+  /**
+   * A fixed pool of point lights handed to the lamps nearest the camera each frame. Every light costs on every
+   * pixel of every lit material (also by day at intensity 0), so the pool is a graphics option, not one per lamp.
+   * The farthest lit lamp fades out as the next one comes closer: no popping.
+   */
+  private pool: THREE.PointLight[] = [];
+  private poolSize = 6;
   private lastHour = G.hour;
   private ambDay: Loop | null = null;
   private ambNight: Loop | null = null;
@@ -39,13 +46,24 @@ export class DayNight {
 
   constructor(private gfx: Gfx) {}
 
-  /** A lantern: warm point light + glowing bulb, on at night. */
+  /** A lantern: glowing bulb + (when in the pool) a warm point light, on at night. */
   addLamp(parent: THREE.Object3D, at: THREE.Vector3, intensity = 9, distance = 13) {
     const glow = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false }));
     glow.position.copy(at); parent.add(glow);
-    const light = new THREE.PointLight(0xffb45a, 0, distance, 1.6);
-    light.position.copy(at); parent.add(light);
-    this.lamps.push({ light, glow, base: intensity });
+    parent.updateMatrixWorld(true);
+    this.lamps.push({ at: at.clone().applyMatrix4(parent.matrixWorld), glow, base: intensity, distance, d2: 0 });
+    if (this.pool.length < Math.min(this.poolSize, this.lamps.length)) this.setLampLights(this.poolSize);
+  }
+
+  /** How many lamps really light their surroundings (the nearest ones). Changing it recompiles materials once. */
+  setLampLights(n: number) {
+    this.poolSize = n;
+    const want = Math.min(n, this.lamps.length);
+    while (this.pool.length > want) this.pool.pop()!.removeFromParent();
+    while (this.pool.length < want) {
+      const l = new THREE.PointLight(0xffb45a, 0, 13, 1.6);
+      this.gfx.scene.add(l); this.pool.push(l);
+    }
   }
 
   /** Advance the clock (fixed step). */
@@ -92,9 +110,18 @@ export class DayNight {
     // lamps
     const lampOn = smoothstep(0.25, 0.75, G.night);
     for (const l of this.lamps) {
-      l.light.intensity = l.base * lampOn * (0.94 + Math.sin(G.time * 13 + l.base) * 0.03 + Math.sin(G.time * 7.3) * 0.03);
+      l.d2 = l.at.distanceToSquared(camPos);
       (l.glow.material as THREE.MeshBasicMaterial).color.setHex(lampOn > 0.3 ? 0xffd27a : 0x8a7a5a);
     }
+    const near = this.pool.length < this.lamps.length ? [...this.lamps].sort((a, b) => a.d2 - b.d2) : this.lamps;
+    const flick = 0.94 + Math.sin(G.time * 7.3) * 0.03;
+    this.pool.forEach((light, i) => {
+      const l = near[i];
+      // the last lit lamp hands over smoothly to the next one in line
+      const fade = i === this.pool.length - 1 && near[i + 1] ? clamp((Math.sqrt(near[i + 1].d2) - Math.sqrt(l.d2)) / 6, 0, 1) : 1;
+      light.position.copy(l.at); light.distance = l.distance;
+      light.intensity = l.base * lampOn * fade * (flick + Math.sin(G.time * 13 + i * 1.7) * 0.03);
+    });
     this.sounds(dt, camPos);
     // dawn / dusk events
     const crossed = (x: number) => (this.lastHour < x && h >= x) || (this.lastHour > h && (x > this.lastHour || x <= h) && this.lastHour - h > 12);

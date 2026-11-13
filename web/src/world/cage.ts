@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { RAPIER, world, groups, L, owners } from '../core/physics';
 import { toonMat } from '../render/toon';
 import { clamp, damp } from '../core/util';
@@ -82,6 +83,7 @@ export class Cage {
     this.latch = at(W / 2 - 0.1, D / 2);
     this.grillPos = at(W / 2 + 1.7, -0.3);
     buildGrill(this.root, W / 2 + 1.7, -0.3);
+    rigidSkin(this.root);   // ~60 bars / posts → a few draw calls (the door pivot is a bone)
   }
 
   /** Ram / hard hit on the cage (pig ram calls knock on the collider owner). */

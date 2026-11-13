@@ -48,7 +48,7 @@ async function boot() {
   go.dataset.i18n = 'title.building'; go.textContent = t('title.building');
   await new Promise((r) => setTimeout(r, 30));
   const app = document.getElementById('app')!;
-  const gfx = new Gfx(app, SETTINGS.quality);
+  const gfx = new Gfx(app, SETTINGS.gfx);
   const input = new Input(gfx.renderer.domElement);
   const game = new Game(gfx, audio, input);
   game.build();

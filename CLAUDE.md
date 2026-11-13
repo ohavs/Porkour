@@ -66,6 +66,19 @@ Dead by Daylight, Party Animals.
   (Render free). Lobby UI `lobby.ts`; Google Identity Services in `auth.ts`; addresses in `config.ts` (`BUILT_IN_SERVER`,
   `BUILT_IN_GOOGLE_CLIENT_ID` (set; origin https://ohavs.github.io), see `server/README.md`). Online never pauses; the host keeps
   simulating in a hidden tab (worker ticks). Leaving = reload to `?lobby=1`. Invite link `?room=CODE`.
+- **Performance (2026-11-13)** — scale by *kinds*, not copies; keep it this way when adding content:
+  static models MUST be placed through farm helpers (`building` / `decor` / `fence`, or push to `out.statics`) →
+  `instanceStatic` turns every repeated part into chunked (36 m) InstancedMeshes; procedural models MUST call
+  `rigidSkin(root, keepMeshes, keepMats)` once built (`render/batch.ts`): all meshes → one SkinnedMesh per material
+  whose bones are the existing pivots (animation code unchanged); plain toon colours share a vertex-colour material;
+  meshes moved/swapped by code → `keep`, materials recoloured live (pig skin, Bob face, cloud) → `keepMats`; hidden
+  subtrees (Bob's tools) and named meshes stay separate. Result: 3,368 → ~620 meshes, ~3,100 → ~650 draw calls / frame,
+  same look (checked side by side). Graphics options `render/quality.ts` (`SETTINGS.preset` auto/low/medium/high/ultra/custom +
+  `SETTINGS.gfx`): auto = from the GPU name; resolution + dynamic resolution (drops to 55 % below ~50 fps, steps back up),
+  shadows 0–4, grass level (built once at 16/m², shows a fraction), lamp-light pool (2/4/6/all nearest lamps, the last
+  one fades), small-detail distance (instanced chunks of things < 0.5 m), outline / bloom / FXAA|SMAA, HD-screen pixel
+  ratio, FPS cap. Post = 1 effect pass (outline + bloom + colour + tone + vignette) + AA pass. Slow at min resolution
+  for 8 s → tip toast.
 - Assets: `web/tools/fetch_assets.sh` (models, idempotent) + `web/tools/fetch_sounds.sh` (audio) fetch from GitHub mirrors
   (asset websites are blocked from the sandbox, GitHub is not) into `web/public/assets/` (committed). Models: Kenney
   `ETdoFresh/kenney.nl`, KayKit `KayKit-Game-Assets/*` (Restaurant, Adventurers, Skeletons, Halloween), Quaternius
@@ -97,12 +110,12 @@ Dead by Daylight, Party Animals.
 | `world/terrain.ts`, `nature.ts`, `props.ts` | Ground (splat map, `mudAt`), instanced trees/bushes/hedges, `Prop` + `PROPS`. |
 | `farmer/farmer.ts` | **Bob** brain (tune in `BOB`): clock routine, suspicion, noises, chase, grab (windup/lunge) **or slap** (30 %, insult toast, taunt), carry (grip: 24 mashes, drains, shakes every 2.2 s), cage, dance (random / after caging), lawn mowing, flashlight at night, sleeps in the house (noises wake him), shoos wolves, poise → stagger / knock-down. |
 | `farmer/farmerModel.ts`, `farmerVisual.ts`, `mower.ts`, `nav.ts` | Procedural Bob + tools (bucket, can, axe, mug, hammer, paper, flashlight, shirt) + poses (ride, slap, taunt, 4 dance moves, read, laundry…); ride-on mower (cuts `Grass` via a mow texture, regrows); nav grid + A*. |
-| `render/` | `gfx.ts` (renderer / sky / stars / moon / lights / post, `setQuality`), `toon.ts`, `grass.ts` (wind, pushers, mowing), `fx.ts`, `textures.ts`. |
+| `render/` | `gfx.ts` (renderer / sky / stars / moon / lights / post, `apply(opts)`, dynamic resolution), `quality.ts` (presets, GPU detect), `batch.ts` (`instanceStatic`, `rigidSkin`, `cullDetail`), `toon.ts`, `grass.ts` (wind, pushers, mowing, `setLevel`), `fx.ts`, `textures.ts`. |
 | `core/` | `physics.ts`, `input.ts`, `audio.ts` (buses sfx / ambience / music, loops), `sounds.ts` (sound manifest + OPTIONAL list), `assets.ts`, `synced.ts`, `util.ts`. |
 
 ## Controls
 WASD move · mouse look · Space jump · LMB grab / hold to throw / punch (standing) · Shift sprint · Q fart · C wallow (hold = play dead) ·
-E stand · F oink · H controls · M sound · P graphics · Esc menu · `` ` `` admin. Gamepad: A jump, B fart, X wallow, Y stand, RT grab, LB/L3 sprint.
+E stand · F oink · H controls · M sound · P next graphics preset · Esc menu (Settings → Advanced graphics) · `` ` `` admin. Gamepad: A jump, B fart, X wallow, Y stand, RT grab, LB/L3 sprint.
 
 ## Legacy
 The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as reference. Its art/audio is reused by the fetch scripts. Don't edit it.
@@ -135,6 +148,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   2026-11-13: client-side prediction built & checked headless (2 browsers, 150 ms fake lag: own pig answers in 2 frames,
   host copy within 0.1–0.4 m, knock → host takes over → resumes). **Next: M5** (loot / missions / round loop). Ask the user
   how online feels now (admin → "Move my pig right away" switches prediction off to compare).
+- 2026-11-13: **performance pass** (batching above + graphics settings menu with presets / advanced options). User
+  wants lots more buildings / props later → that's why the batching is automatic. **Art direction (user)**: environment
+  from ready-made packs (any close style is fine); animals, Bob, mower and other code-built models look "not invested" —
+  replace later, not all at once. Options given: CC0 rigged+animated packs (Quaternius / KayKit / Kenney via GitHub
+  mirrors), an AI text/image-to-3D API (Meshy / Tripo: user makes an account, key via `request_credential`, never chat),
+  or Blender (`bpy`) modelling in the sandbox with rendered previews. Waiting for the user's choice.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
@@ -143,5 +162,5 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - Sim cost +20–35 % vs before M4.5 (grip hands / joints); parts cost nothing while in control (bodies + joints off).
 - Prediction: the player's pig collides with others where the snapshot shows them (~100 ms in the past); own jump / fart
   sounds come from the host (late); my-side ram / grab / punch effects still wait for the host.
-- Never tested on a real GPU: FPS with ~9 lamp lights + grass density 16/m² (high), shadows, outline thickness.
+- Never tested on a real GPU: real FPS per preset, whether "auto" picks well (GPU-name heuristic), dynamic-resolution feel.
 - Bob's mower parking collider is not in the nav grid (Bob can bump into it; the stuck logic copes).

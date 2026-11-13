@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { toonMat } from '../render/toon';
 import { staticBox, staticCylinder } from '../core/physics';
 import { fitted, has, sizeOf } from '../core/assets';
@@ -34,7 +35,9 @@ const WOOD = 0x9a6a3c, DARKWOOD = 0x6e4524;
 export function buildDecor(c: Ctx) {
   const { scene, t, rng, out, daynight, blocked } = c;
   const y = (x: number, z: number) => t.height(x, z);
-  const group = (x: number, z: number, yaw = 0) => { const g = new THREE.Group(); g.position.set(x, y(x, z), z); g.rotation.y = yaw; scene.add(g); return g; };
+  const groups: THREE.Object3D[] = [];
+  const group = (x: number, z: number, yaw = 0) => { const g = new THREE.Group(); g.position.set(x, y(x, z), z); g.rotation.y = yaw; scene.add(g); groups.push(g); return g; };
+  const keep = new Set<THREE.Object3D>();   // meshes animated by updaters
   const block = (x: number, z: number, r: number) => blocked.push({ x0: x - r, x1: x + r, z0: z - r, z1: z + r });
 
   // ---------------------------------------------------------------- lantern posts
@@ -42,7 +45,7 @@ export function buildDecor(c: Ctx) {
   for (const [x, z] of LAMPS) {
     const H = 2.5;
     if (has('kaykit/post_lantern')) {
-      const m = fitted('kaykit/post_lantern', { height: H }); m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = rng.range(0, 6.28); scene.add(m);
+      const m = fitted('kaykit/post_lantern', { height: H }); m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = rng.range(0, 6.28); scene.add(m); out.statics.push(m);
       const s = sizeOf(m);
       daynight.addLamp(scene, V3(x, y(x, z) + H - Math.min(0.45, s.y * 0.2), z));
     } else {
@@ -63,7 +66,7 @@ export function buildDecor(c: Ctx) {
     const w = add(new THREE.CircleGeometry(r, 48), water, [0, 0.06, 0], g, [-Math.PI / 2, 0, 0]);
     w.castShadow = false;
     const shine = add(new THREE.RingGeometry(r * 0.35, r * 0.42, 40, 1, 0.4, 1.4), toonMat(0xbfe8ff, { transparent: true, opacity: 0.6 }), [0.6, 0.07, -0.4], g, [-Math.PI / 2, 0, 0]);
-    shine.castShadow = false;
+    shine.castShadow = false; keep.add(shine);
     const edge = add(new THREE.TorusGeometry(r, 0.18, 6, 48), 0x7c6a4f, [0, 0.04, 0], g, [Math.PI / 2, 0, 0], [1, 1, 0.4]);
     edge.castShadow = false;
     for (let i = 0; i < 16; i++) {
@@ -243,5 +246,7 @@ export function buildDecor(c: Ctx) {
     add(new THREE.BoxGeometry(2.0, 0.04, 0.5), toonMat(0x5fb6e6), [0, 0.46, 0], g);
     staticBox(V3(x, y(x, z) + 0.25, z), V3(1.1, 0.25, 0.35));
   }
+  // fewer draw calls: each piece becomes one skinned mesh (moving pivots are its bones)
+  for (const g of groups) rigidSkin(g, keep);
   void c.decor; void c.F;
 }

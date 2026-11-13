@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { damp, clamp, dampAngle, wrapAngle } from '../core/util';
 import { G } from '../game/ctx';
 import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
@@ -46,6 +47,7 @@ export class FarmerVisual {
 
   constructor() {
     this.rig = buildFarmer(this.root);
+    rigidSkin(this.root, new Set([this.rig.browL, this.rig.browR, this.rig.mouth]), new Set(this.rig.face.map((f) => f.mat)));   // one draw call instead of ~60
   }
 
   /** World position of the right hand (for particles). */

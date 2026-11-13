@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { toonMat } from '../render/toon';
 import { damp, clamp } from '../core/util';
 
@@ -216,7 +217,7 @@ export class AnimalVisual {
   private blinkAt = Math.random() * 3;
   private peck = 0;
   private limpT = 0;
-  constructor(public kind: AnimalKind) { this.rig = buildAnimal(kind, this.root); }
+  constructor(public kind: AnimalKind) { this.rig = buildAnimal(kind, this.root); rigidSkin(this.root); }
 
   update(p: AnimalPose) {
     const R = this.rig, dt = p.dt;
