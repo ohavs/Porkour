@@ -18,6 +18,8 @@ import { Hud } from './hud';
 import { Menu } from './menu';
 import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
+import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST } from '../render/quality';
+import { cullDetail } from '../render/batch';
 import { t } from '../i18n';
 import { NetHost, NetClient } from '../net/sync';
 import { online, type Peer } from '../net/online';
@@ -43,6 +45,8 @@ export class Game {
   private acc = 0;
   private last = performance.now();
   private frames = 0; private fpsT = 0; fps = 0;
+  /** Frame-rate limit bookkeeping, small-detail draw distance, "lower the graphics" tip shown. */
+  private nextDraw = 0; private detailDist = Infinity; private slowTip = false;
   running = false;
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
@@ -66,7 +70,7 @@ export class Game {
     G.terrain = terrain;
     terrain.build(scene);
     this.farm = build(terrain, this.daynight);
-    this.grass = new Grass(scene, terrain, this.gfx.quality === 'high' ? 16 : 8);
+    this.grass = new Grass(scene, terrain);
     this.farm.pigSpawns.forEach((p, i) => this.pigs.push(new Pig(scene, p, PLAYER_COLORS[i],
       i === 0 ? t('name.you') : t('name.p', { n: i + 1 }), i === 0 ? (SETTINGS.outfit ?? defaultOutfit()) : randomOutfit())));
     this.local = this.pigs[0];
@@ -90,14 +94,24 @@ export class Game {
       if (this.menu.blocking && code !== 'KeyM') return;
       if (code === 'KeyH') this.hud.toggleHelp();
       if (code === 'KeyM') this.menu.toggleSound();
-      if (code === 'KeyP') this.menu.toggleQuality();
+      if (code === 'KeyP') this.menu.cyclePreset();
       if (code === 'KeyR' && this.input.held.size === 0 && G.net !== 'client') this.local.respawn();
     };
     const h = new URLSearchParams(location.search).get('hour');
     if (h) this.daynight.setHour(parseFloat(h));
     this.applySettings();
+    this.applyGfx();
     // warm up physics so everything settles before the first frame
     for (let i = 0; i < 30; i++) this.fixed(false);
+  }
+
+  /** Graphics options → renderer, grass, lamp lights, small-detail distance. */
+  applyGfx() {
+    const o = SETTINGS.gfx;
+    this.gfx.apply(o);
+    this.grass.setLevel(GRASS_LEVEL[o.grass].density, GRASS_LEVEL[o.grass].range);
+    this.daynight.setLampLights(LAMP_LIGHTS[o.lamps]);
+    this.detailDist = DETAIL_DIST[o.detail];
   }
 
   applySettings() {
@@ -327,6 +341,13 @@ export class Game {
 
   frame = () => {
     const nowMs = performance.now();
+    // frame-rate limit (battery / hot laptops): skip screen refreshes until the next frame is due
+    const cap = SETTINGS.gfx.fpsCap;
+    if (cap) {
+      const stepMs = 1000 / cap;
+      if (nowMs < this.nextDraw - stepMs * 0.25) { requestAnimationFrame(this.frame); return; }
+      this.nextDraw = nowMs - this.nextDraw > stepMs ? nowMs + stepMs : this.nextDraw + stepMs;
+    }
     const dt = Math.min(0.1, (nowMs - this.last) / 1000);
     this.last = nowMs;
     this.input.poll();
@@ -357,6 +378,7 @@ export class Game {
     const look = this.running && !this.menu.blocking;
     this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
     this.grass.update(G.time, this.gfx.camera.position, this.pigs.map((p) => p.visual.root.position));
+    cullDetail(this.gfx.camera.position, this.detailDist);
     G.fx.update(dt);
     this.daynight.update(dt, this.gfx.camera.position);
     this.gfx.focusShadows(lp);
@@ -371,6 +393,8 @@ export class Game {
     }
     this.handleEvents();
     this.gfx.render(dt);
+    if (this.running) this.gfx.updateDynRes(dt);
+    if (this.gfx.slowFor >= 8 && !this.slowTip && SETTINGS.preset !== 'low') { this.slowTip = true; this.hud.toast(t('toast.slowTip'), 5); }
     requestAnimationFrame(this.frame);
   };
 }

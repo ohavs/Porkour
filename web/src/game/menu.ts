@@ -1,6 +1,7 @@
 import type { Game } from './game';
 import { G, ADMIN } from './ctx';
-import { SETTINGS, saveSettings } from './settings';
+import { SETTINGS, saveSettings, setPreset } from './settings';
+import { PRESETS, PRESET_ORDER, detectPreset, presetOf, type GfxOpts, type PresetChoice } from '../render/quality';
 import { t, setLang, lang, LANGS, onLang, type Lang, type Key } from '../i18n';
 import { SVG } from './hud';
 import { online } from '../net/online';
@@ -14,6 +15,7 @@ const $ = (id: string) => document.getElementById(id)!;
  */
 export class Menu {
   menuOpen = false;
+  private advanced = false;
   private menu = $('menu');
   private panel = $('menuPanel');
   private admin = $('admin');
@@ -44,11 +46,24 @@ export class Menu {
     b.classList.toggle('off', this.game.audio.muted);
   }
 
-  toggleQuality() {
-    SETTINGS.quality = SETTINGS.quality === 'high' ? 'low' : 'high'; saveSettings();
-    this.game.gfx.setQuality(SETTINGS.quality);
-    this.game.hud.toast(t(SETTINGS.quality === 'high' ? 'toast.qualityHigh' : 'toast.qualityLow'), 1.4);
+  /** P key: next preset (low → medium → high → ultra → low). */
+  cyclePreset() {
+    const cur = presetOf(SETTINGS.preset) ?? 'high';
+    this.choosePreset(PRESET_ORDER[(PRESET_ORDER.indexOf(cur) + 1) % PRESET_ORDER.length]);
+  }
+  private choosePreset(c: PresetChoice) {
+    setPreset(c); saveSettings();
+    this.game.applyGfx();
+    this.game.hud.toast(t('toast.preset', { p: this.presetName(c) }), 1.4);
     if (this.menuOpen) this.renderMenu();
+  }
+  private presetName(c: PresetChoice) { return c === 'auto' ? t('g.auto', { p: t(('g.' + detectPreset().preset) as Key) }) : t(('g.' + c) as Key); }
+  /** One advanced option changed: the preset becomes "custom" (or the preset it now matches). */
+  private setGfx<K extends keyof GfxOpts>(k: K, v: GfxOpts[K]) {
+    SETTINGS.gfx = { ...SETTINGS.gfx, [k]: v };
+    const same = PRESET_ORDER.find((p) => (Object.keys(PRESETS[p]) as (keyof GfxOpts)[]).every((key) => PRESETS[p][key] === SETTINGS.gfx[key]));
+    SETTINGS.preset = same && presetOf(SETTINGS.preset) === same ? SETTINGS.preset : same ?? 'custom';
+    saveSettings(); this.game.applyGfx();
   }
 
   // ---------------------------------------------------------------- settings menu
@@ -72,7 +87,7 @@ export class Menu {
     const f = (label: Key, ctl: string) => `<div class="field"><span>${t(label)}</span>${ctl}</div>`;
     this.panel.innerHTML = `<h2>${t('menu.settings')}</h2>` +
       f('menu.language', seg('lang', Object.entries(LANGS), lang())) +
-      f('menu.quality', seg('quality', [['high', t('menu.qualityHigh')], ['low', t('menu.qualityLow')]], SETTINGS.quality)) +
+      this.graphics(seg, slider, f) +
       f('menu.sfx', slider('sfx', SETTINGS.sfx)) + f('menu.music', slider('music', SETTINGS.music)) + f('menu.ambience', slider('ambience', SETTINGS.ambience)) +
       f('menu.sens', slider('sens', SETTINGS.sens, 3, 0.1)) +
       f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) +
@@ -85,21 +100,61 @@ export class Menu {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       const name = s.dataset.seg;
       if (name === 'lang') setLang(v as Lang);
-      if (name === 'quality' && v !== SETTINGS.quality) this.toggleQuality();
+      if (name === 'preset' && v !== SETTINGS.preset) this.choosePreset(v as PresetChoice);
+      if (name?.startsWith('g:')) {
+        const k = name.slice(2) as keyof GfxOpts;
+        this.setGfx(k, (typeof PRESETS.high[k] === 'boolean' ? v === '1' : parseFloat(v)) as never);
+      }
+      if (name === 'showFps') { SETTINGS.fps = v === '1'; saveSettings(); }
       if (name === 'invert') { SETTINGS.invertY = v === '1'; saveSettings(); this.game.applySettings(); }
       this.renderMenu();
     }));
     this.panel.querySelectorAll<HTMLInputElement>('input[data-s]').forEach((el) => el.addEventListener('input', () => {
       (SETTINGS as any)[el.dataset.s!] = parseFloat(el.value); saveSettings(); this.game.applySettings();
     }));
+    this.panel.querySelector<HTMLInputElement>('input[data-g=res]')?.addEventListener('change', (e) => {
+      this.setGfx('res', parseFloat((e.target as HTMLInputElement).value)); this.renderMenu();
+    });
+    this.panel.querySelector<HTMLInputElement>('input[data-g=res]')?.addEventListener('input', (e) => {
+      (this.panel.querySelector('[data-val=res]') as HTMLElement).textContent = `${Math.round(parseFloat((e.target as HTMLInputElement).value) * 100)}%`;
+    });
     this.panel.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.b;
       if (k === 'resume') this.close();
+      if (k === 'advanced') { this.advanced = !this.advanced; this.renderMenu(); }
       if (k === 'wardrobe') { this.close(false); this.onWardrobe?.(); }
       if (k === 'admin') { this.close(false); this.toggleAdmin(); }
       if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2));
       if (k === 'leave') this.onLeave?.();
     }));
+  }
+
+  /** Graphics: a preset row (Auto / Low / Medium / High / Ultra) + every option on its own under "Advanced". */
+  private graphics(seg: (name: string, opts: [string, string][], cur: string) => string, _slider: unknown, f: (label: Key, ctl: string) => string) {
+    const G0 = SETTINGS.gfx, cur = SETTINGS.preset;
+    const presets: [string, string][] = [['auto', this.presetName('auto')], ...PRESET_ORDER.map((p) => [p, t(('g.' + p) as Key)] as [string, string])];
+    if (cur === 'custom') presets.push(['custom', t('g.custom')]);
+    const onOff = (k: keyof GfxOpts) => seg('g:' + k, [['1', t('menu.on')], ['0', t('menu.off')]], G0[k] ? '1' : '0');
+    const lv = (k: keyof GfxOpts, labels: [number, Key | string][]) =>
+      seg('g:' + k, labels.map(([v, l]) => [String(v), l.includes('.') ? t(l as Key) : l]), String(G0[k]));
+    let html = `<div class="field gfx"><span>${t('menu.quality')}</span>${seg('preset', presets, cur)}</div>` +
+      `<div class="btns"><button class="chip" data-b="advanced">${this.advanced ? '▾' : '▸'} ${t('g.advanced')}</button></div>`;
+    if (this.advanced) {
+      const gpu = detectPreset().gpu;
+      html += `<div class="adv"><div class="hint">${t('g.hint')}${gpu ? '<br>' + t('g.gpu', { g: gpu.replace(/[<>&]/g, '') }) : ''}</div>` +
+        f('g.res', `<span class="rv"><b data-val="res">${Math.round(G0.res * 100)}%</b><input type="range" data-g="res" min="0.5" max="1" step="0.05" value="${G0.res}"></span>`) +
+        f('g.dynRes', onOff('dynRes')) +
+        f('g.shadows', lv('shadows', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high'], [4, 'g.ultra']])) +
+        f('g.grass', lv('grass', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high']])) +
+        f('g.lamps', lv('lamps', [[0, '2'], [1, '4'], [2, '6'], [3, 'g.all']])) +
+        f('g.detail', lv('detail', [[0, 'g.near'], [1, 'g.medium'], [2, 'g.far'], [3, 'g.max']])) +
+        f('g.outline', onOff('outline')) + f('g.bloom', onOff('bloom')) +
+        f('g.aa', lv('aa', [[0, 'menu.off'], [1, 'FXAA'], [2, 'SMAA']])) +
+        f('g.dpr', lv('dpr', [[1, '1×'], [1.5, '1.5×'], [2, '2×']])) +
+        f('g.fpsCap', lv('fpsCap', [[0, 'g.max'], [60, '60'], [30, '30']])) +
+        f('g.showFps', seg('showFps', [['1', t('menu.on')], ['0', t('menu.off')]], SETTINGS.fps ? '1' : '0')) + '</div>';
+    }
+    return html;
   }
 
   // ---------------------------------------------------------------- admin panel

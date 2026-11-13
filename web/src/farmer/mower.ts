@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { toonMat } from '../render/toon';
 import { RAPIER, world, groups, L } from '../core/physics';
 import { G } from '../game/ctx';
@@ -43,6 +44,7 @@ export class Mower {
       m(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.15, 12), yellow, [0, 0, 0], undefined, w);
       this.wheels.push(w);
     }
+    rigidSkin(this.root, new Set(this.wheels));   // wheels spin on their own
     this.root.add(this.blade);
     this.place(at, yaw);
     scene.add(this.root);

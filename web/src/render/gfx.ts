@@ -1,12 +1,13 @@
 import * as THREE from 'three';
+import { rigidSkin } from './batch';
 import {
   EffectComposer, RenderPass, EffectPass, SMAAEffect, BloomEffect, ToneMappingEffect, ToneMappingMode,
-  VignetteEffect, HueSaturationEffect,
+  VignetteEffect, HueSaturationEffect, FXAAEffect, type Pass,
 } from 'postprocessing';
 import { InkOutline, toonMat } from './toon';
 import { Rng } from '../core/util';
 
-export type Quality = 'high' | 'low';
+import { SHADOW_SIZE, type GfxOpts } from './quality';
 
 const SKY_VERT = `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }`;
 const SKY_FRAG = `varying vec3 vDir; uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uBottom; uniform vec3 uSunDir; uniform vec3 uGlow;
@@ -27,7 +28,13 @@ export class Gfx {
   sun: THREE.DirectionalLight;
   sunDir = new THREE.Vector3(-0.5, 0.75, 0.42).normalize();
   composer: EffectComposer;
-  quality: Quality;
+  opts: GfxOpts;
+  /** Dynamic resolution multiplier (1 = the chosen resolution) and its frame-time bookkeeping. */
+  dyn = 1;
+  private dynT = 0; private dynFrames = 0; private dynTime = 0; private dynBlockUntil = 0; private dynRaisedAt = -1; private clock = 0;
+  /** Seconds spent at the lowest dynamic resolution while still slow (→ a "lower the graphics" tip). */
+  slowFor = 0;
+  private passes: Pass[] = [];
   clouds = new THREE.Group();
   skyMat!: THREE.ShaderMaterial;
   hemi!: THREE.HemisphereLight;
@@ -36,13 +43,13 @@ export class Gfx {
   cloudMat!: THREE.MeshToonMaterial;
   outline!: InkOutline;
 
-  constructor(container: HTMLElement, quality: Quality) {
-    this.quality = quality;
+  constructor(container: HTMLElement, opts: GfxOpts) {
+    this.opts = { ...opts };
     const r = new THREE.WebGLRenderer({ powerPreference: 'high-performance', antialias: false, stencil: false, depth: true });
-    r.setPixelRatio(Math.min(devicePixelRatio, quality === 'high' ? 1.5 : 1));
+    r.setPixelRatio(this.pixelRatio());
     r.setSize(innerWidth, innerHeight);
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = opts.shadows >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.NoToneMapping;
     container.appendChild(r.domElement);
@@ -66,8 +73,8 @@ export class Gfx {
     this.scene.add(this.clouds);
 
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
-    this.sun.castShadow = true;
-    const S = quality === 'high' ? 3072 : 1536;
+    this.sun.castShadow = opts.shadows > 0;
+    const S = SHADOW_SIZE[opts.shadows] || 1024;
     this.sun.shadow.mapSize.set(S, S);
     const c = this.sun.shadow.camera; c.left = -40; c.right = 40; c.top = 40; c.bottom = -40; c.near = 1; c.far = 220;
     this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.04;
@@ -77,17 +84,32 @@ export class Gfx {
     this.makeStars();
 
     this.composer = new EffectComposer(r, { frameBufferType: THREE.HalfFloatType });
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.outline = new InkOutline(quality === 'high' ? 1.4 : 1.1);
-    this.composer.addPass(new EffectPass(this.camera, this.outline));
-    this.composer.addPass(new EffectPass(this.camera,
-      new BloomEffect({ intensity: 0.35, luminanceThreshold: 0.9, luminanceSmoothing: 0.15, mipmapBlur: true }),
+    this.buildPost();
+    addEventListener('resize', () => this.resize());
+  }
+
+  private pixelRatio() { return Math.max(0.35, Math.min(devicePixelRatio, this.opts.dpr) * this.opts.res * this.dyn); }
+
+  /**
+   * Post chain from the options. Ink lines, bloom, colour, tone mapping and vignette run in ONE full-screen pass
+   * (they used to be two); anti-aliasing runs last so the ink lines get smoothed too.
+   */
+  private buildPost() {
+    for (const p of this.passes) { this.composer.removePass(p); p.dispose(); }
+    this.passes = [];
+    const o = this.opts;
+    this.outline = new InkOutline(o.dpr * o.res >= 1.2 ? 1.4 : 1.2);
+    const fx = [
+      ...(o.outline ? [this.outline] : []),
+      ...(o.bloom ? [new BloomEffect({ intensity: 0.35, luminanceThreshold: 0.9, luminanceSmoothing: 0.15, mipmapBlur: true })] : []),
       new HueSaturationEffect({ saturation: 0.12 }),
       new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }),
       new VignetteEffect({ darkness: 0.3, offset: 0.35 }),
-    ));
-    this.composer.addPass(new EffectPass(this.camera, new SMAAEffect()));
-    addEventListener('resize', () => this.resize());
+    ];
+    this.passes.push(new RenderPass(this.scene, this.camera), new EffectPass(this.camera, ...fx));
+    if (o.aa === 2) this.passes.push(new EffectPass(this.camera, new SMAAEffect()));
+    if (o.aa === 1) this.passes.push(new EffectPass(this.camera, new FXAAEffect()));
+    for (const p of this.passes) this.composer.addPass(p);
   }
 
   private makeClouds() {
@@ -110,6 +132,7 @@ export class Gfx {
       g.rotation.y = rng.range(0, 6.28);
       this.clouds.add(g);
     }
+    rigidSkin(this.clouds, undefined, new Set([mat]));   // 16 clouds × 5 puffs → one draw call (colour still follows the clock)
   }
 
   private makeStars() {
@@ -130,18 +153,55 @@ export class Gfx {
     this.scene.add(this.moon);
   }
 
-  /** Live quality switch (no reload). */
-  setQuality(q: Quality) {
-    this.quality = q;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, q === 'high' ? 1.5 : 1));
-    const S = q === 'high' ? 3072 : 1536;
-    this.sun.shadow.mapSize.set(S, S);
-    this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null;
-    (this.outline.uniforms.get('uThick') as THREE.Uniform).value = q === 'high' ? 1.4 : 1.1;
+  /** Live graphics switch (no reload). Shadow on/off or softness changes recompile the materials once. */
+  apply(o: GfxOpts) {
+    const prev = this.opts;
+    this.opts = { ...o };
+    if (o.res !== prev.res || o.dpr !== prev.dpr || !o.dynRes) { this.dyn = 1; this.slowFor = 0; }
+    const S = SHADOW_SIZE[o.shadows] || 1024;
+    if (S !== this.sun.shadow.mapSize.x) {
+      this.sun.shadow.mapSize.set(S, S);
+      this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null;
+    }
+    const type = o.shadows >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    if (this.sun.castShadow !== o.shadows > 0 || this.renderer.shadowMap.type !== type) {
+      this.sun.castShadow = o.shadows > 0;
+      this.renderer.shadowMap.type = type;
+      this.scene.traverse((m) => { const mat = (m as THREE.Mesh).material; if (mat) for (const x of Array.isArray(mat) ? mat : [mat]) x.needsUpdate = true; });
+    }
+    if (o.outline !== prev.outline || o.bloom !== prev.bloom || o.aa !== prev.aa || o.res !== prev.res || o.dpr !== prev.dpr) this.buildPost();
     this.resize();
   }
 
+  /**
+   * Dynamic resolution: below ~50 fps for a second → render 10 % fewer pixels (down to 55 %); steady at the
+   * target for a few seconds → step back up. A step up that makes it slow again blocks raising for a while.
+   */
+  updateDynRes(dt: number) {
+    this.clock += dt;
+    if (!this.opts.dynRes || document.hidden || dt > 0.25) return;
+    this.dynFrames++; this.dynTime += dt; this.dynT += dt;
+    if (this.dynT < 1) return;
+    const fps = this.dynFrames / this.dynTime;
+    this.dynFrames = 0; this.dynTime = 0; this.dynT = 0;
+    const target = this.opts.fpsCap === 30 ? 30 : 60;
+    const old = this.dyn;
+    if (fps < target * 0.83) {
+      if (this.dynRaisedAt >= 0 && this.clock - this.dynRaisedAt < 3) this.dynBlockUntil = this.clock + 30;
+      this.dyn = Math.max(0.55, this.dyn - 0.1);
+      this.slowFor = this.dyn <= 0.55 && fps < target * 0.6 ? this.slowFor + 1 : 0;
+    } else {
+      this.slowFor = 0;
+      if (fps > target * 0.95 && this.dyn < 1 && this.clock > this.dynBlockUntil) {
+        this.dynT = -3;                       // wait a few seconds at each step before raising again
+        this.dyn = Math.min(1, this.dyn + 0.05); this.dynRaisedAt = this.clock;
+      }
+    }
+    if (this.dyn !== old) this.resize();
+  }
+
   resize() {
+    this.renderer.setPixelRatio(this.pixelRatio());
     this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix();
     this.renderer.setSize(innerWidth, innerHeight);
     this.composer.setSize(innerWidth, innerHeight);

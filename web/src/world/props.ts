@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rigidSkin } from '../render/batch';
 import { RAPIER, world, groups, L, owners, HOOKS } from '../core/physics';
 import { fitted, sizeOf } from '../core/assets';
 import { Synced } from '../core/synced';
@@ -25,6 +26,7 @@ export class Prop implements Holdable {
     const size = sizeOf(model);
     model.position.y = -size.y / 2;
     this.obj.add(model);
+    if (def.make) rigidSkin(this.obj);
     scene.add(this.obj);
     const shape = def.shape ?? 'box';
     const q = new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);

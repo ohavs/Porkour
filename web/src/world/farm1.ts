@@ -10,6 +10,7 @@ import { Cage } from './cage';
 import type { Chore } from '../farmer/farmer';
 import type { DayNight } from './daynight';
 import { buildDecor } from './decor';
+import { instanceStatic } from '../render/batch';
 
 /**
  * Farm 1 — Bob's family farm. North = −z. Everything placed from code (art-agnostic: missing models → magenta box).
@@ -21,6 +22,8 @@ export const FARM: Rect = { x0: -64, x1: 64, z0: -110, z1: 20 };
 export interface FarmBuild {
   props: Prop[]; critters: Critter[]; decor: DecorAnimal[]; spinners: { obj: THREE.Object3D; speed: number }[];
   updaters: ((dt: number, t: number) => void)[];
+  /** Static models (buildings, fences, crops, rocks…): instanced at the end of the build. */
+  statics: THREE.Object3D[];
   pigSpawns: THREE.Vector3[];
   cage: Cage; chores: Chore[]; farmerSpawn: THREE.Vector3;
   zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3 };
@@ -83,7 +86,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: -50, x1: -30, z0: -66, z1: -52 };
     const out: FarmBuild = {
-      props: [], critters: [], decor: [], spinners: [], updaters: [], pigSpawns: [],
+      props: [], critters: [], decor: [], spinners: [], updaters: [], statics: [], pigSpawns: [],
       cage: new Cage(scene, V3(-8, t.height(-8, -35), -35), 0), chores: CHORES,
       farmerSpawn: V3(-4, t.height(-4, -28), -28),
       zones: { garden: [garden], lawn: { x0: -28, x1: -12, z0: -25, z1: -14 }, door: V3(-17.6, t.height(-17.6, -33.4), -33.4), mowerAt: V3(-31, t.height(-31, -16), -16) },
@@ -99,7 +102,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     const building = (model: string, x: number, z: number, height: number, yaw = 0, collide = true) => {
       const o = fitted(model, { height });
       o.position.set(x, y(x, z) - 0.05, z); o.rotation.y = yaw;
-      scene.add(o);
+      scene.add(o); out.statics.push(o);
       const s = sizeOf(o);
       if (collide) staticTrimesh(o);
       const hx = (Math.abs(Math.cos(yaw)) * s.x + Math.abs(Math.sin(yaw)) * s.z) / 2;
@@ -112,7 +115,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       if (!has(model)) return null;
       const m = fitted(model, { height: o.height, scale: o.scale });
       m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = o.yaw ?? 0;
-      scene.add(m);
+      scene.add(m); out.statics.push(m);
       const s = sizeOf(m);
       if (o.collide === 'box') staticBox(V3(x, y(x, z) + s.y / 2, z), V3(s.x / 2, s.y / 2, s.z / 2), o.yaw ?? 0);
       if (o.collide === 'trunk') staticCylinder(V3(x, y(x, z) + 2, z), 2, Math.min(0.45, s.x * 0.07 + 0.15));
@@ -129,7 +132,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
         const f = (i + 0.5) / n, x = x0 + (x1 - x0) * f, z = z0 + (z1 - z0) * f;
         const m = i === 0 ? probe : fitted(model, { height: h });
         m.scale.x = len / n / seg;
-        m.position.set(x, y(x, z) - 0.05, z); m.rotation.y = yaw; scene.add(m);
+        m.position.set(x, y(x, z) - 0.05, z); m.rotation.y = yaw; scene.add(m); out.statics.push(m);
       }
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       staticBox(V3(cx, y(cx, cz) + 0.6, cz), V3(len / 2, 0.65, 0.12), yaw);
@@ -305,6 +308,9 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     }
     // hay bales (rollable!)
     for (const [x, z] of [[30, -78], [32, -79.5], [40, -80], [-4, -14], [-2.5, -15.2], [12, 14], [-30, 0], [44, -20]] as const) prop('hay', x, z);
+    // one draw call per repeated static part instead of hundreds (same look)
+    const n = instanceStatic(scene, out.statics, new Set(out.spinners.map((s) => s.obj)));
+    console.log(`static meshes instanced: ${n}`);
     return out;
   };
   return { terrain, build };

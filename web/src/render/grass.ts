@@ -9,6 +9,9 @@ import { RAMP } from './toon';
  */
 export class Grass {
   private chunks: THREE.InstancedMesh[] = [];
+  /** Blades built per chunk (random order, so the first N are an even thinner field). */
+  private full: number[] = [];
+  private density = 1;
   /** Mowed grass (0..255 per 0.5 m cell), regrows slowly. */
   private mowData: Uint8Array; private mowTex: THREE.DataTexture; private mowW: number; private mowH: number;
   private mowDirty = false; private mowT = 0; private regrowT = 0;
@@ -19,7 +22,8 @@ export class Grass {
   };
   range = 48;
 
-  constructor(scene: THREE.Scene, private terrain: Terrain, density: number) {
+  /** Built once at the highest density; graphics settings show a fraction of it (no rebuild). */
+  constructor(scene: THREE.Scene, private terrain: Terrain, density = 16) {
     const f0 = terrain.farm;
     this.mowW = Math.ceil((f0.x1 - f0.x0) / 0.5); this.mowH = Math.ceil((f0.z1 - f0.z0) / 0.5);
     this.mowData = new Uint8Array(this.mowW * this.mowH);
@@ -91,9 +95,15 @@ export class Grass {
         mesh.receiveShadow = true; mesh.castShadow = false;
         mesh.frustumCulled = true;
         mesh.renderOrder = 5; // after opaque objects (no depth write → no ink lines on grass)
-        scene.add(mesh); this.chunks.push(mesh);
+        scene.add(mesh); this.chunks.push(mesh); this.full.push(mesh.count);
       }
     }
+  }
+
+  /** Graphics level: share of the blades drawn (0 = no grass) and how far. */
+  setLevel(density: number, range: number) {
+    this.density = density; this.range = range;
+    this.chunks.forEach((c, i) => { c.count = Math.floor(this.full[i] * density); });
   }
 
   /** One blade: 3 segments, tapering, 1 unit tall (scaled per instance). */
@@ -144,7 +154,7 @@ export class Grass {
     const r2 = (this.range + 12) ** 2;
     for (const c of this.chunks) {
       const s = c.boundingSphere!;
-      c.visible = s.center.distanceToSquared(cam) < r2;
+      c.visible = this.density > 0 && c.count > 0 && s.center.distanceToSquared(cam) < r2;
     }
   }
 }
