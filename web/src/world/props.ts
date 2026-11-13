@@ -11,6 +11,8 @@ export type PropShape = 'box' | 'ball' | 'cyl';
 export interface PropDef {
   model?: string; make?: () => THREE.Object3D; height?: number; scale?: number; mass: number; shape?: PropShape;
   sound?: string; label?: string; friction?: number; bounce?: number;
+  /** Loot value in coins when it is dropped in the pigs' stash (M5). */
+  value?: number;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -21,6 +23,10 @@ export class Prop implements Holdable {
   synced: Synced;
   obj = new THREE.Group();
   lastHit = 0;
+  /** Dropped in the stash: counted, hidden, out of the world until the next round. */
+  banked = false;
+  private home: { p: THREE.Vector3; q: THREE.Quaternion };
+  get value() { return this.def.value ?? 0; }
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
@@ -46,14 +52,36 @@ export class Prop implements Holdable {
     this.radius = Math.max(size.x, size.z) / 2;
     this.label = def.label;
     this.synced = new Synced(body, this.obj);
+    this.home = { p: new THREE.Vector3(at.x, at.y + size.y / 2 + 0.02, at.z), q: q.clone() };
     G.holdables.push(this);
+  }
+
+  /** Into the stash (host): hidden, no physics, not grabbable. */
+  bank() {
+    if (this.banked) return;
+    this.banked = true;
+    this.body.setEnabled(false);
+    this.obj.visible = false;
+    const i = G.holdables.indexOf(this); if (i >= 0) G.holdables.splice(i, 1);
+  }
+  /** New round: back where it started. */
+  reset() {
+    if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
+    this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.synced.capture(); this.synced.capture();
   }
   body: RAPIER.RigidBody;
   mass: number;
   label?: string;
 
-  netState(n: number[]) { n.push(carrierCode(this.heldBy)); }
-  netApply(n: number[]) { if (n.length) this.heldBy = carrierFrom(n[0]); }
+  netState(n: number[]) { n.push(carrierCode(this.heldBy), this.banked ? 1 : 0); }
+  netApply(n: number[]) {
+    if (!n.length) return;
+    this.heldBy = carrierFrom(n[0]);
+    const b = n[1] === 1;
+    if (b !== this.banked) { this.banked = b; this.obj.visible = !b; const i = G.holdables.indexOf(this); if (b && i >= 0) G.holdables.splice(i, 1); else if (!b && i < 0) G.holdables.push(this); }
+  }
 
   knock(dv: THREE.Vector3) {
     const lv = this.body.linvel();
@@ -82,20 +110,36 @@ function made(o: THREE.Object3D) {
 }
 
 export const PROPS: Record<string, PropDef> = {
-  hay: { make: hayBale, mass: 22, shape: 'box', sound: 'thud', label: 'item.hay', friction: 0.9 },
-  crate: { model: 'kit/Prop_Crate', height: 0.8, mass: 12, sound: 'wood', label: 'item.crate' },
-  veggieCrate: { model: 'kaykit/crate_carrots', height: 0.55, mass: 9, sound: 'wood', label: 'item.carrots' },
-  potatoCrate: { model: 'kaykit/crate_potatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.potatoes' },
-  tomatoCrate: { model: 'kaykit/crate_tomatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.tomatoes' },
-  cheese: { model: 'kaykit/crate_cheese', height: 0.55, mass: 10, sound: 'wood', label: 'item.cheese' },
-  ham: { model: 'kaykit/food_ingredient_ham', height: 0.3, mass: 3, shape: 'ball', sound: 'squish', label: 'item.ham' },
-  barrel: { model: 'kenney/barrel', height: 0.95, mass: 20, shape: 'cyl', sound: 'wood', label: 'item.barrel' },
-  pot: { model: 'kenney/pot_large', height: 0.7, mass: 14, shape: 'cyl', sound: 'metal', label: 'item.pot' },
-  pumpkin: { model: 'kenney/crop_pumpkin', height: 0.42, mass: 5, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.3 },
-  bigPumpkin: { model: 'kaykit/pumpkin_orange', height: 0.62, mass: 12, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25 },
-  melon: { model: 'kenney/crop_melon', height: 0.35, mass: 4, shape: 'ball', sound: 'squish|thud', label: 'item.melon', bounce: 0.3 },
-  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log' },
-  wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'item.wheel' },
-  mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'item.mug' },
-  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword' },
+  hay: { make: hayBale, mass: 22, shape: 'box', sound: 'thud', label: 'item.hay', friction: 0.9, value: 10 },
+  crate: { model: 'kit/Prop_Crate', height: 0.8, mass: 12, sound: 'wood', label: 'item.crate', value: 20 },
+  veggieCrate: { model: 'kaykit/crate_carrots', height: 0.55, mass: 9, sound: 'wood', label: 'item.carrots', value: 30 },
+  potatoCrate: { model: 'kaykit/crate_potatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.potatoes', value: 30 },
+  tomatoCrate: { model: 'kaykit/crate_tomatoes', height: 0.55, mass: 9, sound: 'wood', label: 'item.tomatoes', value: 30 },
+  cheese: { model: 'kaykit/crate_cheese', height: 0.55, mass: 10, sound: 'wood', label: 'item.cheese', value: 60 },
+  ham: { model: 'kaykit/food_ingredient_ham', height: 0.3, mass: 3, shape: 'ball', sound: 'squish', label: 'item.ham', value: 40 },
+  barrel: { model: 'kenney/barrel', height: 0.95, mass: 20, shape: 'cyl', sound: 'wood', label: 'item.barrel', value: 20 },
+  pot: { model: 'kenney/pot_large', height: 0.7, mass: 14, shape: 'cyl', sound: 'metal', label: 'item.pot', value: 30 },
+  pumpkin: { model: 'kenney/crop_pumpkin', height: 0.42, mass: 5, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.3, value: 15 },
+  bigPumpkin: { model: 'kaykit/pumpkin_orange', height: 0.62, mass: 12, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25, value: 35 },
+  melon: { model: 'kenney/crop_melon', height: 0.35, mass: 4, shape: 'ball', sound: 'squish|thud', label: 'item.melon', bounce: 0.3, value: 20 },
+  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log', value: 5 },
+  wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'item.wheel', value: 25 },
+  mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'item.mug', value: 15 },
+  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword', value: 60 },
+  // valuables (Quaternius RPG Items / Survival, CC0)
+  gold: { model: 'loot/Gold_Ingots', height: 0.32, mass: 28, sound: 'metal', label: 'item.gold', value: 150 },
+  chest: { model: 'loot/Chest_Closed', height: 0.6, mass: 36, sound: 'wood', label: 'item.chest', value: 250 },
+  crown: { model: 'loot/Crown', height: 0.22, mass: 2, sound: 'metal', label: 'item.crown', value: 120, bounce: 0.3 },
+  chalice: { model: 'loot/Chalice', height: 0.3, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.chalice', value: 70 },
+  necklace: { model: 'loot/Necklace1', height: 0.12, mass: 1, sound: 'metal', label: 'item.necklace', value: 60 },
+  radio: { model: 'loot/Radio', height: 0.32, mass: 4, sound: 'metal', label: 'item.radio', value: 45 },
+  phone: { model: 'loot/Phone', height: 0.2, mass: 1, sound: 'metal', label: 'item.phone', value: 90 },
+  gasCan: { model: 'loot/GasCan', height: 0.45, mass: 8, sound: 'metal', label: 'item.gasCan', value: 35 },
+  pan: { model: 'loot/Pan', height: 0.12, mass: 2, sound: 'metal', label: 'item.pan', value: 30 },
+  propane: { model: 'loot/PropaneTank', height: 0.7, mass: 18, shape: 'cyl', sound: 'metal', label: 'item.propane', value: 40 },
+  firstAid: { model: 'loot/FirstAidKit', height: 0.25, mass: 2, sound: 'thud', label: 'item.firstAid', value: 25 },
+  backpack: { model: 'loot/Backpack', height: 0.5, mass: 4, sound: 'thud', label: 'item.backpack', value: 30 },
+  shovel: { model: 'loot/Shovel', height: 1.1, mass: 3, sound: 'metal', label: 'item.shovel', value: 20 },
+  trashcan: { model: 'loot/Trashcan', height: 0.8, mass: 9, shape: 'cyl', sound: 'metal', label: 'item.trashcan', value: 10 },
 };
+export const LOOT_MODELS = Object.values(PROPS).map((d) => d.model).filter((m): m is string => !!m && m.startsWith('loot/'));

@@ -97,11 +97,18 @@ grab nature "$CACHE/quaternius/quaternius/stylized-nature-megakit/glTF" 512 \
   Rock_Big_1 Pebble_Round_1 Plant_1_Big
 
 # ---------------------------------------------------------------- Quaternius Ultimate Animated Animals (CC0): skinned + 12 clips
-pack https://github.com/trebeljahr/quaternius-showcase qshow '/public/glb/animals_pack/'
+pack https://github.com/trebeljahr/quaternius-showcase qshow \
+  '/public/glb/animals_pack/' \
+  '/public/glb/rpg_items_pack/Gold_Ingots.glb' '/public/glb/rpg_items_pack/Chest_Closed.glb' '/public/glb/rpg_items_pack/Crown.glb' '/public/glb/rpg_items_pack/Chalice.glb' '/public/glb/rpg_items_pack/Coin.glb' '/public/glb/rpg_items_pack/Necklace1.glb' \
+  '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb'
 for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
 done
+
+# loot (Quaternius RPG Items + Survival, CC0)
+grab loot "$CACHE/qshow/public/glb/rpg_items_pack" 256 Gold_Ingots Chest_Closed Crown Chalice Coin Necklace1
+grab loot "$CACHE/qshow/public/glb/survival_pack" 256 Radio Phone GasCan Pan PropaneTank FirstAidKit Backpack Trashcan Shovel
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)
