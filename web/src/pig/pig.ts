@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair, HOOKS } from '../core/physics';
 import { Synced } from '../core/synced';
 import { clamp, dampAngle, wrapAngle } from '../core/util';
+import { MOD } from '../game/modifiers';
 import { G, ADMIN, type Holdable, type Carrier } from '../game/ctx';
 import type { Cage } from '../world/cage';
 import { PigVisual } from './pigVisual';
@@ -436,7 +437,8 @@ export class Pig implements Holdable {
     this.wallowUntil = this.now + PIG.wallowDur;
     if (this.held) this.release(false);
     if (this.standing) { this.standing = false; this.setShape('four'); }
-    const mud = G.terrain.mudAt(this.pos.x, this.pos.z);
+    // rainy day: the whole farm is mud
+    const mud = Math.max(G.terrain.mudAt(this.pos.x, this.pos.z), G.mod === 'rain' ? MOD.rain.mud : 0);
     if (mud > 0.3) {
       this.muddyUntil = this.now + PIG.mudTime;
       G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: 26, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });

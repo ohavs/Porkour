@@ -22,10 +22,10 @@ export const SOUND_SETS: Record<string, string[]> = {
   shot: n('shot', 2), snap: ['snap'],
   // animals
   moo: n('moo', 2), neigh: n('neigh', 2), bray: n('bray', 2), baa: ['baa1'], llama: ['llama'], cluck: n('cluck', 3), squawk: ['squawk'], bark: n('bark', 3), growl: n('growl', 4), yelp: n('yelp', 2),
-  howl: ['howl'], meow: ['meow'], munch: ['munch'],
+  howl: ['howl'], meow: ['meow'], munch: ['munch'], gobble: n('gobble', 2),
   // ambience
   rooster: ['rooster'], night: ['night'], cricket: n('cricket', 3), bird: ['bird3', 'bird4', 'bird5'],
-  amb_day: ['amb_day'], amb_farm: ['amb_farm'],
+  amb_day: ['amb_day'], amb_farm: ['amb_farm'], rain: ['rain'], thunder: n('thunder', 2),
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */

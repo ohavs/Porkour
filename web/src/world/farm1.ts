@@ -254,12 +254,14 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     const coop = V3(22.5, y(22.5, -27), -27);
     for (let i = 0; i < 6; i++) critter('hen', rng.range(18, 28), rng.range(-30, -20), 4.5);
     for (let i = 0; i < 4; i++) critter('chick', rng.range(19, 27), rng.range(-29, -21), 3);
+    critter('rooster', 21, -24, 6);                                  // crows when it sees a pig up to no good
     for (const c of out.critters) c.roost = coop;
     for (let i = 0; i < 3; i++) critter('cow', rng.range(28, 46), rng.range(-70, -56), 9);
     critter('horse', 40, -62, 8); critter('horse2', 33, -67, 8); critter('donkey', 46, -57, 5);
     for (let i = 0; i < 5; i++) critter('sheep', rng.range(-60, -52), rng.range(-50, -36), 5);
     critter('alpaca', -56, -40, 4);
     critter('dog', -16, -30, 5);
+    for (const [x, z] of [[-25.5, -56], [-26.5, -60], [-25, -63]] as const) critter('turkey', x, z, 4.5);   // guard Bob's garden
     critter('cat', -4, 6, 6); critter('cat', -20, -36, 4);
     critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6); critter('bunny', 12, -76, 5);
     for (let i = 0; i < 3; i++) critter('duck', POND.x + rng.range(-3, 3), POND.z + rng.range(-3, 3), 3.5);

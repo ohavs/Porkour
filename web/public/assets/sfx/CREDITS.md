@@ -46,6 +46,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | fanfare.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | fart_deep.ogg | User's own audio (Assets/Audio) |
 | fart_short.ogg | User's own audio (Assets/Audio) |
+| gobble1.ogg | Animalia by ElCeejo, MIT |
+| gobble2.ogg | Animalia by ElCeejo, MIT |
 | growl1.ogg | VoxeLibre mobs_mc, CC0 |
 | growl2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | growl3.ogg | Battle for Wesnoth, GPL-2.0-or-later |
@@ -75,6 +77,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | pigcry2.ogg | VoxeLibre mobs_mc, CC0 |
 | punch1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | punch2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| rain.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | rooster.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
@@ -100,6 +103,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | thud1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | thud2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | thud3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| thunder1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| thunder2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | unlock.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
@@ -117,3 +122,4 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 - 0 A.D.: https://play0ad.com — © Wildfire Games, https://creativecommons.org/licenses/by-sa/3.0/
 - Battle for Wesnoth: https://www.wesnoth.org — GPL-2.0-or-later
 - Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/
+- Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo

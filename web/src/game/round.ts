@@ -7,6 +7,7 @@ import { PROPS, type Prop } from '../world/props';
 import type { Critter } from '../world/animals';
 import { SETTINGS, saveSettings } from './settings';
 import type { Game } from './game';
+import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 
 /**
  * M5 round loop (Burglin' Gnomes / Untitled Goose Game to-do list): steal loot into the stash in the sty (each item
@@ -57,6 +58,10 @@ const CSS = `
 #missions .m.done { opacity: .55; text-decoration: line-through; }
 #missions .m em { font-style: normal; font-size: 11px; color: #b6e36a; margin-left: auto; }
 #missions .goal { color:#b6e36a; font-size: 14px; margin-top: 4px; }
+#missions .mod { display:flex; align-items:center; gap: 6px; font-size: 13px; color: #cfe3ff; margin: -1px 0 5px; }
+#missions .mod svg, #results .mod svg { width: 17px; height: 17px; flex: none; }
+#missions .mod.grumpy, #results .mod.grumpy { color: #ffab8a; } #missions .mod.market, #results .mod.market { color: #ffe08a; }
+#results .mod { display:inline-flex; align-items:center; gap: 6px; font-size: 15px; color:#cfe3ff; margin-bottom: 4px; }
 .coin { display:inline-block; width: .8em; height: .8em; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0, #ffd166 45%, #c98a1b); box-shadow: 0 0 0 1.5px #7a4b12; vertical-align: -1px; margin-right: 3px; }
 .val { color: var(--gold); white-space: nowrap; }
 .wpt { position:absolute; left:0; top:0; font-family: Title; font-size: 17px; color: var(--gold); opacity:0; transition: opacity .25s; transform: translate(-50%,-100%); text-align:center; pointer-events:none;
@@ -89,6 +94,8 @@ export class Round {
   reason = '';
   /** Round number (host counts; players see it change on a restart). */
   no = 0;
+  /** This round's modifier (rain / fog / grumpy Bob / market day), mirrored in G.mod. */
+  mod: ModId = 'none';
   stash: THREE.Vector3;
   private paid = -1;
   private lastMin = false;
@@ -129,8 +136,15 @@ export class Round {
     this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false;
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
+    this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod());
     const req = pick(REQ_POOL, 2), bonus = pick(BONUS_POOL.filter((m) => !req.includes(m)), 2);
     this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
+  }
+
+  /** Host: this round's modifier (admin can switch it live). Everyone gets a toast through the event. */
+  setMod(m: ModId) {
+    this.mod = m; G.mod = m;
+    if (m !== 'none') G.events.push({ type: 'mod', text: m });
   }
 
   /** Game events (host): Bob knocked down / coughing, wolves scared… */
@@ -154,7 +168,7 @@ export class Round {
     const { props, critters } = this.game.farm;
     // players: solo = just you (the other pigs in the sty are idle extras); online = every connected pig
     const pigs = G.net === 'solo' ? [this.game.local] : this.game.pigs.filter((p) => !p.absent);
-    this.quota = ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1);
+    this.quota = ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
     // loot dropped in the stash
     for (const pr of props) {
       if (pr.banked || pr.value <= 0 || pr.heldBy) continue;
@@ -191,7 +205,7 @@ export class Round {
     if (G.grills >= 3) return this.end(false, 'grill');
     if (this.timeLeft <= 0) return this.end(reqDone, 'time');
     if (!this.lastMin && this.timeLeft < 60) { this.lastMin = true; G.events.push({ type: 'lastMinute' }); }
-    G.farmer?.setFloor(this.timeLeft < 120 ? 2 : 0);   // the last 2 minutes: at least "on alert"
+    G.farmer?.setFloor(this.timeLeft < 120 ? 2 : this.mod === 'grumpy' ? MOD.grumpy.floor : 0);   // the last 2 minutes: at least "on alert"
   }
 
   private atWell(p: THREE.Vector3) { return Math.hypot(p.x - WELL.x, p.z - WELL.z) < 1.6 && p.y > G.terrain.height(WELL.x, WELL.z) + 0.9; }
@@ -216,12 +230,13 @@ export class Round {
   bankProp(pr: Prop) {
     const p = v1.copy(pr.synced.currP);
     pr.bank();
-    this.banked += pr.value;
+    const value = Math.round(pr.value * (this.mod === 'grumpy' ? MOD.grumpy.loot : 1));
+    this.banked += value;
     if (pr.def === PROPS.pie) this.done('pieSteal');
     if (pr.def === PROPS.trophy) this.done('mazeTrophy');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
-    G.events.push({ type: 'banked', text: pr.label ?? '', why: String(pr.value) });
+    G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
   }
   end(won: boolean, reason: string) {
     if (this.phase === 'end') return;
@@ -239,7 +254,7 @@ export class Round {
   netState(n: number[], s: string[]) {
     let bits = 0; this.missions.forEach((m, i) => { if (m.done) bits |= 1 << i; });
     n.push(PHASES.indexOf(this.phase), Math.round(this.elapsed * 10) / 10, this.secs, this.banked, this.quota, this.won ? 1 : 0, bits, this.no, ...this.missions.map((m) => m.n));
-    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason);
+    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason, this.mod);
   }
   netApply(n: number[], s: string[]) {
     if (n.length < 8) return;
@@ -251,6 +266,11 @@ export class Round {
     } else this.missions.forEach((m, i) => { m.done = (n[6] & (1 << i)) !== 0; });
     this.missions.forEach((m, i) => { m.n = n[8 + i] ?? m.n; });
     if (s[1] !== undefined) this.reason = s[1];
+    if (s[2] !== undefined) {
+      const m = (MOD_IDS.includes(s[2] as ModId) ? s[2] : 'none') as ModId;
+      if (m !== this.mod && m !== 'none') G.events.push({ type: 'mod', text: m });   // set outside the host's steps: not in its recorded events
+      this.mod = m; G.mod = m;
+    }
   }
 
   // ================================================================== every frame (all browsers)
@@ -314,11 +334,17 @@ export class Round {
     return out;
   }
 
+  /** The modifier chip (icon + name) for the panel / results. */
+  modLine() {
+    if (this.mod === 'none') return '';
+    return `<div class="mod ${this.mod}" title="${t(('mod.' + this.mod + '.d') as Key)}">${MOD_SVG[this.mod]}<span>${t(('mod.' + this.mod) as Key)}</span></div>`;
+  }
+
   private carrying() { const h = this.game.local?.held as Prop | null; return !!h && (h as Prop).value > 0; }
 
   private renderPanel() {
     const left = Math.ceil(this.timeLeft), mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
-    const key = [left, this.banked, this.quota, this.phase, this.missions.map((m) => m.id + m.done + m.n).join()].join('|');
+    const key = [left, this.banked, this.quota, this.phase, this.mod, this.missions.map((m) => m.id + m.done + m.n).join()].join('|');
     if (key === this.panelKey) return;
     this.panelKey = key;
     if (!this.missions.length) { this.panel.style.display = 'none'; return; }
@@ -329,7 +355,7 @@ export class Round {
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
     this.panel.innerHTML = `<div class="mh"><span class="tm${left < 60 ? ' low' : ''}">⏱ ${mm}:${ss}</span><span><i class="coin"></i>${this.banked} / ${this.quota}</span></div>` +
-      `<div class="bar"><div style="width:${pct}%"></div></div>${rows}` + (this.phase === 'escape' ? `<div class="goal">${t('m.escape')}</div>` : '');
+      `<div class="bar"><div style="width:${pct}%"></div></div>${this.modLine()}${rows}` + (this.phase === 'escape' ? `<div class="goal">${t('m.escape')}</div>` : '');
   }
 
   /** Waypoints: where the thing you hold goes (a prank's place, the stash), Bob's porch when you're muddy for that prank. */
@@ -377,7 +403,7 @@ export class Round {
       return `<li class="${x.done ? 'ok' : 'no'}"><i>${x.done ? '✔' : '✘'}</i>${txt}${x.req ? '' : ` <em>${t('m.bonus')}</em>`}</li>`;
     }).join('');
     this.res.innerHTML = `<div class="panel"><h1 class="${this.won ? '' : 'lose'}">${t(this.won ? 'r.win' : 'r.lose')}</h1>` +
-      `<div class="why">${t(('r.why.' + (this.reason || 'time')) as Key)}</div>` +
+      `<div class="why">${t(('r.why.' + (this.reason || 'time')) as Key)}</div>` + this.modLine() +
       `<div class="stars">${[0, 1, 2].map((i) => (i < stars ? '<b>★</b>' : '★')).join('')}</div><ul>${li}</ul>` +
       `<div class="sum">${t('r.loot')}: <b><i class="coin"></i>${this.banked}</b> · ${t('r.coins')}: <b><i class="coin"></i>${earned}</b></div>` +
       `<div class="tot">${t('r.total', { n: SETTINGS.coins })}</div>` +

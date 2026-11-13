@@ -12,6 +12,8 @@ import { carrierCode, carrierFrom } from '../net/refs';
 export interface CritterDef {
   kind: AnimalKind; mass: number; speed: number; flee: number; radius: number; label: string;
   sound?: string; soundEvery?: number; scared?: string;
+  /** Alarm bird: gives pigs away to Bob (rooster crows, turkeys gobble + chase + peck). */
+  alarm?: 'rooster' | 'turkey';
 }
 export const CRITTERS: Record<string, CritterDef> = {
   hen: { kind: 'hen', mass: 2.5, speed: 1.6, flee: 4.5, radius: 0.18, label: 'item.hen', sound: 'cluck', soundEvery: 9, scared: 'squawk' },
@@ -25,12 +27,23 @@ export const CRITTERS: Record<string, CritterDef> = {
   horse2: { kind: 'horse2', mass: 450, speed: 1.3, flee: 0, radius: 0.5, label: 'item.horse', sound: 'neigh', soundEvery: 35 },
   donkey: { kind: 'donkey', mass: 200, speed: 1.0, flee: 0, radius: 0.42, label: 'item.donkey', sound: 'bray', soundEvery: 40 },
   alpaca: { kind: 'alpaca', mass: 70, speed: 1.0, flee: 2.5, radius: 0.36, label: 'item.alpaca', sound: 'llama', soundEvery: 45 },
+  rooster: { kind: 'rooster', mass: 3.5, speed: 1.7, flee: 0, radius: 0.24, label: 'item.rooster', sound: 'cluck', soundEvery: 16, scared: 'squawk', alarm: 'rooster' },
+  turkey: { kind: 'turkey', mass: 9, speed: 1.3, flee: 0, radius: 0.36, label: 'item.turkey', sound: 'gobble', soundEvery: 24, scared: 'gobble', alarm: 'turkey' },
   duck: { kind: 'duck', mass: 2, speed: 1.2, flee: 4, radius: 0.16, label: 'item.duck', sound: 'cluck', soundEvery: 18, scared: 'squawk' },
 };
 
 const rng = new Rng(99);
 /** Guard dog off the leash (Bob's alert 2+): the whole farm is its beat. Smell range in the open / into a bush (m). */
 const DOG = { patrol: { x: 0, z: -40, r: 46 }, smell: 11, smellHidden: 4, give: 12, skip: 10, chew: 14, boneSee: 14, boneSkip: 45, tipEvery: 3 };
+/**
+ * Alarm birds (Untitled Goose Game's geese, on Bob's side). Rooster: sees a pig up to no good (holding something,
+ * standing, sprinting) within 9 m — or any pig under 3.5 m — and crows: a loud noise right where the pig is, so Bob
+ * comes to look (10 s between crows). Turkeys: guard the garden; a pig within 6 m → gobble (noise) and they charge
+ * (4.3 m/s, a walking pig just outruns them), peck = a shove and you DROP what you hold; give up after 6 s or 15 m from
+ * home. A fart scares any of them off; they can be grabbed and thrown like hens. Asleep at night.
+ */
+const BIRD = { see: 9, close: 3.5, crowEvery: 10, turkeySee: 6, gobbleEvery: 3.5, chase: 4.3, chaseFor: 6, leash: 15, skip: 8, peckR: 0.85,
+  peckEvery: 1.2, crowNoise: 34, gobbleNoise: 22 };
 const v1 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
@@ -79,6 +92,8 @@ export class Critter implements Holdable {
   private chewUntil = 0; private chewing: Holdable | null = null; private boneSkip = new WeakMap<object, number>(); private bones: Holdable[] | null = null;
   private sniffAt = 0; private sniffPig: any = null; private sniffSince = 0; private pigSkip = new Map<unknown, number>();
   private barkAt = 0; private tipAt = 0; private scaredUntil = 0; private scaredFrom = new THREE.Vector3();
+  // alarm birds: next call, the pig a turkey is chasing (since), next peck
+  private callAt = 0; private chasePig: any = null; private chaseSince = 0; private peckAt = 0; private scanAt = 0;
   label: string;
   height: number;
   /** Night roost (hens → coop). */
@@ -118,6 +133,7 @@ export class Critter implements Holdable {
     this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
     this.parts.snap(); this.synced.capture(); this.synced.capture();
     this.sniffPig = null; this.chewUntil = 0; this.chewing = null; this.scaredUntil = 0; this.sicUntil = 0; this.pigSkip.clear();
+    this.chasePig = null; this.callAt = 0; this.excite = 0;
   }
 
   get pos() { return this.synced.currP; }
@@ -192,11 +208,12 @@ export class Critter implements Holdable {
       }
       if (!busy) this.dogBrain(p, dt);
     }
+    if (this.def.alarm && !this.fleeing) this.birdBrain(p, dt);
     const night = G.night > 0.6 && this.roost;
     if (!this.fleeing && G.time > this.nextThink) {
       if (night) { this.target.copy(this.roost!).add(v1.set(rng.range(-0.8, 0.8), 0, rng.range(-0.8, 0.8))); this.nextThink = G.time + 6; }
       else {
-        const home = this.def.kind === 'dog' && (G.farmer?.level ?? 0) >= 2 ? DOG.patrol : this.home;   // off the leash
+        const home = this.def.kind === 'dog' && ((G.farmer?.level ?? 0) >= 2 || G.farmer?.state === 'away') ? DOG.patrol : this.home;   // off the leash
         const a = rng.range(0, 6.28), r = Math.sqrt(rng.next()) * home.r;
         this.target.set(home.x + Math.cos(a) * r, p.y, home.z + Math.sin(a) * r);
         this.nextThink = G.time + rng.range(2.5, 7);
@@ -204,7 +221,7 @@ export class Critter implements Holdable {
       }
     }
     const dx = this.target.x - p.x, dz = this.target.z - p.z, d = Math.hypot(dx, dz);
-    const speed = d > 0.4 && G.time > this.eatUntil ? (this.fleeing ? this.def.speed * 2 : this.def.speed * (this.excite > 0 ? 2 : 1)) : 0;
+    const speed = d > 0.4 && G.time > this.eatUntil ? (this.fleeing ? this.def.speed * 2 : this.chasePig ? BIRD.chase : this.def.speed * (this.excite > 0 ? 2 : 1)) : 0;
     const tx = d > 0.01 ? (dx / d) * speed : 0, tz = d > 0.01 ? (dz / d) * speed : 0;
     const grounded = !!raycast(v1.set(p.x, p.y, p.z), DOWN, this.height / 2 + 0.15, L.STATIC, this.body);
     const k = grounded ? 1 - Math.exp(-8 * dt) : 0.02;
@@ -271,7 +288,8 @@ export class Critter implements Holdable {
     }
     // guard dog
     const bob = G.farmer;
-    if (!bob || (bob.level ?? 0) < 2 || bob.state === 'off') { this.sniffPig = null; return; }
+    // on the job at alert 2+, and while Bob is away at the market (he hears about it when he's back)
+    if (!bob || ((bob.level ?? 0) < 2 && bob.state !== 'away') || bob.state === 'off') { this.sniffPig = null; return; }
     if (now > this.sniffAt) {
       this.sniffAt = now + 0.3;
       let best: any = null, bdist = 1e9;
@@ -308,6 +326,85 @@ export class Critter implements Holdable {
     }
     if (now > this.tipAt) { this.tipAt = now + DOG.tipEvery; bob.tipOff(pig, pig.pos); }
   }
+  /** Rooster / turkeys (host): see the class comment of BIRD. */
+  private birdBrain(p: { x: number; y: number; z: number }, dt: number) {
+    const now = G.time, turkey = this.def.alarm === 'turkey';
+    this.excite = Math.max(0, this.excite - dt * 0.5);
+    for (const c of G.clouds) if (Math.hypot(c.x - p.x, c.z - p.z) < c.r + 0.6 && now > this.scaredUntil - 3) {
+      this.scaredUntil = now + 5; this.scaredFrom.set(c.x, 0, c.z); this.chasePig = null;
+      G.audio.play(this.def.scared ?? 'squawk', { pos: v1.set(p.x, p.y, p.z), vol: 0.9, minGap: 0.5 });
+    }
+    if (now < this.scaredUntil) {
+      const dx = p.x - this.scaredFrom.x, dz = p.z - this.scaredFrom.z, d = Math.hypot(dx, dz) || 1;
+      this.target.set(p.x + (dx / d) * 5, p.y, p.z + (dz / d) * 5); this.nextThink = now + 0.5; this.fleeing = true;
+      return;
+    }
+    if (G.night > 0.6) { this.chasePig = null; return; }   // asleep
+    // a turkey on a pig: charge, peck, give up when it's gone or too far from home
+    const cp = this.chasePig;
+    if (cp) {
+      const away = Math.hypot(p.x - this.home.x, p.z - this.home.z);
+      if (cp.out || cp.cage || cp.heldBy || now - this.chaseSince > BIRD.chaseFor || away > BIRD.leash) {
+        this.pigSkip.set(cp, now + BIRD.skip); this.chasePig = null; this.target.set(this.home.x, p.y, this.home.z); this.nextThink = now + 2;
+        return;
+      }
+      const d = Math.hypot(cp.pos.x - p.x, cp.pos.z - p.z);
+      this.excite = 1; this.nextThink = now + 0.5; this.eatUntil = 0;
+      this.target.set(cp.pos.x, p.y, cp.pos.z);
+      if (now > this.callAt) { this.callAt = now + BIRD.gobbleEvery; this.call(cp, BIRD.gobbleNoise, p); }
+      if (d < BIRD.peckR + cp.radius && now > this.peckAt) this.peck(cp, p);
+      return;
+    }
+    if (now < this.scanAt) return;
+    this.scanAt = now + 0.25;
+    let best: any = null, bd = 1e9;
+    for (const pig of G.pigs) {
+      if (pig.out || pig.cage || pig.heldBy || (this.pigSkip.get(pig) ?? 0) > now) continue;
+      if (pig === G.localPig && (ADMIN.god || !ADMIN.bobSees)) continue;
+      const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
+      const up2 = pig.held || pig.standing || pig.sprinting;
+      if (d > (turkey ? BIRD.turkeySee : up2 ? BIRD.see : BIRD.close) || d > bd) continue;
+      if (G.cover.at(pig.pos) && d > 2) continue;                       // hiding in a bush: they don't spot it
+      const dir = v1.set(pig.pos.x - p.x, pig.pos.y + 0.3 - p.y, pig.pos.z - p.z), len = dir.length(); dir.divideScalar(len);
+      const hit = raycast({ x: p.x, y: p.y + 0.2, z: p.z } as THREE.Vector3, dir, len, L.STATIC, this.body, (c) => !SEE_THROUGH.has(c.handle));
+      if (hit && hit.dist < len - 0.5) continue;
+      best = pig; bd = d;
+    }
+    if (!best || now < this.callAt) return;
+    this.yaw = Math.atan2(best.pos.x - p.x, best.pos.z - p.z);
+    this.excite = 1;
+    if (turkey) { this.chasePig = best; this.chaseSince = now; this.callAt = now + BIRD.gobbleEvery; this.call(best, BIRD.gobbleNoise, p); }
+    else {
+      this.callAt = now + BIRD.crowEvery; this.call(best, BIRD.crowNoise, p);
+      this.eatUntil = now + 2.2; this.target.set(p.x, p.y, p.z);           // stands and crows (flapping)
+      const lv = this.body.linvel(); this.body.setLinvel({ x: lv.x, y: 3.2, z: lv.z }, true);
+    }
+  }
+  /** Crow / gobble: loud, right where the pig is (Bob comes to look there). */
+  private call(pig: any, radius: number, p: { x: number; y: number; z: number }) {
+    const rooster = this.def.alarm === 'rooster';
+    G.audio.play(rooster ? 'rooster' : 'gobble', { pos: v1.set(p.x, p.y, p.z), vol: 1, rand: 0.08, minGap: 0.8 });
+    G.noise(pig.pos, radius);
+    G.events.push({ type: 'birdAlarm', who: pig, text: this.def.alarm });
+  }
+  private peck(pig: any, p: { x: number; y: number; z: number }) {
+    this.peckAt = G.time + BIRD.peckEvery; this.eatUntil = G.time + 0.3;
+    const dx = pig.pos.x - p.x, dz = pig.pos.z - p.z, d = Math.hypot(dx, dz) || 1;
+    const dropped = !!pig.held;
+    if (dropped) pig.release(false);
+    pig.knock(v1.set((dx / d) * 3, 2.4, (dz / d) * 3), false);
+    G.audio.play('bite', { pos: pig.pos, vol: 0.8, pitch: 1.3 });
+    G.audio.play('squeal', { pos: pig.pos, vol: 0.6, minGap: 0.6 });
+    G.fx.bits(v1.copy(pig.pos).setY(pig.pos.y + 0.4), { count: 7, color: 0x7d5233, speed: 2.5, up: 2, life: 0.6, size: 0.1, grow: 0, drag: 2, alpha: 1 });
+    G.shakeFor(pig, 0.25);
+    G.events.push({ type: 'pecked', who: pig, text: dropped ? 'drop' : '' });
+  }
+  /** Admin: the turkeys come for this pig. */
+  sicBird(pig: unknown) {
+    if (this.def.alarm === 'turkey') { this.chasePig = pig; this.chaseSince = G.time; this.callAt = 0; this.pigSkip.delete(pig); }
+    else { this.callAt = 0; this.scanAt = 0; this.pigSkip.delete(pig); }
+  }
+
   /** Admin: sniff this pig out now. */
   sicEm(pig: unknown) { this.sniffPig = pig; this.sniffSince = G.time; this.sicUntil = G.time + DOG.give; this.pigSkip.delete(pig); this.chewUntil = 0; this.tipAt = G.time + 1; }
   private sicUntil = 0;

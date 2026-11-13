@@ -15,6 +15,7 @@ import { Pig, emptyInput, type PigInput } from '../pig/pig';
 import { randomOutfit, defaultOutfit } from '../pig/cosmetics';
 import { Prop } from '../world/props';
 import { DayNight } from '../world/daynight';
+import { MOD, type ModId } from './modifiers';
 import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
 import { CamRig } from './camera';
@@ -278,11 +279,22 @@ export class Game {
         case 'trapFreed': if (me) this.hud.toast(t('e.trapFreed'), 1.2); break;
         case 'dogFound': if (me) this.hud.toast(t('e.dogFound'), 1.6); break;
         case 'dogBone': this.hud.toast(t('e.dogBone'), 1.8); break;
+        case 'mod': this.hud.toast(t(('mod.' + e.text) as Key), 5, t(('mod.' + e.text + '.d') as Key)); break;
+        case 'market': if (e.text === 'gone') this.hud.toast(t('e.marketGone'), 3, t('e.marketGone2')); else this.hud.toast(t('e.marketBack'), 2); break;
+        case 'birdAlarm':
+          if (me && G.time - (this.birdToast[e.text ?? ''] ?? -99) > 7) {
+            this.birdToast[e.text ?? ''] = G.time;
+            if (e.text === 'turkey') this.hud.toast(t('e.turkey'), 2.2, t('e.turkey2')); else this.hud.toast(t('e.rooster'), 2.2, t('e.rooster2'));
+          }
+          break;
+        case 'pecked': if (me) this.hud.toast(t(e.text === 'drop' ? 'e.peckedDrop' : 'e.pecked'), 1.2); break;
         case 'roundEnd': break;
       }
     }
     G.events.length = 0;
   }
+
+  private birdToast: Record<string, number> = {};
 
   /** Host / solo: everything back to the start, new mission list. */
   restartRound() {
@@ -364,6 +376,28 @@ export class Game {
         dog.sicEm(L);
         break;
       }
+      case 'mod:none': case 'mod:rain': case 'mod:fog': case 'mod:grumpy': case 'mod:market': {
+        const m = a.slice(4) as ModId;
+        ADMIN.mod = m; this.round.setMod(m);
+        if (m === 'market') {   // test it now: just before he leaves (unless he's already in his away hours)
+          if (!(G.hour >= MOD.market.leave - 0.3 && G.hour < MOD.market.back)) this.daynight.setHour(MOD.market.leave - 0.3);
+          f?.resetMarket();
+        }
+        break;
+      }
+      case 'mod:random': ADMIN.mod = 'random'; break;
+      case 'roosterMe': case 'turkeyMe': {
+        const kind = a === 'roosterMe' ? 'rooster' : 'turkey', fw = L.forward;
+        if (G.night > 0.6) this.daynight.setHour(10);
+        this.farm.critters.filter((c) => c.def.alarm === kind).forEach((c, i) => {
+          const d = kind === 'rooster' ? 4 : 6.5 + i, x = L.pos.x + fw.x * d + (i - 1) * 0.8, z = L.pos.z + fw.z * d;
+          if (c.heldBy) c.heldBy.release?.(false);
+          c.body.setTranslation({ x, y: G.terrain.height(x, z) + 0.5, z }, true); c.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+          c.sicBird(L);
+        });
+        break;
+      }
+      case 'tp:garden': tp(-24, -54); break;
       case 'bringPot': case 'bringEgg': case 'bringGnome': case 'bringBone': {
         const id = a === 'bringPot' ? 'flowerPot' : a === 'bringEgg' ? 'egg' : a === 'bringBone' ? 'bone' : 'gnome';
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);

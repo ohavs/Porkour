@@ -193,6 +193,10 @@ export class Menu {
       `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${btn('tp:wheat', 'a.tpWheat')}</div>` +
       `<div class="sec">${t('a.alert')}</div><div class="grid">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}">${l} · ${t(('alert.' + l) as Key)}</button>`).join('')}` +
       `${btn('trapMe', 'a.trapMe')}${btn('dogMe', 'a.dogMe')}${btn('bringBone', 'a.bringBone')}</div>` +
+      `<div class="sec">${t('a.mods')}</div><div class="grid">${(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) =>
+        `<button data-a="mod:${m}" class="${G.mod === m ? 'on' : ''}">${m === 'none' ? t('menu.off') : t(('mod.' + m) as Key)}</button>`).join('')}` +
+      `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button></div>` +
+      `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}<button data-tp="garden">${t('a.tpGarden')}</button></div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +
@@ -219,7 +223,10 @@ export class Menu {
       if (k === 'hour') g.daynight.setHour(v); else (ADMIN as any)[k] = v;
       (this.admin.querySelector(`[data-val="${k}"]`) as HTMLElement).textContent = String(v);
     }));
-    this.admin.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => b.addEventListener('click', () => g.adminAction(b.dataset.a!)));
+    this.admin.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => b.addEventListener('click', () => {
+      g.adminAction(b.dataset.a!);
+      if (b.dataset.a!.startsWith('mod:')) this.renderAdmin();   // show which modifier is on
+    }));
     this.admin.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) => b.addEventListener('click', () => g.adminAction('tp:' + b.dataset.tp)));
   }
 }

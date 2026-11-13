@@ -41,7 +41,7 @@ export function toonify(obj: THREE.Object3D) {
 }
 
 const FRAG = `
-uniform vec3 uColor; uniform float uThick;
+uniform vec3 uColor; uniform float uThick; uniform vec2 uFade;
 float vz(const in vec2 uv) { return -getViewZ(readDepth(uv)); }
 void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
   float z = -getViewZ(depth);
@@ -50,7 +50,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   float z3 = vz(uv + vec2(0.0, o.y)), z4 = vz(uv - vec2(0.0, o.y));
   float lap = (z1 + z2 + z3 + z4 - 4.0 * z) / max(z, 0.5);
   float edge = smoothstep(0.025, 0.09, lap);
-  edge *= 1.0 - smoothstep(70.0, 160.0, z);
+  edge *= 1.0 - smoothstep(uFade.x, uFade.y, z);
   outputColor = vec4(mix(inputColor.rgb, uColor, edge * 0.95), inputColor.a);
 }`;
 
@@ -59,7 +59,10 @@ export class InkOutline extends Effect {
   constructor(thickness = 1.3, color = 0x2b170c) {
     super('InkOutline', FRAG, {
       attributes: EffectAttribute.DEPTH,
-      uniforms: new Map<string, THREE.Uniform>([['uColor', new THREE.Uniform(new THREE.Color(color))], ['uThick', new THREE.Uniform(thickness)]]),
+      uniforms: new Map<string, THREE.Uniform>([['uColor', new THREE.Uniform(new THREE.Color(color))], ['uThick', new THREE.Uniform(thickness)],
+        ['uFade', new THREE.Uniform(new THREE.Vector2(70, 160))]]),
     });
   }
+  /** Lines fade out between these distances (pulled in with the fog, so foggy hills don't get ink lines). */
+  setFade(near: number, far: number) { (this.uniforms.get('uFade')!.value as THREE.Vector2).set(near, far); }
 }

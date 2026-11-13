@@ -13,6 +13,8 @@ Dead by Daylight, Party Animals.
 - **Every reply in Hebrew** (code / paths / UI names stay English). This file is English. User has no game-dev experience.
 - **Save tokens**: short answers. At the end of every stage: commit + push, update this file, and say explicitly
   whether it is safe to `/clear`.
+- **Pending checks (user 2026-11-13)**: the user `/clear`s and forgets. EVERY final reply of an update ends with the full
+  list from "Pending user checks" below (in Hebrew), until the user reports on an item → then remove it from the list.
 - **Work autonomously** — the user downloads things only when at a PC; do everything possible without them.
 - **Languages: English + Spanish, full support, forever.** Every new UI string goes through `t()` (`web/src/i18n.ts`) with an
   `en` AND an `es` entry in the same change (`es` is typed `Record<Key, string>`, so a missing entry fails `tsc`).
@@ -111,7 +113,8 @@ Dead by Daylight, Party Animals.
 | `game/markers.ts`, `game/lockpick.ts` | **Markers** (2026-11-13 s4): bobbing arrows over loot (gold, value ≥ 25, bigger ≥ 60) and over what an open prank is about (pink), seen through walls, one `Points` draw call; waypoints (where the thing you hold goes) live in `round.ts` (`targetFor` / `wherePos`). **Lock-pick**: the cage latch is a pin-tumbler timing puzzle on the player's screen (RMB at the latch; LMB / Space when the pin hits the gold band; a slip = loud clank + `G.noise`); result → input press `pickP` / `pickFailP`, host opens (`Cage.canPick` / `pickOpts`: inside = 6 pins, standing = wider band). |
 | `world/landmarks.ts`, `world/funProps.ts` | Big places (s4): hedge maze NE (colliders, trophy on a plinth), sunflower field N (soft cover 2.4 m), junkyard SW (Kenney car kit sedan / van / delivery / truck + tyre stacks), greenhouse W (glass = `SEE_THROUGH`, 8 flower pots). Procedural prank props: egg, gnome, Bob's undies, pie, flower pot. Breakables: `PropDef.fragile` (m/s) → `Prop.smash()` (hidden like banked, `smashed` event). |
 | `game/round.ts` | **M5 round**: stash pit in the sty (loot dropped there is banked: `Prop.value`, hidden, synced), quota (400 + 200 / extra player; solo = you only), 2 required + 2 bonus pranks from a pool, escape phase (all pigs to the stash), timer (`ADMIN.roundMins`, 10), 3 grills = busted, results (stars, coins → `SETTINGS.coins/xp`), `Game.restartRound()` resets the farm. Synced as an entity (`entities()` after the cage). |
-| `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. **Guard dog** (`dogBrain`, `DOG`): alert 2+ = off the leash (patrols the farm), sniffs pigs (11 m open / 4 m in a bush, rail fences don't block), stands next to the pig barking, `Farmer.tipOff` every 3 s, gives up after 12 s; a fart scares it off; a **bone** prop a pig moved / carries → fetch + chew 14 s (take it → it follows you). |
+| `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. **Alarm birds** (`BIRD`, s6): rooster (coop) crows at a pig holding / standing / sprinting ≤9 m (any ≤3.5 m) → `G.noise` 34 m at the pig, every 10 s; 3 turkeys (garden, ×1.4 scale, fan tail pops up with `excite`) gobble at a pig ≤6 m and charge 4.3 m/s for 6 s, peck = shove + you drop what you hold; fart scares them, asleep at night; Animalia turkey sounds (MIT). **Guard dog** (`dogBrain`, `DOG`): alert 2+ = off the leash (patrols the farm), sniffs pigs (11 m open / 4 m in a bush, rail fences don't block), stands next to the pig barking, `Farmer.tipOff` every 3 s, gives up after 12 s; a fart scares it off; a **bone** prop a pig moved / carries → fetch + chew 14 s (take it → it follows you). |
+| `game/modifiers.ts` | **Round modifiers** (2026-11-13 s6): one per round (`rollMod`, weights; admin forces one / `ADMIN.mod`), `G.mod`, synced in the round's strings: **rain** (grey sky, `render/rain.ts` streaks, 0 A.D. rain loop + thunder + lightning flash in `daynight.applyWeather`, Bob sight ×0.75 / hearing ×0.7, wallow anywhere = mud), **fog** (fog 3–62 m, sight ×0.6, ink lines fade with the fog: `InkOutline.setFade`), **grumpy** (alert floor 1, heat ×1.4, slap 55 %, no dancing, loot ×1.25, storm cloud over Bob), **market** (Bob walks to the south gate 9:00, state `away` like sleep until 13:00, the dog guards meanwhile, `tipOff` while away → he searches there when back; quota +150). |
 | `world/traps.ts` | **Bear traps** (pool of 4, one synced entity after the round): a `Carrier` (code 20+i) — snaps a pig by a hind leg (grip joint), mash Space (10, muddy 6) or a teammate RMB/LMB next to it; things thrown on it set it off; sprung traps vanish after 20 s; `G.traps`. |
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
 | `world/cage.ts` | Bob's cage + BBQ (`ADMIN.bbqTime`, default 90 s); latch (standing ×2), ram bursts the door. |
@@ -150,7 +153,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    click = whack, poise 50–60, break after 3–4 hits on Bob), ✅ pranks: sheep out, hay bale in pond, lose Bob,
    whack Bob, hen in pond. Session 4: ✅ markers / waypoints, lock-pick puzzle, landmarks, 8 more pranks, breakables.
    Session 5: ✅ alert levels 0–3, guard dog + bone, bear traps, pitchfork, rock-salt shotgun.
-   Next: modifiers (rain / market day / bad mood), geese / rooster alarms, Bob locks doors / repairs, more farms, shop.
+   Session 6: ✅ round modifiers (rain / fog / grumpy Bob / market day), ✅ alarm birds (rooster + turkeys).
+   Next: Bob locks doors / repairs, more farms, shop (coins saved), more pranks with the new birds.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -204,7 +208,23 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   pincers = `snap`), HUD "trap right here" warning, admin → "Bob alert level" (0–3, trap in front of me, dog sniffs me, bring
   a bone). Checked headless solo (each feature) + 2 browsers online (level, trap catch / escape, gun visible on the player).
   Ask the user: is level 3 too harsh (gun every 5.5 s), heat speed (calm after ~1.5 min), dog too clingy, traps visible enough.
+- 2026-11-13 (session 6, "continue"): round modifiers + alarm birds (see `modifiers.ts`, `BIRD` in animals.ts). Admin → "Round
+  modifier (now)" (+ "Random next round"), "Alarm birds" (rooster spots me, turkeys charge me, teleport to the garden).
+  Checked headless solo (each modifier, Bob leaves / returns + searches the dog's spot, pecks, crow → Bob investigates) and
+  2 browsers online. Sounds: 0 A.D. rain / thunder (CC BY-SA 3.0), Animalia turkey (MIT). No goose recording found → turkeys.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
+
+## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- Missing sounds: `web/sfx_user/README.md` (drop files, Claude converts). Tripo API key when ready (→ `request_credential`).
+- After a crash: screenshot of admin → "Last session ended unexpectedly".
+- Feel on a real PC: wobble when standing, slap chance 30 %, grip 24 mashes, wolves, night length, online lag
+  (admin → "Move my pig right away" off = compare).
+- Round: length 10 min, quota 400 solo, are the pranks fun, Bob putting loot back.
+- Hiding: fun? farm too full / too open? hunt length (~16 s).
+- Alert: level 3 too harsh (gun every 5.5 s)? heat speed (calm after ~1.5 min), dog too clingy, traps visible enough.
+- Modifiers: is rain / fog too dark or too light, grumpy Bob too hard, market day (Bob away 9–13 ≈ 100 s) too long / short,
+  how often (30 % normal days)?
+- Alarm birds: rooster too strict (crows every 10 s), turkeys too annoying (3 of them, drop loot on a peck)?
 
 ## Known issues / TODO
 - Lock-pick / round progress online still only covered by the session-5 smoke test (lobby → start → snapshots fine).

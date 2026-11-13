@@ -9,7 +9,10 @@ import { damp, clamp } from '../core/util';
  * Each builder returns a rig; AnimalVisual animates it procedurally (walk / run / hop / peck / wag / flap / tumble).
  * Animals face +z, origin on the ground between the feet.
  */
-export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck' | 'horse' | 'horse2' | 'donkey' | 'alpaca';
+export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck' | 'horse' | 'horse2' | 'donkey' | 'alpaca'
+  | 'rooster' | 'turkey';
+/** Two-legged birds (waddle, peck, flap). */
+export const BIRDS = new Set<AnimalKind>(['hen', 'chick', 'duck', 'rooster', 'turkey']);
 
 export interface AnimalRig {
   kind: AnimalKind;
@@ -78,6 +81,64 @@ function bird(kind: 'hen' | 'chick' | 'duck', root: THREE.Group): AnimalRig {
   });
   const legs = [-1, 1].map((sd) => leg(root, [sd * 0.07 * s, by - 0.12 * s, 0], (duck ? 0.06 : 0.1) * s, 0.016, beakC, beakC, [0.035, 0.012, 0.06]));
   return { kind, body, head, legs, phases: [0, Math.PI], ears: [], wings, eyes, height: by + 0.25 * s };
+}
+
+/**
+ * The farm's alarm birds. Rooster: rusty body, golden ruff, huge comb, tall dark-green sickle tail. Turkey: big round
+ * brown body, bare blue-white head with a red snood, and a striped fan tail that folds back and pops up when it's angry
+ * (`tail` scales / tilts with excite).
+ */
+function fowl(kind: 'rooster' | 'turkey', outer: THREE.Group): AnimalRig {
+  const T = kind === 'turkey';
+  // built at hen scale, then scaled up as a whole (a turkey is about as tall as a pig)
+  const S = T ? 1.4 : 1.2, root = group(outer, [0, 0, 0]); root.scale.setScalar(S);
+  const body = group(root, [0, 0, 0]);
+  const by = T ? 0.4 : 0.31;
+  const col = T ? 0x5b3a26 : 0xc8541f, wingC = T ? 0x47301f : 0x8a3b1b;
+  mesh(sphere, col, [0, by, 0], body, T ? [0.27, 0.25, 0.31] : [0.2, 0.2, 0.23]);
+  mesh(sphere, T ? 0x3f2a1d : 0x2b2a2e, [0, by - 0.05, T ? 0.17 : 0.12], body, T ? [0.2, 0.19, 0.15] : [0.14, 0.15, 0.12]);   // breast
+  let head: THREE.Group, hr: number;
+  if (T) {
+    mesh(new THREE.CapsuleGeometry(0.045, 0.16, 4, 10), 0xd8e2ec, [0, by + 0.2, 0.25], body, undefined, [0.35, 0, 0]);   // bare neck
+    head = group(body, [0, by + 0.33, 0.3]); hr = 0.085;
+    mesh(sphere, 0xd8e2ec, [0, 0, 0], head, [hr, hr * 1.05, hr * 1.1]);
+    mesh(new THREE.ConeGeometry(0.022, 0.05, 8), 0xe8c07a, [0, -0.01, hr + 0.018], head, undefined, [Math.PI / 2, 0, 0]);
+    mesh(new THREE.CapsuleGeometry(0.014, 0.07, 4, 8), 0xd8322f, [0.012, -0.03, hr + 0.03], head, undefined, [0.25, 0, 0.15]);   // snood
+    mesh(sphere, 0xd8322f, [0, -0.07, hr * 0.55], head, [0.035, 0.05, 0.035]);                                               // wattle
+  } else {
+    mesh(sphere, 0xf0a63a, [0, by + 0.13, 0.12], body, [0.13, 0.13, 0.12]);   // golden ruff
+    head = group(body, [0, by + 0.23, 0.15]); hr = 0.11;
+    mesh(sphere, 0xf0a63a, [0, 0, 0], head, [hr, hr * 1.05, hr]);
+    mesh(new THREE.ConeGeometry(0.03, 0.075, 10), 0xffc12b, [0, -0.01, hr + 0.027], head, undefined, [Math.PI / 2, 0, 0]);
+    for (let i = 0; i < 5; i++) mesh(small, 0xe8322f, [0, hr + 0.025 + Math.sin((i / 4) * Math.PI) * 0.025, -0.055 + i * 0.03], head, [0.024, 0.05, 0.026]);
+    for (const sx of [-1, 1]) mesh(small, 0xe8322f, [sx * 0.012, -0.075, hr - 0.015], head, [0.02, 0.045, 0.02]);
+  }
+  const eyes = [eye(head, [hr * 0.55, 0.02, hr * 0.62], hr * 0.34, 1), eye(head, [-hr * 0.55, 0.02, hr * 0.62], hr * 0.34, -1)];
+  // tail
+  const tail = group(body, [0, by + (T ? 0.06 : 0.1), T ? -0.25 : -0.17]);
+  if (T) {
+    for (let i = 0; i < 11; i++) {
+      const f = group(tail, [0, 0, 0]); f.rotation.z = -1.3 + (i / 10) * 2.6;
+      mesh(sphere, i % 2 ? 0x7d5233 : 0x6b4329, [0, 0.24, 0], f, [0.065, 0.25, 0.022]);
+      mesh(sphere, 0x2b1c12, [0, 0.4, 0.003], f, [0.06, 0.035, 0.022]);
+      mesh(sphere, 0xeadfc6, [0, 0.46, 0.004], f, [0.055, 0.035, 0.022]);
+    }
+    tail.rotation.x = 0.9; tail.scale.setScalar(0.6);
+  } else {
+    for (let i = 0; i < 5; i++) {
+      const f = group(tail, [(i - 2) * 0.025, 0, 0]); f.rotation.set(-0.15 - i * 0.22, 0, (i - 2) * 0.12);
+      mesh(sphere, i % 2 ? 0x15302a : 0x1f4a3a, [0, 0.17, -0.02], f, [0.03, 0.2, 0.055], [-0.35, 0, 0]);
+    }
+  }
+  const wings = [-1, 1].map((sd) => {
+    const w = group(body, [sd * (T ? 0.24 : 0.18), by + 0.03, -0.02]);
+    mesh(sphere, wingC, [sd * 0.02, -0.02, 0], w, T ? [0.05, 0.14, 0.2] : [0.045, 0.11, 0.15], [0, 0, sd * 0.2]);
+    return w;
+  });
+  const legC = T ? 0xc99a86 : 0xffc12b;
+  const legs = [-1, 1].map((sd) => leg(root, [sd * (T ? 0.1 : 0.075), by - (T ? 0.2 : 0.15), 0], T ? 0.13 : 0.11, 0.019, legC, legC, [0.04, 0.013, 0.07]));
+  for (const e of eyes) e.userData.r *= S;   // googly eyes are sized in world units
+  return { kind, body, head, legs, phases: [0, Math.PI], ears: [], wings, eyes, tail, height: (by + (T ? 0.45 : 0.4)) * S };
 }
 
 function quad(kind: 'cow' | 'dog' | 'cat' | 'wolf' | 'sheep' | 'bunny', root: THREE.Group): AnimalRig {
@@ -202,6 +263,7 @@ function quad(kind: 'cow' | 'dog' | 'cat' | 'wolf' | 'sheep' | 'bunny', root: TH
 
 export function buildAnimal(kind: AnimalKind, root: THREE.Group): AnimalRig {
   if (kind === 'hen' || kind === 'chick' || kind === 'duck') return bird(kind, root);
+  if (kind === 'rooster' || kind === 'turkey') return fowl(kind, root);
   return quad(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' ? 'cow' : kind, root);
 }
 
@@ -236,7 +298,7 @@ export class AnimalVisual {
 
   update(p: AnimalPose) {
     const R = this.rig, dt = p.dt;
-    const biped = R.kind === 'hen' || R.kind === 'chick' || R.kind === 'duck';
+    const biped = BIRDS.has(R.kind);
     const hop = R.kind === 'bunny';
     const moving = p.speed > 0.15 && p.mode === 'move';
     const freq = (biped ? 9 : hop ? 7 : R.kind === 'cow' ? 3.2 : 5) * (p.run ? 1.6 : 1);
@@ -258,6 +320,8 @@ export class AnimalVisual {
     let hx = 0, hz = 0;
     if (p.mode === 'eat') { this.peck += dt * (biped ? 9 : 2); hx = biped ? (Math.sin(this.peck) > 0.3 ? 1.1 : 0.2) : 0.7 + Math.sin(this.peck) * 0.08; }
     if (p.mode === 'howl') hx = -0.9;
+    const crowing = R.kind === 'rooster' && p.excite > 0.6;   // head thrown back, wings flapping
+    if (crowing) hx = -0.75;
     if (biped && moving) hz = Math.sin(this.phase * 2) * 0.04;
     R.head.rotation.x = damp(R.head.rotation.x, hx, 14, dt);
     R.head.position.z += (hz - (R.head.userData.hz ?? 0)); R.head.userData.hz = hz;
@@ -266,12 +330,16 @@ export class AnimalVisual {
     if (R.tail) {
       const wag = R.kind === 'dog' ? Math.sin(p.t * (10 + p.excite * 12)) * (0.4 + p.excite * 0.4)
         : R.kind === 'cow' ? Math.sin(p.t * 1.6) * 0.35 : R.kind === 'cat' ? Math.sin(p.t * 1.2) * 0.4 : Math.sin(p.t * 3) * 0.15;
-      R.tail.rotation.y = wag;
+      if (R.kind === 'turkey') {   // the fan pops up when it's angry
+        R.tail.rotation.x = damp(R.tail.rotation.x, 0.9 - p.excite * 0.95, 8, dt);
+        R.tail.scale.setScalar(damp(R.tail.scale.x, 0.6 + p.excite * 0.45, 8, dt));
+        R.tail.rotation.z = p.excite > 0.3 ? Math.sin(p.t * 22) * 0.04 : 0;   // rattle
+      } else R.tail.rotation.y = wag;
     }
     // wings flap when running / falling
     for (const [i, w] of R.wings.entries()) {
       const s = i === 0 ? -1 : 1;
-      const f = p.run || flail ? Math.sin(p.t * 30) * 0.9 + 0.6 : 0;
+      const f = p.run || flail || crowing ? Math.sin(p.t * 30) * 0.9 + 0.6 : 0;
       w.rotation.z = damp(w.rotation.z, s * -f, 30, dt);
     }
     // ear twitch

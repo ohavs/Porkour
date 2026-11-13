@@ -3,6 +3,9 @@ import type { Gfx } from '../render/gfx';
 import { G, ADMIN, SECS_PER_HOUR, DUSK, DAWN } from '../game/ctx';
 import { clamp, smoothstep, lerp } from '../core/util';
 import type { Loop } from '../core/audio';
+import { damp } from '../core/util';
+import { RainFx } from '../render/rain';
+import { MOD } from '../game/modifiers';
 
 /** Palette key at an hour. Colours are hex, the rest scalars. */
 interface Key { h: number; top: number; hor: number; bot: number; sun: number; sunI: number; hemiS: number; hemiG: number; hemiI: number; cloud: number; cloudE: number; glow: number }
@@ -43,8 +46,13 @@ export class DayNight {
   private birdT = 0; private cricketT = 0;
   private started = false;
   private fogNear = 110; private fogFar = 330;
+  /** Weather of the round's modifier (0..1, eased in / out): rain and fog. */
+  weather = { rain: 0, fog: 0 };
+  private rainFx: RainFx;
+  private rainLoop: Loop | null = null;
+  private thunderAt = 0; private flash = 0; private flashes: number[] = []; private boomAt = 0;
 
-  constructor(private gfx: Gfx) {}
+  constructor(private gfx: Gfx) { this.rainFx = new RainFx(gfx.scene); }
 
   /** A lantern: glowing bulb + (when in the pool) a warm point light, on at night. */
   addLamp(parent: THREE.Object3D, at: THREE.Vector3, intensity = 9, distance = 13) {
@@ -92,6 +100,7 @@ export class DayNight {
     mix(g.sun.color, a.sun, b.sun, t); g.sun.intensity = lerp(a.sunI, b.sunI, t);
     mix(g.hemi.color, a.hemiS, b.hemiS, t); mix(g.hemi.groundColor, a.hemiG, b.hemiG, t); g.hemi.intensity = lerp(a.hemiI, b.hemiI, t);
     mix(g.cloudMat.color, a.cloud, b.cloud, t); mix(g.cloudMat.emissive, a.cloudE, b.cloudE, t);
+    this.applyWeather(dt, camPos);
     // sun arc 6:00 → 19:30 (east → west, low in the south), moon the other way round
     const sunA = ((h - 6) / 13.5) * Math.PI;
     const sunDir = new THREE.Vector3(Math.cos(sunA), Math.sin(sunA) * 0.85 + 0.02, 0.42).normalize();
@@ -105,7 +114,7 @@ export class DayNight {
     g.moon.lookAt(camPos);
     (g.moon.material as THREE.MeshBasicMaterial).opacity = clamp(G.night * 1.3, 0, 1);
     g.moon.visible = G.night > 0.02;
-    (g.stars.material as THREE.PointsMaterial).opacity = smoothstep(0.35, 1, G.night) * 0.95;
+    (g.stars.material as THREE.PointsMaterial).opacity = smoothstep(0.35, 1, G.night) * 0.95 * (1 - Math.max(this.weather.rain, this.weather.fog * 0.8));
     g.stars.position.copy(camPos); g.stars.rotation.y = h * 0.03;
     // lamps
     const lampOn = smoothstep(0.25, 0.75, G.night);
@@ -133,17 +142,71 @@ export class DayNight {
     this.lastHour = h;
   }
 
+  /**
+   * Rain: grey sky and clouds, less sun, the fog comes in, streaks + rain loop, lightning flashes (sky + light) with the
+   * thunder a moment later. Fog: the fog wall closes in to ~60 m and the sky fades to its colour. Purely visual —
+   * the gameplay side is in modifiers.ts (Bob's sight / hearing), so every browser just eases toward G.mod.
+   */
+  private applyWeather(dt: number, cam: THREE.Vector3) {
+    const W = this.weather, g = this.gfx, u = g.skyMat.uniforms, fog = g.scene.fog as THREE.Fog;
+    W.rain = damp(W.rain, G.mod === 'rain' ? 1 : 0, 0.6, dt);
+    W.fog = damp(W.fog, G.mod === 'fog' ? 1 : 0, 0.6, dt);
+    const r = W.rain, f = W.fog, day = 1 - G.night;
+    if (r > 0.001) {
+      u.uTop.value.lerp(ca.setHex(0x66758a), r * (0.35 + 0.5 * day));
+      u.uHorizon.value.lerp(ca.setHex(0x97a2ae), r * (0.3 + 0.45 * day));
+      u.uBottom.value.lerp(ca.setHex(0x55634a), r * 0.4 * day);
+      u.uGlow.value.multiplyScalar(1 - r * 0.85);
+      g.sun.intensity *= 1 - r * 0.7;
+      g.hemi.intensity *= 1 - r * 0.22;
+      g.hemi.color.lerp(ca.setHex(0xb8c4d2), r * 0.5 * day);
+      g.cloudMat.color.lerp(ca.setHex(0x8b95a3), r * 0.75 * day);
+      fog.near = lerp(fog.near, 30, r); fog.far = lerp(fog.far, 150, r);
+      fog.color.lerp(ca.setHex(0x9aa5b0), r * 0.6 * day);
+    }
+    if (f > 0.001) {
+      const fc = ca.setHex(0xd3dade).lerp(cb.setHex(0x2a3550), G.night);
+      u.uTop.value.lerp(fc, f * 0.55); u.uHorizon.value.lerp(fc, f * 0.9); u.uBottom.value.lerp(fc, f * 0.8);
+      u.uGlow.value.multiplyScalar(1 - f * 0.6);
+      g.sun.intensity *= 1 - f * 0.35;
+      fog.color.lerp(fc, f); fog.near = lerp(fog.near, 3, f); fog.far = lerp(fog.far, 62, f);
+    }
+    (g.scene.background as THREE.Color).copy(u.uHorizon.value);
+    g.outline?.setFade(Math.min(70, fog.near + 4), Math.min(160, fog.near + (fog.far - fog.near) * 0.55));
+    // lightning: a double flash, thunder 0.6–2 s later
+    if (r > 0.6) {
+      if (!this.thunderAt) this.thunderAt = G.time + 4 + Math.random() * 8;
+      if (G.time > this.thunderAt) {
+        const [a, b] = MOD.rain.thunder;
+        this.thunderAt = G.time + a + Math.random() * (b - a);
+        this.flashes = [G.time, G.time + 0.14 + Math.random() * 0.1];
+        this.boomAt = G.time + 0.6 + Math.random() * 1.4;
+      }
+    } else this.thunderAt = 0;
+    if (this.flashes.length && G.time >= this.flashes[0]) { this.flash = 1; this.flashes.shift(); }
+    if (this.boomAt && G.time >= this.boomAt) { this.boomAt = 0; G.audio?.play('thunder', { vol: 0.75, bus: 'amb', rand: 0.1 }); }
+    this.flash = Math.max(0, this.flash - dt * 7);
+    if (this.flash > 0) {
+      const k = this.flash * r;
+      g.hemi.intensity += k * 2.2;
+      u.uTop.value.lerp(ca.setHex(0xe8eeff), k * 0.6); u.uHorizon.value.lerp(ca.setHex(0xf2f5ff), k * 0.5);
+    }
+    this.rainFx.update(dt, cam, r, G.night);
+  }
+
   private sounds(dt: number, cam: THREE.Vector3) {
     const A = G.audio; if (!A || A.ctx.state !== 'running') return;
     if (!this.ambDay) this.ambDay = A.loop('amb_day', { vol: 0 });
     if (!this.ambNight) this.ambNight = A.loop('night', { vol: 0 });
-    this.ambDay?.setVolume((1 - G.night) * 0.35, 1.5);
+    if (!this.rainLoop && this.weather.rain > 0.01) this.rainLoop = A.loop('rain', { vol: 0, bus: 'amb' });
+    this.rainLoop?.setVolume(this.weather.rain * 0.55, 1);
+    this.ambDay?.setVolume((1 - G.night) * 0.35 * (1 - this.weather.rain * 0.7), 1.5);
     this.ambNight?.setVolume(G.night * 0.32, 1.5);
     A.musicDuck(1 - G.night * 0.55);
     // scattered calls around the listener
     const around = () => cam.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, 2, (Math.random() - 0.5) * 30));
     this.birdT -= dt; this.cricketT -= dt;
-    if (this.birdT <= 0) { this.birdT = 3 + Math.random() * 6; if (G.night < 0.3) A.play('bird', { pos: around(), vol: 0.5, bus: 'amb', rand: 0.15 }); }
+    if (this.birdT <= 0) { this.birdT = 3 + Math.random() * 6; if (G.night < 0.3 && this.weather.rain < 0.3) A.play('bird', { pos: around(), vol: 0.5, bus: 'amb', rand: 0.15 }); }
     if (this.cricketT <= 0) { this.cricketT = 0.4 + Math.random() * 1.2; if (G.night > 0.6) A.play('cricket', { pos: around(), vol: 0.55, bus: 'amb', rand: 0.1, minGap: 0.2 }); }
   }
 }

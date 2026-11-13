@@ -15,6 +15,8 @@ import { Ragdoll, type LimbDef } from '../core/ragdoll';
 import { Grip } from '../core/grip';
 import { SCRUFF } from '../pig/pigBody';
 import { sightPoint } from '../world/cover';
+import { MOD, modSight, modHear, marketHours } from '../game/modifiers';
+import { toonMat } from '../render/toon';
 
 /** Tuning. */
 export const BOB = {
@@ -66,7 +68,7 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away';
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
@@ -161,6 +163,10 @@ export class Farmer {
   private gunReady = 0;
   /** Where he caught / lost pigs (he sets bear traps there at alert 2+), the spot he's setting one at now. */
   private hotSpots: THREE.Vector3[] = []; private trapAt = new THREE.Vector3(); private trapNext = 0;
+  /** Market day: he went this round already; where the dog barked at a pig while he was away (he checks it first). */
+  private marketDone = false; private awayTip: THREE.Vector3 | null = null; private awayTipPig: Pig | null = null;
+  /** Grumpy Bob: a little storm cloud over his head. */
+  private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
   debugAnim: FarmerAnim | null = null;
 
@@ -180,6 +186,7 @@ export class Farmer {
     this.flash.position.set(-0.3, 1.25, 0.35);
     this.flash.target.position.set(0, 0, 9);
     this.visual.root.add(this.flash, this.flash.target);
+    this.moodCloud = this.buildMoodCloud(); this.visual.root.add(this.moodCloud);
     G.farmer = this;
   }
 
@@ -202,7 +209,10 @@ export class Farmer {
   get chasing() { return ['chase', 'windup', 'lunge', 'recover', 'fist', 'pant', 'slapWind', 'slap', 'aim', 'shoot'].includes(this.state); }
   /** What he carries around at this alert level (shown in his hand when no chore tool is). */
   get weapon(): '' | 'fork' | 'gun' { return this.level >= 3 ? 'gun' : this.level >= 2 ? 'fork' : ''; }
-  get asleep() { return this.state === 'sleep' || this.state === 'off'; }
+  get asleep() { return this.state === 'sleep' || this.state === 'off' || this.state === 'away'; }
+  /** In the house asleep or off to the market (not on the farm, but he'll be back). */
+  private get gone() { return this.state === 'sleep' || this.state === 'away'; }
+  private get gate() { return v1.set(0, G.terrain.height(0, 16.5), 16.5); }
   get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down'; }
   escapeNeed(p: Pig) { return ADMIN.easyEscape && p === G.localPig ? 1 : p.muddy > 0 ? BOB.escapeNeedMuddy : BOB.escapeNeed; }
 
@@ -220,7 +230,7 @@ export class Farmer {
   /** Something got him worked up (a named reason or raw heat). */
   raise(k: AlertGain | number) {
     if (this.state === 'off' || G.net === 'client') return;
-    this.heat = Math.min(100, this.heat + (typeof k === 'number' ? k : ALERT.gain[k]));
+    this.heat = Math.min(100, this.heat + (typeof k === 'number' ? k : ALERT.gain[k]) * (G.mod === 'grumpy' ? MOD.grumpy.heat : 1));
     this.heatT = this.now;
     this.updateLevel();
   }
@@ -266,6 +276,8 @@ export class Farmer {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.vel.set(0, 0, 0);
     this.sus.clear(); this.target = null; this.hunt = null; this.path = []; this.doing = false;
     this.heat = 0; this.floor = 0; this.hotSpots = []; this.gunReady = 0; this.trapNext = 0;
+    this.marketDone = false; this.awayTip = null; this.awayTipPig = null;
+    if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
     if (this.level) { this.level = 0; G.events.push({ type: 'alert', why: '0', text: 'down' }); }
     this.parts.snap();
     this.go('routine');
@@ -288,11 +300,11 @@ export class Farmer {
   forceDance() { if (this.calm()) { this.stopRiding(); this.doing = false; this.dance(BOB.danceTime); } }
   forceMow() { const i = this.chores.findIndex((c) => c.id === 'mow'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
   forceBed() { const i = this.chores.findIndex((c) => c.id === 'bed'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
-  slapMe(p: Pig) { if (this.state === 'sleep') this.wake(); this.forceSlap = true; this.stopRiding(); this.alarmed(p); }
+  slapMe(p: Pig) { if (this.gone) this.wake(); this.forceSlap = true; this.stopRiding(); this.alarmed(p); }
   /** Admin: he loses sight of this pig and starts hunting for it. */
   loseMe(p: Pig) {
     if (this.state === 'off' || this.state === 'down') return;
-    if (this.state === 'sleep') this.wake();
+    if (this.gone) this.wake();
     if (this.carrying) this.release(false);
     this.sus.set(p, 0.85); this.lastSeen.copy(p.pos); this.lastVel.copy(p.vel);
     this.startSearch(p.pos, p, BOB.huntSpots);
@@ -300,10 +312,10 @@ export class Farmer {
   /** Was this pig in his sight a moment ago (host)? */
   sees(p: Pig) { return this.now - (this.seenAt.get(p) ?? -10) < 0.15; }
   /** Admin: a poise-breaking hit (real ragdoll knock-down). */
-  knockDown() { if (this.state === 'sleep') this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
+  knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
-  carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.state === 'sleep') this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap'].includes(this.state); }
+  carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -315,6 +327,7 @@ export class Farmer {
     if (this.state === 'off') return;
     this.coolDown(dt);
     if (this.state === 'sleep') { this.sleepStep(dt); return; }
+    if (this.state === 'away') { if (!marketHours()) this.wake(); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     if (p.y < -20) { this.body.setTranslation({ x: 0, y: 3, z: -30 }, true); return; }
@@ -398,7 +411,7 @@ export class Farmer {
         break;
       case 'carry': want = this.carry(dt); break;
       case 'dust':
-        if (this.now - this.stateT > 1.4) { if (Math.random() < 0.5 && G.night < 0.5) this.dance(5); else this.backToWork(); }
+        if (this.now - this.stateT > 1.4) { if (Math.random() < 0.5 && G.night < 0.5 && G.mod !== 'grumpy') this.dance(5); else this.backToWork(); }
         break;
       case 'dance':
         this.activity = 'bob.dance';
@@ -416,6 +429,7 @@ export class Farmer {
         if (this.now - this.stateT > ALERT.gunShoot) { this.lastSeenT = this.now; this.go(this.target ? 'chase' : 'routine'); }
         break;
       case 'setTrap': want = this.setTrap(dt); break;
+      case 'market': want = this.toMarket(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -478,13 +492,23 @@ export class Farmer {
     this.sleepT = 0;
   }
   private wake(at?: THREE.Vector3) {
-    if (this.state !== 'sleep') return;
-    const d = this.zones.door;
+    if (!this.gone) return;
+    const back = this.state === 'away';
+    const d = back ? this.gate.clone() : this.zones.door;
     this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
     this.body.setTranslation({ x: d.x, y: d.y + CENTER + 0.1, z: d.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.pos.copy(d);
     this.doing = false; this.path = [];
+    if (back) {   // home from the market: first he checks where the dog was barking
+      G.events.push({ type: 'market', text: 'back' }); this.voice('hey', 0.8);
+      G.fx.puff(v2.copy(d).setY(d.y + 0.4), { count: 14, color: 0xcbb48c, speed: 2, up: 0.6, life: 1.2, size: 1.2, alpha: 0.6 });
+      const tip = at ?? this.awayTip;
+      if (tip && this.awayTipPig) { this.sus.set(this.awayTipPig, 0.55); this.lastSeen.copy(tip); this.lastVel.set(0, 0, 0); this.startSearch(tip, this.awayTipPig, 3); }
+      else this.go('routine');
+      this.awayTip = null; this.awayTipPig = null;
+      return;
+    }
     if (at) { this.searchAt.copy(at); this.go('investigate'); this.voice('huh'); G.events.push({ type: 'bobWakes' }); }
     else { this.choreIdx = this.chores.findIndex((c) => (c.phase ?? 'day') === 'day'); this.go('routine'); this.voice('yawn', 0.7); }
   }
@@ -497,7 +521,7 @@ export class Farmer {
       this.noiseT = n.t;
       if (this.sleepT < 3) continue;
       const d = Math.hypot(n.x - this.zones.door.x, n.z - this.zones.door.z);
-      if (d < Math.min(30, n.radius * 0.9) * ALERT.hear[this.level]) { this.wake(new THREE.Vector3(n.x, n.y, n.z)); return; }
+      if (d < Math.min(30, n.radius * 0.9) * ALERT.hear[this.level] * modHear()) { this.wake(new THREE.Vector3(n.x, n.y, n.z)); return; }
     }
   }
 
@@ -538,7 +562,7 @@ export class Farmer {
   private canSee(p: { pos: THREE.Vector3; vel?: THREE.Vector3; standing?: boolean; muddy?: number }, v: { cos: number; range: number }) {
     this.eye.copy(this.pos).setY(this.pos.y + 1.7);
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, d = Math.hypot(dx, dz);
-    let range = v.range * (p.standing ? 1.25 : 1) * ALERT.sight[this.level];
+    let range = v.range * (p.standing ? 1.25 : 1) * ALERT.sight[this.level] * modSight();
     if ((p.muddy ?? 0) > 0) range *= G.terrain.isBare(p.pos.x, p.pos.z) ? 0.5 : 0.75;   // mud = camouflage
     if (G.night > 0.5 && this.state === 'chase') range *= 0.75;
     if (d > range && d > 2.2) return 0;
@@ -616,7 +640,7 @@ export class Farmer {
         this.noiseT = n.t;
         const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
         const asleep = this.view() === 'nap';
-        if (d > n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1) * ALERT.hear[this.level]) continue;
+        if (d > n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1) * ALERT.hear[this.level] * modHear()) continue;
         this.stopRiding();
         this.searchAt.set(n.x, n.y, n.z);
         this.voice(asleep ? 'yawn' : 'huh');
@@ -806,6 +830,7 @@ export class Farmer {
 
   // ================================================================== routine (clock-driven)
   private routine(dt: number) {
+    if (marketHours() && !this.marketDone && !this.carrying) { this.stopRiding(); this.doing = false; this.path = []; this.go('market'); this.voice('mutter', 0.6); return 0; }
     if (this.wantTrap()) { this.stopRiding(); this.doing = false; this.path = []; this.go('setTrap'); this.voice('mutter'); return 0; }
     const phase = this.phaseNow();
     let c = this.chores[this.choreIdx];
@@ -838,7 +863,7 @@ export class Farmer {
     this.doing = false; this.path = []; this.lookYaw = 0;
     const n = this.chores.length;
     for (let k = 1; k <= n; k++) { const i = (this.choreIdx + k) % n; if ((this.chores[i].phase ?? 'day') === phase) { this.choreIdx = i; break; } }
-    if (phase === 'day' && Math.random() < BOB.danceChance) this.dance(BOB.danceTime);
+    if (phase === 'day' && G.mod !== 'grumpy' && Math.random() < BOB.danceChance) this.dance(BOB.danceTime);
     else if (Math.random() < 0.4) this.voice('mutter', 0.5);
   }
 
@@ -919,8 +944,29 @@ export class Farmer {
     return 0;
   }
 
+  // ================================================================== market day
+  /** Admin: he may go (again) this round. */
+  resetMarket() { this.marketDone = false; }
+  /** Market day: off to the gate (he drives to town), gone until the market closes. */
+  private toMarket(dt: number) {
+    this.activity = 'bob.toMarket';
+    if (!marketHours()) { this.marketDone = true; this.backToWork(); return 0; }
+    const d = this.moveTo(this.gate, BOB.walk * 1.25, dt);
+    if (d < 1.3 || (d < 3 && this.stuck >= 2)) { this.leave(); return 0; }
+    return BOB.walk * 1.25;
+  }
+  private leave() {
+    this.marketDone = true; this.stuck = 0;
+    this.dropProp(); this.stopRiding();
+    this.go('away'); this.activity = 'bob.market';
+    G.fx.puff(v2.copy(this.pos).setY(this.pos.y + 0.4), { count: 14, color: 0xcbb48c, speed: 2, up: 0.6, life: 1.2, size: 1.2, alpha: 0.6 });
+    this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = false;
+    G.events.push({ type: 'market', text: 'gone' });
+  }
+
   /** The guard dog barked at a pig: he comes over to look (or wakes up). */
   tipOff(p: Pig, at: THREE.Vector3) {
+    if (this.state === 'away') { this.awayTip = at.clone(); this.awayTipPig = p; return; }   // he'll hear about it later
     if (this.state === 'off' || this.state === 'down' || this.carrying) return;
     if (this.state === 'sleep') { this.wake(at); return; }
     if (!this.calm() || this.state === 'suspect') return;
@@ -1000,7 +1046,7 @@ export class Farmer {
     if (d < (this.level >= 2 ? ALERT.reach : BOB.grabReach) && dy < 1.7 && dy > -0.8) {
       this.face(t.pos, dt, 16);
       // sometimes he doesn't bother grabbing: a big humiliating slap instead
-      if (this.forceSlap || Math.random() < BOB.slapChance) { this.forceSlap = false; this.go('slapWind'); this.voice('grr', 0.7); }
+      if (this.forceSlap || Math.random() < (G.mod === 'grumpy' ? MOD.grumpy.slap : BOB.slapChance)) { this.forceSlap = false; this.go('slapWind'); this.voice('grr', 0.7); }
       else this.go('windup');
       this.yell = 0.8;
       return 0;
@@ -1327,7 +1373,8 @@ export class Farmer {
 
   // ================================================================== render
   render(alpha: number, dt: number) {
-    if (this.state === 'off' || this.state === 'sleep') { this.flash.intensity = 0; return; }
+    if (this.asleep) { this.flash.intensity = 0; return; }
+    this.updateMoodCloud(dt);
     const r = this.visual.root;
     // knocked down: the whole body follows the physics torso; otherwise upright, facing his heading
     const limp = this.state === 'down';
@@ -1354,6 +1401,34 @@ export class Farmer {
       yell: this.yell, lookYaw: this.lookYaw, carrying: holding, flashlight: fl, limp, rel: this.relQ, hand,
       weapon: this.weapon, fury: this.level / 3,
     });
+  }
+
+  /** A cartoon storm cloud that follows grumpy Bob around (drizzle + an odd flicker). */
+  private buildMoodCloud() {
+    const g = new THREE.Group(); g.position.set(0, 2.75, 0); g.visible = false;
+    const m = toonMat(0x5c6370), ball = new THREE.SphereGeometry(1, 14, 10);
+    for (const [x, y, z, r] of [[0, 0, 0, 0.3], [0.3, -0.05, 0.05, 0.22], [-0.3, -0.04, -0.02, 0.24], [0.08, 0.14, -0.08, 0.22], [-0.12, -0.1, 0.16, 0.2]]) {
+      const b = new THREE.Mesh(ball, m); b.position.set(x, y, z); b.scale.set(r * 1.25, r, r); b.castShadow = false; g.add(b);
+    }
+    const dm = new THREE.MeshBasicMaterial({ color: 0x8fc4ff }), dg = new THREE.CapsuleGeometry(0.018, 0.08, 2, 6);
+    for (let i = 0; i < 5; i++) { const d = new THREE.Mesh(dg, dm); d.userData.ph = i / 5; g.add(d); this.moodDrops.push(d); }
+    return g;
+  }
+  private updateMoodCloud(dt: number) {
+    const on = G.mod === 'grumpy' && this.state !== 'down';
+    this.moodCloud.visible = on;
+    if (!on) return;
+    const c = this.moodCloud, t = this.now;
+    c.position.y = 2.75 + Math.sin(t * 2.1) * 0.05 + (this.lying ? -1 : 0);
+    c.rotation.y += dt * 0.6;
+    this.moodDrops.forEach((d, i) => {
+      const ph = (t * 1.4 + d.userData.ph) % 1;
+      const a = i * 2.4;
+      d.position.set(Math.cos(a) * 0.2, -0.2 - ph * 0.65, Math.sin(a) * 0.15);
+      d.visible = ph < 0.9;
+    });
+    const m = (c.children[0] as THREE.Mesh).material as THREE.MeshToonMaterial;
+    m.emissive.setHex(this.level >= 2 && Math.sin(t * 9) > 0.96 ? 0x9a9a60 : 0x000000);   // grumbling flicker
   }
 
   private animFor(): FarmerAnim {
