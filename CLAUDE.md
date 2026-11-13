@@ -50,7 +50,7 @@ Dead by Daylight, Party Animals.
   STUN only) with fallback through the server relay. Server `server/server.js` (Node, `ws` + `jose`): Google ID-token
   verification or guest, rooms (4-letter code, public list, quick play, kick, chat, outfit/name), relay; `render.yaml`
   (Render free). Lobby UI `lobby.ts`; Google Identity Services in `auth.ts`; addresses in `config.ts` (`BUILT_IN_SERVER`,
-  `BUILT_IN_GOOGLE_CLIENT_ID` — empty until the user deploys, see `server/README.md`). Online never pauses; the host keeps
+  `BUILT_IN_GOOGLE_CLIENT_ID` (set; origin https://ohavs.github.io), see `server/README.md`). Online never pauses; the host keeps
   simulating in a hidden tab (worker ticks). Leaving = reload to `?lobby=1`. Invite link `?room=CODE`.
 - Assets: `web/tools/fetch_assets.sh` (models, idempotent) + `web/tools/fetch_sounds.sh` (audio) fetch from GitHub mirrors
   (asset websites are blocked from the sandbox, GitHub is not) into `web/public/assets/` (committed). Models: Kenney
@@ -98,7 +98,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 3. ✅ **M3 Living farm (2026-11-12)**: real sounds, EN/ES, HUD cleanup + settings + admin, standing rework, Bob slap / dance /
    mower / night routine, day/night + lamps, wolves, round animals, wardrobe, farm dressing.
 4. ✅ **M4 Online (2026-11-12)** 4 players: server (Google / guest, rooms, relay), lobby, P2P + relay, host snapshots.
-   Waiting on the user: deploy the server on Render + create the Google Client ID (`server/README.md`), then fill `config.ts`.
+   Google Client ID is set (config.ts + server.js; OAuth app in "Testing": only Test users can sign in — Publish later with
+   name + email branding, no logo). Waiting on the user: deploy the server on Render, then fill `BUILT_IN_SERVER`.
 5. **M4.5 Real physics ("active ragdoll", user asked 2026-11-12)**: characters = several rigid bodies + joint motors that
    chase the procedural animation pose (Gang Beasts / Human Fall Flat / Party Animals); grab = a joint at the contact point
    (things hang / swing / drag by mass); throw = real arm swing; hit = motors go limp. Order: pigs → Bob → animals.
