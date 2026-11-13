@@ -7,10 +7,32 @@ const loader = new GLTFLoader();
 const gltfs = new Map<string, GLTF>();
 const BASE = './assets/';
 
+/**
+ * Per-model colour fixes (material name → colour) so packs match the farm's palette. Kenney's nature kit is
+ * mint-teal "grass" + peach "dirt": corn leaves would be teal, wheat white, rocks peach.
+ */
+const PALETTE: Record<string, Record<string, number>> = {
+  'kenney/crops_cornStageD': { grass: 0x5fae35 },
+  'kenney/crops_cornStageB': { grass: 0x5fae35 },
+  'kenney/crops_wheatStageB': { woodInner: 0xe2b84a, _defaultMat: 0xc99a3e },
+  'kenney/rock_largeA': { dirt: 0x9b958e, grass: 0x6bb547 },
+  'kenney/rock_smallA': { dirt: 0x9b958e, grass: 0x6bb547 },
+};
+function repaint(name: string, root: THREE.Object3D) {
+  const p = PALETTE[name]; if (!p) return;
+  root.traverse((o) => {
+    const m = o as THREE.Mesh; if (!m.isMesh) return;
+    for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+      const c = p[mat.name]; const s = mat as THREE.MeshStandardMaterial;
+      if (c !== undefined && s.color) s.color.setHex(c);
+    }
+  });
+}
+
 export async function preload(names: string[], onProgress: (f: number) => void) {
   let done = 0;
   await Promise.all(names.map(async (n) => {
-    try { const g = await loader.loadAsync(BASE + n + '.glb'); toonify(g.scene); gltfs.set(n, g); }
+    try { const g = await loader.loadAsync(BASE + n + '.glb'); repaint(n, g.scene); toonify(g.scene); gltfs.set(n, g); }
     catch (e) { console.warn('model missing', n, e); }
     onProgress(++done / names.length);
   }));

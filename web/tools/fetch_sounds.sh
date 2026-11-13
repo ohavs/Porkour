@@ -69,6 +69,7 @@ snd "$VL/mobs_mc_zombiepig_death.1.ogg" pigcry2 -2 0 "$VLc"
 for i in 1 2 3 4; do snd "$OA/actor/singlesteps/fs_grass$i.ogg" step$i -6 0 "$OAc"; done
 for i in 1 2 3 4; do snd "$OA/actor/singlesteps/fs_gravel$i.ogg" boot$i -5 0 "$OAc"; done
 for i in 1 2 3; do snd "$VS/default_water_footstep.$i.ogg" mudstep$i -6 0 "$VSb"; done
+for i in 1 2 3; do snd "$VS/default_grass_footstep.$i.ogg" rustle$i -6 0 "$VSb"; done
 snd "$WS/mud-glob.ogg" splat1 -2 0 "$WSg"; snd "$WS/mud-fist.ogg" splat2 -2 0 "$WSg"
 snd "$WS/bite-small.ogg" bite -3 0 "$WSg"
 for i in 1 2 3; do snd "$WS/miss-$i.ogg" whoosh$i -4 0 "$WSg"; done

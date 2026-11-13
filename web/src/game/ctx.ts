@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { Fx } from '../render/fx';
 import type { Audio } from '../core/audio';
 import type { Terrain } from '../world/terrain';
+import { CoverMap } from '../world/cover';
 import type RAPIER from '@dimforge/rapier3d-compat';
 
 /** Anything a pig can pick up / drag / throw. */
@@ -46,6 +47,7 @@ export const ADMIN = {
   netLag: 0,            // online test: extra delay (ms) on everything this browser sends
   predict: true,        // online player: move my own pig on my machine at once (client-side prediction)
   roundMins: 10,        // round length (minutes)
+  showSight: false,     // HUD line: does Bob see me right now
 };
 
 /** Shared game context (set up once in Game). */
@@ -58,6 +60,8 @@ export const G = {
   fx: null as unknown as Fx,
   audio: null as unknown as Audio,
   terrain: null as unknown as Terrain,
+  /** Bushes / crops / hay pigs can hide in (Bob can't see through). */
+  cover: new CoverMap(),
   holdables: [] as Holdable[],
   noises: [] as Noise[],
   clouds: [] as Cloud[],

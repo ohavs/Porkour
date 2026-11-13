@@ -156,7 +156,7 @@ export class FarmerVisual {
         break;
       case 'look':
         T.rsx = -2.3; T.rex = -1.5; T.rsz = 0.2;       // shading the eyes
-        T.headY = Math.sin(a * 1.6) * 0.7; T.twist = Math.sin(a * 1.6) * 0.25; T.lean = 0.12;
+        T.twist = Math.sin(a * 1.6) * 0.25; T.lean = 0.12;      // the head follows where he looks (lookYaw)
         break;
       case 'suspect':
         T.lean = 0.18; T.headX = 0.1; T.lsz = 0.5; T.lex = -1.6; T.rsz = -0.5; T.rex = -1.6; // hands on hips, leaning in

@@ -64,6 +64,9 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | mudstep1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | mudstep2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | mudstep3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
+| rustle3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | munch.ogg | VoxeLibre mobs_mc, CC0 |
 | neigh1.ogg | GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0 |
 | neigh2.ogg | ERH (freesound 32043) via VoxeLibre, CC BY 3.0 |

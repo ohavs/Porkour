@@ -13,6 +13,8 @@ export interface PropDef {
   sound?: string; label?: string; friction?: number; bounce?: number;
   /** Loot value in coins when it is dropped in the pigs' stash (M5). */
   value?: number;
+  /** Melee weapon (standing pig, click): poise damage on Bob; breaks after `breaks` hits on him. */
+  weapon?: number; breaks?: number;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -27,6 +29,8 @@ export class Prop implements Holdable {
   banked = false;
   private home: { p: THREE.Vector3; q: THREE.Quaternion };
   get value() { return this.def.value ?? 0; }
+  /** Hits a weapon has landed on Bob this round. */
+  uses = 0;
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
@@ -64,8 +68,17 @@ export class Prop implements Holdable {
     this.obj.visible = false;
     const i = G.holdables.indexOf(this); if (i >= 0) G.holdables.splice(i, 1);
   }
+  /** How far it is from where it belongs (Bob tidies stolen loot back). */
+  homeDist() { const p = this.body.translation(); return Math.hypot(p.x - this.home.p.x, p.z - this.home.p.z); }
+  get homePos() { return this.home.p; }
+  /** Bob puts it back neatly. */
+  putHome() {
+    this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  }
   /** New round: back where it started. */
   reset() {
+    this.uses = 0;
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -125,7 +138,8 @@ export const PROPS: Record<string, PropDef> = {
   log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log', value: 5 },
   wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'item.wheel', value: 25 },
   mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'item.mug', value: 15 },
-  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword', value: 60 },
+  sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword', value: 60, weapon: 60, breaks: 3 },
+  axe: { model: 'kaykit/axe_1handed', height: 0.75, mass: 3, shape: 'box', sound: 'metal', label: 'item.axe', value: 25, weapon: 58, breaks: 3 },
   // valuables (Quaternius RPG Items / Survival, CC0)
   gold: { model: 'loot/Gold_Ingots', height: 0.32, mass: 28, sound: 'metal', label: 'item.gold', value: 150 },
   chest: { model: 'loot/Chest_Closed', height: 0.6, mass: 36, sound: 'wood', label: 'item.chest', value: 250 },
@@ -135,11 +149,11 @@ export const PROPS: Record<string, PropDef> = {
   radio: { model: 'loot/Radio', height: 0.32, mass: 4, sound: 'metal', label: 'item.radio', value: 45 },
   phone: { model: 'loot/Phone', height: 0.2, mass: 1, sound: 'metal', label: 'item.phone', value: 90 },
   gasCan: { model: 'loot/GasCan', height: 0.45, mass: 8, sound: 'metal', label: 'item.gasCan', value: 35 },
-  pan: { model: 'loot/Pan', height: 0.12, mass: 2, sound: 'metal', label: 'item.pan', value: 30 },
+  pan: { model: 'loot/Pan', height: 0.12, mass: 2, sound: 'metal', label: 'item.pan', value: 30, weapon: 50, breaks: 4 },
   propane: { model: 'loot/PropaneTank', height: 0.7, mass: 18, shape: 'cyl', sound: 'metal', label: 'item.propane', value: 40 },
   firstAid: { model: 'loot/FirstAidKit', height: 0.25, mass: 2, sound: 'thud', label: 'item.firstAid', value: 25 },
   backpack: { model: 'loot/Backpack', height: 0.5, mass: 4, sound: 'thud', label: 'item.backpack', value: 30 },
-  shovel: { model: 'loot/Shovel', height: 1.1, mass: 3, sound: 'metal', label: 'item.shovel', value: 20 },
+  shovel: { model: 'loot/Shovel', height: 1.1, mass: 3, sound: 'metal', label: 'item.shovel', value: 20, weapon: 55, breaks: 3 },
   trashcan: { model: 'loot/Trashcan', height: 0.8, mass: 9, shape: 'cyl', sound: 'metal', label: 'item.trashcan', value: 10 },
 };
 export const LOOT_MODELS = Object.values(PROPS).map((d) => d.model).filter((m): m is string => !!m && m.startsWith('loot/'));

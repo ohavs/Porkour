@@ -10,7 +10,7 @@ export const SOUND_SETS: Record<string, string[]> = {
   // pigs
   oink: n('oink', 3), grunt: n('grunt', 2), squeal: n('squeal', 3), pigcry: n('pigcry', 2),
   fart: ['fart_short', 'fart_deep'],
-  step: n('step', 4), boot: n('boot', 4), mudstep: n('mudstep', 3), splat: n('splat', 2),
+  step: n('step', 4), boot: n('boot', 4), mudstep: n('mudstep', 3), splat: n('splat', 2), rustle: n('rustle', 3),
   bite: ['bite'], whoosh: n('whoosh', 3), throw: ['throw'],
   // hits
   punch: n('punch', 2), body: n('body', 3), slap: n('slap', 2), thud: n('thud', 3),

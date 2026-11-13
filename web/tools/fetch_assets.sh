@@ -101,6 +101,7 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/animals_pack/' \
   '/public/glb/crops_pack/Carrot_4.glb' '/public/glb/crops_pack/Lettuce_4.glb' '/public/glb/crops_pack/Tomato_4.glb' '/public/glb/crops_pack/Beet_4.glb' '/public/glb/crops_pack/BushBerries_4.glb' '/public/glb/crops_pack/Watermelon_4.glb' '/public/glb/crops_pack/Pumpkin_4.glb' '/public/glb/crops_pack/Wheat_4.glb' '/public/glb/crops_pack/Flowers_Crop.glb' '/public/glb/crops_pack/Apple_Crop.glb' '/public/glb/crops_pack/Orange_Crop.glb' \
   '/public/glb/rpg_items_pack/Gold_Ingots.glb' '/public/glb/rpg_items_pack/Chest_Closed.glb' '/public/glb/rpg_items_pack/Crown.glb' '/public/glb/rpg_items_pack/Chalice.glb' '/public/glb/rpg_items_pack/Coin.glb' '/public/glb/rpg_items_pack/Necklace1.glb' \
+  '/public/glb/medieval_village_pack/Hay.glb' '/public/glb/medieval_village_pack/Bags.glb' '/public/glb/medieval_village_pack/MarketStand_1.glb' '/public/glb/medieval_village_pack/MarketStand_2.glb' '/public/glb/survival_pack/WoodLog.glb' '/public/glb/survival_pack/BearTrap_Open.glb' '/public/glb/survival_pack/BearTrap_Closed.glb' '/public/glb/real_time_strategy_pack/Crate_Big_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack1.glb' '/public/glb/real_time_strategy_pack/Logs.glb' \
   '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb'
 for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
@@ -113,6 +114,12 @@ grab loot "$CACHE/qshow/public/glb/survival_pack" 256 Radio Phone GasCan Pan Pro
 
 # crops (Quaternius Ultimate Crops, CC0)
 grab crops "$CACHE/qshow/public/glb/crops_pack" 256 Carrot_4 Lettuce_4 Tomato_4 Beet_4 BushBerries_4 Watermelon_4 Pumpkin_4 Wheat_4 Flowers_Crop Apple_Crop Orange_Crop
+
+# cover / hiding spots (Quaternius Medieval Village, Survival, RTS; CC0). Bear traps: for later (traps).
+Q="$CACHE/qshow/public/glb"
+grab cover "$Q/medieval_village_pack" 256 Hay Bags MarketStand_1 MarketStand_2
+grab cover "$Q/survival_pack" 256 WoodLog BearTrap_Open BearTrap_Closed
+grab cover "$Q/real_time_strategy_pack" 256 Crate_Big_Stack2 Crate_Stack2 Crate_Stack1 Logs
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)
