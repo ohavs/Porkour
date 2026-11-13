@@ -111,10 +111,10 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       t.noGrass(r); blocked.push({ x0: r.x0 - 2, x1: r.x1 + 2, z0: r.z0 - 2, z1: r.z1 + 2 });
       return o;
     };
-    const decor = (model: string, x: number, z: number, o: { height?: number; scale?: number; yaw?: number; collide?: 'box' | 'trunk' | false } = {}) => {
+    const decor = (model: string, x: number, z: number, o: { height?: number; scale?: number; yaw?: number; collide?: 'box' | 'trunk' | false; sink?: number } = {}) => {
       if (!has(model)) return null;
       const m = fitted(model, { height: o.height, scale: o.scale });
-      m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = o.yaw ?? 0;
+      m.position.set(x, y(x, z) - 0.02 - (o.sink ?? 0), z); m.rotation.y = o.yaw ?? 0;
       scene.add(m); out.statics.push(m);
       const s = sizeOf(m);
       if (o.collide === 'box') staticBox(V3(x, y(x, z) + s.y / 2, z), V3(s.x / 2, s.y / 2, s.z / 2), o.yaw ?? 0);
@@ -191,8 +191,10 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       const z = -63.5 + i * 2.1;
       for (let x = -48; x < -32; x += 2) {
         decor('kenney/crops_dirtRow', x + 1, z, { scale: 2, yaw: Math.PI / 2 });
-        const crop = ['kenney/crop_carrot', 'kenney/crop_turnip', 'kenney/crop_pumpkin', 'kenney/crop_melon', 'kenney/crops_wheatStageB', 'kenney/crop_carrot'][i];
-        decor(crop, x + 1, z, { scale: 2 });
+        // Quaternius Ultimate Crops (carrot / beet roots sit in the soil)
+        const [crop, sc, sink] = ([['crops/Carrot_4', 1.5, 0.9], ['crops/Lettuce_4', 1.2, 0.04], ['crops/Tomato_4', 1.5, 0],
+          ['crops/Beet_4', 1.5, 0.45], ['crops/BushBerries_4', 0.85, 0], ['crops/Watermelon_4', 1.15, 0.22]] as const)[i];
+        decor(crop, x + 1 + rng.range(-0.15, 0.15), z, { scale: sc, sink, yaw: rng.range(0, 6.28) });
       }
     }
     // corn field
