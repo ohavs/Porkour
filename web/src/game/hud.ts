@@ -175,7 +175,8 @@ export class Hud {
     });
   }
 
-  update(pig: Pig, fps: number) {
+  /** `goal`: where a prank wants the thing you hold (shown instead of the stash hint). */
+  update(pig: Pig, fps: number, goal = '') {
     this.ring('sprint', pig.readiness('sprint'), pig.sprinting);
     this.ring('fart', pig.readiness('fart'));
     this.ring('wallow', 1, pig.mode === 'wallow');
@@ -195,7 +196,7 @@ export class Hud {
     else if (pig.cage) p = G.cage?.canPick(pig) ? t('p.pickLock', keys) : t('p.caged', keys);
     else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
       + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
-      + (val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
+      + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
     else if (G.cage?.canPick(pig)) p = t('p.pickLock', keys);
     else {
       const tg = pig.findGrabTarget();

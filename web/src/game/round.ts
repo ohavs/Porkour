@@ -341,6 +341,7 @@ export class Round {
       if ((this.carrying() && tg?.where !== 'stash') || (this.phase === 'escape' && !this.inStash(L.pos)) || tg?.where === 'stash')
         list.push({ at: this.wp[1].copy(this.stash), label: t('hud.stash'), mission: false });
     }
+    let px = -1e9, py = -1e9;
     [this.mark, this.mark2].forEach((el, i) => {
       const m = list[i];
       el.style.opacity = m ? '1' : '0';
@@ -350,6 +351,8 @@ export class Round {
       let x = (v1.x * 0.5 + 0.5) * W, y = (-v1.y * 0.5 + 0.5) * H;
       if (v1.z > 1) { x = W - x; y = H - 40; }
       x = Math.min(W - 60, Math.max(60, x)); y = Math.min(H - 40, Math.max(70, y));
+      if (Math.abs(x - px) < 150 && Math.abs(y - py) < 46) y = py - 48;   // two waypoints the same way: stack them
+      px = x; py = y;
       el.style.left = x + 'px'; el.style.top = y + 'px';
       el.classList.toggle('mission', m.mission);
       const d = Math.hypot(L.pos.x - m.at.x, L.pos.z - m.at.z);

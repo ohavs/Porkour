@@ -117,12 +117,15 @@ export class Wardrobe {
     const box = new THREE.Box3();
     const item = q.slot === 'skin' || !q.id ? null : ITEMS[q.slot].find((i) => i.id === q.id);
     if (item) box.setFromObject(pig.rig.anchors[item.anchor]);
-    const head = new THREE.Box3().setFromObject(pig.rig.head);
-    if (!item || box.isEmpty()) box.copy(q.slot === 'skin' ? new THREE.Box3().setFromObject(pig.root) : head);
-    else if (q.slot !== 'back') box.union(head.expandByScalar(-0.05));
+    // the face (around the eyes anchor) as the base frame; the back slot frames the pig's back
+    const base = new THREE.Box3().setFromCenterAndSize(
+      (q.slot === 'back' ? pig.rig.anchors.back : pig.rig.anchors.eyes).getWorldPosition(new THREE.Vector3()), new THREE.Vector3(0.42, 0.42, 0.42));
+    if (q.slot === 'skin') box.setFromObject(pig.root);
+    else if (!item || box.isEmpty()) box.copy(base);
+    else box.union(base);
     const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
     const dir = q.slot === 'back' ? new THREE.Vector3(-0.55, 0.55, -1) : q.slot === 'skin' ? new THREE.Vector3(0.9, 0.45, 1.1) : new THREE.Vector3(0.6, 0.25, 1);
-    const dist = (size * 0.5) / Math.tan((this.thumbCam.fov * Math.PI) / 360) * (q.slot === 'skin' ? 1.05 : 1.5);
+    const dist = (size * 0.5) / Math.tan((this.thumbCam.fov * Math.PI) / 360) * (q.slot === 'skin' ? 1.05 : 0.95);
     this.thumbCam.position.copy(c).addScaledVector(dir.normalize(), Math.max(dist, 0.5));
     this.thumbCam.lookAt(c);
     this.thumbR.render(this.thumbScene, this.thumbCam);

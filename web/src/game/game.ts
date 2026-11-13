@@ -495,7 +495,8 @@ export class Game {
     this.audio.setListener(this.gfx.camera);
     this.frames++; this.fpsT += dt;
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
-    this.hud.update(this.local, SETTINGS.fps ? this.fps : 0);
+    const goal = this.round.targetFor(this.local.held);
+    this.hud.update(this.local, SETTINGS.fps ? this.fps : 0, goal ? t(('where.' + goal.where) as Key) : '');
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     if (this.farmer) {
       this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);
