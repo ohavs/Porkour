@@ -12,6 +12,7 @@ import { initLang, applyDom, setLang, LANGS, lang, t, onLang, type Lang } from '
 import { Lobby } from './net/lobby';
 import { online } from './net/online';
 import { G } from './game/ctx';
+import { GLB_MODELS } from './world/animalGlb';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -23,6 +24,7 @@ const MODELS = [
     'post_lantern', 'pumpkin_orange', 'pumpkin_orange_jackolantern'].map((n) => 'kaykit/' + n),
   ...['wizard_hat', 'viking_helmet', 'knight_helmet', 'skull_helmet', 'dark_wizard_hat', 'hood', 'cape_knight', 'cape_mage', 'cape_barbarian', 'cape_rogue'].map((n) => 'cosm/' + n),
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
+  ...GLB_MODELS,
 ];
 
 loadSettings();

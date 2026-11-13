@@ -95,6 +95,12 @@ snd "$WS/fanfare-short.wav" fanfare -4 0 "$WSg"
 snd "$WS/gold.ogg" coins -4 0 "$WSg"
 # ---------------------------------------------------------------- animals
 snd "$VL/mobs_mc_cow.ogg" moo1 -3 0 "$VLc"; snd "$OA/actor/fauna/animal/cattle_02.ogg" moo2 -3 0 "$OAc"
+snd "$VL/mobs_mc_horse_random.1.ogg" neigh1 -3 0 "GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0"
+snd "$VL/mobs_mc_horse_random.2.ogg" neigh2 -3 0 "ERH (freesound 32043) via VoxeLibre, CC BY 3.0"
+snd "$VL/mobs_mc_donkey_random.1.ogg" bray1 -3 0 "Garuda1982 (freesound 539505) via VoxeLibre, CC BY 3.0"
+snd "$VL/mobs_mc_donkey_random.2.ogg" bray2 -3 0 "JarredGibb (freesound 233131) via VoxeLibre, CC0"
+snd "$VL/mobs_sheep.ogg" baa1 -4 0 "Blender Foundation via VoxeLibre, CC BY 3.0"
+snd "$VL/mobs_mc_llama.ogg" llama -4 0 "$VLm"
 for i in 1 2 3; do snd "$VL/mobs_mc_chicken_buck.$i.ogg" cluck$i -5 0 "$VLc"; done
 snd "$VL/mobs_mc_chicken_hurt.ogg" squawk -3 0 "$VLc"
 for i in 1 2 3; do snd "$VL/mobs_mc_wolf_bark.$i.ogg" bark$i -2 0 "$VLc"; done

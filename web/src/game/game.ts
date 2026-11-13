@@ -5,6 +5,7 @@ import type { Audio } from '../core/audio';
 import { Gfx } from '../render/gfx';
 import { Grass } from '../render/grass';
 import { Fx } from '../render/fx';
+import { googly } from '../render/googly';
 import { buildFarm1, FARM, type FarmBuild } from '../world/farm1';
 import { Farmer } from '../farmer/farmer';
 import { Nav } from '../farmer/nav';
@@ -64,6 +65,7 @@ export class Game {
   build() {
     const scene = this.gfx.scene;
     G.fx = new Fx(scene);
+    googly(scene);
     G.audio = this.audio;
     this.daynight = new DayNight(this.gfx);
     const { terrain, build } = buildFarm1(scene);
@@ -371,6 +373,7 @@ export class Game {
     for (const d of this.farm.decor) d.render(dt);
     for (const w of this.wolves.wolves) w.render(alpha, dt);
     this.farmer?.render(alpha, dt);
+    googly()?.update(dt);
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);

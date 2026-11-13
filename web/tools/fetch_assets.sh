@@ -3,7 +3,7 @@
 # Sources (asset sites are blocked from the cloud sandbox, GitHub is not):
 #   Kenney     github.com/ETdoFresh/kenney.nl (mirror of kenney.nl)
 #   KayKit     github.com/KayKit-Game-Assets/*
-#   Quaternius github.com/tilakpatell/tilakverse-assets (Stylized Nature MegaKit, UAL)
+#   Quaternius github.com/tilakpatell/tilakverse-assets (Stylized Nature MegaKit, UAL), github.com/trebeljahr/quaternius-showcase (animals)
 #   repo       ../Assets/Art (Quaternius Farm Buildings FBX, Medieval kit)
 #   KayKit hats / capes are extracted from the character GLBs with tools/extract_nodes.mjs
 # Usage: cd web && bash tools/fetch_assets.sh      (idempotent; output is committed)
@@ -95,6 +95,13 @@ grab nature "$CACHE/quaternius/quaternius/stylized-nature-megakit/glTF" 512 \
   Bush_Common Bush_Common_Flowers Bush_Large Fern_1 Flower_3_Group Flower_4_Group Grass_Wheat \
   Grass_Common_Tall Grass_Wispy_Tall Clover_1 Mushroom_Common Rock_Medium_1 Rock_Medium_2 Rock_Medium_3 \
   Rock_Big_1 Pebble_Round_1 Plant_1_Big
+
+# ---------------------------------------------------------------- Quaternius Ultimate Animated Animals (CC0): skinned + 12 clips
+pack https://github.com/trebeljahr/quaternius-showcase qshow '/public/glb/animals_pack/'
+for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
+  d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
+  "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
+done
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)

@@ -113,7 +113,7 @@ const en = {
   'item.cheese': 'Cheese', 'item.ham': 'Ham', 'item.barrel': 'Barrel', 'item.pot': 'Pot', 'item.pumpkin': 'Pumpkin',
   'item.melon': 'Melon', 'item.log': 'Log', 'item.wheel': 'Wheel', 'item.mug': 'Mug', 'item.sword': 'Sword', 'item.bucket': 'Bucket',
   'item.chick': 'Chicken', 'item.hen': 'Hen', 'item.bunny': 'Bunny', 'item.cat': 'Cat', 'item.dog': 'Dog', 'item.duck': 'Duck',
-  'item.lamb': 'Lamb', 'item.pig': 'Pig', 'item.watermelon': 'Watermelon', 'item.lantern': 'Lantern',
+  'item.lamb': 'Lamb', 'item.horse': 'Horse', 'item.donkey': 'Donkey', 'item.alpaca': 'Alpaca', 'item.pig': 'Pig', 'item.watermelon': 'Watermelon', 'item.lantern': 'Lantern',
   // clock
   'clock.day': 'Day {n}',
   // wardrobe
@@ -274,7 +274,7 @@ const es: Record<Key, string> = {
   'item.cheese': 'Queso', 'item.ham': 'Jamón', 'item.barrel': 'Barril', 'item.pot': 'Olla', 'item.pumpkin': 'Calabaza',
   'item.melon': 'Melón', 'item.log': 'Tronco', 'item.wheel': 'Rueda', 'item.mug': 'Taza', 'item.sword': 'Espada', 'item.bucket': 'Cubo',
   'item.chick': 'Pollito', 'item.hen': 'Gallina', 'item.bunny': 'Conejito', 'item.cat': 'Gato', 'item.dog': 'Perro', 'item.duck': 'Pato',
-  'item.lamb': 'Cordero', 'item.pig': 'Cerdo', 'item.watermelon': 'Sandía', 'item.lantern': 'Farol',
+  'item.lamb': 'Cordero', 'item.horse': 'Caballo', 'item.donkey': 'Burro', 'item.alpaca': 'Alpaca', 'item.pig': 'Cerdo', 'item.watermelon': 'Sandía', 'item.lantern': 'Farol',
   'clock.day': 'Día {n}',
   'w.title': 'Vestuario', 'w.done': 'Listo', 'w.random': '¡Sorpréndeme!', 'w.none': 'Nada',
   'w.cat.skin': 'Piel', 'w.cat.hat': 'Sombreros', 'w.cat.hair': 'Pelo', 'w.cat.face': 'Barbas', 'w.cat.eyes': 'Gafas',

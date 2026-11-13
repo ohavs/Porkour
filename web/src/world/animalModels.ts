@@ -8,7 +8,7 @@ import { damp, clamp } from '../core/util';
  * Each builder returns a rig; AnimalVisual animates it procedurally (walk / run / hop / peck / wag / flap / tumble).
  * Animals face +z, origin on the ground between the feet.
  */
-export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck';
+export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck' | 'horse' | 'horse2' | 'donkey' | 'alpaca';
 
 export interface AnimalRig {
   kind: AnimalKind;
@@ -200,7 +200,7 @@ function quad(kind: 'cow' | 'dog' | 'cat' | 'wolf' | 'sheep' | 'bunny', root: TH
 
 export function buildAnimal(kind: AnimalKind, root: THREE.Group): AnimalRig {
   if (kind === 'hen' || kind === 'chick' || kind === 'duck') return bird(kind, root);
-  return quad(kind, root);
+  return quad(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' ? 'cow' : kind, root);
 }
 
 export interface AnimalPose {
