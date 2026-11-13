@@ -94,6 +94,7 @@ export class Critter implements Holdable {
   private barkAt = 0; private tipAt = 0; private scaredUntil = 0; private scaredFrom = new THREE.Vector3();
   // alarm birds: next call, the pig a turkey is chasing (since), next peck
   private callAt = 0; private chasePig: any = null; private chaseSince = 0; private peckAt = 0; private scanAt = 0;
+  private chaseFrom = new THREE.Vector3();
   label: string;
   height: number;
   /** Night roost (hens → coop). */
@@ -343,9 +344,9 @@ export class Critter implements Holdable {
     // a turkey on a pig: charge, peck, give up when it's gone or too far from home
     const cp = this.chasePig;
     if (cp) {
-      const away = Math.hypot(p.x - this.home.x, p.z - this.home.z);
+      const away = Math.hypot(p.x - this.chaseFrom.x, p.z - this.chaseFrom.z);   // leash: from where the charge began (by home)
       if (cp.out || cp.cage || cp.heldBy || now - this.chaseSince > BIRD.chaseFor || away > BIRD.leash) {
-        this.pigSkip.set(cp, now + BIRD.skip); this.chasePig = null; this.target.set(this.home.x, p.y, this.home.z); this.nextThink = now + 2;
+        this.pigSkip.set(cp, now + BIRD.skip); this.chasePig = null; this.target.set(this.home.x, p.y, this.home.z); this.nextThink = now + 4;
         return;
       }
       const d = Math.hypot(cp.pos.x - p.x, cp.pos.z - p.z);
@@ -373,7 +374,7 @@ export class Critter implements Holdable {
     if (!best || now < this.callAt) return;
     this.yaw = Math.atan2(best.pos.x - p.x, best.pos.z - p.z);
     this.excite = 1;
-    if (turkey) { this.chasePig = best; this.chaseSince = now; this.callAt = now + BIRD.gobbleEvery; this.call(best, BIRD.gobbleNoise, p); }
+    if (turkey) { this.chasePig = best; this.chaseSince = now; this.chaseFrom.set(p.x, p.y, p.z); this.callAt = now + BIRD.gobbleEvery; this.call(best, BIRD.gobbleNoise, p); }
     else {
       this.callAt = now + BIRD.crowEvery; this.call(best, BIRD.crowNoise, p);
       this.eatUntil = now + 2.2; this.target.set(p.x, p.y, p.z);           // stands and crows (flapping)
@@ -401,7 +402,7 @@ export class Critter implements Holdable {
   }
   /** Admin: the turkeys come for this pig. */
   sicBird(pig: unknown) {
-    if (this.def.alarm === 'turkey') { this.chasePig = pig; this.chaseSince = G.time; this.callAt = 0; this.pigSkip.delete(pig); }
+    if (this.def.alarm === 'turkey') { this.chasePig = pig; this.chaseSince = G.time; const b = this.body.translation(); this.chaseFrom.set(b.x, b.y, b.z); this.callAt = 0; this.pigSkip.delete(pig); }
     else { this.callAt = 0; this.scanAt = 0; this.pigSkip.delete(pig); }
   }
 
