@@ -14,7 +14,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const PORT = Number(process.env.PORT || 8080);
 // Public value (not a secret): the OAuth client id the game uses for "Sign in with Google" (web/src/net/config.ts).
-const BUILT_IN_GOOGLE_CLIENT_ID = '';
+const BUILT_IN_GOOGLE_CLIENT_ID = '186251969828-09ngofot9gbr3p951dmm2ad88oo9upum.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || BUILT_IN_GOOGLE_CLIENT_ID).trim();
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const MAX_PLAYERS = 4;

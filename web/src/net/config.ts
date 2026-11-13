@@ -10,7 +10,7 @@ const env = ((import.meta as any).env ?? {}) as Record<string, string | undefine
 /** Filled in once the server is deployed (server/README.md). */
 const BUILT_IN_SERVER = '';
 /** Filled in once the Google OAuth client exists (server/README.md). */
-const BUILT_IN_GOOGLE_CLIENT_ID = '';
+const BUILT_IN_GOOGLE_CLIENT_ID = '186251969828-09ngofot9gbr3p951dmm2ad88oo9upum.apps.googleusercontent.com';
 export const DEFAULT_SERVER = env.VITE_SERVER_URL || BUILT_IN_SERVER;
 export const GOOGLE_CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID || BUILT_IN_GOOGLE_CLIENT_ID;
 
