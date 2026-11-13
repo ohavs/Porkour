@@ -163,6 +163,8 @@ export class Farmer {
   forceMow() { const i = this.chores.findIndex((c) => c.id === 'mow'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
   forceBed() { const i = this.chores.findIndex((c) => c.id === 'bed'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
   slapMe(p: Pig) { if (this.state === 'sleep') this.wake(); this.forceSlap = true; this.stopRiding(); this.alarmed(p); }
+  /** Admin: pick this pig up right now (tests the limp, dangling pig). */
+  carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.state === 'sleep') this.wake(); this.stopRiding(); this.pickUp(p); }
   private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance'].includes(this.state); }
 
   // ================================================================== fixed step

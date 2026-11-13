@@ -199,6 +199,16 @@ export class Game {
       case 'free': cage.setOpen(true, 'admin'); break;
       case 'catch': if (!L.cage && !L.out) { if (L.heldBy) L.heldBy.release(false); cage.lock(L); } break;
       case 'mud': L.muddyUntil = G.time + 60; break;
+      case 'knock': if (!L.out && !L.heldBy) L.knock(new THREE.Vector3(Math.sin(L.yaw) * -3, 7, Math.cos(L.yaw) * -3), true); break;
+      case 'bringCrate': case 'bringPig': {
+        // drop something to grab right in front of me
+        const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
+        const it = a === 'bringPig' ? this.pigs.find((p) => p !== L && !p.out && !p.cage && !p.heldBy && !p.held)
+          : this.farm.props.filter((p) => !p.heldBy && p.mass <= 20).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
+        if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
+        break;
+      }
+      case 'bobCarry': if (f && ADMIN.bob && !L.out && !L.cage) { if (L.heldBy) L.heldBy.release(false); f.carryMe(L); } break;
       case 'dance': f?.forceDance(); break;
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;
       case 'mow': f?.forceMow(); break;

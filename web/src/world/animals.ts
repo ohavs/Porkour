@@ -70,18 +70,21 @@ export class Critter implements Holdable {
 
   get pos() { return this.synced.currP; }
 
-  onGrabbed() { G.audio.play(this.def.scared ?? this.def.sound ?? 'squish', { pos: v1.copy(this.synced.currP), vol: 0.7, minGap: 0.3 }); }
-  onReleased(_by: any, thrown: boolean) { if (thrown) this.tumble(); }
+  onGrabbed() {
+    G.audio.play(this.def.scared ?? this.def.sound ?? 'squish', { pos: v1.copy(this.synced.currP), vol: 0.7, minGap: 0.3 });
+    this.body.lockRotations(false, true);   // dangles from the grip
+  }
+  onReleased(_by: any, thrown: boolean) { if (thrown) this.tumble(); else this.tumble(0.7, 2); }
   knock(dv: THREE.Vector3) {
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dv.x, y: lv.y + dv.y, z: lv.z + dv.z }, true);
     this.tumble();
     if (this.def.scared) G.audio.play(this.def.scared, { pos: v1.copy(this.synced.currP), vol: 0.8, minGap: 0.3 });
   }
-  private tumble() {
-    this.tumbleUntil = G.time + 1.6;
+  private tumble(dur = 1.6, spin = 8) {
+    this.tumbleUntil = G.time + dur;
     this.body.lockRotations(false, true);
-    this.body.setAngvel({ x: rng.range(-8, 8), y: rng.range(-4, 4), z: rng.range(-8, 8) }, true);
+    this.body.setAngvel({ x: rng.range(-spin, spin), y: rng.range(-spin / 2, spin / 2), z: rng.range(-spin, spin) }, true);
   }
 
   /** Is something scary near? Returns the thing to flee from. */
@@ -171,8 +174,9 @@ export class Critter implements Holdable {
 
   render(alpha: number, dt: number) {
     const r = this.visual.root;
-    this.synced.pos(alpha, r.position); r.position.y -= this.height / 2;
+    this.synced.pos(alpha, r.position);
     this.synced.rot(alpha, r.quaternion);
+    r.position.sub(v1.set(0, this.height / 2, 0).applyQuaternion(r.quaternion));   // feet below the centre, also when tumbling / dangling
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const mode = this.heldBy ? 'held' : G.time < this.tumbleUntil ? 'tumble' : G.time < this.eatUntil ? 'eat' : sp > 0.15 ? 'move' : 'idle';
     this.visual.update({ speed: sp, run: this.fleeing || sp > this.def.speed * 1.4, t: G.time, dt, mode, excite: this.excite });

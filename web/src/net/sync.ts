@@ -123,19 +123,26 @@ export class NetHost {
         if (!(Math.abs(q.x - bq[i * 4]) < 3e-4 && Math.abs(q.y - bq[i * 4 + 1]) < 3e-4 && Math.abs(q.z - bq[i * 4 + 2]) < 3e-4 && Math.abs(q.w - bq[i * 4 + 3]) < 3e-4)) bits |= 2;
       }
       const bn = this.bn[i], bs = this.bs[i];
-      let nmask = 0, smask = 0;
-      for (let k = 0; k < n.length; k++) if (bn.length !== n.length || !(Math.abs(n[k] - bn[k]) < 1e-4 || n[k] === bn[k])) nmask |= 1 << k;
+      let nlo = 0, nhi = 0, smask = 0;
+      for (let k = 0; k < n.length; k++) if (bn.length !== n.length || !(Math.abs(n[k] - bn[k]) < 1e-4 || n[k] === bn[k])) {
+        if (k < 32) nlo |= 1 << k; else nhi |= 1 << (k - 32);
+      }
       for (let k = 0; k < s.length; k++) if (bs[k] !== s[k]) smask |= 1 << k;
+      const nmask = nlo || nhi;
       if (nmask) bits |= 4;
+      if (nhi) bits |= 16;
       if (smask) bits |= 8;
       if (bits) {
-        this.writeEnt(w, i, bits, p, q, n, s, nmask, smask);
+        this.writeEnt(w, i, bits, p, q, n, s, nlo, nhi, smask);
         if (bits & 1) { this.bp[i * 3] = p!.x; this.bp[i * 3 + 1] = p!.y; this.bp[i * 3 + 2] = p!.z; }
         if (bits & 2) { this.bq[i * 4] = q!.x; this.bq[i * 4 + 1] = q!.y; this.bq[i * 4 + 2] = q!.z; this.bq[i * 4 + 3] = q!.w; }
         if (nmask) this.bn[i] = n.slice();
         if (smask) this.bs[i] = s.slice();
       }
-      if (wantKey) this.writeEnt(kw, i, (e.body ? 3 : 0) | (n.length ? 4 : 0) | (s.length ? 8 : 0), p, q, n, s, n.length >= 32 ? -1 : (1 << n.length) - 1, (1 << s.length) - 1);
+      if (wantKey) {
+        const lo = n.length >= 32 ? -1 : (1 << n.length) - 1, hi = n.length <= 32 ? 0 : n.length >= 64 ? -1 : (1 << (n.length - 32)) - 1;
+        this.writeEnt(kw, i, (e.body ? 3 : 0) | (n.length ? 4 : 0) | (s.length ? 8 : 0) | (hi ? 16 : 0), p, q, n, s, lo, hi, (1 << s.length) - 1);
+      }
     });
     w.u16(0xffff); if (wantKey) kw.u16(0xffff);
     this.writeWolves(w); if (wantKey) this.writeWolves(kw);
@@ -155,11 +162,15 @@ export class NetHost {
   private header(w: Writer, key: boolean) {
     w.u8w(T.SNAP).u32(this.seq).u8w(key ? 1 : 0).f64(G.time).f32(G.hour).u16(G.day).u8w(Math.min(255, G.grills)).u8w(ADMIN.bob ? 1 : 0);
   }
-  private writeEnt(w: Writer, i: number, bits: number, p: RAPIER.Vector | null, q: RAPIER.Rotation | null, n: number[], s: string[], nmask: number, smask: number) {
+  /** Entity record: index, bits (1 pos, 2 rot, 4 numbers, 8 strings, 16 numbers past the 32nd), then the changed fields. */
+  private writeEnt(w: Writer, i: number, bits: number, p: RAPIER.Vector | null, q: RAPIER.Rotation | null, n: number[], s: string[], nlo: number, nhi: number, smask: number) {
     w.u16(i).u8w(bits);
     if (bits & 1) w.f32(p!.x).f32(p!.y).f32(p!.z);
     if (bits & 2) { const k = q!.w < 0 ? -32767 : 32767; w.i16(q!.x * k).i16(q!.y * k).i16(q!.z * k).i16(q!.w * k); }
-    if (bits & 4) { w.u32(nmask); for (let k = 0; k < n.length; k++) if (nmask & (1 << k)) w.f32(n[k]); }
+    if (bits & 4) {
+      w.u32(nlo); if (bits & 16) w.u32(nhi);
+      for (let k = 0; k < n.length; k++) if (((k < 32 ? nlo >>> k : nhi >>> (k - 32)) & 1) === 1) w.f32(n[k]);
+    }
     if (bits & 8) { w.u8w(smask); for (let k = 0; k < s.length; k++) if (smask & (1 << k)) w.str(s[k]); }
   }
   /** Wolves come and go: always sent whole (there are only a few). */
@@ -239,8 +250,8 @@ export class NetClient {
       if (bits & 1) { f.p[i * 3] = r.f32(); f.p[i * 3 + 1] = r.f32(); f.p[i * 3 + 2] = r.f32(); }
       if (bits & 2) { for (let k = 0; k < 4; k++) f.q[i * 4 + k] = r.i16() / 32767; }
       if (bits & 4) {
-        const mask = r.u32(), arr = f.n[i].slice();
-        for (let k = 0; k < 32; k++) if (mask & (1 << k)) arr[k] = r.f32();
+        const lo = r.u32(), hi = bits & 16 ? r.u32() : 0, arr = f.n[i].slice();
+        for (let k = 0; k < 64; k++) if (((k < 32 ? lo >>> k : hi >>> (k - 32)) & 1) === 1) arr[k] = r.f32();
         f.n[i] = arr;
       }
       if (bits & 8) {
