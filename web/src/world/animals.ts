@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, HOOKS, raycast } from '../core/physics';
 import { Synced } from '../core/synced';
+import { Ragdoll, type LimbDef, type Tone } from '../core/ragdoll';
+import type { AnimalRig } from './animalModels';
 import { G, type Holdable } from '../game/ctx';
 import { dampAngle, Rng } from '../core/util';
 import { AnimalVisual, type AnimalKind } from './animalModels';
@@ -25,6 +27,24 @@ const rng = new Rng(99);
 const v1 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
+/** Body parts of an animal (head + legs), measured from its procedural model (root at the feet, facing +z). */
+export function animalLimbs(rig: AnimalRig, mass: number): LimbDef[] {
+  const box = new THREE.Box3(), size = new THREE.Vector3();
+  const hb = box.setFromObject(rig.head).getSize(size), hr = Math.max(0.03, Math.max(hb.x, hb.y, hb.z) * 0.4);
+  const hc = rig.head.getWorldPosition(new THREE.Vector3());
+  const limbs: LimbDef[] = [{
+    joint: hc.clone().add(new THREE.Vector3(0, -hr * 0.4, -hr * 0.9)), center: hc, shape: () => RAPIER.ColliderDesc.ball(hr),
+    mass: Math.max(0.1, mass * 0.08), limit: 0.8, flail: { x: 0.35, y: 0.4, z: 0, speed: 9, phase: 0 },
+  }];
+  rig.legs.forEach((l, i) => {
+    const hip = l.getWorldPosition(new THREE.Vector3()), len = Math.max(0.04, hip.y);
+    const lr = Math.max(0.015, Math.min(0.12, box.setFromObject(l).getSize(size).x * 0.4));
+    limbs.push({ joint: hip, center: hip.clone().setY(hip.y - len / 2), shape: () => RAPIER.ColliderDesc.capsule(Math.max(0.005, len / 2 - lr), lr),
+      mass: Math.max(0.05, mass * 0.03), limit: 1.3, flail: { x: 1, y: 0, z: hip.x > 0 ? 0.3 : -0.3, speed: 18, phase: i * 1.9 } });
+  });
+  return limbs;
+}
+
 /**
  * Farm animal: wanders inside its home area, flees pigs and wolves, can be grabbed / thrown (small ones), tumbles when hit.
  * Hens go back to the coop at night; the dog barks at wolves (wakes Bob).
@@ -36,6 +56,9 @@ export class Critter implements Holdable {
   mass: number; radius: number;
   synced: Synced;
   visual: AnimalVisual;
+  /** Head + legs as real bodies: limp (flailing) when tumbling or dangling from a grip. */
+  parts: Ragdoll;
+  private relQ: THREE.Quaternion[];
   private target = new THREE.Vector3();
   private nextThink = 0;
   private yaw = rng.range(0, 6.28);
@@ -64,6 +87,10 @@ export class Critter implements Holdable {
     this.mass = def.mass; this.radius = def.radius;
     this.label = def.label;
     this.synced = new Synced(this.body);
+    this.visual.root.updateMatrixWorld(true);
+    const limbs = animalLimbs(this.visual.rig, def.mass), hh = this.height / 2;
+    this.parts = new Ragdoll(this.body, limbs, at, (i, anchor, rest) => { anchor.copy(limbs[i].joint).setY(limbs[i].joint.y - hh); rest.identity(); });
+    this.relQ = limbs.map(() => new THREE.Quaternion());
     this.target.copy(at);
     if (def.mass <= 40) G.holdables.push(this);
   }
@@ -105,6 +132,11 @@ export class Critter implements Holdable {
   }
 
   preStep(dt: number) {
+    this.control(dt);
+    const tone: Tone = this.heldBy ? 'carried' : G.time < this.tumbleUntil ? 'ragdoll' : 'active';
+    this.parts.setTone(tone); this.parts.step(G.time);
+  }
+  private control(dt: number) {
     this.synced.beforeStep();
     const p = this.body.translation();
     if (p.y < -20) { this.body.setTranslation({ x: this.home.x, y: 3, z: this.home.z }, true); return; }
@@ -165,11 +197,13 @@ export class Critter implements Holdable {
 
   netState(n: number[]) {
     n.push(this.vel.x, this.vel.y, this.vel.z, this.tumbleUntil, this.eatUntil, this.fleeing ? 1 : 0, this.excite, carrierCode(this.heldBy));
+    this.parts.netState(n);
   }
   netApply(n: number[]) {
     if (!n.length) return;
     this.vel.set(n[0], n[1], n[2]); this.tumbleUntil = n[3]; this.eatUntil = n[4]; this.fleeing = n[5] === 1; this.excite = n[6];
     this.heldBy = carrierFrom(n[7]);
+    this.parts.netApply(n, 8);
   }
 
   render(alpha: number, dt: number) {
@@ -179,7 +213,9 @@ export class Critter implements Holdable {
     r.position.sub(v1.set(0, this.height / 2, 0).applyQuaternion(r.quaternion));   // feet below the centre, also when tumbling / dangling
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const mode = this.heldBy ? 'held' : G.time < this.tumbleUntil ? 'tumble' : G.time < this.eatUntil ? 'eat' : sp > 0.15 ? 'move' : 'idle';
-    this.visual.update({ speed: sp, run: this.fleeing || sp > this.def.speed * 1.4, t: G.time, dt, mode, excite: this.excite });
+    const limp = mode === 'held' || mode === 'tumble';
+    if (limp) this.relQ.forEach((q, i) => this.parts.rel(i, q, G.net === 'client'));
+    this.visual.update({ speed: sp, run: this.fleeing || sp > this.def.speed * 1.4, t: G.time, dt, mode, excite: this.excite, limp, rel: this.relQ });
   }
 }
 

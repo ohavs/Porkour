@@ -138,7 +138,7 @@ const en = {
   'a.noWolves': 'Remove wolves', 'a.teleport': 'Teleport', 'a.sty': 'Sty', 'a.cage': 'Cage', 'a.house': 'House', 'a.barn': 'Barn',
   'a.pasture': 'Pasture', 'a.gameSpeed': 'Game speed', 'a.godMode': 'Nobody can catch me', 'a.cooldowns': 'No cooldowns',
   'a.physics': 'Physics (ragdoll / grab)', 'a.knockMe': 'Knock me over', 'a.bringCrate': 'Bring me a crate', 'a.bringPig': 'Bring me a pig',
-  'a.bobCarry': 'Bob: carry me',
+  'a.bobCarry': 'Bob: carry me', 'a.bobDown': 'Bob: knock him down',
   'a.mud': 'Make me muddy', 'a.bobDance': 'Bob: dance', 'a.bobSlap': 'Bob: slap me', 'a.bobMow': 'Bob: mow the lawn',
   'a.bobSleep': 'Bob: go to bed', 'a.fps': 'Show FPS', 'a.hint': 'Toggle with the ` key (left of 1)',
   // online (lobby, rooms, in-game)
@@ -293,7 +293,7 @@ const es: Record<Key, string> = {
   'a.house': 'Casa', 'a.barn': 'Granero', 'a.pasture': 'Pradera', 'a.gameSpeed': 'Velocidad del juego',
   'a.godMode': 'Nadie puede atraparme', 'a.cooldowns': 'Sin tiempos de recarga', 'a.mud': 'Embarrarme',
   'a.physics': 'Física (muñeco de trapo / agarrar)', 'a.knockMe': 'Tírame al suelo', 'a.bringCrate': 'Tráeme una caja', 'a.bringPig': 'Tráeme un cerdo',
-  'a.bobCarry': 'Bob: cárgame',
+  'a.bobCarry': 'Bob: cárgame', 'a.bobDown': 'Bob: tumbarlo',
   'a.bobDance': 'Bob: bailar', 'a.bobSlap': 'Bob: abofetéame', 'a.bobMow': 'Bob: cortar el césped', 'a.bobSleep': 'Bob: a la cama',
   'a.fps': 'Mostrar FPS', 'a.hint': 'Se abre con la tecla ` (a la izquierda del 1)',
   'title.online': 'Jugar en línea',

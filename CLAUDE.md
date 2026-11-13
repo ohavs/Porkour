@@ -36,6 +36,14 @@ Dead by Daylight, Party Animals.
 - TypeScript + Vite 6, **three 0.170**, **Rapier 0.14** (`@dimforge/rapier3d-compat`, gravity −20, fixed 60 Hz + render
   interpolation via `Synced`), **postprocessing 6.36** (ink outline → bloom / hue / NEUTRAL tone map / vignette → SMAA). N8AO installed, unused.
 - Characters are procedural (pig, Bob, all animals) in one cel-shaded style; packs only for buildings / props / hats.
+- **Real physics (M4.5)**: `core/ragdoll.ts` = active ragdoll: torso = the character's own locomotion body; head + limbs =
+  rigid bodies on spherical joints, **switched off while in control** (animation drives the visual, zero cost) and woken
+  in the current pose when limp (`Tone`: ragdoll / carried / dragged): they collide, flop, flail with muscle tone + soft
+  limits; visuals slerp each part to its physical rotation (`rel`). Pig (`pigBody.ts`: head + 4 legs), Bob (head, 2 arms,
+  2 legs; knock-down = torso unlocks and falls, belly = trampoline), critters (`animalLimbs` measured from the rig).
+  `core/grip.ts` = invisible hand body + spherical joint at the grabbed point + force-limited motor (lift / drag limits →
+  light things dangle, heavy ones drag, snagged ones slip): pig snout / hooves (wind-up + swing throw), Bob's hands and wolf
+  jaws hold pigs by the `SCRUFF`. Snapshots carry part rotations (3 numbers / part) + hand position; entity numbers ≤ 64.
 - Cartoon rendering: every loaded model is `toonify`-ed (MeshToonMaterial + 3-band `RAMP`), `InkOutline` = depth-Laplacian edges;
   grass blades don't write depth (renderOrder 5) so they get no lines. Gradient sky dome (+ sun glow) + puffy toon clouds, stars,
   moon, hemisphere + key light (sun by day, moon at night; shadow map follows the player, texel-snapped). Lamps = point lights
@@ -71,7 +79,8 @@ Dead by Daylight, Party Animals.
 | `game/hud.ts` | HUD: ability rings (+ labels), clock dial, Bob chip + ?/! marker, prompts, wobble bar, controls card (shown 16 s at start, H). |
 | `game/menu.ts` | Top-right buttons (sound / controls / settings), settings menu (language, graphics, volumes, sensitivity, invert), admin panel. |
 | `game/wardrobe.ts`, `game/settings.ts` | Wardrobe overlay (own preview renderer); localStorage settings (incl. outfit). |
-| `pig/pig.ts` | **Pig** (tune in `PIG`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
+| `core/ragdoll.ts`, `core/grip.ts`, `pig/pigBody.ts` | Active ragdoll parts (generic), grip hand + joint, pig part layout (`CENTER` per shape, `SCRUFF`). |
+| `pig/pig.ts` | **Pig** (tune in `PIG`, grip targets in `GRIP`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
 | `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
@@ -101,10 +110,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Google Client ID is set (config.ts + server.js). OAuth consent: publish with name + email + home page + privacy link,
    never a logo (a logo triggers Google verification). Server live on Render: `wss://porkour-server.onrender.com` (auto-deploys from main; the sandbox proxy blocks
    onrender.com, so it can't be reached from here).
-5. **M4.5 Real physics ("active ragdoll", user asked 2026-11-12)**: characters = several rigid bodies + joint motors that
-   chase the procedural animation pose (Gang Beasts / Human Fall Flat / Party Animals); grab = a joint at the contact point
-   (things hang / swing / drag by mass); throw = real arm swing; hit = motors go limp. Order: pigs → Bob → animals.
-   Sync: host only; snapshots then carry body parts. Also next for online: client-side prediction of your own pig.
+5. 🟡 **M4.5 Real physics (2026-11-13)**: ✅ pigs (parts, joint grab, swing throw, pig grabs pig by the scruff), ✅ Bob
+   (ragdoll knock-down, carries pigs dangling from his hands, real shakes), ✅ animals (limp head + legs when tumbling / held),
+   ✅ wolves drag pigs by a jaw joint. Left: wolves' own ragdoll, Bob stagger as physics, **client-side prediction** of your
+   own pig online (next).
 6. **M5** loot / missions / round loop / weapons; then alert levels, dog helper, traps, modifiers, more farms, shop.
 
 ## Status / next step
@@ -115,10 +124,14 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   ✅ User confirmed: 2 people joined the same lobby online. **Next: M4.5 real physics** (start with pigs: multi-body pig +
   joint grab + real throw), then client-side prediction. Ask the user how actual online play felt (lag) when convenient.
   User feedback: don't base designs on Nice-Crash (a few-prompts game) — take inspiration from real games.
+- 2026-11-13: M4.5 physics built & checked headless (pigs / Bob / wolf / hen, online part sync). Admin → Physics buttons:
+  knock me over, bring a crate / pig, Bob carries me, knock Bob down. Ask the user how grabbing / throwing / ragdolls feel.
+  **Next: client-side prediction** (own pig rendered from local input, reconciled with host snapshots), then M5.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
-- Bob has no ragdoll physics (knock-down is an animation + lying capsule). Untested: guard mode (2 caged), fist (unreachable pig).
+- Untested: guard mode (2 caged), fist (unreachable pig). Bob's HUD marker sits low while he lies ragdolled (pos = torso).
+- Sim cost +20–35 % vs before M4.5 (grip hands / joints); parts cost nothing while in control.
 - Never tested on a real GPU: FPS with ~9 lamp lights + grass density 16/m² (high), shadows, outline thickness.
 - Bob's mower parking collider is not in the nav grid (Bob can bump into it; the stuck logic copes).

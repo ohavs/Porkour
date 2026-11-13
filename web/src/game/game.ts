@@ -208,6 +208,7 @@ export class Game {
         if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
         break;
       }
+      case 'bobDown': if (f && ADMIN.bob) f.knockDown(); break;
       case 'bobCarry': if (f && ADMIN.bob && !L.out && !L.cage) { if (L.heldBy) L.heldBy.release(false); f.carryMe(L); } break;
       case 'dance': f?.forceDance(); break;
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;

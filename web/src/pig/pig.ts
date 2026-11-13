@@ -7,7 +7,9 @@ import type { Cage } from '../world/cage';
 import { PigVisual } from './pigVisual';
 import type { Outfit } from './cosmetics';
 import { carrierCode, carrierFrom, holdableIndex, holdableFrom } from '../net/refs';
-import { PigParts, Grip, CENTER, type Shape, type Tone } from './pigBody';
+import { PigParts, CENTER, SCRUFF, type Shape } from './pigBody';
+import { Grip } from '../core/grip';
+import type { Tone } from '../core/ragdoll';
 import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
@@ -38,8 +40,6 @@ const GRIP = {
   four: { hold: new THREE.Vector3(0, 0.6, 0.86), wind: new THREE.Vector3(0, 1.05, 0.42), rel: new THREE.Vector3(0, 0.95, 1.2) },
   two: { hold: new THREE.Vector3(0, 0.95, 0.5), wind: new THREE.Vector3(0, 1.5, -0.1), rel: new THREE.Vector3(0, 1.3, 0.8) },
 };
-/** Where a pig is grabbed by another pig (ragdoll torso space): the scruff, behind the head. */
-const SCRUFF = new THREE.Vector3(0, 0.28, 0.22);
 const QSTAND = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -STAND_ANGLE);
 
 type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
@@ -146,7 +146,7 @@ export class Pig implements Holdable {
 
   /** How the body parts behave now (muscles on, or limp). */
   private toneNow(): Tone {
-    if (this.heldBy) return this.heldBy.kind === 'pig' ? 'dragged' : 'carried';
+    if (this.heldBy) return this.heldBy.kind === 'farmer' ? 'carried' : 'dragged';
     return this.mode === 'ragdoll' ? 'ragdoll' : 'active';
   }
 
@@ -503,6 +503,7 @@ export class Pig implements Holdable {
   caughtBy(by: Carrier) {
     if (this.held) this.release(false);         // Bob confiscates the loot
     if (this.heldBy) this.heldBy.release(false);
+    if (this.mode !== 'ragdoll') this.startRagdoll(null, false);   // hangs limp from the carrier's grip
     this.heldBy = by; this.mode = 'held'; this.escape = 0;
     this.standing = false; this.sprintUntil = 0; this.chargeStart = -1;
   }

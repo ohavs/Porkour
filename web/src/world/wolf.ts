@@ -7,6 +7,8 @@ import { AnimalVisual } from './animalModels';
 import type { Nav } from '../farmer/nav';
 import type { Rect } from './terrain';
 import type { Pig } from '../pig/pig';
+import { Grip } from '../core/grip';
+import { SCRUFF } from '../pig/pigBody';
 
 const rng = new Rng(777);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
@@ -35,6 +37,8 @@ export class Wolf {
   netId = 0;
   target: Pig | null = null;
   carrying: Pig | null = null;
+  /** Jaws: the pig hangs on them by the scruff (a joint) and gets dragged along the ground. */
+  private grip = new Grip();
   mass = 35; radius = R; heldBy = null;
   private goal = new THREE.Vector3();
   private path: THREE.Vector3[] = [];
@@ -68,6 +72,7 @@ export class Wolf {
   release(_thrown: boolean) {
     const p = this.carrying; if (!p) return;
     this.carrying = null;
+    this.grip.detach();
     ignorePair(this.body, p.body, false);
     p.heldBy = null;
     p.body.setLinvel({ x: rng.range(-2, 2), y: 5, z: rng.range(-2, 2) }, true);
@@ -211,6 +216,7 @@ export class Wolf {
     G.fx.bits(v1.copy(t.pos).setY(t.pos.y + 0.3), { count: 10, color: 0xffe08a, speed: 3, up: 2, life: 0.4, size: 0.12, grow: 0, alpha: 1 });
     this.carrying = t; t.caughtBy(this);
     ignorePair(this.body, t.body, true);
+    this.grip.attach(t.body, t.pos, SCRUFF);
     G.shakeFor(t, 0.35);
     G.events.push({ type: 'wolfBit', who: t });
     this.go('drag');
@@ -219,6 +225,7 @@ export class Wolf {
 
   private takeAway(p: Pig) {
     this.carrying = null;
+    this.grip.detach();
     ignorePair(this.body, p.body, false);
     p.heldBy = null;
     p.takenByWolf();
@@ -229,12 +236,10 @@ export class Wolf {
   private holdCarried() {
     const p = this.carrying; if (!p) return;
     const f = v2.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const tgt = v1.set(this.pos.x + f.x * 0.75, this.pos.y + 0.45, this.pos.z + f.z * 0.75);
-    const pp = p.body.translation();
-    const d = new THREE.Vector3(tgt.x - pp.x, tgt.y - pp.y, tgt.z - pp.z);
-    if (d.length() > 3) { p.body.setTranslation(tgt, true); d.set(0, 0, 0); }
-    p.body.setLinvel(d.multiplyScalar(14).add(this.vel), true);
-    p.body.setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.yaw + Math.PI / 2, Math.PI / 2 + Math.sin(this.now * 12) * 0.3)), true);
+    const tgt = v1.set(this.pos.x + f.x * 0.75, this.pos.y + 0.5 + Math.sin(this.now * 12) * 0.06, this.pos.z + f.z * 0.75);
+    // jaws are strong sideways but can't lift a pig: it's dragged, kicking, along the ground
+    this.grip.drive(tgt, this.body, p.mass + 6, 1 / 60, { up: 22 * 20, side: 2600, kp: 14, react: 0, g: 20 });
+    if (this.grip.strain > 2.5) { p.body.setTranslation({ x: tgt.x, y: tgt.y, z: tgt.z }, true); p.body.setLinvel(this.vel, true); this.grip.attach(p.body, p.pos, SCRUFF); }
   }
 
   private moveTo(goal: THREE.Vector3, replan = 3) {
