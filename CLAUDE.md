@@ -153,7 +153,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   from ready-made packs (any close style is fine); animals, Bob, mower and other code-built models look "not invested" —
   replace later, not all at once. Options given: CC0 rigged+animated packs (Quaternius / KayKit / Kenney via GitHub
   mirrors), an AI text/image-to-3D API (Meshy / Tripo: user makes an account, key via `request_credential`, never chat),
-  or Blender (`bpy`) modelling in the sandbox with rendered previews. Waiting for the user's choice.
+  or Blender (`bpy`) modelling in the sandbox with rendered previews. **Decided (user 2026-11-13)**: CC0 packs for the
+  environment + animals (Claude does it alone, via GitHub mirrors); **Tripo API** (text/image → 3D, auto-rig, preset
+  animations; new API users reportedly get starter credits) for Bob + pigs. User creates the key in the Tripo Console →
+  next session call `request_credential` (host = Tripo's API host from its docs; Bearer). Keep physics: new models must
+  be split / skinned onto the SAME pivots (pig: head + 4 legs, Bob: head, arms, legs) that `ragdoll.ts` / `grip.ts` drive.
+  Users asked: batching does NOT touch physics (only how the GPU draws; verified knock / Bob knock-down after it).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
