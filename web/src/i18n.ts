@@ -137,6 +137,8 @@ const en = {
   'a.timeSpeed': 'Day speed', 'a.freeze': 'Freeze time', 'a.toDay': 'Morning', 'a.toNight': 'Night', 'a.wolves': 'Spawn wolves',
   'a.noWolves': 'Remove wolves', 'a.teleport': 'Teleport', 'a.sty': 'Sty', 'a.cage': 'Cage', 'a.house': 'House', 'a.barn': 'Barn',
   'a.pasture': 'Pasture', 'a.gameSpeed': 'Game speed', 'a.godMode': 'Nobody can catch me', 'a.cooldowns': 'No cooldowns',
+  'a.physics': 'Physics (ragdoll / grab)', 'a.knockMe': 'Knock me over', 'a.bringCrate': 'Bring me a crate', 'a.bringPig': 'Bring me a pig',
+  'a.bobCarry': 'Bob: carry me', 'a.bobDown': 'Bob: knock him down',
   'a.mud': 'Make me muddy', 'a.bobDance': 'Bob: dance', 'a.bobSlap': 'Bob: slap me', 'a.bobMow': 'Bob: mow the lawn',
   'a.bobSleep': 'Bob: go to bed', 'a.fps': 'Show FPS', 'a.hint': 'Toggle with the ` key (left of 1)',
   // online (lobby, rooms, in-game)
@@ -164,7 +166,7 @@ const en = {
   'net.err.notfound': 'No room with that code.', 'net.err.full': 'That room is full (4 pigs).', 'net.err.closed': 'The host closed the room.',
   'net.err.kicked': 'You were removed from the room.', 'net.err.hello': 'Connection problem, try again.', 'net.err.version': 'Refresh the page (F5).',
   'a.online': 'Online',
-  'a.netLag': 'Fake lag (ms)',
+  'a.netLag': 'Fake lag (ms)', 'a.predict': 'Move my pig right away (prediction)',
 } as const;
 
 export type Key = keyof typeof en;
@@ -290,6 +292,8 @@ const es: Record<Key, string> = {
   'a.wolves': 'Soltar lobos', 'a.noWolves': 'Quitar lobos', 'a.teleport': 'Teletransporte', 'a.sty': 'Pocilga', 'a.cage': 'Jaula',
   'a.house': 'Casa', 'a.barn': 'Granero', 'a.pasture': 'Pradera', 'a.gameSpeed': 'Velocidad del juego',
   'a.godMode': 'Nadie puede atraparme', 'a.cooldowns': 'Sin tiempos de recarga', 'a.mud': 'Embarrarme',
+  'a.physics': 'Física (muñeco de trapo / agarrar)', 'a.knockMe': 'Tírame al suelo', 'a.bringCrate': 'Tráeme una caja', 'a.bringPig': 'Tráeme un cerdo',
+  'a.bobCarry': 'Bob: cárgame', 'a.bobDown': 'Bob: tumbarlo',
   'a.bobDance': 'Bob: bailar', 'a.bobSlap': 'Bob: abofetéame', 'a.bobMow': 'Bob: cortar el césped', 'a.bobSleep': 'Bob: a la cama',
   'a.fps': 'Mostrar FPS', 'a.hint': 'Se abre con la tecla ` (a la izquierda del 1)',
   'title.online': 'Jugar en línea',
@@ -316,7 +320,7 @@ const es: Record<Key, string> = {
   'net.err.notfound': 'No hay ninguna sala con ese código.', 'net.err.full': 'Esa sala está llena (4 cerdos).', 'net.err.closed': 'El anfitrión cerró la sala.',
   'net.err.kicked': 'Te sacaron de la sala.', 'net.err.hello': 'Problema de conexión, inténtalo de nuevo.', 'net.err.version': 'Recarga la página (F5).',
   'a.online': 'En línea',
-  'a.netLag': 'Retraso simulado (ms)',
+  'a.netLag': 'Retraso simulado (ms)', 'a.predict': 'Mover mi cerdo al instante (predicción)',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

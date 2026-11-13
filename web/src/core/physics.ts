@@ -7,7 +7,7 @@ export const eventQueue = () => queue;
 let queue: RAPIER.EventQueue;
 
 /** Collision layers (membership bits). */
-export const L = { STATIC: 1, PIG: 2, PROP: 4, CRITTER: 8, FARMER: 16 } as const;
+export const L = { STATIC: 1, PIG: 2, PROP: 4, CRITTER: 8, FARMER: 16, LIMB: 32 } as const;
 const ALL = 0xffff;
 export const groups = (member: number, filter = ALL) => (member << 16) | filter;
 

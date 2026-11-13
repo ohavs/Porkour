@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { damp, clamp, lerp } from '../core/util';
 import { G } from '../game/ctx';
-import { buildPig, PIVOT, type PigRig } from './pigModel';
+import { buildPig, PIVOT, STAND_POS, STAND_ANGLE, NECK, SNOUT_TIP, type PigRig } from './pigModel';
+import { HEAD_TILT } from './pigBody';
 import { dress, defaultOutfit, type Outfit } from './cosmetics';
 
-const STAND_POS = new THREE.Vector3(0, PIVOT.y + 0.1, PIVOT.z + 0.05);
-const STAND_ANGLE = 1.25;
+const DOWN = new THREE.Vector3(0, -1, 0);
+const SNOUT_DIR = SNOUT_TIP.clone().sub(NECK).normalize();
+const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+const _e = new THREE.Euler();
 const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620);
 
 export interface PigPose {
@@ -13,6 +16,10 @@ export interface PigPose {
   sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number; burnt?: number;
   /** 0..1 how close a standing pig is to falling over; punch 0..1 (jab progress). */
   wobble?: number; punch?: number; turn?: number;
+  /** Limp (ragdoll / carried): `rel` = physical rotations of head, frontL, frontR, hindL, hindR relative to the torso. */
+  limp?: boolean; rel?: THREE.Quaternion[];
+  /** Grip hand position (model space) while holding something: the head (four legs) or the arms (standing) reach for it. */
+  hand?: THREE.Vector3 | null;
 }
 
 /**
@@ -30,7 +37,7 @@ export class PigVisual {
   private animParts: THREE.Object3D[] = [];
   private phase = 0; private standT = 0; private rollT = 0; private squash = 0;
   private lastGrounded = true; private blinkAt = 2;
-  private wob = 0;
+  private wob = 0; private limpT = 0;
   centerHeight = 0.36;
   outfit: Outfit = defaultOutfit();
 
@@ -45,6 +52,9 @@ export class PigVisual {
     this.outfit = { ...o };
     this.animParts = dress(this.rig, this.outfit, this.color, this.spots);
   }
+
+  /** Knocked over while standing: the physics torso takes over the standing pose at once. */
+  snapStand() { this.standT = 0; this.rig.upper.position.copy(PIVOT); this.rig.upper.rotation.set(0, 0, 0); }
 
   update(p: PigPose) {
     const dt = p.dt, R = this.rig;
@@ -105,6 +115,36 @@ export class PigVisual {
       set(R.frontL, fl, zl, p.punch ? 40 : 22); set(R.frontR, fr, zr, p.punch ? 40 : 22);
     }
     R.hindL.position.x = 0.2 * (1 + sT * 0.15); R.hindR.position.x = -0.2 * (1 + sT * 0.15);
+
+    // head: looks ahead when standing; reaches for what it holds (four legs)
+    _q.setFromEuler(_e.set(HEAD_TILT * sT, 0, 0));
+    if (p.hand && !flail) {
+      R.upper.updateMatrix();
+      _p.copy(p.hand).applyMatrix4(_m.copy(R.upper.matrix).invert());      // hand in the upper body's space
+      if (sT < 0.5) {
+        _d.copy(_p).sub(R.head.position).normalize();
+        _qi.setFromUnitVectors(SNOUT_DIR, _d);
+        const ang = 2 * Math.acos(Math.min(1, Math.abs(_qi.w)));
+        if (ang > 1.1) _qi.slerp(_q.identity(), 1 - 1.1 / ang);
+        _q.setFromEuler(_e.set(HEAD_TILT * sT, 0, 0)).premultiply(_qi);
+      } else {
+        // both front hooves reach for the hand
+        for (const leg of [R.frontL, R.frontR]) {
+          _d.copy(_p).sub(leg.position);
+          if (_d.lengthSq() < 1e-4) continue;
+          _qi.setFromUnitVectors(DOWN, _d.normalize());
+          leg.quaternion.slerp(_qi, 1 - Math.exp(-28 * dt));
+        }
+      }
+    }
+    R.head.quaternion.slerp(_q, 1 - Math.exp(-16 * dt));
+
+    // limp: every part shows its physical rotation (head + legs flop, swing, hang)
+    this.limpT = damp(this.limpT, p.limp ? 1 : 0, p.limp ? 25 : 8, dt);
+    if (this.limpT > 0.01 && p.rel) {
+      R.head.quaternion.slerp(p.rel[0], this.limpT);
+      [R.frontL, R.frontR, R.hindL, R.hindR].forEach((leg, i) => leg.quaternion.slerp(p.rel![i + 1], this.limpT));
+    }
 
     // ears flop with speed / bounce, tail wiggles, blink
     const flop = 0.55 + (moving ? Math.sin(this.phase * 2) * 0.25 * amp : 0) - (air ? 0.5 : 0) + (flail ? Math.sin(p.t * 17) * 0.4 : 0);

@@ -202,7 +202,11 @@ export function buildAnimal(kind: AnimalKind, root: THREE.Group): AnimalRig {
   return quad(kind, root);
 }
 
-export interface AnimalPose { speed: number; run: boolean; t: number; dt: number; mode: 'idle' | 'move' | 'eat' | 'tumble' | 'held' | 'howl' | 'bite' | 'swim'; excite: number }
+export interface AnimalPose {
+  speed: number; run: boolean; t: number; dt: number; mode: 'idle' | 'move' | 'eat' | 'tumble' | 'held' | 'howl' | 'bite' | 'swim'; excite: number;
+  /** Limp (tumbling / held): physical rotations of head + legs relative to the body. */
+  limp?: boolean; rel?: THREE.Quaternion[];
+}
 
 /** Procedural animation shared by every animal. */
 export class AnimalVisual {
@@ -211,6 +215,7 @@ export class AnimalVisual {
   private phase = Math.random() * 6;
   private blinkAt = Math.random() * 3;
   private peck = 0;
+  private limpT = 0;
   constructor(public kind: AnimalKind) { this.rig = buildAnimal(kind, this.root); }
 
   update(p: AnimalPose) {
@@ -255,6 +260,12 @@ export class AnimalVisual {
     }
     // ear twitch
     for (const [i, e] of R.ears.entries()) e.rotation.x = Math.sin(p.t * 1.3 + i) > 0.97 ? 0.3 : damp(e.rotation.x, flail ? Math.sin(p.t * 15 + i) * 0.5 : 0, 12, dt);
+    // limp: head and legs show their physical rotation
+    this.limpT = damp(this.limpT, p.limp ? 1 : 0, p.limp ? 25 : 8, dt);
+    if (this.limpT > 0.01 && p.rel) {
+      R.head.quaternion.slerp(p.rel[0], this.limpT);
+      R.legs.forEach((l, i) => { if (p.rel![i + 1]) l.quaternion.slerp(p.rel![i + 1], this.limpT); });
+    }
     // blink
     if (p.t > this.blinkAt) this.blinkAt = p.t + 2 + Math.random() * 4;
     const shut = flail ? 0.2 : this.blinkAt - p.t < 0.12 ? 0.1 : 1;

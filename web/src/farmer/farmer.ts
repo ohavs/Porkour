@@ -10,6 +10,9 @@ import type { Wolf } from '../world/wolf';
 import { Nav } from './nav';
 import { Mower } from './mower';
 import { FarmerVisual, type FarmerAnim } from './farmerVisual';
+import { Ragdoll, type LimbDef } from '../core/ragdoll';
+import { Grip } from '../core/grip';
+import { SCRUFF } from '../pig/pigBody';
 
 /** Tuning. */
 export const BOB = {
@@ -46,6 +49,19 @@ const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3
 const UP = THREE.Object3D.DEFAULT_UP;
 const HALF = 0.55, RAD = 0.38, CENTER = HALF + RAD;   // capsule; body centre height above the feet
 
+/** Body parts (real bodies, limp when knocked down): head, armL, armR, legL, legR. Model space, Bob faces +z. */
+const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const LIMBS: LimbDef[] = [
+  { joint: V(0, 1.58, 0.02), center: V(0, 1.76, 0.03), shape: () => RAPIER.ColliderDesc.ball(0.25), mass: 6, limit: 0.7,
+    flail: { x: 0.2, y: 0.4, z: 0, speed: 5, phase: 0 } },
+  ...[1, -1].map((s, i): LimbDef => ({ joint: V(s * 0.38, 1.42, 0), center: V(s * 0.4, 1.12, 0), shape: () => RAPIER.ColliderDesc.capsule(0.2, 0.09),
+    mass: 5, limit: 2.2, flail: { x: 1.1, y: 0, z: s * 0.9, speed: 9, phase: i * 2 } })),
+  ...[1, -1].map((s, i): LimbDef => ({ joint: V(s * 0.16, 0.86, 0), center: V(s * 0.16, 0.46, 0.02), shape: () => RAPIER.ColliderDesc.capsule(0.28, 0.12),
+    mass: 9, limit: 1.4, flail: { x: 0.6, y: 0, z: s * 0.25, speed: 7, phase: 1 + i * 2.5 } })),
+];
+/** Where he holds a pig he carries (by the scruff, at arm's length in front of the belly), body space. */
+const CARRY_AT = V(0, 1.38 - CENTER, 0.8);
+
 /**
  * Farmer Bob: daily routine of chores (Untitled Goose Game) on a clock — day chores, flashlight patrol in the evening,
  * sleeps in the house at night. Per-pig suspicion (only un-piggy behaviour counts), hears noises, chases,
@@ -58,6 +74,12 @@ export class Farmer {
   collider!: RAPIER.Collider;
   visual = new FarmerVisual();
   synced: Synced;
+  /** Head, arms and legs as real bodies (limp when he is knocked down) and the hand that holds a pig. */
+  parts: Ragdoll;
+  grip = new Grip();
+  private vq = new THREE.Quaternion(); private tq = new THREE.Quaternion();
+  private relQ = [0, 1, 2, 3, 4].map(() => new THREE.Quaternion());
+  private handM = new THREE.Vector3(); private netHand = new THREE.Vector3();
   mass = BOB.mass; radius = RAD; heldBy = null;
   label = 'Bob';
   pos = new THREE.Vector3();
@@ -109,6 +131,8 @@ export class Farmer {
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + CENTER + 0.05, at.z)
       .lockRotations().setCanSleep(false).setCcdEnabled(true));
     this.setCollider(false);
+    this.parts = new Ragdoll(this.body, LIMBS, at, (i, anchor, rest) => { anchor.copy(LIMBS[i].joint).setY(LIMBS[i].joint.y - CENTER); rest.identity(); });
+    this.parts.flailK.ragdoll = 0.3; this.parts.toneK.ragdoll = 0.05;
     this.synced = new Synced(this.body);
     scene.add(this.visual.root);
     this.pos.copy(at);
@@ -123,11 +147,11 @@ export class Farmer {
 
   private setCollider(lying: boolean) {
     if (this.collider) { owners.delete(this.collider.handle); world.removeCollider(this.collider, false); }
-    const d = RAPIER.ColliderDesc.capsule(HALF, RAD).setMass(BOB.mass).setFriction(0)
-      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setCollisionGroups(groups(L.FARMER));
-    // knocked down: lying capsule behind him (head toward −z), belly = trampoline
-    if (lying) d.setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2))
-      .setTranslation(0, -CENTER + RAD, -0.85).setRestitution(0.9).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max);
+    // knocked down (real ragdoll): the torso only (head + limbs are parts), belly = trampoline
+    const d = lying ? RAPIER.ColliderDesc.capsule(0.12, 0.42).setTranslation(0, 1.15 - CENTER, 0.02).setFriction(0.8)
+      .setRestitution(0.9).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Max)
+      : RAPIER.ColliderDesc.capsule(HALF, RAD).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+    d.setMass(BOB.mass).setCollisionGroups(groups(L.FARMER));
     this.collider = world.createCollider(d, this.body);
     owners.set(this.collider.handle, this);
     this.lying = lying;
@@ -151,10 +175,11 @@ export class Farmer {
     if (!on) {
       if (this.carrying) this.release(false);
       this.stopRiding();
+      if (this.lying) this.getUp();
       this.go('off'); this.target = null;
-      this.body.setEnabled(false); this.visual.root.visible = false;
+      this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = false;
     } else {
-      this.body.setEnabled(true); this.visual.root.visible = true;
+      this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
       this.body.setTranslation({ x: this.zones.door.x, y: this.zones.door.y + CENTER + 0.1, z: this.zones.door.z }, true);
       this.go('routine'); this.doing = false; this.path = [];
     }
@@ -163,10 +188,18 @@ export class Farmer {
   forceMow() { const i = this.chores.findIndex((c) => c.id === 'mow'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
   forceBed() { const i = this.chores.findIndex((c) => c.id === 'bed'); if (i >= 0 && this.calm()) { this.stopRiding(); this.choreIdx = i; this.doing = false; this.go('routine'); } }
   slapMe(p: Pig) { if (this.state === 'sleep') this.wake(); this.forceSlap = true; this.stopRiding(); this.alarmed(p); }
+  /** Admin: a poise-breaking hit (real ragdoll knock-down). */
+  knockDown() { if (this.state === 'sleep') this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
+  /** Admin: pick this pig up right now (tests the limp, dangling pig). */
+  carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.state === 'sleep') this.wake(); this.stopRiding(); this.pickUp(p); }
   private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
+    this.control(dt);
+    if (!this.asleep) { this.parts.setTone(this.lying ? 'ragdoll' : 'active'); this.parts.step(this.now); }
+  }
+  private control(dt: number) {
     this.synced.beforeStep();
     if (this.state === 'off') return;
     if (this.state === 'sleep') { this.sleepStep(dt); return; }
@@ -182,7 +215,7 @@ export class Farmer {
     // stuns: cough / stagger / down end → resume
     if (this.stunUntil && this.now > this.stunUntil) {
       this.stunUntil = 0;
-      if (this.lying) { this.setCollider(false); this.body.setTranslation({ x: p.x, y: p.y + 0.05, z: p.z }, true); }
+      if (this.lying) this.getUp();
       this.go(this.carrying ? 'carry' : this.target ? 'chase' : this.cage.pigs.length >= 2 ? 'guard' : 'routine');
       if (this.state === 'chase') this.lastSeenT = this.now;
       this.path = [];
@@ -275,7 +308,7 @@ export class Farmer {
         break;
       case 'cough': this.moveVel.copy(this.forward).multiplyScalar(0.4); want = -1; break;
       case 'stagger': this.moveVel.copy(this.forward).multiplyScalar(-1.2); want = -1; break;
-      case 'down': break;
+      case 'down': return;   // a real ragdoll: physics only
     }
     // apply velocity
     const target = want === 0 ? v1.set(0, 0, 0) : v1.copy(this.moveVel);
@@ -314,13 +347,13 @@ export class Farmer {
   private sleep() {
     this.stopRiding();
     this.go('sleep'); this.activity = 'bob.sleep';
-    this.body.setEnabled(false); this.visual.root.visible = false;
+    this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = false;
     this.sleepT = 0;
   }
   private wake(at?: THREE.Vector3) {
     if (this.state !== 'sleep') return;
     const d = this.zones.door;
-    this.body.setEnabled(true); this.visual.root.visible = true;
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
     this.body.setTranslation({ x: d.x, y: d.y + CENTER + 0.1, z: d.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.pos.copy(d);
@@ -625,6 +658,7 @@ export class Farmer {
     this.carrying = p; this.target = p;
     p.caughtBy(this);
     ignorePair(this.body, p.body, true);
+    this.grip.attach(p.body, p.pos, SCRUFF);   // he grabs it by the scruff: it dangles, kicks, swings
     G.audio.play('body', { pos: this.pos, vol: 1 });
     G.audio.play('squeal', { pos: p.pos, vol: 1 });
     this.voice('ha');
@@ -638,6 +672,7 @@ export class Farmer {
   release(_thrown: boolean) {
     const p = this.carrying; if (!p) return;
     this.carrying = null;
+    this.grip.detach();
     ignorePair(this.body, p.body, false);
     p.heldBy = null;
     const f = this.forward;
@@ -668,6 +703,7 @@ export class Farmer {
     const d = this.moveTo(this.cage.front, BOB.carry, dt);
     if (d < 0.7) {
       this.carrying = null;
+      this.grip.detach();
       ignorePair(this.body, p.body, false);
       p.heldBy = null;
       this.cage.lock(p);
@@ -679,18 +715,16 @@ export class Farmer {
     return BOB.carry;
   }
 
+  /** The pig hangs from his hand (a joint at its scruff); a strong arm: it lifts any pig. Shakes = real shakes. */
   private holdCarried(dt: number) {
     const p = this.carrying; if (!p) return;
-    const f = this.forward;
-    const tgt = v1.set(this.pos.x + f.x * 0.62, this.pos.y + 1.22, this.pos.z + f.z * 0.62);
-    const pp = p.body.translation();
-    const d = v2.set(tgt.x - pp.x, tgt.y - pp.y, tgt.z - pp.z);
-    if (d.length() > 3) { p.body.setTranslation(tgt, true); d.set(0, 0, 0); }
-    const vv = d.multiplyScalar(18).add(v3.copy(this.vel));
-    p.body.setLinvel(vv, true);
-    const shake = this.now < this.shakeUntil ? Math.sin(this.now * 60) * 0.7 : Math.sin(this.now * 14) * 0.25;
-    p.body.setRotation(new THREE.Quaternion().setFromEuler(new THREE.Euler(shake * 0.4, this.yaw + Math.PI / 2, Math.PI / 2 + shake)), true);
-    void dt;
+    const shake = this.now < this.shakeUntil ? Math.sin(this.now * 60) * 0.22 : Math.sin(this.now * 7) * 0.03;
+    const T = v1.copy(CARRY_AT).setX(shake).applyAxisAngle(UP, this.yaw).add(this.pos).setY(this.pos.y + CENTER + CARRY_AT.y + Math.abs(shake) * 0.5);
+    this.grip.drive(T, this.body, p.mass + 6, dt, { up: 5000, side: 5000, kp: 16, react: 0, g: 20 });
+    if (this.grip.strain > 2.5) {    // snagged / teleported: bring it back to his hand
+      p.body.setTranslation({ x: T.x, y: T.y - 0.3, z: T.z }, true); p.body.setLinvel(this.vel, true);
+      this.grip.attach(p.body, p.pos, SCRUFF);
+    }
   }
 
   // ================================================================== getting hurt
@@ -733,6 +767,12 @@ export class Farmer {
     this.stopRiding();
     if (kind === 'down') {
       this.setCollider(true);
+      // he topples over backwards (head away from the hit), arms and legs flopping
+      this.body.lockRotations(false, true);
+      const f = this.forward;
+      this.body.setAngvel({ x: -Math.cos(this.yaw) * 2.6, y: (Math.random() - 0.5) * 1.5, z: Math.sin(this.yaw) * 2.6 }, true);
+      this.body.setLinvel({ x: this.vel.x - f.x * 1.5, y: 1.5, z: this.vel.z - f.z * 1.5 }, true);
+      this.parts.setTone('ragdoll'); this.parts.matchVelocity();
       G.audio.play('thud|body', { pos: this.pos, vol: 1, pitch: 0.7 });
       G.audio.play('bob_down', { pos: this.pos, vol: 1 });
       G.fx.shake(0.4);
@@ -742,6 +782,18 @@ export class Farmer {
     if (kind === 'stagger') G.events.push({ type: 'stagger' });   // poise keeps stacking: more hits now = knock-down
     this.doing = false;
     this.go(kind); this.stunUntil = this.now + secs;
+  }
+
+  /** Back on his feet after a knock-down: upright, same heading, rotations locked again. */
+  private getUp() {
+    const p = this.body.translation();
+    this.setCollider(false);
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.lockRotations(true, true);
+    this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(UP, this.yaw), true);
+    this.body.setTranslation({ x: p.x, y: Math.max(p.y, G.terrain.height(p.x, p.z) + CENTER + 0.05), z: p.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.vel.set(0, 0, 0);
   }
 
   private cough() {
@@ -815,6 +867,10 @@ export class Farmer {
       this.carrying ? G.pigs.indexOf(this.carrying) : -1, this.target ? G.pigs.indexOf(this.target) : -1,
       this.riding ? 1 : 0, this.doing ? 1 : 0, this.choreIdx);
     for (const p of this.pigs) n.push(this.sus.get(p) ?? 0);
+    this.parts.netState(n);
+    const hp = this.grip.pos, bp = this.body.translation();
+    const hl = this.carrying ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyAxisAngle(UP, -this.yaw) : v1.set(0, 0, 0);
+    n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000);
     s.push(this.state, this.activity, this.debugAnim ?? '');
   }
   netApply(n: number[], s: string[], nb: number[] = n, alpha = 0) {
@@ -827,6 +883,9 @@ export class Farmer {
     if (riding !== this.riding) { this.riding = riding; if (riding) this.mower.mount(this.visual.root); else this.mower.dismount(this.pos, this.yaw); }
     this.doing = n[10] === 1; this.choreIdx = n[11];
     this.pigs.forEach((p, i) => this.sus.set(p, n[12 + i] ?? 0));
+    const at = 12 + this.pigs.length;
+    this.parts.netApply(n, at);
+    this.netHand.set(n[at + 15] ?? 0, n[at + 16] ?? 0, n[at + 17] ?? 0);
     this.visual.root.visible = !this.asleep;
   }
   netPose(p: THREE.Vector3) { this.pos.copy(p).setY(p.y - CENTER); }
@@ -835,8 +894,20 @@ export class Farmer {
   render(alpha: number, dt: number) {
     if (this.state === 'off' || this.state === 'sleep') { this.flash.intensity = 0; return; }
     const r = this.visual.root;
-    this.synced.pos(alpha, r.position); r.position.y -= CENTER;
-    r.rotation.y = this.yaw;
+    // knocked down: the whole body follows the physics torso; otherwise upright, facing his heading
+    const limp = this.state === 'down';
+    if (limp) this.synced.rot(alpha, this.tq); else this.tq.setFromAxisAngle(UP, this.yaw);
+    this.vq.slerp(this.tq, 1 - Math.exp(-(limp ? 40 : 30) * dt));
+    if (limp) for (let i = 0; i < 5; i++) this.parts.rel(i, this.relQ[i], G.net === 'client');
+    this.synced.pos(alpha, r.position);
+    r.position.sub(v1.set(0, CENTER, 0).applyQuaternion(this.vq));
+    r.quaternion.copy(this.vq);
+    let hand: THREE.Vector3 | null = null;
+    if (this.carrying) {
+      if (G.net === 'client') hand = this.handM.copy(this.netHand);
+      else { const hp = this.grip.pos, bp = this.synced.currP; hand = this.handM.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyAxisAngle(UP, -this.yaw); }
+      hand.y += CENTER;
+    }
     const anim = this.animFor();
     const fl = this.flashlightOn && !this.riding;
     this.flash.intensity = fl ? 60 : 0;
@@ -844,7 +915,7 @@ export class Farmer {
     this.visual.update({
       speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase' || this.state === 'shoo', anim, at: this.now - this.stateT,
       t: this.now, dt, angry: this.chasing || this.state === 'carry' || this.state === 'fist' || this.state === 'shoo' ? 1 : this.state === 'suspect' ? 0.5 : 0,
-      yell: this.yell, lookYaw: this.lookYaw, carrying: !!this.carrying, flashlight: fl,
+      yell: this.yell, lookYaw: this.lookYaw, carrying: !!this.carrying, flashlight: fl, limp, rel: this.relQ, hand,
     });
   }
 

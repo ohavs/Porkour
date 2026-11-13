@@ -11,11 +11,16 @@ export type FarmerAnim =
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
   angry: number; yell: number; lookYaw: number; carrying: boolean; flashlight?: boolean;
+  /** Knocked down (real ragdoll): `rel` = physical rotations of head, armL, armR, legL, legR relative to the torso. */
+  limp?: boolean; rel?: THREE.Quaternion[];
+  /** Grip hand (model space) while he holds a pig: both arms reach for it. */
+  hand?: THREE.Vector3 | null;
 }
 
 const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
 const GREEN = new THREE.Color(0x9ccf4f);
-const v1 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
 /** Joint targets; everything is damped toward them so poses blend smoothly. */
 interface Targets {
@@ -37,6 +42,7 @@ export class FarmerVisual {
   private blinkAt = 1;
   private shown = '';
   private fxT = 0;
+  private limpT = 0;
 
   constructor() {
     this.rig = buildFarmer(this.root);
@@ -262,6 +268,10 @@ export class FarmerVisual {
     }
     if (moving && (p.anim === 'carry' || p.anim === 'suspect')) { T.ltx = -s * 0.55 * amp; T.rtx = s * 0.55 * amp; }
     if (p.flashlight && !TOOL[p.anim] && p.anim !== 'carry') { T.rsx = -1.25; T.rex = -0.25; T.rsz = -0.05; }
+    if (p.limp) {   // physics does the falling: no animated tilt / lean; elbows and knees a little bent
+      T.tiltX = 0; T.tiltY = 0; T.hipY = 0; T.hipZ = 0; T.lean = 0; T.twist = 0; T.roll = 0;
+      T.lex = T.rex = -0.35; T.lkx = T.rkx = 0.35;
+    }
     // ---------------------------------------------------------------- apply (damped)
     const C = this.cur, k = p.anim === 'down' || p.anim === 'lunge' || p.anim === 'stagger' ? 26 : 14;
     for (const key of Object.keys(T) as (keyof Targets)[]) C[key] = damp(C[key], T[key], key === 'tiltX' ? 40 : k, dt);
@@ -275,6 +285,22 @@ export class FarmerVisual {
     R.elbowL.rotation.x = C.lex; R.elbowR.rotation.x = C.rex;
     R.thighL.rotation.x = C.ltx; R.thighR.rotation.x = C.rtx;
     R.kneeL.rotation.x = C.lkx; R.kneeR.rotation.x = C.rkx;
+    // carrying a pig by the scruff: both arms reach for the grip
+    if (p.hand && !p.limp) {
+      this.root.updateMatrixWorld();
+      const local = R.torso.worldToLocal(v1.copy(p.hand).applyMatrix4(this.root.matrixWorld));
+      [R.shoulderL, R.shoulderR].forEach((sh, i) => {
+        v2.copy(local).setX(local.x + (i ? -0.07 : 0.07)).sub(sh.position);
+        if (v2.lengthSq() < 1e-4) return;
+        sh.quaternion.copy(qa.setFromUnitVectors(DOWN, v2.normalize()));
+      });
+      R.elbowL.rotation.x = R.elbowR.rotation.x = -0.2;
+    }
+    // knocked down: every part shows its physical rotation
+    this.limpT = damp(this.limpT, p.limp ? 1 : 0, p.limp ? 25 : 6, dt);
+    if (this.limpT > 0.01 && p.rel) {
+      [R.head, R.shoulderL, R.shoulderR, R.thighL, R.thighR].forEach((o, i) => o.quaternion.slerp(p.rel![i], this.limpT));
+    }
     // face: brows, mouth, blink, cough tint
     const ang = clamp(p.angry, 0, 1);
     R.browL.rotation.z = Math.PI / 2 - 0.45 * ang + (p.anim === 'down' ? 0.3 : 0);

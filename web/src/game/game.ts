@@ -25,6 +25,8 @@ import { parseOutfit } from '../pig/cosmetics';
 
 export const PLAYER_COLORS = [0xffc934, 0x38c6f4, 0x8be04e, 0xb57bff];
 const FIXED = 1 / 60;
+const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP'] as const;
+const tmpV = new THREE.Vector3();
 
 export class Game {
   pigs: Pig[] = [];
@@ -48,6 +50,8 @@ export class Game {
   /** Online: host simulation + snapshots, or player view of the host's world. */
   net: NetHost | NetClient | null = null;
   private bgWorker: Worker | null = null;
+  /** Online player: my own pig's prediction clock and presses that haven't had a step yet. */
+  private pacc = 0; private pendP: PigInput | null = null;
 
   constructor(public gfx: Gfx, public audio: Audio, public input: Input) {
     this.cam = new CamRig(gfx.camera);
@@ -129,7 +133,7 @@ export class Game {
     this.daynight.tick(FIXED);
     for (const p of this.pigs) p.input = emptyInput();
     if (withInput) this.local.input = this.menu.blocking && G.net === 'host' ? emptyInput() : this.buildInput(first);
-    if (host) this.pigs.forEach((p, i) => { if (p !== this.local && !p.absent) p.input = host.inputFor(i) ?? p.input; });
+    if (host) this.pigs.forEach((p, i) => { if (p !== this.local && !p.absent) { p.input = host.inputFor(i) ?? p.input; p.remote = host.poseFor(i); } });
     for (const p of this.pigs) p.preStep(FIXED);
     this.farmer?.preStep(FIXED);
     for (const c of this.farm.critters) c.preStep(FIXED);
@@ -199,6 +203,17 @@ export class Game {
       case 'free': cage.setOpen(true, 'admin'); break;
       case 'catch': if (!L.cage && !L.out) { if (L.heldBy) L.heldBy.release(false); cage.lock(L); } break;
       case 'mud': L.muddyUntil = G.time + 60; break;
+      case 'knock': if (!L.out && !L.heldBy) L.knock(new THREE.Vector3(Math.sin(L.yaw) * -3, 7, Math.cos(L.yaw) * -3), true); break;
+      case 'bringCrate': case 'bringPig': {
+        // drop something to grab right in front of me
+        const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
+        const it = a === 'bringPig' ? this.pigs.find((p) => p !== L && !p.out && !p.cage && !p.heldBy && !p.held)
+          : this.farm.props.filter((p) => !p.heldBy && p.mass <= 20).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
+        if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
+        break;
+      }
+      case 'bobDown': if (f && ADMIN.bob) f.knockDown(); break;
+      case 'bobCarry': if (f && ADMIN.bob && !L.out && !L.cage) { if (L.heldBy) L.heldBy.release(false); f.carryMe(L); } break;
       case 'dance': f?.forceDance(); break;
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;
       case 'mow': f?.forceMow(); break;
@@ -266,6 +281,38 @@ export class Game {
     } catch { /* no workers: the game pauses while hidden */ }
   }
 
+  /**
+   * Online player: my own pig runs here, on my machine, at the same fixed rate (movement answers my keys at once);
+   * only it is simulated — everything else is placed from the host's snapshots. The host follows my pig's pose.
+   */
+  private predict(dt: number, inp: PigInput) {
+    const L = this.local;
+    if (!L.predicting) { this.pacc = 0; this.pendP = null; return; }
+    const pin = { ...inp };
+    if (this.pendP) for (const k of PRESSES) pin[k] = pin[k] || this.pendP[k];
+    this.pacc += dt;
+    let n = 0;
+    while (this.pacc >= FIXED && n < 8) {
+      L.input = n === 0 ? pin : { ...pin, jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false };
+      G.mute = true;
+      try { L.predictStep(FIXED); } finally { G.mute = false; }
+      step();
+      L.synced.capture();
+      this.pacc -= FIXED; n++;
+    }
+    if (n >= 8) this.pacc = 0;
+    this.pendP = n === 0 ? pin : null;   // no step this frame: keep the presses for the next one
+  }
+
+  /** Online player: what my (predicted) pig holds is drawn where my pig is, not where the host's older copy was. */
+  private carryAlong() {
+    const L = this.local, h = L.held as { synced?: { prevP: THREE.Vector3; currP: THREE.Vector3 } } | null;
+    if (!L.predicting || !h?.synced || !(this.net instanceof NetClient)) return;
+    const d = L.synced.pos(this.pacc / FIXED, tmpV).sub(this.net.ownSnap);
+    if (d.lengthSq() > 9) return;
+    h.synced.prevP.add(d); h.synced.currP.add(d);
+  }
+
   /** Fixed simulation steps for the time that passed (solo / host). */
   private simulate(dt: number) {
     // settings menu / wardrobe pause the game (the admin panel doesn't: you test things live). Online never pauses.
@@ -285,15 +332,20 @@ export class Game {
     this.input.poll();
     let alpha: number;
     if (this.net instanceof NetClient) {
-      if (this.running) this.net.sendInput(this.menu.blocking ? emptyInput() : this.buildInput(true));
+      if (this.running) {
+        const inp = this.menu.blocking ? emptyInput() : this.buildInput(true);
+        this.predict(dt, inp);
+        this.net.sendInput(inp, this.local.predicting ? this.local.pose() : null);
+      }
       alpha = Math.max(0, this.net.frame(dt));
+      this.carryAlong();
       this.farm.cage.animate(dt);
     } else {
       this.simulate(dt);
       alpha = this.acc / FIXED;
     }
     if (online.room) { online.tickStats(); if ((this.frames & 15) === 0) this.menu.netStats(); }
-    for (const p of this.pigs) p.render(alpha, dt);
+    for (const p of this.pigs) p.render(p === this.local && p.predicting ? this.pacc / FIXED : alpha, dt);
     for (const c of this.farm.critters) c.render(alpha, dt);
     for (const d of this.farm.decor) d.render(dt);
     for (const w of this.wolves.wolves) w.render(alpha, dt);
