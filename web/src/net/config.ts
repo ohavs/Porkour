@@ -8,7 +8,7 @@ import { SETTINGS } from '../game/settings';
  */
 const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 /** Filled in once the server is deployed (server/README.md). */
-const BUILT_IN_SERVER = '';
+const BUILT_IN_SERVER = 'wss://porkour-server.onrender.com';
 /** Filled in once the Google OAuth client exists (server/README.md). */
 const BUILT_IN_GOOGLE_CLIENT_ID = '186251969828-09ngofot9gbr3p951dmm2ad88oo9upum.apps.googleusercontent.com';
 export const DEFAULT_SERVER = env.VITE_SERVER_URL || BUILT_IN_SERVER;

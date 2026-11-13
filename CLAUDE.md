@@ -99,7 +99,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    mower / night routine, day/night + lamps, wolves, round animals, wardrobe, farm dressing.
 4. ✅ **M4 Online (2026-11-12)** 4 players: server (Google / guest, rooms, relay), lobby, P2P + relay, host snapshots.
    Google Client ID is set (config.ts + server.js; OAuth app in "Testing": only Test users can sign in — Publish later with
-   name + email branding, no logo). Waiting on the user: deploy the server on Render, then fill `BUILT_IN_SERVER`.
+   name + email branding, no logo). Server live on Render: `wss://porkour-server.onrender.com` (auto-deploys from main; the sandbox proxy blocks
+   onrender.com, so it can't be reached from here).
 5. **M4.5 Real physics ("active ragdoll", user asked 2026-11-12)**: characters = several rigid bodies + joint motors that
    chase the procedural animation pose (Gang Beasts / Human Fall Flat / Party Animals); grab = a joint at the contact point
    (things hang / swing / drag by mass); throw = real arm swing; hit = motors go limp. Order: pigs → Bob → animals.
@@ -110,6 +111,7 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
   feel on a real PC (wobble, slap chance 30 %, grip 24 mashes, wolves, night length).
 - 2026-11-12: M4 online built & tested locally (2 headless browsers: lobby, chat, P2P, start, late join, movement).
+  2026-11-13: Google client id + Render server set; waiting for the user's first real online test (feel, lag, Google sign-in).
   User feedback: don't base designs on Nice-Crash (a few-prompts game) — take inspiration from real games.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
