@@ -195,8 +195,7 @@ export function buildDecor(c: Ctx) {
       add(new THREE.BoxGeometry(1.9, 0.06, 0.3), WOOD, [0, 0.45, s * 0.7], g);
       for (const k of [-1, 1]) add(new THREE.BoxGeometry(0.08, 0.8, 0.08), DARKWOOD, [k * 0.75, 0.4, s * 0.3], g, [s * 0.35, 0, 0]);
     }
-    add(new THREE.CylinderGeometry(0.2, 0.17, 0.08, 16), 0xf2d27a, [0.3, 0.86, 0], g);           // pie
-    add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), 0xffffff, [0.3, 0.83, 0], g);
+    add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), 0xffffff, [0.3, 0.83, 0], g);              // plate (the pie is a prop)
     add(new THREE.CylinderGeometry(0.05, 0.045, 0.12, 12), 0xd8403a, [-0.4, 0.88, 0.1], g);      // cup
     staticBox(V3(x, y(x, z) + 0.45, z), V3(0.95, 0.45, 0.85), 0.3);
     block(x, z, 1.8);

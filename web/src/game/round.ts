@@ -4,6 +4,7 @@ import { t, type Key } from '../i18n';
 import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
 import { PROPS, type Prop } from '../world/props';
+import type { Critter } from '../world/animals';
 import { SETTINGS, saveSettings } from './settings';
 import type { Game } from './game';
 
@@ -16,10 +17,25 @@ import type { Game } from './game';
 export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 40, stashR: 2.3 };
 
 export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell'
-  | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond';
-const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob'];
-const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', ...REQ_POOL];
-interface Mission { id: MissionId; req: boolean; done: boolean }
+  | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond'
+  | 'smashPots' | 'melonSmash' | 'eggBob' | 'gnomePond' | 'undiesWell' | 'pieSteal' | 'mudPorch' | 'mazeTrophy';
+const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
+  'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch'];
+const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
+interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
+/** Places things get taken to (waypoint when you hold the thing). */
+export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob';
+/** Counted pranks (progress shown as n / need). */
+const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2 };
+/** Which props / critters a prank is about, and where they go. */
+const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; to?: Where; inCoop?: boolean; inPen?: boolean }>> = {
+  mugPond: { props: ['mug'], to: 'pond' }, hayPond: { props: ['hay'], to: 'pond' }, gnomePond: { props: ['gnome'], to: 'pond' },
+  catBath: { critters: ['cat'], to: 'pond' }, henPond: { critters: ['hen'], to: 'pond' },
+  lambStash: { critters: ['sheep'], to: 'stash' }, pieSteal: { props: ['pie'], to: 'stash' }, mazeTrophy: { props: ['trophy'], to: 'stash' },
+  pumpkinWell: { props: ['pumpkin', 'bigPumpkin'], to: 'well' }, undiesWell: { props: ['undies'], to: 'well' },
+  hensOut: { critters: ['hen'], inCoop: true }, sheepOut: { critters: ['sheep'], inPen: true },
+  smashPots: { props: ['flowerPot'] }, melonSmash: { props: ['melon'] }, eggBob: { props: ['egg'], to: 'bob' },
+};
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
 
@@ -27,6 +43,7 @@ const COOP = { x0: 16, x1: 30, z0: -32, z1: -18 };
 const SHEEP_PEN = { x0: -63, x1: -50, z0: -52, z1: -34 };
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const WELL = { x: 0, z: -56 };
+const POND = { x: 50, z: -2 };
 const v1 = new THREE.Vector3();
 
 const CSS = `
@@ -42,8 +59,10 @@ const CSS = `
 #missions .goal { color:#b6e36a; font-size: 14px; margin-top: 4px; }
 .coin { display:inline-block; width: .8em; height: .8em; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0, #ffd166 45%, #c98a1b); box-shadow: 0 0 0 1.5px #7a4b12; vertical-align: -1px; margin-right: 3px; }
 .val { color: var(--gold); white-space: nowrap; }
-#stashmark { position:absolute; left:0; top:0; font-family: Title; font-size: 17px; color: var(--gold); opacity:0; transition: opacity .25s; transform: translate(-50%,-100%); text-align:center; pointer-events:none; }
-#stashmark b { display:block; font-size: 26px; line-height: .9; }
+.wpt { position:absolute; left:0; top:0; font-family: Title; font-size: 17px; color: var(--gold); opacity:0; transition: opacity .25s; transform: translate(-50%,-100%); text-align:center; pointer-events:none;
+  -webkit-text-stroke: 3px #3b2412; paint-order: stroke; white-space: nowrap; }
+.wpt b { display:block; font-size: 26px; line-height: .9; }
+.wpt.mission { color: #ff8ad8; }
 #results { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background: rgba(20,10,4,.55); z-index: 30; }
 #results .panel { text-align:center; min-width: 380px; }
 #results h1 { font-family: Title; font-weight: normal; font-size: 52px; margin: 0; color: var(--gold); }
@@ -73,7 +92,7 @@ export class Round {
   stash: THREE.Vector3;
   private paid = -1;
   private lastMin = false;
-  private panel: HTMLElement; private mark: HTMLElement; private res: HTMLElement;
+  private panel: HTMLElement; private mark: HTMLElement; private mark2: HTMLElement; private res: HTMLElement;
   private ring: THREE.Mesh; private coin: THREE.Object3D;
   private panelKey = ''; private resNo = -1;
   private events = new Set<string>();
@@ -95,7 +114,8 @@ export class Round {
     const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     const hud = document.getElementById('hud')!;
     this.panel = el('div', 'missions', 'txt'); hud.appendChild(this.panel);
-    this.mark = el('div', 'stashmark', 'txt'); hud.appendChild(this.mark);
+    this.mark = el('div', 'stashmark', 'txt wpt'); hud.appendChild(this.mark);
+    this.mark2 = el('div', 'stashmark2', 'txt wpt'); hud.appendChild(this.mark2);
     this.res = el('div', 'results'); document.body.appendChild(this.res);
   }
 
@@ -110,12 +130,15 @@ export class Round {
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
     const req = pick(REQ_POOL, 2), bonus = pick(BONUS_POOL.filter((m) => !req.includes(m)), 2);
-    this.missions = [{ id: 'quota', req: true, done: false }, ...req.map((id) => ({ id, req: true, done: false })), ...bonus.map((id) => ({ id, req: false, done: false }))];
+    this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
   }
 
   /** Game events (host): Bob knocked down / coughing, wolves scared… */
-  onEvent(type: string) {
+  onEvent(type: string, text = '') {
     if (this.phase === 'end') return;
+    if (type === 'smashed' && text === 'flowerPot') this.count('smashPots');
+    if (type === 'smashed' && text === 'melon') this.count('melonSmash');
+    if (type === 'splatBob') this.count('eggBob');
     if (type === 'knockdown') { this.done('knockBob'); this.done('staggerBob'); }
     if (type === 'stagger') this.done('staggerBob');
     if (type === 'bobCough') this.done('fartBob');
@@ -147,10 +170,16 @@ export class Round {
     if (this.wants('lambStash')) this.check('lambStash', critters.some((c) => c.def.kind === 'sheep' && this.inStash(c.pos, 0.3)));
     if (this.wants('hensOut')) this.check('hensOut', critters.filter((c) => c.def.kind === 'hen' && !(c.pos.x > COOP.x0 && c.pos.x < COOP.x1 && c.pos.z > COOP.z0 && c.pos.z < COOP.z1)).length >= 3);
     if (this.wants('pumpkinWell')) this.check('pumpkinWell', props.some((p) => (p.def === PROPS.pumpkin || p.def === PROPS.bigPumpkin) && !p.banked && !p.heldBy
-      && Math.hypot(p.synced.currP.x - WELL.x, p.synced.currP.z - WELL.z) < 1.6 && p.synced.currP.y > G.terrain.height(WELL.x, WELL.z) + 0.9));
+      && this.atWell(p.synced.currP)));
     if (this.wants('sheepOut')) this.check('sheepOut', critters.filter((c) => c.def.kind === 'sheep' && !inRect(SHEEP_PEN, c.pos)).length >= 2);
     if (this.wants('hayPond')) this.check('hayPond', props.some((p) => p.def === PROPS.hay && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
     if (this.wants('henPond')) this.check('henPond', critters.some((c) => c.def.kind === 'hen' && inWater(c.pos.x, c.pos.z)));
+    if (this.wants('gnomePond')) this.check('gnomePond', props.some((p) => p.def === PROPS.gnome && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
+    if (this.wants('undiesWell')) this.check('undiesWell', props.some((p) => p.def === PROPS.undies && !p.banked && !p.heldBy && this.atWell(p.synced.currP)));
+    if (this.wants('mudPorch')) {
+      const door = this.game.farm.zones.door;
+      this.check('mudPorch', pigs.some((p) => p.muddy > 0 && !p.out && Math.hypot(p.pos.x - door.x, p.pos.z - door.z) < 2.6));
+    }
     this.check('quota', this.banked >= this.quota);
     // phases
     const reqDone = this.missions.every((m) => !m.req || m.done);
@@ -164,7 +193,16 @@ export class Round {
     if (!this.lastMin && this.timeLeft < 60) { this.lastMin = true; G.events.push({ type: 'lastMinute' }); }
   }
 
+  private atWell(p: THREE.Vector3) { return Math.hypot(p.x - WELL.x, p.z - WELL.z) < 1.6 && p.y > G.terrain.height(WELL.x, WELL.z) + 0.9; }
   private wants(id: MissionId) { return this.missions.some((m) => m.id === id && !m.done); }
+  /** One more of a counted prank (pots smashed, eggs on Bob…). */
+  private count(id: MissionId) {
+    const m = this.missions.find((x) => x.id === id);
+    if (!m || m.done) return;
+    m.n++;
+    if (m.n >= (NEED[id] ?? 1)) this.done(id);
+    else G.events.push({ type: 'missionStep', text: 'm.' + id, why: `${m.n}/${NEED[id]}` });
+  }
   private check(id: MissionId, ok: boolean) { if (ok) this.done(id); }
   private done(id: MissionId) {
     const m = this.missions.find((x) => x.id === id);
@@ -177,6 +215,8 @@ export class Round {
     const p = v1.copy(pr.synced.currP);
     pr.bank();
     this.banked += pr.value;
+    if (pr.def === PROPS.pie) this.done('pieSteal');
+    if (pr.def === PROPS.trophy) this.done('mazeTrophy');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(pr.value) });
@@ -196,7 +236,7 @@ export class Round {
   // ================================================================== network (synced entity, no body)
   netState(n: number[], s: string[]) {
     let bits = 0; this.missions.forEach((m, i) => { if (m.done) bits |= 1 << i; });
-    n.push(PHASES.indexOf(this.phase), Math.round(this.elapsed * 10) / 10, this.secs, this.banked, this.quota, this.won ? 1 : 0, bits, this.no);
+    n.push(PHASES.indexOf(this.phase), Math.round(this.elapsed * 10) / 10, this.secs, this.banked, this.quota, this.won ? 1 : 0, bits, this.no, ...this.missions.map((m) => m.n));
     s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason);
   }
   netApply(n: number[], s: string[]) {
@@ -205,8 +245,9 @@ export class Round {
     this.won = n[5] === 1; this.no = n[7];
     if (s[0] !== undefined) {
       const ids = s[0] ? s[0].split(',') : [];
-      this.missions = ids.map((x, i) => ({ id: x.replace('!', '') as MissionId, req: x.endsWith('!'), done: (n[6] & (1 << i)) !== 0 }));
+      this.missions = ids.map((x, i) => ({ id: x.replace('!', '') as MissionId, req: x.endsWith('!'), done: (n[6] & (1 << i)) !== 0, n: 0 }));
     } else this.missions.forEach((m, i) => { m.done = (n[6] & (1 << i)) !== 0; });
+    this.missions.forEach((m, i) => { m.n = n[8 + i] ?? m.n; });
     if (s[1] !== undefined) this.reason = s[1];
   }
 
@@ -224,17 +265,64 @@ export class Round {
     this.renderResults();
   }
 
+  /** The {n} of a mission text key ('m.smashPots' → 4, 'm.quota' → the quota). */
+  textN(key: string) { const id = key.replace('m.', '') as MissionId; return id === 'quota' ? this.quota : NEED[id] ?? 0; }
+  /** Mission line: text + progress for counted pranks. */
+  private mText(x: Mission) {
+    if (x.id === 'quota') return t('m.quota', { n: this.quota });
+    const need = NEED[x.id];
+    return t(('m.' + x.id) as Key, { n: need ?? 0 }) + (need && !x.done ? ` <span class="val">${x.n}/${need}</span>` : '');
+  }
+
+  // ---------------------------------------------------------------- what to point at (markers.ts draws the arrows)
+  /** Props / critters the open pranks are about (arrows over them). */
+  missionThings(): { obj: Prop | Critter; id: MissionId }[] {
+    const out: { obj: Prop | Critter; id: MissionId }[] = [];
+    if (this.phase === 'end') return out;
+    const { props, critters } = this.game.farm;
+    for (const m of this.missions) {
+      const d = MDEF[m.id]; if (m.done || !d) continue;
+      if (d.props) for (const p of props) if (!p.banked && d.props.includes(p.def.id ?? '')) out.push({ obj: p, id: m.id });
+      if (d.critters) for (const c of critters) {
+        if (!d.critters.includes(c.def.kind)) continue;
+        if (d.inCoop && !inRect(COOP, c.pos)) continue;
+        if (d.inPen && !inRect(SHEEP_PEN, c.pos)) continue;
+        out.push({ obj: c, id: m.id });
+      }
+    }
+    return out;
+  }
+  /** Where an open prank wants this thing taken (null = nowhere special). */
+  targetFor(h: unknown): { where: Where; id: MissionId } | null {
+    if (this.phase === 'end' || !h) return null;
+    const pr = h as Prop, cr = h as Critter;
+    for (const m of this.missions) {
+      const d = MDEF[m.id]; if (m.done || !d?.to) continue;
+      if (d.props && pr.def && d.props.includes(pr.def.id ?? '')) return { where: d.to, id: m.id };
+      if (d.critters && cr.kind === 'critter' && d.critters.includes(cr.def.kind)) return { where: d.to, id: m.id };
+    }
+    return null;
+  }
+  wherePos(w: Where, out: THREE.Vector3) {
+    if (w === 'pond') out.set(POND.x, G.terrain.height(POND.x, POND.z), POND.z);
+    else if (w === 'well') out.set(WELL.x, G.terrain.height(WELL.x, WELL.z) + 2.2, WELL.z);
+    else if (w === 'porch') out.copy(this.game.farm.zones.door);
+    else if (w === 'bob' && G.farmer) out.copy(G.farmer.pos).setY(G.farmer.pos.y + 1);
+    else out.copy(this.stash);
+    return out;
+  }
+
   private carrying() { const h = this.game.local?.held as Prop | null; return !!h && (h as Prop).value > 0; }
 
   private renderPanel() {
     const left = Math.ceil(this.timeLeft), mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
-    const key = [left, this.banked, this.quota, this.phase, this.missions.map((m) => m.id + m.done).join()].join('|');
+    const key = [left, this.banked, this.quota, this.phase, this.missions.map((m) => m.id + m.done + m.n).join()].join('|');
     if (key === this.panelKey) return;
     this.panelKey = key;
     if (!this.missions.length) { this.panel.style.display = 'none'; return; }
     this.panel.style.display = this.phase === 'end' ? 'none' : '';
     const rows = this.missions.map((x) => {
-      const txt = x.id === 'quota' ? t('m.quota', { n: this.quota }) : t(('m.' + x.id) as Key);
+      const txt = this.mText(x);
       return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? '✔' : x.req ? '•' : '★'}</i><span>${txt}</span>${x.req ? '' : `<em>${t('m.bonus')}</em>`}</div>`;
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
@@ -242,20 +330,37 @@ export class Round {
       `<div class="bar"><div style="width:${pct}%"></div></div>${rows}` + (this.phase === 'escape' ? `<div class="goal">${t('m.escape')}</div>` : '');
   }
 
+  /** Waypoints: where the thing you hold goes (a prank's place, the stash), Bob's porch when you're muddy for that prank. */
   private renderMark(camera: THREE.Camera) {
     const L = this.game.local;
-    const show = this.phase !== 'end' && L && !L.out && (this.carrying() || (this.phase === 'escape' && !this.inStash(L.pos)));
-    this.mark.style.opacity = show ? '1' : '0';
-    if (!show) return;
-    v1.copy(this.stash).setY(this.stash.y + 3).project(camera);
-    const W = innerWidth, H = innerHeight;
-    let x = (v1.x * 0.5 + 0.5) * W, y = (-v1.y * 0.5 + 0.5) * H;
-    if (v1.z > 1) { x = W - x; y = H - 40; }
-    x = Math.min(W - 50, Math.max(50, x)); y = Math.min(H - 40, Math.max(70, y));
-    this.mark.style.left = x + 'px'; this.mark.style.top = y + 'px';
-    const d = Math.hypot(L.pos.x - this.stash.x, L.pos.z - this.stash.z);
-    this.mark.innerHTML = `<b>▼</b>${t('hud.stash')} · ${Math.round(d)} m`;
+    const list: { at: THREE.Vector3; label: string; mission: boolean }[] = [];
+    if (this.phase !== 'end' && L && !L.out && !L.cage) {
+      const tg = this.targetFor(L.held);
+      if (tg && tg.where !== 'bob') list.push({ at: this.wherePos(tg.where, this.wp[0]), label: t(('where.' + tg.where) as Key), mission: true });
+      if (this.wants('mudPorch') && L.muddy > 0 && !tg) list.push({ at: this.wherePos('porch', this.wp[0]), label: t('where.porch'), mission: true });
+      if ((this.carrying() && tg?.where !== 'stash') || (this.phase === 'escape' && !this.inStash(L.pos)) || tg?.where === 'stash')
+        list.push({ at: this.wp[1].copy(this.stash), label: t('hud.stash'), mission: false });
+    }
+    let px = -1e9, py = -1e9;
+    [this.mark, this.mark2].forEach((el, i) => {
+      const m = list[i];
+      el.style.opacity = m ? '1' : '0';
+      if (!m) return;
+      v1.copy(m.at).setY(m.at.y + 3).project(camera);
+      const W = innerWidth, H = innerHeight;
+      let x = (v1.x * 0.5 + 0.5) * W, y = (-v1.y * 0.5 + 0.5) * H;
+      if (v1.z > 1) { x = W - x; y = H - 40; }
+      x = Math.min(W - 60, Math.max(60, x)); y = Math.min(H - 40, Math.max(70, y));
+      if (Math.abs(x - px) < 150 && Math.abs(y - py) < 46) y = py - 48;   // two waypoints the same way: stack them
+      px = x; py = y;
+      el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.classList.toggle('mission', m.mission);
+      const d = Math.hypot(L.pos.x - m.at.x, L.pos.z - m.at.z);
+      const html = `<b>▼</b>${m.label} · ${Math.round(d)} m`;
+      if (el.innerHTML !== html) el.innerHTML = html;
+    });
   }
+  private wp = [new THREE.Vector3(), new THREE.Vector3()];
 
   private renderResults() {
     if (this.phase !== 'end') { if (this.resNo !== -1) { this.res.style.display = 'none'; this.resNo = -1; } return; }
@@ -266,7 +371,7 @@ export class Round {
     const stars = this.stars();
     const can = G.net !== 'client';
     const li = this.missions.map((x) => {
-      const txt = x.id === 'quota' ? t('m.quota', { n: this.quota }) : t(('m.' + x.id) as Key);
+      const txt = this.mText(x);
       return `<li class="${x.done ? 'ok' : 'no'}"><i>${x.done ? '✔' : '✘'}</i>${txt}${x.req ? '' : ` <em>${t('m.bonus')}</em>`}</li>`;
     }).join('');
     this.res.innerHTML = `<div class="panel"><h1 class="${this.won ? '' : 'lose'}">${t(this.won ? 'r.win' : 'r.lose')}</h1>` +

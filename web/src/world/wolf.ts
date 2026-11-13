@@ -99,14 +99,14 @@ export class Wolf {
     if (this.state !== 'flee') G.events.push({ type: 'wolfScared' });
     this.target = null;
     this.go('flee');
-    this.goal.copy(this.edgePoint(this.pos));
+    this.goal.copy(this.edgePoint(this.pos, 0));
   }
 
   /** Dawn: run off the farm. */
   leave() { if (this.carrying) this.release(false); if (this.state !== 'gone') { this.target = null; this.go('leave'); this.goal.copy(this.edgePoint(this.pos)); } }
 
-  private edgePoint(p: THREE.Vector3) {
-    const F = this.farm, m = 3.2;
+  private edgePoint(p: THREE.Vector3, m = 3.2) {
+    const F = this.farm;
     const cand = [[F.x0 + m, p.z], [F.x1 - m, p.z], [p.x, F.z0 + m], [p.x, F.z1 - m]] as const;
     let best = cand[0], bd = 1e9;
     for (const c of cand) { const d = Math.hypot(c[0] - p.x, c[1] - p.z); if (d < bd) { bd = d; best = c; } }
@@ -188,12 +188,14 @@ export class Wolf {
         break;
       }
       case 'flee':
+        // scared wolves run for the fence and slip out under it (the pack sends others later). Before this they turned
+        // around at the fence and came straight back — next to Bob, who kept shooing them forever (stuck).
         speed = WOLF.run;
-        if (this.moveTo(this.goal) < 1.5 || sinceT > WOLF.fleeTime) this.go(G.night > 0.5 ? 'prowl' : 'leave');
+        if (this.moveTo(this.goal) < 1.5 || sinceT > WOLF.fleeTime) this.go('leave');
         break;
       case 'leave':
         speed = WOLF.run * 0.8;
-        if (this.moveTo(this.goal) < 1.5 || sinceT > 20) this.despawn();
+        if (this.moveTo(this.goal) < 2.2 || sinceT > 14) this.despawn();
         break;
     }
     // steer
@@ -262,6 +264,13 @@ export class Wolf {
     this.active = false; this.state = 'gone';
     this.body.setEnabled(false);
     this.scene.remove(this.visual.root);
+    // free the physics bodies (a night spawns many wolves: disabled bodies used to pile up in the world)
+    const w = this;
+    queueMicrotask(() => {
+      for (let i = 0; i < w.body.numColliders(); i++) owners.delete(w.body.collider(i).handle);
+      world.removeRigidBody(w.body);
+      w.grip.dispose();
+    });
   }
 
   postStep() { this.synced.capture(); }

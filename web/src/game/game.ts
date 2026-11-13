@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { step, owners } from '../core/physics';
+import { step, owners, world } from '../core/physics';
 import type { Input } from '../core/input';
 import type { Audio } from '../core/audio';
 import { Gfx } from '../render/gfx';
@@ -19,6 +19,8 @@ import { WolfPack } from '../world/wolf';
 import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
+import { Lockpick } from './lockpick';
+import { Markers } from './markers';
 import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
 import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST } from '../render/quality';
@@ -30,8 +32,9 @@ import { parseOutfit } from '../pig/cosmetics';
 
 export const PLAYER_COLORS = [0xffc934, 0x38c6f4, 0x8be04e, 0xb57bff];
 const FIXED = 1 / 60;
-const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP'] as const;
+const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 const tmpV = new THREE.Vector3();
+const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
 
 export class Game {
   pigs: Pig[] = [];
@@ -52,6 +55,8 @@ export class Game {
   private nextDraw = 0; private detailDist = Infinity; private slowTip = false;
   running = false;
   round!: Round;
+  lockpick!: Lockpick;
+  markers!: Markers;
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
   scripted: Partial<PigInput> | null = null;
@@ -90,11 +95,25 @@ export class Game {
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
     this.wolves = new WolfPack(scene, this.nav, FARM);
     this.round = new Round(scene, this, new THREE.Vector3(30, terrain.height(30, 7.5), 7.5));
+    this.markers = new Markers(scene, this);
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
+    (window as any).__world = () => world;
     this.local.yaw = Math.PI;
     this.hud = new Hud();
     this.menu = new Menu(this);
+    this.lockpick = new Lockpick();
+    this.input.onPress = (b) => {
+      if (!this.running || this.menu.blocking) return;
+      if (this.lockpick.isOpen) {
+        if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
+        this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
+        return;
+      }
+      // RMB at the cage latch: the lock-pick puzzle (the pig itself doesn't grab there)
+      const L = this.local, cage = this.farm.cage;
+      if (b === 'grab' && !L.held && cage.canPick(L)) { this.lockpick.open(cage.pickOpts(L)); this.input.clearPresses(); }
+    };
     this.input.onKey = (code) => {
       if (code === 'Backquote') { this.menu.toggleAdmin(); return; }
       if (this.menu.blocking && code !== 'KeyM') return;
@@ -136,13 +155,22 @@ export class Game {
     const h = this.input.held;
     inp.jump = h.has('jump'); inp.sprint = h.has('sprint'); inp.fart = h.has('fart'); inp.stand = h.has('stand');
     inp.wallow = h.has('wallow'); inp.grab = h.has('grab');
+    inp.attack = h.has('attack');
     if (first) {
       const { pressed, released } = this.input.consume();
       inp.jumpP = pressed.has('jump'); inp.sprintP = pressed.has('sprint'); inp.fartP = pressed.has('fart');
       inp.standP = pressed.has('stand'); inp.wallowP = pressed.has('wallow'); inp.grabP = pressed.has('grab');
       inp.grabR = released.has('grab'); inp.oinkP = pressed.has('oink');
+      inp.attackP = pressed.has('attack'); inp.attackR = released.has('attack');
     }
     if (s) Object.assign(inp, s, { mx: inp.mx, mz: inp.mz });
+    const lp = this.lockpick;
+    if (lp.isOpen) {
+      // picking the lock: the pig stands still, every key goes to the puzzle
+      const yaw = inp.yaw, pitch = inp.pitch;
+      Object.assign(inp, emptyInput(), { yaw, pitch });
+    }
+    if (first && (lp.solved || lp.slips)) { inp.pickP = lp.solved; inp.pickFailP = lp.slips > 0; lp.solved = false; lp.slips = 0; }
     return inp;
   }
 
@@ -192,15 +220,15 @@ export class Game {
     G.clouds = G.clouds.filter((c) => c.until > G.time);
     if (G.net !== 'client') {
       this.round.step(FIXED);
-      for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type);
+      for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
-    if (this.scripted) { this.scripted.jumpP = this.scripted.fartP = this.scripted.sprintP = this.scripted.wallowP = this.scripted.standP = this.scripted.grabP = this.scripted.grabR = false; }
+    if (this.scripted) for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false;
   }
 
   private handleEvents() {
     for (const e of G.events) {
-      if (G.net !== 'client') this.round.onEvent(e.type);   // usually already seen inside the step; repeats are no-ops
+      if (G.net !== 'client' && e.type !== 'smashed' && e.type !== 'splatBob') this.round.onEvent(e.type, e.text);   // usually already seen inside the step; repeats are no-ops (counted ones aren't: only there)
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
       switch (e.type) {
@@ -228,7 +256,9 @@ export class Game {
         case 'lostToWolf': this.hud.toast(t('e.lostToWolf', { who }), 2); break;
         case 'bobWakes': this.hud.toast(t('e.bobWakes'), 1.6); break;
         case 'banked': this.hud.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.2, t((e.text ?? '') as Key)); break;
-        case 'missionDone': this.hud.toast(t('e.missionDone'), 2, t((e.text ?? '') as Key, { n: this.round.quota })); break;
+        case 'missionDone': this.hud.toast(t('e.missionDone'), 2, t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') })); break;
+        case 'missionStep': this.hud.toast(e.why ?? '', 1.2, t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') })); break;
+        case 'splatBob': this.hud.toast(t('e.splat'), 1.2); break;
         case 'roundEscape': this.hud.toast(t('e.roundEscape'), 3.5, t('e.roundEscape2')); break;
         case 'lastMinute': this.hud.toast(t('e.lastMinute'), 2); break;
         case 'roundEnd': break;
@@ -300,6 +330,18 @@ export class Game {
       case 'tp:house': tp(this.farm.zones.door.x + 1, this.farm.zones.door.z + 2); break;
       case 'tp:barn': tp(0, 8); break;
       case 'tp:pasture': tp(30, -62); break;
+      case 'tp:maze': tp(47.9, -93.6); break;
+      case 'tp:sunflowers': tp(21, -95.5); break;
+      case 'tp:junkyard': tp(-50, 5); break;
+      case 'tp:greenhouse': tp(-37, -77); break;
+      case 'pick': { tp(cage.latch.x + 0.4, cage.latch.z + 0.9); this.menu.toggleAdmin(); setTimeout(() => { if (cage.canPick(L)) this.lockpick.open(cage.pickOpts(L)); else this.hud.toast(t('a.pickNo'), 1.4); }, 300); break; }
+      case 'bringPot': case 'bringEgg': case 'bringGnome': {
+        const id = a === 'bringPot' ? 'flowerPot' : a === 'bringEgg' ? 'egg' : 'gnome';
+        const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
+        const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
+        if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
+        break;
+      }
     }
   }
 
@@ -366,7 +408,7 @@ export class Game {
     this.pacc += dt;
     let n = 0;
     while (this.pacc >= FIXED && n < 8) {
-      L.input = n === 0 ? pin : { ...pin, jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false };
+      L.input = n === 0 ? pin : { ...pin, ...NO_PRESSES };
       G.mute = true;
       try { L.predictStep(FIXED); } finally { G.mute = false; }
       step();
@@ -410,6 +452,11 @@ export class Game {
     const dt = Math.min(0.1, (nowMs - this.last) / 1000);
     this.last = nowMs;
     this.input.poll();
+    const pick = this.lockpick;
+    if (pick.isOpen) {
+      if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !this.farm.cage.canPick(this.local, 0.6) || this.menu.blocking) pick.close();
+      else pick.update(dt);
+    }
     let alpha: number;
     if (this.net instanceof NetClient) {
       if (this.running) {
@@ -432,6 +479,8 @@ export class Game {
     this.farmer?.render(alpha, dt);
     googly()?.update(dt);
     this.round.render(dt, this.gfx.camera);
+    this.markers.update(this.gfx.camera, this.gfx.renderer.getPixelRatio());
+    if (this.menu.blocking) document.getElementById('clickHint')?.classList.remove('show');
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
@@ -446,7 +495,8 @@ export class Game {
     this.audio.setListener(this.gfx.camera);
     this.frames++; this.fpsT += dt;
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
-    this.hud.update(this.local, SETTINGS.fps ? this.fps : 0);
+    const goal = this.round.targetFor(this.local.held);
+    this.hud.update(this.local, SETTINGS.fps ? this.fps : 0, goal ? t(('where.' + goal.where) as Key) : '');
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     if (this.farmer) {
       this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);

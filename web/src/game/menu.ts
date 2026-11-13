@@ -71,6 +71,7 @@ export class Menu {
     if (ADMIN.open) return;
     this.menuOpen = true;
     document.exitPointerLock?.();
+    document.getElementById('clickHint')?.classList.remove('show');
     this.renderMenu();
     this.menu.classList.add('show');
   }
@@ -180,7 +181,9 @@ export class Menu {
     const rng = (k: string, label: Key, v: number, min: number, max: number, step: number) =>
       `<div class="field"><span>${t(label)} <b data-val="${k}">${v}</b></span><input type="range" data-r="${k}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
     const btn = (k: string, label: Key) => `<button data-a="${k}">${t(label)}</button>`;
-    this.admin.innerHTML = `<h2>${t('a.title')}</h2><div class="hint">${t('a.hint')}</div>` +
+    let crash = '';
+    try { const c = JSON.parse(localStorage.getItem('porkour.crash') ?? 'null'); if (c) crash = `<div class="hint" style="color:#ffb38a">${t('a.crash')}<br>${new Date(c.at).toLocaleString()} · ${c.mins} min · heap ${c.heap} MB · geo ${c.geo} · tex ${c.tex} · ${c.fps} fps · ${c.preset} · ${c.net}${c.lost ? ' · GL lost' : ''}</div>`; } catch { /* */ }
+    this.admin.innerHTML = `<h2>${t('a.title')}</h2><div class="hint">${t('a.hint')}</div>` + crash +
       (G.net !== 'solo' ? `<div class="sec">${t('a.online')}</div><div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) + tog('predict', 'a.predict') : '') +
       tog('bob', 'a.bob') + tog('bobSees', 'a.bobSee') + tog('god', 'a.godMode') + tog('easyEscape', 'a.escape') + tog('noCooldowns', 'a.cooldowns') +
       rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
@@ -196,7 +199,8 @@ export class Menu {
       `<div class="sec">${t('a.round')}</div>` + rng('roundMins', 'a.roundMins', ADMIN.roundMins, 1, 20, 1) +
       `<div class="grid">${btn('roundWin', 'a.roundWin')}${btn('loot100', 'a.loot100')}${btn('roundEnd', 'a.roundEnd')}${btn('roundNew', 'a.roundNew')}</div>` +
       `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>` +
-      `<div class="sec">${t('a.teleport')}</div><div class="tp">${(['sty', 'cage', 'house', 'barn', 'pasture'] as const).map((k) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>`;
+      `<div class="sec">${t('a.pranks')}</div><div class="grid">${btn('pick', 'a.pick')}${btn('bringPot', 'a.bringPot')}${btn('bringEgg', 'a.bringEgg')}${btn('bringGnome', 'a.bringGnome')}</div>` +
+      `<div class="sec">${t('a.teleport')}</div><div class="tp">${(['sty', 'cage', 'house', 'barn', 'pasture', 'maze', 'sunflowers', 'junkyard', 'greenhouse'] as const).map((k) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>`;
     this.admin.querySelectorAll<HTMLElement>('[data-tog]').forEach((s) => s.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       const k = s.dataset.tog as keyof typeof ADMIN;

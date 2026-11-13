@@ -39,6 +39,8 @@ export class Lobby {
     this.el.classList.add('show');
     this.connect();
   }
+  /** Esc: back to the title (not while in a room: leaving it takes the Back button). */
+  escape() { if (!online.room) this.action('back'); }
   close() { this.isOpen = false; this.el.classList.remove('show'); clearInterval(this.listTimer); }
 
   private async connect() {

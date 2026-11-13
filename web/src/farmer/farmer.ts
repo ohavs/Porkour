@@ -133,6 +133,8 @@ export class Farmer {
   private slapDone = false; private slapped: Pig[] = []; forceSlap = false;
   private danceUntil = 0;
   private shooWolf: Wolf | null = null;
+  /** Wolves he already chased off (he doesn't keep shooing the same one). */
+  private shooed = new WeakMap<Wolf, number>();
   private mowPath: THREE.Vector3[] = []; private mowIdx = 0; private riding = false;
   private flash: THREE.SpotLight;
   private sleepT = 0;
@@ -378,6 +380,9 @@ export class Farmer {
       const o = owners.get(c.handle) as (Holdable & { synced?: Synced }) | undefined;
       if (!o || o === this.carrying || !o.synced || (o as any).heldBy) return;
       const ov = o.synced.preVel, rel = v2.copy(ov).sub(this.vel).length();
+      // eggs / melons / pots thrown at him: SPLAT (a prank; he's furious but it barely hurts)
+      const br = o as unknown as { def?: { fragile?: number; id?: string }; smash?: (how: string) => void; banked?: boolean };
+      if (br.def?.fragile && rel > 2.5 && !br.banked) { br.smash?.('bob'); this.splatted(ov); return; }
       if (rel < 6.5 || o.mass < 2) return;
       if ((this.hitBy.get(o) ?? -10) > this.now - 0.6) return;
       this.hitBy.set(o, this.now);
@@ -509,7 +514,7 @@ export class Farmer {
     // wolves on his farm: chase them off
     if (this.calm() && this.state !== 'suspect' && !this.carrying) {
       for (const w of G.wolves as Wolf[]) {
-        if (!w.active || w.state === 'flee' || w.state === 'leave') continue;
+        if (!w.active || w.state === 'flee' || w.state === 'leave' || (this.shooed.get(w) ?? -99) > this.now - 15) continue;
         if (Math.hypot(w.pos.x - this.pos.x, w.pos.z - this.pos.z) > 18 || !this.canSee(w, VIEW.alert)) continue;
         this.stopRiding(); this.doing = false;
         this.shooWolf = w; this.go('shoo'); this.voice('hey'); this.path = [];
@@ -790,10 +795,10 @@ export class Farmer {
   private shoo(dt: number) {
     const w = this.shooWolf;
     this.activity = 'bob.shoo';
-    if (!w || !w.active || w.state === 'flee' || w.state === 'leave' || this.now - this.stateT > 10) { this.backToWork(); return 0; }
+    if (!w || !w.active || w.state === 'flee' || w.state === 'leave' || this.now - this.stateT > 10) { if (w) this.shooed.set(w, this.now); this.backToWork(); return 0; }
     const d = this.moveTo(w.pos, BOB.run * 0.9, dt, 0.5);
     if (Math.random() < dt * 0.7) this.voice('hey');
-    if (d < 4.5) { w.scare(); this.go('fist'); this.target = null; this.stateT = this.now - BOB.fistGiveUp + 1.2; }
+    if (d < 4.5) { w.scare(); this.shooed.set(w, this.now); this.go('fist'); this.target = null; this.stateT = this.now - BOB.fistGiveUp + 1.2; }
     return BOB.run * 0.9;
   }
 
@@ -868,12 +873,22 @@ export class Farmer {
     G.noise(this.pos, 12);
   }
 
-  /** Admin / pig punch: a hoof jab. */
-  punched(dir: THREE.Vector3) {
+  /** Something squishy burst on him (egg, melon, flower pot). */
+  private splatted(dir: THREE.Vector3) {
+    if ((this.hitBy.get('splat') ?? -10) > this.now - 0.2) return;
+    this.hitBy.set('splat', this.now);
+    G.audio.play('splat|squish', { pos: this.pos, vol: 1 });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.6), { count: 14, color: 0xffe27a, speed: 2.5, up: 1, grav: 10, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
+    G.events.push({ type: 'splatBob' });
+    this.hit(8, v2.copy(dir));
+  }
+
+  /** Admin / pig punch: a hoof jab (k < 1: a headbutt / a bash with something that isn't a weapon). */
+  punched(dir: THREE.Vector3, k = 1) {
     if (this.asleep) return;
     if ((this.hitBy.get('punch') ?? -10) > this.now - 0.3) return;
     this.hitBy.set('punch', this.now);
-    this.hit(BOB.punch, dir);
+    this.hit(BOB.punch * k, dir);
   }
 
   /** A pig whacked him with a weapon (pan, shovel, sword, axe). */

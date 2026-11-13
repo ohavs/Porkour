@@ -11,6 +11,7 @@ import type { Chore } from '../farmer/farmer';
 import type { DayNight } from './daynight';
 import { buildDecor } from './decor';
 import { buildHideouts } from './hideouts';
+import { buildLandmarks } from './landmarks';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 
@@ -231,12 +232,20 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     prop('sword', 36, -84); prop('axe', -38.6, 9.4, 0.3, 0.55);   // the axe lies on the chopping stumps
     // valuables (M5 loot): Bob's porch, the picnic table, the BBQ, the barn, the garage, the garden
     prop('chest', -14.2, -30.4, 2.4); prop('chalice', -15.6, -30.0); prop('necklace', -12.8, -31.6);
-    prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.1, -47.7, 0.3, 0.84);
+    prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.35, -47.8, 0.3, 0.84);
     prop('crown', -39.9, -45.3, 0.6);
     prop('gold', -10.8, -49.5, 0.3);
     prop('gasCan', 7.6, 11.6); prop('propane', -2.6, -29.6, 0); prop('pan', -4.2, -29.2);
     prop('firstAid', 4.5, 7.2); prop('backpack', -3.5, 7.4);
     prop('shovel', -23.8, -59.5, 1.2); prop('trashcan', -13.2, -26.8, 0);
+    // pranks: the pie on the picnic table, Bob's undies (fell off the laundry line), a garden gnome, eggs by the coop,
+    // flower pots on the porch, more melons by the garden
+    prop('pie', 8.79, -47.59, 0, 0.84);
+    prop('undies', -29.4, -27.4, 0.4);
+    prop('gnome', -28.6, -55.4, 2.2);
+    for (const [x, z] of [[18.9, -20.6], [19.25, -20.75], [19.05, -21.0], [28.2, -29.3], [28.5, -29.0]] as const) prop('egg', x, z, rng.range(0, 6));
+    for (const [x, z] of [[-15.9, -31.6], [-16.6, -31.9], [-12.2, -32.6]] as const) prop('flowerPot', x, z, 0);
+    for (const [x, z] of [[-34.4, -50.6], [-40.2, -50.8], [-29.4, -60.2]] as const) prop('melon', x, z);
     for (let i = 0; i < 4; i++) prop('crate', 34 + (i % 2) * 1.05, -84 + Math.floor(i / 2) * 1.05, 0);
 
     // ---------------------------------------------------------------- animals
@@ -270,6 +279,8 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     };
     // hiding spots: big bushes, wheat + corn, bale stacks, log piles, crates…
     buildHideouts({ scene, t, rng, out, blocked, forest, decor });
+    // bigger places: hedge maze, sunflower field, junkyard, greenhouse
+    buildLandmarks({ scene, t, rng, out, blocked, decor, prop });
     // hedge along the inside of the farm fence (gap at the gate)
     const hedgeRun = (x0: number, z0: number, x1: number, z1: number) => {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.floor(len / 3.4), yaw = Math.atan2(z1 - z0, x1 - x0);

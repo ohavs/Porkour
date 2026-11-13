@@ -15,12 +15,15 @@ import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
 export interface PigInput {
   mx: number; mz: number; yaw: number; pitch: number;
-  jump: boolean; sprint: boolean; fart: boolean; stand: boolean; wallow: boolean; grab: boolean;
+  jump: boolean; sprint: boolean; fart: boolean; stand: boolean; wallow: boolean; grab: boolean; attack: boolean;
   jumpP: boolean; sprintP: boolean; fartP: boolean; standP: boolean; wallowP: boolean; grabP: boolean; grabR: boolean; oinkP: boolean;
+  /** LMB pressed / released; the lock-pick puzzle was solved / a pin slipped (the puzzle runs on the player's screen). */
+  attackP: boolean; attackR: boolean; pickP: boolean; pickFailP: boolean;
 }
 export const emptyInput = (): PigInput => ({
-  mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false,
+  mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false, attack: false,
   jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false,
+  attackP: false, attackR: false, pickP: false, pickFailP: false,
 });
 
 /** Where a player's own copy of their pig is (sent with the controls, host follows it). */
@@ -34,9 +37,19 @@ export const PIG = {
   liftMax: 26, dragMax: 90, throwMin: 5, throwMax: 16, grabRange: 1.7,
   // standing on two legs: strong hooves (punch, lift, throw, latch) but wobbly
   liftMaxStand: 50, throwStand: 1.35, punchCd: 0.45, punchRange: 1.15, punchPoise: 34, wobbleFall: 1,
+  /** LMB shorter than this = a hit, longer = wind up a throw. Headbutt (four legs) = this share of a punch on Bob. */
+  clickTime: 0.22, headbutt: 0.6,
   // grip (real physics): lift force = liftMax × g × gripLift, drag force = dragMax × g × gripDrag; throw swing time
   gripLift: 1.2, gripDrag: 0.6, swing: 0.14,
 };
+
+/**
+ * Standing balance (inverted pendulum). fall0 = gravity tipping it over, kp = the pig righting itself (saturates at
+ * `sat` rad: past that, gravity slowly wins), kd = damping (low = sways back and forth), accel = lean per m/s² of
+ * speed change, turn = lean out of turns, noise = random teeter, stumble / fall = radians, stagger = m/s of forced
+ * steps per radian past `stumble`.
+ */
+export const BAL = { fall0: 10, kp: 22, sat: 0.27, kd: 2.6, accel: 0.13, turn: 0.11, noise: 0.7, stumble: 0.3, fall: 0.62, stagger: 22 };
 
 /** Grip targets in model space (pig's feet = origin, facing +z): hold, wind-up (full charge), release. */
 const GRIP = {
@@ -78,6 +91,10 @@ export class Pig implements Holdable {
   private rammed = new Set<unknown>();
   /** Standing balance: 0 steady … 1 falls over. */
   wobble = 0; private lastYaw = 0; turnRate = 0;
+  /** Standing balance: top-of-body lean (world x / z, radians) and its speed. */
+  leanX = 0; leanZ = 0; private leanVX = 0; private leanVZ = 0; private lastVx = 0; private lastVz = 0; private stumbleSnd = 0;
+  private stumbleX = 0; private stumbleZ = 0; private bumpT = 0;
+  private seed = Math.random();
   punchAt = -10; private punched = false;
   /** Grilled / taken by a wolf (HUD text). */
   outReason: 'grill' | 'wolf' = 'grill';
@@ -227,7 +244,7 @@ export class Pig implements Holdable {
     this.follow(dt);
 
     if (this.sprinting) this.ramStep();
-    if (this.standing) this.balanceStep(dt); else this.wobble = Math.max(0, this.wobble - dt * 2);
+    if (this.standing) this.balanceStep(dt); else if (this.wobble || this.leanX || this.leanZ) this.resetLean();
     if (this.punchAt > 0 && !this.punched && this.now - this.punchAt > 0.12) { this.punched = true; this.punchHit(); }
     this.finishStep(dt);
   }
@@ -240,7 +257,8 @@ export class Pig implements Holdable {
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
     if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
     if (this.muddy > 0) speed *= 0.95;
-    const tx = mx * speed, tz = mz * speed;
+    let tx = mx * speed, tz = mz * speed;
+    if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
     if (!this.grounded && !moving && this.ownJump) acc = PIG.airBrake;
     if (!this.grounded && !moving && !this.ownJump) acc = 1.5; // thrown / launched: keep momentum
@@ -278,55 +296,93 @@ export class Pig implements Holdable {
   /** Host: something pushed this pig here (knock, ram, teleport): the host moves it for a moment, the player follows. */
   hostTakes(secs: number) { this.ctlUntil = Math.max(this.ctlUntil, this.now + secs); }
 
-  /** Two legs: turning fast, speeding, landing hard or carrying heavy things builds wobble → falls over. */
-  private balanceStep(dt: number) {
-    const dYaw = wrapAngle(this.yaw - this.lastYaw), turn = Math.abs(dYaw) / Math.max(dt, 1e-3);
-    this.lastYaw = this.yaw;
-    this.turnRate = clamp(dYaw / Math.max(dt, 1e-3) / 6, -1, 1);
+  /**
+   * Two legs = an inverted pendulum (Gang Beasts / Human: Fall Flat feel). The pig's top leans; speeding up leaves it
+   * behind, stopping or turning throws it forward / outward, carrying heavy stuff and a slow random teeter push it,
+   * hits and hard landings kick it. The pig rights itself (underdamped spring → it sways back and forth); past
+   * `stumble` it staggers a few steps toward the lean to catch itself; past `fall` it goes over (ragdoll).
+   * Moving toward the lean on purpose helps (that's how you catch yourself).
+   */
+  private balanceStep(dt: number, canFall = true) {
+    const B = BAL;
+    const ax = (this.vel.x - this.lastVx) / dt, az = (this.vel.z - this.lastVz) / dt;
+    this.lastVx = this.vel.x; this.lastVz = this.vel.z;
+    const dYaw = wrapAngle(this.yaw - this.lastYaw); this.lastYaw = this.yaw;
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    let gain = Math.max(0, turn - 2.2) * sp * 0.035 + (sp > PIG.standWalk * 0.8 ? 0.09 : 0);
-    if (this.held) gain += clamp(this.held.mass / 60, 0, 0.5) * 0.25 * (sp > 1 ? 1 : 0.3);
-    if (!this.grounded) gain += 0.05;
-    gain += Math.max(0, Math.sin(this.now * 1.7) * Math.sin(this.now * 0.63)) * 0.08 * (sp > 0.5 ? 1 : 0);  // random teeter
-    this.wobble += gain * dt;
-    if (sp < 1 && this.grounded) this.wobble -= dt * 0.55;
-    this.wobble = clamp(this.wobble, 0, 1.2);
-    if (this.wobble >= PIG.wobbleFall) {
-      this.wobble = 0;
-      this.startRagdoll(v1.set(Math.sin(this.yaw) * 2, 0.5, Math.cos(this.yaw) * 2), true);
+    const heavy = this.held ? clamp(this.held.mass / 50, 0, 1) : 0;
+    // slow, smooth random teeter (fixed frequencies per pig: no phase jumps)
+    const t = this.now + this.seed * 37;
+    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8);
+    const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp;
+    const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp;
+    // turning while moving: lean out of the turn
+    const turn = clamp(dYaw / Math.max(dt, 1e-3), -8, 8) * sp * B.turn;
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);     // pig's right (world)
+    const am = Math.hypot(ax, az), acc = am > 60 ? 60 / am : 1;     // collisions are handled as kicks (postStep)
+    const L0 = Math.hypot(this.leanX, this.leanZ);
+    const kp = B.kp * (1 - heavy * 0.35) * (this.grounded ? 1 : 0.5) * (L0 > B.sat ? B.sat / L0 : 1);
+    const fx = B.fall0 * this.leanX - B.accel * ax * acc - kp * this.leanX - B.kd * this.leanVX + nx - turn * rx;
+    const fz = B.fall0 * this.leanZ - B.accel * az * acc - kp * this.leanZ - B.kd * this.leanVZ + nz - turn * rz;
+    this.leanVX += fx * dt; this.leanVZ += fz * dt;
+    this.leanX += this.leanVX * dt; this.leanZ += this.leanVZ * dt;
+    const L = Math.hypot(this.leanX, this.leanZ);
+    this.wobble = clamp(L / B.fall, 0, 1);
+    this.turnRate = 0;
+    // past `stumble`: the feet stagger toward the lean to get back under the body (moveStep adds it to the walk)
+    const st = L > B.stumble && this.grounded ? (L - B.stumble) * B.stagger : 0;
+    this.stumbleX = st ? (this.leanX / L) * st : 0; this.stumbleZ = st ? (this.leanZ / L) * st : 0;
+    if (st > 0.8 && this.now > this.stumbleSnd) { this.stumbleSnd = this.now + 0.45; G.audio.play('step|mudstep', { pos: this.pos, vol: 0.45, pitch: 1.4 }); }
+    if (canFall && L > B.fall) {
+      const dx = this.leanX / L, dz = this.leanZ / L;
+      this.resetLean();
+      this.startRagdoll(v1.set(dx * 2.5, 0.5, dz * 2.5), true);
       G.audio.play('grunt', { pos: this.pos, vol: 0.8 });
       G.events.push({ type: 'fell', who: this });
     }
   }
+  /** A shove to the balance (hit, throw, landing, punch recoil): `k` ≈ how hard; direction = forward by default. */
+  balanceKick(k: number, dir?: THREE.Vector3) {
+    if (!this.standing) return;
+    const f = dir ?? this.forward, l = Math.hypot(f.x, f.z) || 1;
+    const r = (Math.random() - 0.5) * 0.8;
+    this.leanVX += (f.x / l + r * Math.cos(this.yaw)) * k; this.leanVZ += (f.z / l - r * Math.sin(this.yaw)) * k;
+  }
+  private resetLean() { this.leanX = this.leanZ = this.leanVX = this.leanVZ = this.stumbleX = this.stumbleZ = 0; this.wobble = 0; this.lastVx = this.vel.x; this.lastVz = this.vel.z; this.lastYaw = this.yaw; }
 
-  /** Standing: jab whatever is in front with the hooves, or whack it with the weapon held (counts on Bob's poise). */
+  /**
+   * The hit lands: hoof punch (standing), headbutt (four legs), weapon whack, or a bash with whatever is held.
+   * Counts on Bob's poise, knocks pigs / critters / props, scares wolves.
+   */
   private punchHit() {
     const f = this.forward;
-    const wpn = this.held ? weaponOf(this.held) : 0, reach = PIG.punchRange + (wpn ? 0.6 : 0);
-    const hx = this.pos.x + f.x * (wpn ? 0.95 : 0.7), hz = this.pos.z + f.z * (wpn ? 0.95 : 0.7), hy = this.pos.y + 0.3;
+    const h = this.held, wpn = h ? weaponOf(h) : 0, butt = !this.standing && !h;
+    const reach = (butt ? 1.0 : PIG.punchRange) + (wpn ? 0.6 : h ? 0.3 : 0);
+    const fwd = wpn ? 0.95 : butt ? 0.75 : 0.7;
+    const hx = this.pos.x + f.x * fwd, hz = this.pos.z + f.z * fwd, hy = this.pos.y + (butt ? 0.05 : 0.3);
     const dir = v1.set(f.x, 0.35, f.z).normalize();
+    const k = butt ? PIG.headbutt : h && !wpn ? 0.75 : 1;
     let hit = false;
     const farmer = G.farmer;
     if (farmer && Math.hypot(farmer.pos.x - hx, farmer.pos.z - hz) < reach && Math.abs(farmer.pos.y + 1 - hy) < 1.4) {
-      if (wpn) { farmer.whacked?.(dir, wpn); this.weaponHit(); } else farmer.punched?.(dir);
+      if (wpn) { farmer.whacked?.(dir, wpn); this.weaponHit(); } else farmer.punched?.(dir, k);
       hit = true;
     }
-    for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < reach * 0.9) { w.knock(v2.copy(dir).multiplyScalar(wpn ? 9 : 6)); hit = true; }
-    for (const h of G.holdables) {
-      if (h === this || h === this.held || h.heldBy) continue;
-      const p = h.body.translation();
-      if (Math.hypot(p.x - hx, p.z - hz) - h.radius > 0.55 || Math.abs(p.y - hy) > 1) continue;
-      const dv = Math.min(7, 160 / Math.max(h.mass, 4));
-      if (h.knock) h.knock(v2.copy(dir).multiplyScalar(dv), h.kind === 'pig');
-      else h.body.applyImpulse(v2.copy(dir).multiplyScalar(dv * h.mass), true);
+    for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < reach * 0.9) { w.knock(v2.copy(dir).multiplyScalar(wpn ? 9 : 6 * k)); hit = true; }
+    for (const o of G.holdables) {
+      if (o === this || o === h || o.heldBy) continue;
+      const p = o.body.translation();
+      if (Math.hypot(p.x - hx, p.z - hz) - o.radius > 0.55 || Math.abs(p.y - hy) > 1) continue;
+      const dv = Math.min(7, (160 * k) / Math.max(o.mass, 4));
+      if (o.knock) o.knock(v2.copy(dir).multiplyScalar(dv), o.kind === 'pig');
+      else o.body.applyImpulse(v2.copy(dir).multiplyScalar(dv * o.mass), true);
       hit = true;
     }
     if (hit) {
-      G.audio.play(wpn ? 'metal' : 'punch|body', { pos: this.pos, vol: wpn ? 1 : 0.9, pitch: wpn ? 0.9 : 1 });
+      G.audio.play(wpn ? 'metal' : h ? (h.kind === 'prop' ? 'wood|thud' : 'body') : 'punch|body', { pos: this.pos, vol: wpn ? 1 : 0.9, pitch: wpn ? 0.9 : butt ? 0.85 : 1 });
       G.fx.bits(v1.set(hx, hy + 0.3, hz), { count: 8, color: 0xfff1a8, speed: 3, up: 1.5, life: 0.35, size: 0.12, grow: 0, drag: 3, alpha: 1 });
       G.shakeFor(this, 0.2);
       G.noise(this.pos, 10);
-    } else G.audio.play('whoosh', { pos: this.pos, vol: 0.4 });
+    }
   }
 
   private finishStep(dt: number) {
@@ -345,7 +401,8 @@ export class Pig implements Holdable {
     const dvy = lv.y - (this.setVel.y - 20 * dt);
     const side = Math.hypot(dvx, dvz);
     const k = this.standing ? 0.6 : 1;           // two legs: easier to knock over
-    if (this.standing && dvy > 6) this.wobble += dvy * 0.06;   // hard landing on two legs
+    if (this.standing && dvy > 5) this.balanceKick(dvy * 0.12);   // hard landing on two legs
+    if (this.standing && side > 4 && this.now > this.bumpT) { this.bumpT = this.now + 0.5; this.balanceKick(side * 0.3, v2.set(dvx, 0, dvz)); }   // shoved
     if (side > PIG.hitSpeed * k || dvy > PIG.landSpeed * (this.standing ? 0.75 : 1) || dvy < -PIG.hitSpeed * k) {
       this.startRagdoll(v1.set(dvx, Math.max(dvy, 0), dvz), true);
       return;
@@ -370,7 +427,7 @@ export class Pig implements Holdable {
     const p = this.body.translation();
     if (this.standing) this.body.setTranslation({ x: p.x, y: p.y + 0.36, z: p.z }, true);
     this.setShape(this.standing ? 'two' : 'four');
-    this.wobble = this.standing ? 0.15 : 0; this.lastYaw = this.yaw;
+    this.resetLean(); if (this.standing) this.balanceKick(0.6, v2.set(-this.forward.x, 0, -this.forward.z));   // rocks back as it gets up
     G.audio.play('grunt', { pos: this.pos, vol: 0.5, pitch: this.standing ? 1.15 : 0.9 });
   }
 
@@ -576,32 +633,42 @@ export class Pig implements Holdable {
     this.hostTakes(0.3);
   }
 
-  // ------------------------------------------------------------------ grab / carry / throw
+  // ------------------------------------------------------------------ grab / carry / throw / hit
+  /**
+   * RMB: grab what's in front / drop what you hold. LMB: a click hits (hoof punch standing, headbutt on four legs,
+   * whack with a weapon, bash with whatever else you hold); held down with something in your mouth / hooves = wind up
+   * and throw it on release.
+   */
   private grabStep(inp: PigInput) {
-    if (inp.grabP) {
-      if (this.held) this.chargeStart = this.now;
-      else if (this.mode === 'normal') {
-        const t = this.findGrabTarget();
-        if (t) this.grab(t);
-        else if (this.standing && this.now - this.punchAt > PIG.punchCd && !this.cageLatchNear()) { this.punchAt = this.now; this.punched = false; this.wobble += 0.06; }
-      }
+    if (inp.grabP && this.mode === 'normal') {
+      if (this.held) this.release(false);
+      else if (!this.cageLatchNear()) { const t = this.findGrabTarget(); if (t) this.grab(t); }
     }
-    if (inp.grabR && this.held && this.chargeStart >= 0) {
-      const c = this.charge();
+    if (inp.attackP && this.mode === 'normal') {
+      if (this.held) this.chargeStart = this.now;
+      else this.startHit();
+    }
+    if (inp.attackR && this.held && this.chargeStart >= 0) {
+      const quick = this.now - this.chargeStart < PIG.clickTime, c = this.charge();
       this.chargeStart = -1;
-      // standing with a weapon: a click swings it (hold = throw as usual)
-      if (this.standing && weaponOf(this.held) && c < 0.3) {
-        if (this.now - this.punchAt > PIG.punchCd) { this.punchAt = this.now; this.punched = false; this.wobble += 0.08; G.audio.play('whoosh', { pos: this.pos, vol: 0.6, pitch: 0.8 }); }
-        return;
-      }
+      if (quick) this.startHit();
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
-      if (this.held.mass > this.liftMax) this.throwHeld(c);
+      else if (this.held.mass > this.liftMax) this.throwHeld(c);
       else { this.swingT = 0; this.swingC = c; }
     }
     if (this.swingT >= 0) {
       if (!this.held) this.swingT = -1;
       else if ((this.swingT += 1 / 60) >= PIG.swing) { this.swingT = -1; this.throwHeld(this.swingC); }
     }
+  }
+  /** Start a hit (lands a moment later in `punchHit`). */
+  private startHit() {
+    if (this.now - this.punchAt < PIG.punchCd) return;
+    this.punchAt = this.now; this.punched = false;
+    const wpn = this.held ? weaponOf(this.held) : 0;
+    if (this.standing) this.balanceKick(0.5 + (wpn ? 0.4 : 0));
+    else if (!this.held) { const f = this.forward; this.vel.x += f.x * 3; this.vel.z += f.z * 3; }   // headbutt lunge
+    G.audio.play('whoosh', { pos: this.pos, vol: wpn ? 0.6 : 0.35, pitch: wpn ? 0.8 : 1.3 });
   }
   /** A weapon wears out on Bob's head: after a few hits it breaks (gone until the next round). */
   private weaponHit() {
@@ -616,8 +683,9 @@ export class Pig implements Holdable {
     G.fx.bits(at, { count: 14, color: 0xc9c2b8, speed: 4, up: 3, life: 0.6, size: 0.12, grow: 0, drag: 2, alpha: 1 });
     G.events.push({ type: 'weaponBroke', who: this, text: h.label });
   }
-  private cageLatchNear() { const c = this.cage ?? G.cage; return !!c && !c.open && Math.hypot(this.pos.x - c.latch.x, this.pos.z - c.latch.z) < 1.3; }
-  charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart) / 0.9, 0, 1); }
+  /** At the cage latch: RMB opens the lock-pick puzzle there (game.ts), so the pig doesn't grab. */
+  private cageLatchNear() { const c = this.cage ?? G.cage; return !!c && c.canPick(this); }
+  charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - PIG.clickTime) / 0.9, 0, 1); }
 
   findGrabTarget(): Holdable | null {
     let best: Holdable | null = null, bestScore = Infinity;
@@ -673,7 +741,7 @@ export class Pig implements Holdable {
     h.body.setAngvel({ x: av.x + (Math.random() - 0.5) * 4, y: av.y + (Math.random() - 0.5) * 4, z: av.z + (Math.random() - 0.5) * 4 }, true);
     if (h.kind === 'pig') (h as Pig).parts.matchVelocity();
     G.audio.play('throw|whoosh', { pos: this.pos, vol: 0.4 + c * 0.6, pitch: 1.2 - c * 0.4 });
-    if (this.standing) this.wobble += 0.12 + c * 0.15;
+    if (this.standing) this.balanceKick(0.6 + c * 0.9);
     G.noise(this.pos, 6 + c * 8);
   }
 
@@ -689,7 +757,8 @@ export class Pig implements Holdable {
     if (this.swingT >= 0) {
       const k = clamp(this.swingT / PIG.swing, 0, 1);
       out.lerpVectors(g.hold, g.wind, this.swingC).lerp(g.rel, k * k * (3 - 2 * k));
-    } else out.lerpVectors(g.hold, g.wind, this.held && this.held.mass > this.liftMax ? 0 : this.charge());
+    } else if (this.punchT > 0) out.lerpVectors(g.hold, g.rel, Math.sin(this.punchT * Math.PI) * 1.2);   // bash / whack with it
+    else out.lerpVectors(g.hold, g.wind, this.held && this.held.mass > this.liftMax ? 0 : this.charge());
     return this.gripTarget(out, out);
   }
 
@@ -737,12 +806,12 @@ export class Pig implements Holdable {
     n.push(MODES.indexOf(this.mode), SHAPES.indexOf(this.shape),
       (this.grounded ? 1 : 0) | (this.standing ? 2 : 0) | (this.out ? 4 : 0) | (this.outReason === 'wolf' ? 8 : 0) | (this.absent ? 16 : 0) | (this.cage ? 32 : 0) | (this.now < this.ctlUntil ? 64 : 0),
       this.vel.x, this.vel.y, this.vel.z, this.yaw, this.sprintUntil, this.sprintReady, this.fartReady, this.muddyUntil, this.burntUntil,
-      this.punchAt, this.chargeStart, this.outUntil === Infinity ? -1 : this.outUntil, this.grillAt, this.wobble, this.turnRate, this.escape,
+      this.punchAt, this.chargeStart, this.outUntil === Infinity ? -1 : this.outUntil, this.grillAt, this.wobble, this.leanX, this.escape,
       this.heldBy ? this.escapeNeed() : 0, holdableIndex(this.held), carrierCode(this.heldBy));
     this.parts.netState(n);
     const hp = this.grip.pos, r = this.body.rotation(), bp = this.body.translation();
     const hl = this.held ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w).invert()) : v1.set(0, 0, 0);
-    n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000);
+    n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000, this.leanZ);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -776,7 +845,8 @@ export class Pig implements Holdable {
     }
     this.muddyUntil = n[10]; this.burntUntil = n[11];
     this.punchAt = n[12]; this.chargeStart = n[13]; this.outUntil = n[14] < 0 ? Infinity : n[14]; this.grillAt = n[15];
-    this.wobble = n[16]; this.turnRate = n[17]; this.escape = n[18]; this.netNeed = n[19];
+    if (!pred) { this.wobble = n[16]; this.leanX = n[17]; this.leanZ = n[40] ?? 0; }
+    this.escape = n[18]; this.netNeed = n[19];
     this.held = holdableFrom(n[20]);
     if (this.held) this.held.heldBy = this;
     this.parts.netApply(n, 22);
@@ -843,6 +913,7 @@ export class Pig implements Holdable {
       if (inp.wallow) this.predWallow = Math.max(this.predWallow, this.now + 0.15);
       this.vel.x *= 0.8; this.vel.z *= 0.8;
     } else this.moveStep(inp, dt);
+    if (this.standing) this.balanceStep(dt, false); else if (this.wobble || this.leanX || this.leanZ) this.resetLean();   // the host decides falls
     this.body.setLinvel(this.vel, true);
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
     // what I hold isn't simulated here: don't bump into it
@@ -886,7 +957,8 @@ export class Pig implements Holdable {
       limp, rel: this.relQ, hand,
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
-      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, turn: this.turnRate,
+      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT,
+      leanF: this.leanX * Math.sin(this.yaw) + this.leanZ * Math.cos(this.yaw), leanS: this.leanX * Math.cos(this.yaw) - this.leanZ * Math.sin(this.yaw),
     });
     // dust while sprinting, mud drips
     if (this.sprinting && this.grounded && Math.random() < dt * 30)

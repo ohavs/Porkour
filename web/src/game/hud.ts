@@ -43,7 +43,7 @@ export class Hud {
 
   constructor() {
     const box = document.getElementById('abilities')!;
-    const defs: [string, string][] = [['grab', 'key.lmb'], ['sprint', 'key.shift'], ['fart', 'Q'], ['wallow', 'C'], ['stand', 'E']];
+    const defs: [string, string][] = [['grab', 'key.rmb'], ['sprint', 'key.shift'], ['fart', 'Q'], ['wallow', 'C'], ['stand', 'E']];
     for (const [id, key] of defs) {
       const el = document.createElement('div'); el.className = 'ab';
       el.innerHTML = `<div class="cd"></div><div class="lbl txt"></div>${ICONS[id]}<div class="key" data-k="${key}"></div>`;
@@ -54,6 +54,8 @@ export class Hud {
     document.getElementById('bMenu')!.insertAdjacentHTML('afterbegin', SVG.menu);
     this.renderHelp();
     onLang(() => this.renderHelp());
+    // hidden on the title screen (it covered the logo); shown when the game starts (flashHelp)
+    this.showHelp = false; this.help.classList.add('hide');
   }
 
   /** Controls card: shown at the start (and on H), fades out by itself. */
@@ -68,7 +70,7 @@ export class Hud {
     const row = (k: string, a: Key) => `<div class="row"><kbd>${k}</kbd><span>${t(a)}</span></div>`;
     this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
-      row(t('key.lmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
+      row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
       row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') +
       `<div class="tip">${t('help.tip1')}<br>${t('help.tip2')}<br>${t('help.tip3')}</div><div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
@@ -173,7 +175,8 @@ export class Hud {
     });
   }
 
-  update(pig: Pig, fps: number) {
+  /** `goal`: where a prank wants the thing you hold (shown instead of the stash hint). */
+  update(pig: Pig, fps: number, goal = '') {
     this.ring('sprint', pig.readiness('sprint'), pig.sprinting);
     this.ring('fart', pig.readiness('fart'));
     this.ring('wallow', 1, pig.mode === 'wallow');
@@ -181,7 +184,7 @@ export class Hud {
     this.ring('grab', 1, !!pig.held);
     this.updateClock();
     const K = (k: string) => `<b>${k}</b>`;
-    const keys = { space: K(t('key.space')), lmb: K(t('key.lmb')), q: K('Q') };
+    const keys = { space: K(t('key.space')), lmb: K(t('key.lmb')), rmb: K(t('key.rmb')), q: K('Q') };
     // prompt
     let p = '';
     if (pig.out) p = pig.outReason === 'wolf' ? t('p.dragged', { n: Math.ceil(pig.outUntil - pig.now) })
@@ -190,22 +193,18 @@ export class Hud {
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'wolf') p = t('p.wolfGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
     else if (pig.mode === 'ragdoll') p = t('p.ragdoll', keys);
     else if (pig.mode === 'held') p = t('p.held', keys);
-    else if (pig.cage) p = t('p.caged', keys);
+    else if (pig.cage) p = G.cage?.canPick(pig) ? t('p.pickLock', keys) : t('p.caged', keys);
     else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
       + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
-      + (val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
+      + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
+    else if (G.cage?.canPick(pig)) p = t('p.pickLock', keys);
     else {
       const tg = pig.findGrabTarget();
       if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') + val(tg) });
       else if (pig.standing && pig.wobble > 0.55) p = `<span style="color:#ffb38a">${t('p.wobbly')}</span>`;
       else if (pig.standing) p = `<span style="opacity:.75">${t('p.punch', keys)}</span>`;
     }
-    let c = pig.charge();
-    const cage = pig.cage ?? G.cage;
-    if (cage && !cage.open && cage.progress > 0 && pig.pos.distanceTo(cage.latch) < 2) {
-      c = cage.progress;
-      if (!pig.cage) p = t('p.opening');
-    }
+    const c = pig.charge();
     this.prompt.innerHTML = p;
     this.charge.style.opacity = c > 0 ? '1' : '0';
     this.chargeBar.style.width = `${c * 100}%`;

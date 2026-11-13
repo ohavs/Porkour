@@ -11,13 +11,13 @@ const v1 = new THREE.Vector3();
 
 /**
  * Bob's pig cage next to his BBQ grill. Caught pigs are locked inside; the grill heats up (90 s) and then… grilled.
- * Opens when a pig outside holds LMB at the latch, when a caged pig picks the lock (slow), or when it's rammed.
+ * Opens when a pig picks the lock (puzzle, from outside or — harder — from inside) or when it's rammed.
  */
 export class Cage {
   root = new THREE.Group();
   door = new THREE.Group();
   open = false;
-  /** Latch progress 0..1 (pigs holding LMB at the door). */
+  /** (unused since the lock-pick puzzle; kept in the snapshot layout) */
   progress = 0;
   pigs: Pig[] = [];
   /** Where Bob stands to put a pig in (outside the door), the inside drop point, the latch. */
@@ -26,7 +26,6 @@ export class Cage {
   private doorAngle = 0;
   private fwd: THREE.Vector3;
   private smokeT = 0;
-  private lastPick = 0;
 
   constructor(scene: THREE.Scene, public center: THREE.Vector3, public yaw: number) {
     this.root.position.copy(center); this.root.rotation.y = yaw; scene.add(this.root);
@@ -125,22 +124,29 @@ export class Cage {
     pig.enterCage(this, G.time + ADMIN.bbqTime);
   }
 
+  /** Close enough to the latch to pick it (from outside, or from inside the cage). */
+  canPick(p: Pig, slack = 0) {
+    if (this.open || p.out || p.heldBy || p.mode !== 'normal') return false;
+    return Math.hypot(p.pos.x - this.latch.x, p.pos.z - this.latch.z) < (this.pigs.includes(p) ? 1.55 : 1.45) + slack;
+  }
+  /** Lock-pick puzzle settings for this pig: from inside = more pins, faster; standing = steadier hooves; mud = slippery (inside). */
+  pickOpts(p: Pig) {
+    const inside = this.pigs.includes(p);
+    return {
+      pins: inside ? 6 : 4,
+      zone: (inside ? 0.12 : 0.16) * (p.standing ? 1.45 : 1) * (inside && p.muddy > 0 ? 1.3 : 1),
+      speed: inside ? 1.7 : 1.4,
+    };
+  }
+
   update(dt: number, pigs: Pig[]) {
-    // latch: pigs outside hold LMB near it (fast); caged pigs pick the lock from inside (slow)
-    let rate = 0;
-    if (!this.open) {
-      for (const p of pigs) {
-        if (!p.input.grab || p.mode !== 'normal' || p.out) continue;
-        const d = Math.hypot(p.pos.x - this.latch.x, p.pos.z - this.latch.z);
-        if (d > 1.25) continue;
-        // hooves work better: standing pigs pick / open the latch twice as fast
-        rate = Math.max(rate, (this.pigs.includes(p) ? (p.muddy > 0 ? 1 / 6 : 1 / 9) : 1 / 1.1) * (p.standing ? 2 : 1));
+    // the latch: a lock-pick puzzle on the player's screen; the result arrives as an input press
+    if (!this.open) for (const p of pigs) {
+      if (p.input.pickFailP) {
+        G.audio.play('metal', { pos: this.latch, vol: 1, pitch: 1.5 });
+        G.noise(this.latch, 14);
       }
-      if (rate > 0) {
-        this.progress += rate * dt;
-        if (G.time - this.lastPick > 0.35) { this.lastPick = G.time; G.audio.play('unlock', { pos: this.latch, vol: 0.3, pitch: 1.6, rand: 0.3 }); }
-        if (this.progress >= 1) this.setOpen(true, 'latch');
-      } else this.progress = Math.max(0, this.progress - dt * 0.05);
+      if (p.input.pickP && this.canPick(p, 0.8)) { this.setOpen(true, 'latch'); break; }
     }
     // keep caged pigs inside (ragdolls can squeeze through bars)
     if (!this.open) for (const p of this.pigs) if (!this.contains(p.pos, 0.3) && !p.heldBy) {

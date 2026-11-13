@@ -29,8 +29,8 @@ export interface NetEnt {
 
 const T = { SNAP: 1, INPUT: 2, KEYREQ: 3, PING: 5, PONG: 6 } as const;
 export const SNAP_EVERY = 2;          // fixed steps per snapshot (60 Hz sim → 30 Hz snapshots)
-const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab'] as const;
-const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP'] as const;
+const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab', 'attack'] as const;
+const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 
 export function entities(game: Game): NetEnt[] {
   return [...game.pigs, game.farmer!, game.farm.cage, game.round, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];

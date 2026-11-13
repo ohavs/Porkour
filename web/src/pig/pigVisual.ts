@@ -16,7 +16,9 @@ export interface PigPose {
   speed: number; grounded: boolean; vy: number; standing: boolean; mode: string;
   sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number; burnt?: number;
   /** 0..1 how close a standing pig is to falling over; punch 0..1 (jab progress). */
-  wobble?: number; punch?: number; turn?: number;
+  wobble?: number; punch?: number;
+  /** Standing balance lean (radians): forward / sideways (+ = toward the pig's left), from the physics. */
+  leanF?: number; leanS?: number;
   /** Limp (ragdoll / carried): `rel` = physical rotations of head, frontL, frontR, hindL, hindR relative to the torso. */
   limp?: boolean; rel?: THREE.Quaternion[];
   /** Grip hand position (model space) while holding something: the head (four legs) or the arms (standing) reach for it. */
@@ -38,7 +40,7 @@ export class PigVisual {
   private animParts: THREE.Object3D[] = [];
   private phase = 0; private standT = 0; private rollT = 0; private squash = 0;
   private lastGrounded = true; private blinkAt = 2;
-  private wob = 0; private limpT = 0;
+  private limpT = 0; private lf = 0; private ls = 0;
   centerHeight = 0.36;
   outfit: Outfit = defaultOutfit();
 
@@ -79,17 +81,22 @@ export class PigVisual {
     const breath = Math.sin(p.t * 2.6) * 0.018;
     this.base.scale.set(1 + this.squash * 0.6 - stretch * 0.5, 1 - this.squash + stretch + breath, 1 + this.squash * 0.3);
 
-    // wobble on two legs: sway the whole pig around its feet, more when close to falling
+    // balance on two legs: the whole pig leans around its feet exactly as the physics lean says (smoothed a touch:
+    // the sim runs at 60 Hz). The pivot is at the feet: sway sits at foot level, roll / base are lifted back up.
     const w = clamp(p.wobble ?? 0, 0, 1);
-    this.wob = damp(this.wob, sT * (0.05 + w * 0.3), 6, dt);
-    this.sway.rotation.z = Math.sin(p.t * (3 + w * 6)) * this.wob + (p.turn ?? 0) * 0.12 * sT;
-    this.sway.rotation.x = Math.sin(p.t * 2.3 + 1) * this.wob * 0.6;
+    this.lf = damp(this.lf, (p.leanF ?? 0) * sT, 30, dt); this.ls = damp(this.ls, (p.leanS ?? 0) * sT, 30, dt);
+    this.sway.position.y = -this.centerHeight;
+    this.sway.rotation.x = this.lf;
+    this.sway.rotation.z = -this.ls;
 
     // hinge
     R.upper.position.lerpVectors(PIVOT, STAND_POS, sT);
     R.upper.rotation.x = -STAND_ANGLE * sT + (moving ? Math.sin(this.phase * 2) * 0.04 * amp : 0) + (p.punch ? Math.sin(p.punch * Math.PI) * 0.15 * sT : 0);
     R.upper.rotation.z = moving ? Math.sin(this.phase) * 0.06 * amp * (sT * 2 + 0.6) : 0;
     this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0);
+    // headbutt (four legs): the body lunges, the head ducks and rams
+    const butt = p.punch && sT < 0.5 && !p.holding ? Math.sin(clamp(p.punch, 0, 1) * Math.PI) : 0;
+    if (butt) { R.upper.position.z += butt * 0.22; R.upper.rotation.x += butt * 0.18; }
 
     // legs
     const flail = p.mode === 'ragdoll' || p.mode === 'held' || (p.mode === 'wallow' && this.rollT > 0.5);
@@ -119,7 +126,7 @@ export class PigVisual {
     R.hindL.position.x = 0.2 * (1 + sT * 0.15); R.hindR.position.x = -0.2 * (1 + sT * 0.15);
 
     // head: looks ahead when standing; reaches for what it holds (four legs)
-    _q.setFromEuler(_e.set(HEAD_TILT * sT, 0, 0));
+    _q.setFromEuler(_e.set(HEAD_TILT * sT + butt * 0.55, 0, 0));
     if (p.hand && !flail) {
       R.upper.updateMatrix();
       _p.copy(p.hand).applyMatrix4(_m.copy(R.upper.matrix).invert());      // hand in the upper body's space
@@ -156,9 +163,9 @@ export class PigVisual {
     const blink = this.blinkAt - p.t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = flail ? 0.25 : damp(e.scale.y, blink, 30, dt);
 
-    // wallow: roll onto the back
+    // wallow: roll onto the back (around the body's middle, not the feet)
     this.roll.rotation.z = this.rollT * Math.PI * (1 + Math.sin(p.t * 9) * 0.04 * this.rollT);
-    this.roll.position.y = this.rollT * 0.12;
+    this.roll.position.y = this.centerHeight + this.rollT * 0.12;
 
     // outfit animation
     for (const a of this.animParts) {
