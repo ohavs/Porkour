@@ -24,7 +24,7 @@ export interface LimbDef {
   flail: { x: number; y: number; z: number; speed: number; phase: number };
 }
 
-interface Part { def: LimbDef; body: RAPIER.RigidBody; col: RAPIER.Collider; joint: RAPIER.ImpulseJoint }
+interface Part { def: LimbDef; body: RAPIER.RigidBody; col: RAPIER.Collider; joint: RAPIER.ImpulseJoint | null }
 
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion(), q4 = new THREE.Quaternion();
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
@@ -54,28 +54,40 @@ export class Ragdoll {
         .setCanSleep(false).setGravityScale(0).setLinearDamping(0.4).setAngularDamping(1.2));
       const col = world.createCollider(def.shape().setMass(def.mass).setFriction(0.8).setRestitution(0.1)
         .setCollisionGroups(groups(L.LIMB, 0)), body);
-      this.frame(i, v1, q1);
-      const a2 = v2.copy(def.joint).sub(def.center);
-      const joint = world.createImpulseJoint(RAPIER.JointData.spherical({ x: v1.x, y: v1.y, z: v1.z }, { x: a2.x, y: a2.y, z: a2.z }), torso, body, true);
-      joint.setContactsEnabled(false);
-      this.parts.push({ def, body, col, joint });
+      this.parts.push({ def, body, col, joint: null });
+      void i;
     });
     this.netRel = defs.map(() => new THREE.Quaternion());
     this.setLive(false);
   }
 
-  /** Parts only exist in the simulation while limp (in control, the visual animates them: no cost). */
+  /**
+   * Parts only exist in the simulation while limp (in control, the visual animates them: no cost). Their joints exist
+   * only then too: a joint to a switched-off body would pin the torso in place.
+   */
   private setLive(on: boolean) {
     on = on && this.enabled;
     if (on === this.live) return;
     this.live = on;
-    for (const p of this.parts) p.body.setEnabled(on);
+    this.parts.forEach((p, i) => {
+      if (on) {
+        p.body.setEnabled(true);
+        this.frame(i, v1, q1);
+        const a2 = v2.copy(p.def.joint).sub(p.def.center);
+        p.joint = world.createImpulseJoint(RAPIER.JointData.spherical({ x: v1.x, y: v1.y, z: v1.z }, { x: a2.x, y: a2.y, z: a2.z }), this.torso, p.body, true);
+        p.joint.setContactsEnabled(false);
+      } else {
+        if (p.joint) world.removeImpulseJoint(p.joint, true);
+        p.joint = null;
+        p.body.setEnabled(false);
+      }
+    });
     if (on) this.snap();
   }
 
   /** The torso's collider / pose changed: move the joint anchors. */
   refresh() {
-    this.parts.forEach((p, i) => { this.frame(i, v1, q1); p.joint.setAnchor1({ x: v1.x, y: v1.y, z: v1.z }); });
+    this.parts.forEach((p, i) => { if (!p.joint) return; this.frame(i, v1, q1); p.joint.setAnchor1({ x: v1.x, y: v1.y, z: v1.z }); });
   }
 
   setEnabled(on: boolean) {
@@ -113,9 +125,10 @@ export class Ragdoll {
     const tq = q1.set(r.x, r.y, r.z, r.w);
     const lv = this.torso.linvel(), av = this.torso.angvel();
     // a teleport (respawn, cage, carried too far) leaves the parts behind: bring them along
-    for (const p of this.parts) {
-      const a = p.joint.anchor1(), b = p.body.translation();
-      v2.set(a.x, a.y, a.z).applyQuaternion(tq).add(tp);
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i], b = p.body.translation();
+      this.frame(i, v2, q2);
+      v2.applyQuaternion(tq).add(tp);
       if (v2.distanceToSquared(b as THREE.Vector3) > 1) { this.snap(); break; }
     }
     // limp: muscle tone pulls (weakly) toward a flailing pose; soft joint limits stop limbs folding through the body

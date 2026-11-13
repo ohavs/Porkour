@@ -23,6 +23,9 @@ export const emptyInput = (): PigInput => ({
   jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false,
 });
 
+/** Where a player's own copy of their pig is (sent with the controls, host follows it). */
+export interface RemotePose { x: number; y: number; z: number; vx: number; vy: number; vz: number; yaw: number; at: number }
+
 /** Tuning (all pigs are equal). */
 export const PIG = {
   mass: 30, walk: 4.8, standWalk: 3.5, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
@@ -91,6 +94,12 @@ export class Pig implements Holdable {
   private swingT = -1; private swingC = 0; private strainT = 0;
   /** Just thrown: it may still overlap us for a moment (no collision, doesn't count as a hit). */
   private thrown: { h: Holdable; until: number } | null = null;
+  /** Online, host: the player's own simulation of this pig (pose it reports); host control window (knocks, rams…). */
+  remote: RemotePose | null = null; ctlUntil = 0;
+  /** Online, player: this is my pig and I move it myself right away (client-side prediction). */
+  predicting = false;
+  private predFart = 0; private predSprint = 0; private predSprintUntil = 0; private predWallow = 0; private standDiff = 0;
+  private predIgnore: Holdable | null = null;
   /** Player side: hand position (torso space) from the host. */
   private netHand = new THREE.Vector3(); private netHasHand = false;
   label: string;
@@ -210,7 +219,17 @@ export class Pig implements Holdable {
       return;
     }
 
-    // --- move
+    this.moveStep(inp, dt);
+    this.follow(dt);
+
+    if (this.sprinting) this.ramStep();
+    if (this.standing) this.balanceStep(dt); else this.wobble = Math.max(0, this.wobble - dt * 2);
+    if (this.punchAt > 0 && !this.punched && this.now - this.punchAt > 0.12) { this.punched = true; this.punchHit(); }
+    this.finishStep(dt);
+  }
+
+  /** Walk / sprint / jump / facing from the controls (host, solo, and the player's own prediction). */
+  private moveStep(inp: PigInput, dt: number) {
     let mx = inp.mx, mz = inp.mz;
     const moving = mx * mx + mz * mz > 0.01;
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
@@ -237,11 +256,23 @@ export class Pig implements Holdable {
     // short hop when jump released early
     if (this.ownJump && !inp.jump && this.vel.y > 2) this.vel.y -= 40 * dt;
 
-    if (this.sprinting) this.ramStep();
-    if (this.standing) this.balanceStep(dt); else this.wobble = Math.max(0, this.wobble - dt * 2);
-    if (this.punchAt > 0 && !this.punched && this.now - this.punchAt > 0.12) { this.punched = true; this.punchHit(); }
-    this.finishStep(dt);
   }
+
+  /** Host: a player moves their own pig on their machine (no input lag); here it follows the pose they report. */
+  private follow(dt: number) {
+    const r = this.remote;
+    if (!r || G.net !== 'host' || this.now - r.at > 0.3 || this.now < this.ctlUntil || this.mode !== 'normal') return;
+    const age = clamp(this.now - r.at, 0, 0.1);
+    const ex = r.x + r.vx * age - this.pos.x, ey = r.y + r.vy * age - this.pos.y, ez = r.z + r.vz * age - this.pos.z;
+    if (ex * ex + ey * ey + ez * ez > 9) { this.hostTakes(0.3); return; }   // blocked here but not there: resync them
+    // catch up gently (a hard push into something only here would knock the pig over)
+    const cx = ex * 10, cz = ez * 10, cl = Math.hypot(cx, cz), k = cl > 5 ? 5 / cl : 1;
+    this.vel.set(r.vx + cx * k, r.vy + clamp(ey * 10, -6, 6), r.vz + cz * k);
+    this.yaw = r.yaw;
+    void dt;
+  }
+  /** Host: something pushed this pig here (knock, ram, teleport): the host moves it for a moment, the player follows. */
+  hostTakes(secs: number) { this.ctlUntil = Math.max(this.ctlUntil, this.now + secs); }
 
   /** Two legs: turning fast, speeding, landing hard or carrying heavy things builds wobble → falls over. */
   private balanceStep(dt: number) {
@@ -419,7 +450,7 @@ export class Pig implements Holdable {
       if (o.knock) o.knock(dir.multiplyScalar(dv), true);
       else o.body.applyImpulse(dir.multiplyScalar(dv * o.mass), true);
       this.vel.x *= -0.25; this.vel.z *= -0.25; this.vel.y = 3;
-      this.sprintUntil = this.now;
+      this.sprintUntil = this.now; this.hostTakes(0.4);
       G.audio.play('punch|body', { pos: this.pos, vol: 1 });
       G.fx.bits(this.pos, { count: 12, color: 0xffe08a, speed: 4, up: 2, life: 0.5, size: 0.18, grow: 0, drag: 3, alpha: 1 });
       G.shakeFor(this, 0.45);
@@ -441,6 +472,7 @@ export class Pig implements Holdable {
     this.body.setLinvel({ x: lv.x + impulse.x, y: lv.y + impulse.y, z: lv.z + impulse.z }, true);
     this.setVel.set(lv.x + impulse.x, lv.y + impulse.y, lv.z + impulse.z);
     this.parts.matchVelocity();
+    this.hostTakes(0.5);
   }
 
   startRagdoll(hit: THREE.Vector3 | null, sound: boolean) {
@@ -497,6 +529,7 @@ export class Pig implements Holdable {
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x * 0.3, y: 3.5, z: lv.z * 0.3 }, true);
     this.setVel.set(lv.x * 0.3, 3.5, lv.z * 0.3);
+    this.hostTakes(0.25);
   }
 
   // ------------------------------------------------------------------ farmer: caught / caged / grilled
@@ -532,6 +565,7 @@ export class Pig implements Holdable {
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.setVel.set(0, 0, 0);
     this.parts.snap();
+    this.hostTakes(0.3);
   }
 
   // ------------------------------------------------------------------ grab / carry / throw
@@ -675,7 +709,7 @@ export class Pig implements Holdable {
   /** Host → players: everything the visuals and the HUD need (positions travel separately). */
   netState(n: number[]) {
     n.push(MODES.indexOf(this.mode), SHAPES.indexOf(this.shape),
-      (this.grounded ? 1 : 0) | (this.standing ? 2 : 0) | (this.out ? 4 : 0) | (this.outReason === 'wolf' ? 8 : 0) | (this.absent ? 16 : 0) | (this.cage ? 32 : 0),
+      (this.grounded ? 1 : 0) | (this.standing ? 2 : 0) | (this.out ? 4 : 0) | (this.outReason === 'wolf' ? 8 : 0) | (this.absent ? 16 : 0) | (this.cage ? 32 : 0) | (this.now < this.ctlUntil ? 64 : 0),
       this.vel.x, this.vel.y, this.vel.z, this.yaw, this.sprintUntil, this.sprintReady, this.fartReady, this.muddyUntil, this.burntUntil,
       this.punchAt, this.chargeStart, this.outUntil === Infinity ? -1 : this.outUntil, this.grillAt, this.wobble, this.turnRate, this.escape,
       this.heldBy ? this.escapeNeed() : 0, holdableIndex(this.held), carrierCode(this.heldBy));
@@ -686,22 +720,116 @@ export class Pig implements Holdable {
   }
   netApply(n: number[]) {
     if (!n.length) return;
-    this.mode = MODES[n[0]] ?? 'normal';
-    const shape = SHAPES[n[1]] ?? 'four';
-    if (shape !== this.shape) { this.shape = shape; this.visual.centerHeight = CENTER[shape]; }
     const f = n[2];
-    this.grounded = !!(f & 1); this.standing = !!(f & 2); this.out = !!(f & 4); this.outReason = f & 8 ? 'wolf' : 'grill'; this.absent = !!(f & 16);
+    const hostMode = MODES[n[0]] ?? 'normal', ctl = !!(f & 64), out = !!(f & 4);
+    this.heldBy = carrierFrom(n[21]);
+    // my own pig: I move it myself (prediction) whenever the host isn't moving it for me (knocked, carried, caged-out…)
+    if (G.net === 'client' && this === G.localPig) {
+      const can = ADMIN.predict && !ctl && !out && !this.heldBy && (hostMode === 'normal' || hostMode === 'wallow');
+      if (can && !this.predicting) this.startPredicting(n);
+      else if (!can) this.predicting = false;
+    } else if (G.net === 'client' && this.body.isEnabled() === out) this.body.setEnabled(!out);
+    const pred = this.predicting;
+    this.mode = hostMode;
+    const shape = SHAPES[n[1]] ?? 'four';
+    if (!pred && shape !== this.shape) { this.shape = shape; this.visual.centerHeight = CENTER[shape]; }
+    this.out = out; this.outReason = f & 8 ? 'wolf' : 'grill'; this.absent = !!(f & 16);
     this.cage = f & 32 ? G.cage : null;
     this.visual.root.visible = !this.out;
-    this.vel.set(n[3], n[4], n[5]); this.yaw = n[6];
-    this.sprintUntil = n[7]; this.sprintReady = n[8]; this.fartReady = n[9]; this.muddyUntil = n[10]; this.burntUntil = n[11];
+    if (!pred) {
+      this.grounded = !!(f & 1); this.standing = !!(f & 2);
+      this.vel.set(n[3], n[4], n[5]); this.yaw = n[6];
+      this.sprintUntil = n[7]; this.sprintReady = n[8]; this.fartReady = n[9];
+    } else {
+      // the host is a little behind me: keep my own timers until its catch up; standing follows it if we disagree for long
+      this.sprintUntil = Math.max(n[7], this.predSprintUntil); this.sprintReady = Math.max(n[8], this.predSprint); this.fartReady = Math.max(n[9], this.predFart);
+      const hostStand = !!(f & 2);
+      if (hostStand === this.standing) this.standDiff = 0;
+      else if (!this.standDiff) this.standDiff = performance.now();
+      else if (performance.now() - this.standDiff > 500) { this.setStanding(hostStand); this.standDiff = 0; }
+    }
+    this.muddyUntil = n[10]; this.burntUntil = n[11];
     this.punchAt = n[12]; this.chargeStart = n[13]; this.outUntil = n[14] < 0 ? Infinity : n[14]; this.grillAt = n[15];
     this.wobble = n[16]; this.turnRate = n[17]; this.escape = n[18]; this.netNeed = n[19];
     this.held = holdableFrom(n[20]);
     if (this.held) this.held.heldBy = this;
-    this.heldBy = carrierFrom(n[21]);
     this.parts.netApply(n, 22);
     this.netHand.set(n[37] ?? 0, n[38] ?? 0, n[39] ?? 0); this.netHasHand = !!this.held;
+  }
+
+  /** Player: take over my pig from the latest snapshot (pose, speed, heading, stance). */
+  private startPredicting(n: number[]) {
+    this.predicting = true;
+    const p = this.synced.currP;
+    this.yaw = n[6]; this.vel.set(n[3], n[4], n[5]);
+    const shape = SHAPES[n[1]] ?? 'four';
+    this.standing = !!(n[2] & 2);
+    this.setShape(shape === 'rag' ? 'four' : shape);
+    this.body.lockRotations(true, true);
+    this.body.setTranslation(p, true);
+    this.body.setLinvel(this.vel, true);
+    this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
+    this.synced.capture(); this.synced.capture();
+    this.predWallow = 0; this.standDiff = 0;
+  }
+
+  /** Stand up / drop to four legs (shape + height), no sound. */
+  private setStanding(on: boolean) {
+    if (on === this.standing) return;
+    this.standing = on;
+    const p = this.body.translation();
+    if (on) this.body.setTranslation({ x: p.x, y: p.y + 0.36, z: p.z }, true);
+    this.setShape(on ? 'two' : 'four');
+    this.lastYaw = this.yaw;
+  }
+
+  /**
+   * Player: one fixed step of my own pig on my machine — movement, jump, sprint, fart launch, stance, wallow — so it
+   * answers my keys at once. The host still runs everything that touches the world (grabs, rams, blasts, Bob…)
+   * and follows where I say my pig is.
+   */
+  predictStep(dt: number) {
+    const inp = this.input;
+    const p = this.body.translation(); this.pos.set(p.x, p.y, p.z);
+    const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
+    this.synced.beforeStep();
+    const hit = raycast(this.pos, DOWN, this.bottom() + 0.16, ~L.FARMER & 0xffff, this.body, (c) => !(this.held && c.parent() === this.held.body));
+    this.grounded = !!hit && hit.normal.y > 0.55;
+    if (hit) this.groundNormal.copy(hit.normal);
+    if (this.grounded) { this.coyote = 0.1; this.ownJump = false; } else this.coyote -= dt;
+    this.jumpBuf = inp.jumpP ? 0.14 : this.jumpBuf - dt;
+    const normal = this.mode === 'normal' && this.now >= this.predWallow;
+    if (inp.standP && normal) this.setStanding(!this.standing);
+    if (inp.sprintP && normal && this.now >= this.sprintReady) {
+      this.sprintUntil = this.predSprintUntil = this.now + PIG.sprintDur; this.sprintReady = this.predSprint = this.now + PIG.sprintCd;
+      this.setStanding(false);
+    }
+    if (inp.fartP && this.now >= this.fartReady && normal) {
+      this.fartReady = this.predFart = this.now + PIG.fartCd;
+      const mvLen = Math.hypot(inp.mx, inp.mz), f = this.forward;
+      const dir = mvLen > 0.1 ? v2.set(inp.mx / mvLen, 0, inp.mz / mvLen) : v2.copy(f);
+      this.vel.y = Math.max(this.vel.y, this.grounded ? PIG.fartUp : PIG.fartUp * 0.85);
+      this.vel.x += dir.x * PIG.fartFwd; this.vel.z += dir.z * PIG.fartFwd;
+      this.ownJump = false;
+    }
+    if (inp.wallowP && normal && this.grounded) { this.predWallow = this.now + PIG.wallowDur; this.setStanding(false); }
+    if (this.mode === 'wallow' || this.now < this.predWallow) {
+      if (inp.wallow) this.predWallow = Math.max(this.predWallow, this.now + 0.15);
+      this.vel.x *= 0.8; this.vel.z *= 0.8;
+    } else this.moveStep(inp, dt);
+    this.body.setLinvel(this.vel, true);
+    this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
+    // what I hold isn't simulated here: don't bump into it
+    if (this.held !== this.predIgnore) {
+      if (this.predIgnore) ignorePair(this.body, this.predIgnore.body, false);
+      if (this.held) ignorePair(this.body, this.held.body, true);
+      this.predIgnore = this.held;
+    }
+  }
+  /** Player: my pose for the host (it follows it). */
+  pose(): number[] {
+    const p = this.body.translation(), v = this.body.linvel();
+    return [p.x, p.y, p.z, v.x, v.y, v.z, this.yaw];
   }
   netPose(p: THREE.Vector3) { this.pos.copy(p); }
 

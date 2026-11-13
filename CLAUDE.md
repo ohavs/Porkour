@@ -54,7 +54,13 @@ Dead by Daylight, Party Animals.
   interpolation (adaptive to jitter). Every synced class has `netState(n, s)` / `netApply(n, s)` (+ `netPose`); entity order
   = `entities()` (pigs, Bob, cage, critters, props); wolves by `netId`. Host records sounds / fx / shakes / `G.events` made
   inside fixed steps (`G.rec`, `installRecorders`) and players replay them; `G.shakeFor(pig, amt)` for per-player shakes;
-  `G.mute` drops local side effects while applying. Transport (`online.ts`): WebRTC data channel host↔player (P2P,
+  `G.mute` drops local side effects while applying. **Client-side prediction** (`ADMIN.predict`): the player's own pig
+  is simulated on their machine (`Pig.predictStep`: move / jump / sprint / fart launch / stance / wallow; `Game.predict`
+  steps the client world where every other body is kinematic, placed from snapshots) and its pose rides along with the
+  inputs; the host's copy follows it (`Pig.follow`, capped catch-up). Anything that pushes the pig on the host (knock,
+  ram, respawn, ragdoll, carried, divergence > 3 m) → `hostTakes()` window (netState flag 64): the player stops predicting,
+  shows the host's pig, then resumes from the latest snapshot. What I hold is drawn relative to my predicted pig (`carryAlong`).
+  Transport (`online.ts`): WebRTC data channel host↔player (P2P,
   STUN only) with fallback through the server relay. Server `server/server.js` (Node, `ws` + `jose`): Google ID-token
   verification or guest, rooms (4-letter code, public list, quick play, kick, chat, outfit/name), relay; `render.yaml`
   (Render free). Lobby UI `lobby.ts`; Google Identity Services in `auth.ts`; addresses in `config.ts` (`BUILT_IN_SERVER`,
@@ -112,8 +118,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    onrender.com, so it can't be reached from here).
 5. 🟡 **M4.5 Real physics (2026-11-13)**: ✅ pigs (parts, joint grab, swing throw, pig grabs pig by the scruff), ✅ Bob
    (ragdoll knock-down, carries pigs dangling from his hands, real shakes), ✅ animals (limp head + legs when tumbling / held),
-   ✅ wolves drag pigs by a jaw joint. Left: wolves' own ragdoll, Bob stagger as physics, **client-side prediction** of your
-   own pig online (next).
+   ✅ wolves drag pigs by a jaw joint, ✅ client-side prediction of your own pig online. Left (later): wolves' own ragdoll,
+   Bob stagger as physics, grabs predicted on the player's side (held things still answer at host speed).
 6. **M5** loot / missions / round loop / weapons; then alert levels, dog helper, traps, modifiers, more farms, shop.
 
 ## Status / next step
@@ -126,12 +132,16 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   User feedback: don't base designs on Nice-Crash (a few-prompts game) — take inspiration from real games.
 - 2026-11-13: M4.5 physics built & checked headless (pigs / Bob / wolf / hen, online part sync). Admin → Physics buttons:
   knock me over, bring a crate / pig, Bob carries me, knock Bob down. Ask the user how grabbing / throwing / ragdolls feel.
-  **Next: client-side prediction** (own pig rendered from local input, reconciled with host snapshots), then M5.
+  2026-11-13: client-side prediction built & checked headless (2 browsers, 150 ms fake lag: own pig answers in 2 frames,
+  host copy within 0.1–0.4 m, knock → host takes over → resumes). **Next: M5** (loot / missions / round loop). Ask the user
+  how online feels now (admin → "Move my pig right away" switches prediction off to compare).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
 - Untested: guard mode (2 caged), fist (unreachable pig). Bob's HUD marker sits low while he lies ragdolled (pos = torso).
-- Sim cost +20–35 % vs before M4.5 (grip hands / joints); parts cost nothing while in control.
+- Sim cost +20–35 % vs before M4.5 (grip hands / joints); parts cost nothing while in control (bodies + joints off).
+- Prediction: the player's pig collides with others where the snapshot shows them (~100 ms in the past); own jump / fart
+  sounds come from the host (late); my-side ram / grab / punch effects still wait for the host.
 - Never tested on a real GPU: FPS with ~9 lamp lights + grass density 16/m² (high), shadows, outline thickness.
 - Bob's mower parking collider is not in the nav grid (Bob can bump into it; the stuck logic copes).

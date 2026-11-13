@@ -166,7 +166,7 @@ const en = {
   'net.err.notfound': 'No room with that code.', 'net.err.full': 'That room is full (4 pigs).', 'net.err.closed': 'The host closed the room.',
   'net.err.kicked': 'You were removed from the room.', 'net.err.hello': 'Connection problem, try again.', 'net.err.version': 'Refresh the page (F5).',
   'a.online': 'Online',
-  'a.netLag': 'Fake lag (ms)',
+  'a.netLag': 'Fake lag (ms)', 'a.predict': 'Move my pig right away (prediction)',
 } as const;
 
 export type Key = keyof typeof en;
@@ -320,7 +320,7 @@ const es: Record<Key, string> = {
   'net.err.notfound': 'No hay ninguna sala con ese código.', 'net.err.full': 'Esa sala está llena (4 cerdos).', 'net.err.closed': 'El anfitrión cerró la sala.',
   'net.err.kicked': 'Te sacaron de la sala.', 'net.err.hello': 'Problema de conexión, inténtalo de nuevo.', 'net.err.version': 'Recarga la página (F5).',
   'a.online': 'En línea',
-  'a.netLag': 'Retraso simulado (ms)',
+  'a.netLag': 'Retraso simulado (ms)', 'a.predict': 'Mover mi cerdo al instante (predicción)',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

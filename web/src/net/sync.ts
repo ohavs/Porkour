@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER from '@dimforge/rapier3d-compat';
 import type { Synced } from '../core/synced';
 import { G, ADMIN } from '../game/ctx';
-import { emptyInput, type PigInput } from '../pig/pig';
+import { emptyInput, type PigInput, type RemotePose } from '../pig/pig';
 import type { Game } from '../game/game';
 import type { Online } from './online';
 import { Writer, Reader } from './codec';
@@ -37,10 +37,10 @@ export function entities(game: Game): NetEnt[] {
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
-const v1 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), qq = new THREE.Quaternion();
 
 // ====================================================================== host
-interface Remote { inp: PigInput; presses: number; seq: number }
+interface Remote { inp: PigInput; presses: number; seq: number; pose: RemotePose | null }
 
 export class NetHost {
   private ents: NetEnt[];
@@ -74,6 +74,11 @@ export class NetHost {
     }
     return null;
   }
+  /** Where that player says their own pig is (client-side prediction), or null. */
+  poseFor(slot: number): RemotePose | null {
+    for (const [id, r] of this.remote) if (this.on.peers.get(id)?.slot === slot) return r.pose;
+    return null;
+  }
   dropPeer(id: number) { this.remote.delete(id); this.needKey.delete(id); }
 
   private onData(from: number, u8: Uint8Array) {
@@ -84,13 +89,18 @@ export class NetHost {
     if (type !== T.INPUT) return;
     const seq = r.u32();
     let rm = this.remote.get(from);
-    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1 }; this.remote.set(from, rm); }
+    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1, pose: null }; this.remote.set(from, rm); }
     if (seq <= rm.seq) return;
     rm.seq = seq;
     const inp = rm.inp;
     inp.mx = r.i8() / 127; inp.mz = r.i8() / 127; inp.yaw = r.f32(); inp.pitch = r.f32();
     const held = r.u8r(); HELD.forEach((k, i) => (inp[k] = !!(held & (1 << i))));
     rm.presses |= r.u16();
+    if (r.left >= 28) {   // their own pig's pose (they move it themselves)
+      const pose = rm.pose ?? (rm.pose = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, at: 0 });
+      pose.x = r.f32(); pose.y = r.f32(); pose.z = r.f32(); pose.vx = r.f32(); pose.vy = r.f32(); pose.vz = r.f32(); pose.yaw = r.f32();
+      pose.at = G.time;
+    } else rm.pose = null;
   }
 
   beginStep() { G.rec = this.rec; this.evStart = G.events.length; }
@@ -210,8 +220,13 @@ export class NetClient {
   onFirstFrame?: () => void;
   private pingT = 0;
 
+  /** Interpolated snapshot position of my own pig (to carry what I hold along with my predicted pig). */
+  ownSnap = new THREE.Vector3();
+
   constructor(private game: Game, private on: Online) {
     this.ents = entities(game);
+    // here only my own pig is simulated (prediction): everything else is placed from snapshots
+    for (const e of this.ents) if (e.body && e !== (game.local as unknown as NetEnt)) e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
     on.onData = (from, u8) => { if (from === on.hostId) this.onData(u8); };
     on.onDirect = () => {};
     installRecorders();
@@ -283,17 +298,18 @@ export class NetClient {
   }
 
   /** Every rendered frame: send controls (latched presses, ~30 Hz or at once on a press). */
-  sendInput(inp: PigInput) {
+  sendInput(inp: PigInput, pose: number[] | null = null) {
     PRESS.forEach((k, i) => { if (inp[k]) this.pending |= 1 << i; });
     let held = 0; HELD.forEach((k, i) => { if (inp[k]) held |= 1 << i; });
     const mx = Math.round(inp.mx * 127), mz = Math.round(inp.mz * 127);
     const sig = `${mx},${mz},${held},${inp.yaw.toFixed(2)}`;
     const now = performance.now();
-    if (!this.pending && sig === this.lastSig && now - this.lastSend < 100) return;
-    if (!this.pending && now - this.lastSend < 30) return;
+    if (!this.pending && !pose && sig === this.lastSig && now - this.lastSend < 100) return;
+    if (!this.pending && now - this.lastSend < (pose ? 33 : 30)) return;
     this.lastSend = now; this.lastSig = sig;
     const w = new Writer();
     w.u8w(T.INPUT).u32(++this.inputSeq).i8(mx).i8(mz).f32(inp.yaw).f32(inp.pitch).u8w(held).u16(this.pending);
+    if (pose) for (const x of pose) w.f32(x);
     this.pending = 0;
     this.on.sendData(this.on.hostId, w.bytes());
     if (now - this.pingT > 2000) { this.pingT = now; const p = new Writer(); p.u8w(T.PING).f64(now); this.on.sendData(this.on.hostId, p.bytes()); }
@@ -317,14 +333,17 @@ export class NetClient {
     G.hour = h; G.day = A.day; G.grills = A.grills; ADMIN.bob = A.bob;
     G.mute = true;
     try {
+      const me = this.game.local as unknown as NetEnt;
       this.ents.forEach((e, i) => {
-        if (e.synced) {
+        if (e === me) this.ownSnap.lerpVectors(v1.set(A.p[i * 3], A.p[i * 3 + 1], A.p[i * 3 + 2]), v2.set(B.p[i * 3], B.p[i * 3 + 1], B.p[i * 3 + 2]), alpha);
+        if (e.synced && !(e === me && this.game.local.predicting)) {
           const s = e.synced;
           s.prevP.set(A.p[i * 3], A.p[i * 3 + 1], A.p[i * 3 + 2]); s.currP.set(B.p[i * 3], B.p[i * 3 + 1], B.p[i * 3 + 2]);
           s.prevQ.set(A.q[i * 4], A.q[i * 4 + 1], A.q[i * 4 + 2], A.q[i * 4 + 3]).normalize();
           s.currQ.set(B.q[i * 4], B.q[i * 4 + 1], B.q[i * 4 + 2], B.q[i * 4 + 3]).normalize();
           s.pos(alpha, v1);
           e.body?.setTranslation(v1, false);
+          if (e.body && e !== me) e.body.setRotation(s.rot(alpha, qq), false);
           e.netPose?.(v1);
         }
         e.netApply?.(A.n[i], A.s[i], B.n[i], alpha);
@@ -340,7 +359,7 @@ export class NetClient {
     pack.wolves = pack.wolves.filter((w) => w.active); G.wolves = pack.wolves;
     for (const [id, a] of A.wolves) {
       let w = pack.wolves.find((x) => x.netId === id);
-      if (!w) w = pack.spawnAt(new THREE.Vector3(a.p[0], a.p[1], a.p[2]), id);
+      if (!w) { w = pack.spawnAt(new THREE.Vector3(a.p[0], a.p[1], a.p[2]), id); w.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); }
       const b = B.wolves.get(id) ?? a, s = w.synced;
       s.prevP.set(a.p[0], a.p[1], a.p[2]); s.currP.set(b.p[0], b.p[1], b.p[2]);
       s.prevQ.set(a.q[0], a.q[1], a.q[2], a.q[3]).normalize(); s.currQ.set(b.q[0], b.q[1], b.q[2], b.q[3]).normalize();
