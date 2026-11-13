@@ -111,10 +111,10 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       t.noGrass(r); blocked.push({ x0: r.x0 - 2, x1: r.x1 + 2, z0: r.z0 - 2, z1: r.z1 + 2 });
       return o;
     };
-    const decor = (model: string, x: number, z: number, o: { height?: number; scale?: number; yaw?: number; collide?: 'box' | 'trunk' | false } = {}) => {
+    const decor = (model: string, x: number, z: number, o: { height?: number; scale?: number; yaw?: number; collide?: 'box' | 'trunk' | false; sink?: number } = {}) => {
       if (!has(model)) return null;
       const m = fitted(model, { height: o.height, scale: o.scale });
-      m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = o.yaw ?? 0;
+      m.position.set(x, y(x, z) - 0.02 - (o.sink ?? 0), z); m.rotation.y = o.yaw ?? 0;
       scene.add(m); out.statics.push(m);
       const s = sizeOf(m);
       if (o.collide === 'box') staticBox(V3(x, y(x, z) + s.y / 2, z), V3(s.x / 2, s.y / 2, s.z / 2), o.yaw ?? 0);
@@ -191,8 +191,10 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       const z = -63.5 + i * 2.1;
       for (let x = -48; x < -32; x += 2) {
         decor('kenney/crops_dirtRow', x + 1, z, { scale: 2, yaw: Math.PI / 2 });
-        const crop = ['kenney/crop_carrot', 'kenney/crop_turnip', 'kenney/crop_pumpkin', 'kenney/crop_melon', 'kenney/crops_wheatStageB', 'kenney/crop_carrot'][i];
-        decor(crop, x + 1, z, { scale: 2 });
+        // Quaternius Ultimate Crops (carrot / beet roots sit in the soil)
+        const [crop, sc, sink] = ([['crops/Carrot_4', 1.5, 0.9], ['crops/Lettuce_4', 1.2, 0.04], ['crops/Tomato_4', 1.5, 0],
+          ['crops/Beet_4', 1.5, 0.45], ['crops/BushBerries_4', 0.85, 0], ['crops/Watermelon_4', 1.15, 0.22]] as const)[i];
+        decor(crop, x + 1 + rng.range(-0.15, 0.15), z, { scale: sc, sink, yaw: rng.range(0, 6.28) });
       }
     }
     // corn field
@@ -224,6 +226,14 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (const [x, z] of [[-39, 6], [-40.5, 7], [-38, 7.6]] as const) prop('log', x, z);
     prop('wheel', -12, 6, 0.4);
     prop('sword', 36, -84);
+    // valuables (M5 loot): Bob's porch, the picnic table, the BBQ, the barn, the garage, the garden
+    prop('chest', -14.2, -30.4, 2.4); prop('chalice', -15.6, -30.0); prop('necklace', -12.8, -31.6);
+    prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.1, -47.7, 0.3, 0.84);
+    prop('crown', -39.9, -45.3, 0.6);
+    prop('gold', -10.8, -49.5, 0.3);
+    prop('gasCan', 7.6, 11.6); prop('propane', -2.6, -29.6, 0); prop('pan', -4.2, -29.2);
+    prop('firstAid', 4.5, 7.2); prop('backpack', -3.5, 7.4);
+    prop('shovel', -23.8, -59.5, 1.2); prop('trashcan', -13.2, -26.8, 0);
     for (let i = 0; i < 4; i++) prop('crate', 34 + (i % 2) * 1.05, -84 + Math.floor(i / 2) * 1.05, 0);
 
     // ---------------------------------------------------------------- animals
@@ -231,8 +241,10 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (let i = 0; i < 6; i++) critter('hen', rng.range(18, 28), rng.range(-30, -20), 4.5);
     for (let i = 0; i < 4; i++) critter('chick', rng.range(19, 27), rng.range(-29, -21), 3);
     for (const c of out.critters) c.roost = coop;
-    for (let i = 0; i < 4; i++) critter('cow', rng.range(28, 46), rng.range(-70, -56), 9);
+    for (let i = 0; i < 3; i++) critter('cow', rng.range(28, 46), rng.range(-70, -56), 9);
+    critter('horse', 40, -62, 8); critter('horse2', 33, -67, 8); critter('donkey', 46, -57, 5);
     for (let i = 0; i < 5; i++) critter('sheep', rng.range(-60, -52), rng.range(-50, -36), 5);
+    critter('alpaca', -56, -40, 4);
     critter('dog', -16, -30, 5);
     critter('cat', -4, 6, 6); critter('cat', -20, -36, 4);
     critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6); critter('bunny', 12, -76, 5);

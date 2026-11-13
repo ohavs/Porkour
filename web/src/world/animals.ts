@@ -5,7 +5,8 @@ import { Ragdoll, type LimbDef, type Tone } from '../core/ragdoll';
 import type { AnimalRig } from './animalModels';
 import { G, type Holdable } from '../game/ctx';
 import { dampAngle, Rng } from '../core/util';
-import { AnimalVisual, type AnimalKind } from './animalModels';
+import { type AnimalKind } from './animalModels';
+import { animalVisual, GlbAnimalVisual, type AnyAnimalVisual } from './animalGlb';
 import { carrierCode, carrierFrom } from '../net/refs';
 
 export interface CritterDef {
@@ -19,7 +20,11 @@ export const CRITTERS: Record<string, CritterDef> = {
   dog: { kind: 'dog', mass: 16, speed: 2.6, flee: 0, radius: 0.28, label: 'item.dog', sound: 'bark', soundEvery: 30 },
   cat: { kind: 'cat', mass: 4, speed: 2.2, flee: 4, radius: 0.18, label: 'item.cat', sound: 'meow', soundEvery: 40 },
   bunny: { kind: 'bunny', mass: 2, speed: 2.6, flee: 5, radius: 0.16, label: 'item.bunny' },
-  sheep: { kind: 'sheep', mass: 45, speed: 1.1, flee: 3, radius: 0.4, label: 'item.lamb' },
+  sheep: { kind: 'sheep', mass: 45, speed: 1.1, flee: 3, radius: 0.4, label: 'item.lamb', sound: 'baa', soundEvery: 25 },
+  horse: { kind: 'horse', mass: 450, speed: 1.3, flee: 0, radius: 0.5, label: 'item.horse', sound: 'neigh', soundEvery: 35 },
+  horse2: { kind: 'horse2', mass: 450, speed: 1.3, flee: 0, radius: 0.5, label: 'item.horse', sound: 'neigh', soundEvery: 35 },
+  donkey: { kind: 'donkey', mass: 200, speed: 1.0, flee: 0, radius: 0.42, label: 'item.donkey', sound: 'bray', soundEvery: 40 },
+  alpaca: { kind: 'alpaca', mass: 70, speed: 1.0, flee: 2.5, radius: 0.36, label: 'item.alpaca', sound: 'llama', soundEvery: 45 },
   duck: { kind: 'duck', mass: 2, speed: 1.2, flee: 4, radius: 0.16, label: 'item.duck', sound: 'cluck', soundEvery: 18, scared: 'squawk' },
 };
 
@@ -55,7 +60,7 @@ export class Critter implements Holdable {
   body: RAPIER.RigidBody;
   mass: number; radius: number;
   synced: Synced;
-  visual: AnimalVisual;
+  visual: AnyAnimalVisual;
   /** Head + legs as real bodies: limp (flailing) when tumbling or dangling from a grip. */
   parts: Ragdoll;
   private relQ: THREE.Quaternion[];
@@ -74,7 +79,7 @@ export class Critter implements Holdable {
   roost?: THREE.Vector3;
 
   constructor(scene: THREE.Scene, public def: CritterDef, at: THREE.Vector3, public home: { x: number; z: number; r: number }) {
-    this.visual = new AnimalVisual(def.kind);
+    this.visual = animalVisual(def.kind);
     this.height = this.visual.rig.height;
     scene.add(this.visual.root);
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + this.height / 2 + 0.05, at.z)
@@ -88,11 +93,24 @@ export class Critter implements Holdable {
     this.label = def.label;
     this.synced = new Synced(this.body);
     this.visual.root.updateMatrixWorld(true);
-    const limbs = animalLimbs(this.visual.rig, def.mass), hh = this.height / 2;
+    const limbs = this.visual instanceof GlbAnimalVisual ? this.visual.limbs(def.mass) : animalLimbs(this.visual.rig, def.mass), hh = this.height / 2;
     this.parts = new Ragdoll(this.body, limbs, at, (i, anchor, rest) => { anchor.copy(limbs[i].joint).setY(limbs[i].joint.y - hh); rest.identity(); });
     this.relQ = limbs.map(() => new THREE.Quaternion());
+    // goofy: floppy when tumbling, flails wildly when held
+    this.parts.toneK.ragdoll = 0.03; this.parts.flailK.ragdoll = 0.8; this.parts.flailK.carried = 1.3;
     this.target.copy(at);
+    this.spawnAt = at.clone();
     if (def.mass <= 40) G.holdables.push(this);
+  }
+  private spawnAt: THREE.Vector3;
+  /** New round: back home on its feet. */
+  reset() {
+    if (this.heldBy) this.heldBy.release?.(false);
+    const a = this.spawnAt;
+    this.body.setTranslation({ x: a.x, y: a.y + this.height / 2 + 0.05, z: a.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
+    this.parts.snap(); this.synced.capture(); this.synced.capture();
   }
 
   get pos() { return this.synced.currP; }
@@ -108,7 +126,7 @@ export class Critter implements Holdable {
     this.tumble();
     if (this.def.scared) G.audio.play(this.def.scared, { pos: v1.copy(this.synced.currP), vol: 0.8, minGap: 0.3 });
   }
-  private tumble(dur = 1.6, spin = 8) {
+  private tumble(dur = 2.2, spin = 9) {
     this.tumbleUntil = G.time + dur;
     this.body.lockRotations(false, true);
     this.body.setAngvel({ x: rng.range(-spin, spin), y: rng.range(-spin / 2, spin / 2), z: rng.range(-spin, spin) }, true);
@@ -125,7 +143,8 @@ export class Critter implements Holdable {
     for (const w of G.wolves) {
       if (!w.active) continue;
       const d = Math.hypot(p.x - w.pos.x, p.z - w.pos.z);
-      const r = this.def.kind === 'dog' ? 0 : this.def.kind === 'cow' ? 5 : 9;
+      const big = this.def.mass > 150;
+      const r = this.def.kind === 'dog' ? 0 : big ? 5 : 9;
       if (d < r && d < bd) { bd = d; best = w.pos; }
     }
     return best;
@@ -189,7 +208,7 @@ export class Critter implements Holdable {
     this.soundT -= dt;
     if (this.soundT <= 0 && this.def.sound) {
       this.soundT = (this.def.soundEvery ?? 20) * rng.range(0.6, 1.6);
-      if (!(night && this.def.kind !== 'cow')) G.audio.play(this.def.sound, { pos: v1.set(p.x, p.y, p.z), vol: this.def.kind === 'cow' ? 0.8 : 0.5, rand: 0.1 });
+      if (!(night && this.def.mass < 150)) G.audio.play(this.def.sound, { pos: v1.set(p.x, p.y, p.z), vol: this.def.mass > 150 ? 0.8 : 0.5, rand: 0.1 });
     }
   }
 
@@ -221,10 +240,10 @@ export class Critter implements Holdable {
 
 /** Static decor animal (no physics): idles, looks around, eats. */
 export class DecorAnimal {
-  visual: AnimalVisual;
+  visual: AnyAnimalVisual;
   private eatT = rng.range(0, 5);
   constructor(scene: THREE.Scene, kind: AnimalKind, at: THREE.Vector3, yaw: number, scale = 1) {
-    this.visual = new AnimalVisual(kind);
+    this.visual = animalVisual(kind);
     this.visual.root.position.copy(at); this.visual.root.rotation.y = yaw; this.visual.root.scale.setScalar(scale);
     scene.add(this.visual.root);
   }

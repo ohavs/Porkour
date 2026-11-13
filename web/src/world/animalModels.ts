@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { rigidSkin } from '../render/batch';
+import { googly } from '../render/googly';
 import { toonMat } from '../render/toon';
 import { damp, clamp } from '../core/util';
 
@@ -8,7 +9,7 @@ import { damp, clamp } from '../core/util';
  * Each builder returns a rig; AnimalVisual animates it procedurally (walk / run / hop / peck / wag / flap / tumble).
  * Animals face +z, origin on the ground between the feet.
  */
-export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck';
+export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck' | 'horse' | 'horse2' | 'donkey' | 'alpaca';
 
 export interface AnimalRig {
   kind: AnimalKind;
@@ -36,6 +37,7 @@ function group(parent: THREE.Object3D, p: V) { const g = new THREE.Group(); g.po
 /** Cartoon eye: white, pupil, highlight. */
 function eye(parent: THREE.Object3D, p: V, r: number, s = 1, iris = 0x1b1010, white = 0xffffff) {
   const e = group(parent, p);
+  e.userData.r = r;
   mesh(small, white, [0, 0, 0], e, [r, r * 1.1, r * 0.75]);
   mesh(small, iris, [s * -r * 0.08, -r * 0.05, r * 0.55], e, [r * 0.6, r * 0.66, r * 0.4]);
   const hl = mesh(small, 0xffffff, [s * r * 0.15, r * 0.3, r * 0.9], e, [r * 0.2, r * 0.2, r * 0.15]); hl.castShadow = false;
@@ -200,7 +202,7 @@ function quad(kind: 'cow' | 'dog' | 'cat' | 'wolf' | 'sheep' | 'bunny', root: TH
 
 export function buildAnimal(kind: AnimalKind, root: THREE.Group): AnimalRig {
   if (kind === 'hen' || kind === 'chick' || kind === 'duck') return bird(kind, root);
-  return quad(kind, root);
+  return quad(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' ? 'cow' : kind, root);
 }
 
 export interface AnimalPose {
@@ -217,7 +219,20 @@ export class AnimalVisual {
   private blinkAt = Math.random() * 3;
   private peck = 0;
   private limpT = 0;
-  constructor(public kind: AnimalKind) { this.rig = buildAnimal(kind, this.root); rigidSkin(this.root); }
+  constructor(public kind: AnimalKind) {
+    this.rig = buildAnimal(kind, this.root);
+    // goofy: the drawn eyes become googly eyes (pupils slide around, see render/googly.ts)
+    const gl = googly();
+    if (gl) for (const e of this.rig.eyes) {
+      const r = e.userData.r as number | undefined; if (!r) continue;
+      for (const c of [...e.children]) e.remove(c);
+      const a = new THREE.Object3D(); e.add(a);
+      a.position.z = r * 0.15;
+      a.rotation.set(-0.15, (Math.sign(e.position.x) || 1) * 0.45, 0);
+      gl.add(a, r * 1.3);
+    }
+    rigidSkin(this.root);
+  }
 
   update(p: AnimalPose) {
     const R = this.rig, dt = p.dt;

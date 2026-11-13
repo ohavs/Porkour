@@ -22,8 +22,9 @@ Dead by Daylight, Party Animals.
   placeholders. Sources = open-source games on GitHub (see Assets). Missing ones → listed in `web/sfx_user/README.md` for the user.
 - Admin mode (user request): `` ` `` key / menu button / `?admin=1` — keep it updated with test switches for new features.
 - Quality bar: "not embarrassing next to popular Steam games" — use many free technologies / assets; no "AI slop" look.
-- Look (user feedback): **cartoon, not realistic**; pigs **round, fat, long**; animals must not look like Roblox (Cube Pets were
-  replaced by procedural round animals); the level = **one fenced farm compound**. Standing on 2 legs must be worth it and wobbly.
+- Look (user feedback): **cartoon, not realistic**; pigs **round, fat, long**; animals must not look like Roblox; the level =
+  **one fenced farm compound**. Standing on 2 legs must be worth it and wobbly. **Animals + characters as goofy / ragdolly as
+  possible** (user 2026-11-13): big heads, googly eyes, floppy ragdolls. Buildings / props may be colourful and from any pack.
 - Claude CAN run the game here: `cd web && npx vite build && npx vite preview --port 4173`, then headless Chromium via Playwright
   (`--use-angle=swiftshader`, `?auto=1&q=low`; software GL ≈ 10 fps so the sim runs slower than real time — wait on
   `window.__G.time`, not wall time). Test hooks: `window.__game` (`scripted` input override, `cam`, `local`, `pigs`, `farmer`,
@@ -82,9 +83,10 @@ Dead by Daylight, Party Animals.
 - Assets: `web/tools/fetch_assets.sh` (models, idempotent) + `web/tools/fetch_sounds.sh` (audio) fetch from GitHub mirrors
   (asset websites are blocked from the sandbox, GitHub is not) into `web/public/assets/` (committed). Models: Kenney
   `ETdoFresh/kenney.nl`, KayKit `KayKit-Game-Assets/*` (Restaurant, Adventurers, Skeletons, Halloween), Quaternius
-  `tilakpatell/tilakverse-assets`, repo art (Quaternius Farm Buildings FBX → GLB via `fbx2gltf`, Medieval kit) via `gltf-transform`.
+  `tilakpatell/tilakverse-assets` + `trebeljahr/quaternius-showcase` (GLBs: animals, RPG items, Survival, Ultimate Crops, house
+  interior, weapons, buildings… — check it first for new content; `chibifire-stages/quaternius-stage` has every pack as .usda), repo art (Quaternius Farm Buildings FBX → GLB via `fbx2gltf`, Medieval kit) via `gltf-transform`.
   KayKit hats / capes are cut out of the character GLBs by `tools/extract_nodes.mjs`. Sounds: VoxeLibre (CC0 / MIT), 0 A.D.
-  (CC BY-SA 3.0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), user's own
+  (CC BY-SA 3.0), horse / donkey / sheep (VoxeLibre, CC BY 3.0 / CC0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), user's own
   farts + music (`Assets/Audio`). Credits: `public/assets/sfx/CREDITS.md`. User drop-ins: `web/sfx_user/` → `fetch_sounds.sh`.
 
 ## Structure (`web/src`)
@@ -104,6 +106,8 @@ Dead by Daylight, Party Animals.
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
+| `world/animalGlb.ts`, `render/googly.ts` | Pack animals (Quaternius Ultimate Animated Animals: cow, dog = Shiba, wolf, 2 horses, donkey, alpaca): one vertex-coloured SkinnedMesh each, mixer clips, neck + upper legs = ragdoll parts, goofy (`GLB_ANIMALS`: head scale, eye size, recolours). Googly eyes for every animal = 2 InstancedMeshes (pupils slide with gravity / inertia). |
+| `game/round.ts` | **M5 round**: stash pit in the sty (loot dropped there is banked: `Prop.value`, hidden, synced), quota (400 + 200 / extra player; solo = you only), 2 required + 2 bonus pranks from a pool, escape phase (all pigs to the stash), timer (`ADMIN.roundMins`, 10), 3 grills = busted, results (stars, coins → `SETTINGS.coins/xp`), `Game.restartRound()` resets the farm. Synced as an entity (`entities()` after the cage). |
 | `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. |
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
 | `world/cage.ts` | Bob's cage + BBQ (`ADMIN.bbqTime`, default 90 s); latch (standing ×2), ram bursts the door. |
@@ -133,7 +137,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    (ragdoll knock-down, carries pigs dangling from his hands, real shakes), ✅ animals (limp head + legs when tumbling / held),
    ✅ wolves drag pigs by a jaw joint, ✅ client-side prediction of your own pig online. Left (later): wolves' own ragdoll,
    Bob stagger as physics, grabs predicted on the player's side (held things still answer at host speed).
-6. **M5** loot / missions / round loop / weapons; then alert levels, dog helper, traps, modifiers, more farms, shop.
+6. 🟡 **M5 (2026-11-13)**: ✅ loot + stash + missions + round loop + results (coins saved). Left: weapons, Bob tidies loot back,
+   more pranks; then alert levels, dog helper, traps, modifiers, more farms, shop (coins are already saved).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -153,7 +158,17 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   from ready-made packs (any close style is fine); animals, Bob, mower and other code-built models look "not invested" —
   replace later, not all at once. Options given: CC0 rigged+animated packs (Quaternius / KayKit / Kenney via GitHub
   mirrors), an AI text/image-to-3D API (Meshy / Tripo: user makes an account, key via `request_credential`, never chat),
-  or Blender (`bpy`) modelling in the sandbox with rendered previews. Waiting for the user's choice.
+  or Blender (`bpy`) modelling in the sandbox with rendered previews. **Decided (user 2026-11-13)**: CC0 packs for the
+  environment + animals (Claude does it alone, via GitHub mirrors); **Tripo API** (text/image → 3D, auto-rig, preset
+  animations; new API users reportedly get starter credits) for Bob + pigs. User creates the key in the Tripo Console →
+  next session call `request_credential` (host = Tripo's API host from its docs; Bearer). Keep physics: new models must
+  be split / skinned onto the SAME pivots (pig: head + 4 legs, Bob: head, arms, legs) that `ragdoll.ts` / `grip.ts` drive.
+  Users asked: batching does NOT touch physics (only how the GPU draws; verified knock / Bob knock-down after it).
+- 2026-11-13 (session 2): **goofy pack animals** (Quaternius, big heads, googly eyes — also on hens / sheep / ducks…), real
+  horse / donkey / sheep sounds, **M5 round loop** (tested solo + 2 browsers), garden = Quaternius Ultimate Crops (their corn was
+  too thin → kept Kenney corn). Tripo: user will sign up later → then `request_credential` (Tripo API host, Bearer) and make
+  Bob + pigs **goofy** (big heads / googly-friendly), split onto the same physics pivots. Ask the user: round length (10 min),
+  quota (400 solo), are the pranks fun, should Bob put loot back.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Known issues / TODO
@@ -164,3 +179,6 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   sounds come from the host (late); my-side ram / grab / punch effects still wait for the host.
 - Never tested on a real GPU: real FPS per preset, whether "auto" picks well (GPU-name heuristic), dynamic-resolution feel.
 - Bob's mower parking collider is not in the nav grid (Bob can bump into it; the stuck logic copes).
+- Round: Bob ignores the stash (doesn't take loot back yet); "pumpkin on the well" counts on the well's roof too; solo extra
+  pigs in the sty are idle and don't count. Hens / chicks / ducks / cats / bunnies / sheep are still procedural (no CC0 pack in
+  the same style found) — googly eyes make them match.

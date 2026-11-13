@@ -5,6 +5,9 @@ import type { Audio } from '../core/audio';
 import { Gfx } from '../render/gfx';
 import { Grass } from '../render/grass';
 import { Fx } from '../render/fx';
+import { googly } from '../render/googly';
+import { Round, ROUND } from './round';
+const ROUND_START_HOUR = ROUND.startHour;
 import { buildFarm1, FARM, type FarmBuild } from '../world/farm1';
 import { Farmer } from '../farmer/farmer';
 import { Nav } from '../farmer/nav';
@@ -20,7 +23,7 @@ import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
 import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST } from '../render/quality';
 import { cullDetail } from '../render/batch';
-import { t } from '../i18n';
+import { t, type Key } from '../i18n';
 import { NetHost, NetClient } from '../net/sync';
 import { online, type Peer } from '../net/online';
 import { parseOutfit } from '../pig/cosmetics';
@@ -48,6 +51,7 @@ export class Game {
   /** Frame-rate limit bookkeeping, small-detail draw distance, "lower the graphics" tip shown. */
   private nextDraw = 0; private detailDist = Infinity; private slowTip = false;
   running = false;
+  round!: Round;
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
   scripted: Partial<PigInput> | null = null;
@@ -64,6 +68,7 @@ export class Game {
   build() {
     const scene = this.gfx.scene;
     G.fx = new Fx(scene);
+    googly(scene);
     G.audio = this.audio;
     this.daynight = new DayNight(this.gfx);
     const { terrain, build } = buildFarm1(scene);
@@ -84,6 +89,7 @@ export class Game {
     this.farmer.mower.onMow = (x, z, r) => this.grass.mow(x, z, r);
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
     this.wolves = new WolfPack(scene, this.nav, FARM);
+    this.round = new Round(scene, this, new THREE.Vector3(30, terrain.height(30, 7.5), 7.5));
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
     this.local.yaw = Math.PI;
@@ -143,6 +149,7 @@ export class Game {
   private fixed(withInput: boolean, first = false) {
     const host = this.net instanceof NetHost ? this.net : null;
     host?.beginStep();
+    const ev0 = G.events.length;
     G.time += FIXED;
     this.daynight.tick(FIXED);
     for (const p of this.pigs) p.input = emptyInput();
@@ -173,12 +180,17 @@ export class Game {
       if (p === this.local) this.hud.toast(t('s.clean'), 1.2);
     }
     G.clouds = G.clouds.filter((c) => c.until > G.time);
+    if (G.net !== 'client') {
+      this.round.step(FIXED);
+      for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type);
+    }
     host?.endStep();
     if (this.scripted) { this.scripted.jumpP = this.scripted.fartP = this.scripted.sprintP = this.scripted.wallowP = this.scripted.standP = this.scripted.grabP = this.scripted.grabR = false; }
   }
 
   private handleEvents() {
     for (const e of G.events) {
+      if (G.net !== 'client') this.round.onEvent(e.type);   // usually already seen inside the step; repeats are no-ops
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
       switch (e.type) {
@@ -189,7 +201,6 @@ export class Game {
         case 'cage-open': this.hud.toast(this.local.cage === null && e.why ? t('e.cageOpenRun') : t('e.cageOpen'), 1.6); break;
         case 'grilled':
           this.hud.toast(me ? t('e.grilledMe') : t('e.grilledOther', { who }), 2);
-          if (G.grills >= 3) { this.hud.toast(t('e.bobWins'), 3); G.grills = 0; }
           break;
         case 'knockdown': this.hud.toast(t('e.knockdown'), 1.4); break;
         case 'stagger': this.hud.toast(t('e.stagger'), 1.2); break;
@@ -202,9 +213,32 @@ export class Game {
         case 'wolfScared': break;
         case 'lostToWolf': this.hud.toast(t('e.lostToWolf', { who }), 2); break;
         case 'bobWakes': this.hud.toast(t('e.bobWakes'), 1.6); break;
+        case 'banked': this.hud.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.2, t((e.text ?? '') as Key)); break;
+        case 'missionDone': this.hud.toast(t('e.missionDone'), 2, t((e.text ?? '') as Key, { n: this.round.quota })); break;
+        case 'roundEscape': this.hud.toast(t('e.roundEscape'), 3.5, t('e.roundEscape2')); break;
+        case 'lastMinute': this.hud.toast(t('e.lastMinute'), 2); break;
+        case 'roundEnd': break;
       }
     }
     G.events.length = 0;
+  }
+
+  /** Host / solo: everything back to the start, new mission list. */
+  restartRound() {
+    if (G.net === 'client') return;
+    const cage = this.farm.cage;
+    if (!cage.open) cage.setOpen(true, '');
+    for (const p of this.pigs) { if (p.heldBy) p.heldBy.release?.(false); }
+    this.farmer?.resetRound(this.farm.farmerSpawn);
+    for (const p of this.pigs) if (!p.absent) { if (p.out && !p.absent) p.outUntil = G.time; p.respawn(); }
+    for (const c of this.farm.critters) c.reset();
+    for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
+    this.wolves.clear();
+    this.daynight.setHour(ROUND_START_HOUR);
+    G.grills = 0;
+    cage.setOpen(false);
+    this.round.start();
+    this.hud.toast(t('e.roundStart'), 2.5, t('e.roundStart2'));
   }
 
   /** Admin panel buttons. */
@@ -236,6 +270,10 @@ export class Game {
       case 'night': this.daynight.setHour(21.3); break;
       case 'wolves': for (let i = 0; i < 2; i++) this.wolves.spawn(); break;
       case 'nowolves': this.wolves.clear(); break;
+      case 'roundWin': this.round.finishAll(); break;
+      case 'roundEnd': this.round.end(this.round.missions.every((m) => !m.req || m.done), 'time'); break;
+      case 'loot100': this.round.banked += 100; break;
+      case 'roundNew': this.restartRound(); break;
       case 'tp:sty': tp(30, 6); break;
       case 'tp:cage': tp(cage.front.x + 1.5, cage.front.z + 1.5); break;
       case 'tp:house': tp(this.farm.zones.door.x + 1, this.farm.zones.door.z + 2); break;
@@ -371,6 +409,8 @@ export class Game {
     for (const d of this.farm.decor) d.render(dt);
     for (const w of this.wolves.wolves) w.render(alpha, dt);
     this.farmer?.render(alpha, dt);
+    googly()?.update(dt);
+    this.round.render(dt, this.gfx.camera);
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);

@@ -191,6 +191,8 @@ export class Menu {
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +
       `<div class="grid">${btn('day', 'a.toDay')}${btn('night', 'a.toNight')}${btn('wolves', 'a.wolves')}${btn('nowolves', 'a.noWolves')}</div>` +
       rng('gameSpeed', 'a.gameSpeed', ADMIN.gameSpeed, 0.25, 3, 0.25) +
+      `<div class="sec">${t('a.round')}</div>` + rng('roundMins', 'a.roundMins', ADMIN.roundMins, 1, 20, 1) +
+      `<div class="grid">${btn('roundWin', 'a.roundWin')}${btn('loot100', 'a.loot100')}${btn('roundEnd', 'a.roundEnd')}${btn('roundNew', 'a.roundNew')}</div>` +
       `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>` +
       `<div class="sec">${t('a.teleport')}</div><div class="tp">${(['sty', 'cage', 'house', 'barn', 'pasture'] as const).map((k) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>`;
     this.admin.querySelectorAll<HTMLElement>('[data-tog]').forEach((s) => s.addEventListener('click', (e) => {

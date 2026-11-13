@@ -189,10 +189,10 @@ export class Hud {
     else if (pig.mode === 'ragdoll') p = t('p.ragdoll', keys);
     else if (pig.mode === 'held') p = t('p.held', keys);
     else if (pig.cage) p = t('p.caged', keys);
-    else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>` });
+    else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` }) + (val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
     else {
       const tg = pig.findGrabTarget();
-      if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') });
+      if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') + val(tg) });
       else if (pig.standing && pig.wobble > 0.55) p = `<span style="color:#ffb38a">${t('p.wobbly')}</span>`;
       else if (pig.standing) p = `<span style="opacity:.75">${t('p.punch', keys)}</span>`;
     }
@@ -219,3 +219,6 @@ export class Hud {
     this.fps.textContent = fps ? `${fps | 0} fps` : '';
   }
 }
+
+/** Loot value tag for prompts (M5). */
+function val(h: unknown) { const v = (h as { value?: number }).value ?? 0; return v > 0 ? ` <span class="val"><i class="coin"></i>${v}</span>` : ''; }

@@ -3,7 +3,7 @@
 # Sources (asset sites are blocked from the cloud sandbox, GitHub is not):
 #   Kenney     github.com/ETdoFresh/kenney.nl (mirror of kenney.nl)
 #   KayKit     github.com/KayKit-Game-Assets/*
-#   Quaternius github.com/tilakpatell/tilakverse-assets (Stylized Nature MegaKit, UAL)
+#   Quaternius github.com/tilakpatell/tilakverse-assets (Stylized Nature MegaKit, UAL), github.com/trebeljahr/quaternius-showcase (animals)
 #   repo       ../Assets/Art (Quaternius Farm Buildings FBX, Medieval kit)
 #   KayKit hats / capes are extracted from the character GLBs with tools/extract_nodes.mjs
 # Usage: cd web && bash tools/fetch_assets.sh      (idempotent; output is committed)
@@ -95,6 +95,24 @@ grab nature "$CACHE/quaternius/quaternius/stylized-nature-megakit/glTF" 512 \
   Bush_Common Bush_Common_Flowers Bush_Large Fern_1 Flower_3_Group Flower_4_Group Grass_Wheat \
   Grass_Common_Tall Grass_Wispy_Tall Clover_1 Mushroom_Common Rock_Medium_1 Rock_Medium_2 Rock_Medium_3 \
   Rock_Big_1 Pebble_Round_1 Plant_1_Big
+
+# ---------------------------------------------------------------- Quaternius Ultimate Animated Animals (CC0): skinned + 12 clips
+pack https://github.com/trebeljahr/quaternius-showcase qshow \
+  '/public/glb/animals_pack/' \
+  '/public/glb/crops_pack/Carrot_4.glb' '/public/glb/crops_pack/Lettuce_4.glb' '/public/glb/crops_pack/Tomato_4.glb' '/public/glb/crops_pack/Beet_4.glb' '/public/glb/crops_pack/BushBerries_4.glb' '/public/glb/crops_pack/Watermelon_4.glb' '/public/glb/crops_pack/Pumpkin_4.glb' '/public/glb/crops_pack/Wheat_4.glb' '/public/glb/crops_pack/Flowers_Crop.glb' '/public/glb/crops_pack/Apple_Crop.glb' '/public/glb/crops_pack/Orange_Crop.glb' \
+  '/public/glb/rpg_items_pack/Gold_Ingots.glb' '/public/glb/rpg_items_pack/Chest_Closed.glb' '/public/glb/rpg_items_pack/Crown.glb' '/public/glb/rpg_items_pack/Chalice.glb' '/public/glb/rpg_items_pack/Coin.glb' '/public/glb/rpg_items_pack/Necklace1.glb' \
+  '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb'
+for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
+  d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
+  "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
+done
+
+# loot (Quaternius RPG Items + Survival, CC0)
+grab loot "$CACHE/qshow/public/glb/rpg_items_pack" 256 Gold_Ingots Chest_Closed Crown Chalice Coin Necklace1
+grab loot "$CACHE/qshow/public/glb/survival_pack" 256 Radio Phone GasCan Pan PropaneTank FirstAidKit Backpack Trashcan Shovel
+
+# crops (Quaternius Ultimate Crops, CC0)
+grab crops "$CACHE/qshow/public/glb/crops_pack" 256 Carrot_4 Lettuce_4 Tomato_4 Beet_4 BushBerries_4 Watermelon_4 Pumpkin_4 Wheat_4 Flowers_Crop Apple_Crop Orange_Crop
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)

@@ -8,6 +8,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 |---|---|
 | amb_day.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | amb_farm.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| baa1.ogg | Blender Foundation via VoxeLibre, CC BY 3.0 |
 | bark1.ogg | VoxeLibre mobs_mc, CC0 |
 | bark2.ogg | VoxeLibre mobs_mc, CC0 |
 | bark3.ogg | VoxeLibre mobs_mc, CC0 |
@@ -31,6 +32,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | boot2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | boot3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | boot4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| bray1.ogg | Garuda1982 (freesound 539505) via VoxeLibre, CC BY 3.0 |
+| bray2.ogg | JarredGibb (freesound 233131) via VoxeLibre, CC0 |
 | cluck1.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck2.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck3.ogg | VoxeLibre mobs_mc, CC0 |
@@ -50,6 +53,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | grunt1.ogg | VoxeLibre mobs_mc, CC0 |
 | grunt2.ogg | VoxeLibre mobs_mc, CC0 |
 | howl.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| llama.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | meow.ogg | VoxeLibre mobs_mc, CC0 |
 | metal1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | metal2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
@@ -61,6 +65,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | mudstep2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | mudstep3.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | munch.ogg | VoxeLibre mobs_mc, CC0 |
+| neigh1.ogg | GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0 |
+| neigh2.ogg | ERH (freesound 32043) via VoxeLibre, CC BY 3.0 |
 | night.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | oink1.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | oink2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |

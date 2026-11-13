@@ -3,7 +3,7 @@ import { RAPIER, world, groups, L, owners, HOOKS, ignorePair } from '../core/phy
 import { Synced } from '../core/synced';
 import { G, ADMIN, type Cloud } from '../game/ctx';
 import { clamp, dampAngle, Rng } from '../core/util';
-import { AnimalVisual } from './animalModels';
+import { animalVisual } from './animalGlb';
 import type { Nav } from '../farmer/nav';
 import type { Rect } from './terrain';
 import type { Pig } from '../pig/pig';
@@ -26,7 +26,7 @@ export class Wolf {
   kind = 'wolf' as const;
   body: RAPIER.RigidBody;
   synced: Synced;
-  visual = new AnimalVisual('wolf');
+  visual = animalVisual('wolf');
   pos = new THREE.Vector3();
   vel = new THREE.Vector3();
   yaw = 0;

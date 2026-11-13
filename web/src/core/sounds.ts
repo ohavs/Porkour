@@ -20,7 +20,7 @@ export const SOUND_SETS: Record<string, string[]> = {
   // cage / grill / misc
   unlock: ['unlock'], creak: ['creak'], sizzle: ['sizzle'], crackle: ['crackle'], fanfare: ['fanfare'], coins: ['coins'],
   // animals
-  moo: n('moo', 2), cluck: n('cluck', 3), squawk: ['squawk'], bark: n('bark', 3), growl: n('growl', 4), yelp: n('yelp', 2),
+  moo: n('moo', 2), neigh: n('neigh', 2), bray: n('bray', 2), baa: ['baa1'], llama: ['llama'], cluck: n('cluck', 3), squawk: ['squawk'], bark: n('bark', 3), growl: n('growl', 4), yelp: n('yelp', 2),
   howl: ['howl'], meow: ['meow'], munch: ['munch'],
   // ambience
   rooster: ['rooster'], night: ['night'], cricket: n('cricket', 3), bird: ['bird3', 'bird4', 'bird5'],
