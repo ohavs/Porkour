@@ -13,6 +13,7 @@ import { Lobby } from './net/lobby';
 import { online } from './net/online';
 import { G } from './game/ctx';
 import { GLB_MODELS } from './world/animalGlb';
+import { LOOT_MODELS } from './world/props';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -24,7 +25,7 @@ const MODELS = [
     'post_lantern', 'pumpkin_orange', 'pumpkin_orange_jackolantern'].map((n) => 'kaykit/' + n),
   ...['wizard_hat', 'viking_helmet', 'knight_helmet', 'skull_helmet', 'dark_wizard_hat', 'hood', 'cape_knight', 'cape_mage', 'cape_barbarian', 'cape_rogue'].map((n) => 'cosm/' + n),
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
-  ...GLB_MODELS,
+  ...GLB_MODELS, ...LOOT_MODELS, 'loot/Coin',
 ];
 
 loadSettings();
@@ -74,6 +75,7 @@ async function boot() {
     audio.unlock(); audio.playMusic('music_level');
     input.lock();
     game.running = true;
+    if (G.net !== 'client' && game.round.no === 0) game.round.start();
     game.hud.flashHelp(16);
   };
   // online lobby (title "Play online", invite links ?room=CODE, back from a game ?lobby=1)
@@ -92,7 +94,6 @@ async function boot() {
   go.dataset.i18n = 'title.play'; go.textContent = t('title.play'); go.classList.add('ready');
   go.addEventListener('click', start);
   title.addEventListener('click', (e) => { if (e.target === title || (e.target as HTMLElement).tagName === 'H1') start(); });
-  void G;
   const btns = document.getElementById('titleBtns')!; btns.classList.add('show');
   document.getElementById('tWardrobe')!.addEventListener('click', (e) => { e.stopPropagation(); audio.unlock(); wardrobe.open(); });
   const sel = document.getElementById('tLang') as HTMLSelectElement;

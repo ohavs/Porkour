@@ -99,7 +99,18 @@ export class Critter implements Holdable {
     // goofy: floppy when tumbling, flails wildly when held
     this.parts.toneK.ragdoll = 0.03; this.parts.flailK.ragdoll = 0.8; this.parts.flailK.carried = 1.3;
     this.target.copy(at);
+    this.spawnAt = at.clone();
     if (def.mass <= 40) G.holdables.push(this);
+  }
+  private spawnAt: THREE.Vector3;
+  /** New round: back home on its feet. */
+  reset() {
+    if (this.heldBy) this.heldBy.release?.(false);
+    const a = this.spawnAt;
+    this.body.setTranslation({ x: a.x, y: a.y + this.height / 2 + 0.05, z: a.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
+    this.parts.snap(); this.synced.capture(); this.synced.capture();
   }
 
   get pos() { return this.synced.currP; }

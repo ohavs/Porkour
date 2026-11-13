@@ -170,6 +170,18 @@ export class Farmer {
   private phaseNow(): ChorePhase { const h = G.hour; return h >= 5.5 && h < 20 ? 'day' : h >= 20 && h < 22.5 ? 'evening' : 'night'; }
 
   // ================================================================== admin
+  /** New round: drop whatever he holds, stand up, back to his routine at `at`. */
+  resetRound(at: THREE.Vector3) {
+    if (this.state === 'off') return;
+    if (this.carrying) this.release(false);
+    this.stopRiding();
+    if (this.lying) this.getUp();
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.05, z: at.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.vel.set(0, 0, 0);
+    this.sus.clear(); this.target = null; this.path = []; this.doing = false;
+    this.parts.snap();
+    this.go('routine');
+  }
   setEnabled(on: boolean) {
     if (on === (this.state !== 'off')) return;
     if (!on) {
@@ -799,6 +811,7 @@ export class Farmer {
   private cough() {
     if (this.state === 'down' || this.state === 'stagger') return;
     this.stun('cough', BOB.cough);
+    G.events.push({ type: 'bobCough' });
     G.audio.play('cough', { pos: this.pos, vol: 0.9, rand: 0.1 });
     if (!G.audio.has('cough')) this.voice('oof', 0.7);
   }

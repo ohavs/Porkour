@@ -224,6 +224,14 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     for (const [x, z] of [[-39, 6], [-40.5, 7], [-38, 7.6]] as const) prop('log', x, z);
     prop('wheel', -12, 6, 0.4);
     prop('sword', 36, -84);
+    // valuables (M5 loot): Bob's porch, the picnic table, the BBQ, the barn, the garage, the garden
+    prop('chest', -14.2, -30.4, 2.4); prop('chalice', -15.6, -30.0); prop('necklace', -12.8, -31.6);
+    prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.1, -47.7, 0.3, 0.84);
+    prop('crown', -39.9, -45.3, 0.6);
+    prop('gold', -10.8, -49.5, 0.3);
+    prop('gasCan', 7.6, 11.6); prop('propane', -2.6, -29.6, 0); prop('pan', -4.2, -29.2);
+    prop('firstAid', 4.5, 7.2); prop('backpack', -3.5, 7.4);
+    prop('shovel', -23.8, -59.5, 1.2); prop('trashcan', -13.2, -26.8, 0);
     for (let i = 0; i < 4; i++) prop('crate', 34 + (i % 2) * 1.05, -84 + Math.floor(i / 2) * 1.05, 0);
 
     // ---------------------------------------------------------------- animals

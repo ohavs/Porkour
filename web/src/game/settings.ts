@@ -9,6 +9,8 @@ export const SETTINGS = {
   sfx: 1, music: 0.6, ambience: 0.8,
   sens: 1, invertY: false, muted: false, fps: false,
   outfit: null as Outfit | null,
+  /** Coins + XP from finished rounds (for the shop later). */
+  coins: 0, xp: 0,
   /** Online server override (empty = the built-in one). */
   server: '',
 };

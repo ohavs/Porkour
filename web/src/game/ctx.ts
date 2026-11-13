@@ -45,6 +45,7 @@ export const ADMIN = {
   gameSpeed: 1,         // × simulation speed
   netLag: 0,            // online test: extra delay (ms) on everything this browser sends
   predict: true,        // online player: move my own pig on my machine at once (client-side prediction)
+  roundMins: 10,        // round length (minutes)
 };
 
 /** Shared game context (set up once in Game). */

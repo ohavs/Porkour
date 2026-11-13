@@ -33,7 +33,7 @@ const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab'] as const;
 const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP'] as const;
 
 export function entities(game: Game): NetEnt[] {
-  return [...game.pigs, game.farmer!, game.farm.cage, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
+  return [...game.pigs, game.farmer!, game.farm.cage, game.round, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
