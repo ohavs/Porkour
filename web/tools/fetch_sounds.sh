@@ -5,6 +5,7 @@
 #   0 A.D.     github.com/0ad/0ad               CC BY-SA 3.0, Wildfire Games
 #   Wesnoth    github.com/wesnoth/wesnoth       GPL-2.0-or-later
 #   Veloren    github.com/veloren/veloren       crickets / birdcalls by DaforLynx, CC BY 4.0
+#   Animalia   github.com/ElCeejo/animalia      turkey, MIT
 # Drop-in replacements: put <name>.ogg (or .mp3/.wav, converted by this script from web/sfx_user/) — see SOUNDS in src/core/sounds.ts.
 # Usage: cd web && bash tools/fetch_sounds.sh        (idempotent; output is committed)
 set -euo pipefail
@@ -42,12 +43,14 @@ A=binaries/data/mods/public/audio
 pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fauna/animal/chicken_*" "/$A/actor/fauna/animal/cattle_*" \
   "/$A/actor/singlesteps/fs_grass*" "/$A/actor/singlesteps/fs_gravel[1-4]*" "/$A/attack/impact/fleshimp_*" \
   "/$A/attack/impact/shield_wood_0*" "/$A/attack/impact/shield_metal_0[1-4]*" "/$A/attack/impact/arrow_dirt_0[1-6]*" \
-  "/$A/attack/fire/c_1[1-3]*" "/$A/attack/fire/sz1[1-3]*" "/$A/ambient/dayscape/day_temperate_1*" "/$A/ambient/building/amb_farm_1*" "/$A/LICENSE.txt"
+  "/$A/attack/fire/c_1[1-3]*" "/$A/attack/fire/sz1[1-3]*" "/$A/ambient/dayscape/day_temperate_1*" "/$A/ambient/building/amb_farm_1*" \
+  "/$A/ambient/weather/rain_1*" "/$A/ambient/weather/thunder_1*" "/$A/LICENSE.txt"
 pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night.ogg' '/data/core/sounds/ambient/morning.ogg' \
   '/data/core/sounds/bite-small.ogg' '/data/core/sounds/club.ogg' '/data/core/sounds/dwarf-laugh.wav' '/data/core/sounds/fanfare-short.wav' \
   '/data/core/sounds/fist.ogg' '/data/core/sounds/gold.ogg' '/data/core/sounds/groan.wav' '/data/core/sounds/human-old-*' \
   '/data/core/sounds/miss-*' '/data/core/sounds/mud-*' '/data/core/sounds/open-chest.wav' '/data/core/sounds/squishy-*' \
   '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
+pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/LICENSE'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
@@ -114,6 +117,8 @@ for i in 1 2; do snd "$WS/wolf-hit-$i.ogg" yelp$i -2 0 "$WSg"; done
 snd "$WS/wolf-die-2.ogg" howl -2 0 "$WSg"
 snd "$VL/mobs_mc_cat_idle.2.ogg" meow -4 0 "$VLc"
 snd "$VL/mobs_mc_animal_eat_generic.ogg" munch -4 0 "$VLc"
+AN=$CACHE/animalia/sounds/turkey; ANm="Animalia by ElCeejo, MIT"
+snd "$AN/animalia_turkey.ogg" gobble1 -2 0 "$ANm"; snd "$AN/animalia_turkey_hurt.ogg" gobble2 -2 0 "$ANm"
 # ---------------------------------------------------------------- ambience (day / night)
 snd "$WS/ambient/morning.ogg" rooster -3 0 "$WSg"
 snd "$WS/ambient/night.ogg" night -6 0 "$WSg"
@@ -121,6 +126,9 @@ for i in 1 2 3; do snd "$VE/crickets_$i.ogg" cricket$i -8 0 "$VEc"; done
 for i in 3 4 5; do snd "$VE/birdcall_0$i.ogg" bird$i -10 0 "$VEc"; done
 snd "$OA/ambient/dayscape/day_temperate_11.ogg" amb_day -10 0 "$OAc"
 snd "$OA/ambient/building/amb_farm_11.ogg" amb_farm -12 0 "$OAc"
+# weather (round modifier "rain")
+snd "$OA/ambient/weather/rain_11.ogg" rain -8 0 "$OAc"
+snd "$OA/ambient/weather/thunder_10.ogg" thunder1 -2 0 "$OAc"; snd "$OA/ambient/weather/thunder_11.ogg" thunder2 -2 0 "$OAc"
 
 # ---------------------------------------------------------------- the user's own audio (Unity Assets/Audio)
 AU="$REPO/Assets/Audio"
@@ -154,5 +162,6 @@ fi
   echo "- 0 A.D.: https://play0ad.com — © Wildfire Games, https://creativecommons.org/licenses/by-sa/3.0/"
   echo "- Battle for Wesnoth: https://www.wesnoth.org — GPL-2.0-or-later"
   echo "- Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/"
+  echo "- Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo"
 } > "$CREDITS"
 echo "sfx: $(ls "$OUT"/*.ogg | wc -l) files, $(du -sh "$OUT" | cut -f1)"

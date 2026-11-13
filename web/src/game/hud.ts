@@ -152,13 +152,14 @@ export class Hud {
     else if (st === 'fist') { txt = t('bob.fist'); cls = 'yellow'; }
     else if (st === 'dance') { txt = t('bob.dance'); cls = 'green'; }
     else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; }
+    else if (st === 'away') { txt = t('bob.market'); cls = 'blue'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; }
     else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; }
     if (st === 'aim' || st === 'shoot') { txt = t('bob.aim'); cls = 'red'; }
     this.bob.textContent = txt; this.bob.className = 'txt ' + cls;
     // marker
     let sym = '', col = '#ffd166', fill = 0;
-    if (st === 'sleep') { this.mark.style.opacity = '0'; return; }
+    if (st === 'sleep' || st === 'away') { this.mark.style.opacity = '0'; return; }
     if (bob.chasing || st === 'carry' || st === 'taunt') { sym = '!'; col = '#ff5a3c'; fill = 1; }
     else if (st === 'down' || st === 'stagger') { sym = '✦'; col = '#fff1a8'; fill = 1; }
     else if (st === 'cough') { sym = '~'; col = '#b6e36a'; fill = 1; }

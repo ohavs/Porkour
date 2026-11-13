@@ -48,6 +48,7 @@ export const ADMIN = {
   predict: true,        // online player: move my own pig on my machine at once (client-side prediction)
   roundMins: 10,        // round length (minutes)
   showSight: false,     // HUD line: does Bob see me right now
+  mod: 'random',        // next round's modifier: random or a fixed one (admin)
 };
 
 /** Shared game context (set up once in Game). */
@@ -75,6 +76,8 @@ export const G = {
   events: [] as GameEvent[],
   /** Times a pig got grilled this round. */
   grills: 0,
+  /** This round's modifier (game/modifiers.ts): set by the round on the host, from snapshots on players. */
+  mod: 'none' as 'none' | 'rain' | 'fog' | 'grumpy' | 'market',
   /** Online role of this browser: solo, host (runs the world) or client (shows the host's world). */
   net: 'solo' as 'solo' | 'host' | 'client',
   /** Host: sounds / particles / shakes of the current fixed step, recorded for the players. */
