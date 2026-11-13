@@ -98,8 +98,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 3. ✅ **M3 Living farm (2026-11-12)**: real sounds, EN/ES, HUD cleanup + settings + admin, standing rework, Bob slap / dance /
    mower / night routine, day/night + lamps, wolves, round animals, wardrobe, farm dressing.
 4. ✅ **M4 Online (2026-11-12)** 4 players: server (Google / guest, rooms, relay), lobby, P2P + relay, host snapshots.
-   Google Client ID is set (config.ts + server.js; OAuth app in "Testing": only Test users can sign in — Publish later with
-   name + email branding, no logo). Server live on Render: `wss://porkour-server.onrender.com` (auto-deploys from main; the sandbox proxy blocks
+   Google Client ID is set (config.ts + server.js). OAuth consent: publish with name + email + home page + privacy link,
+   never a logo (a logo triggers Google verification). Server live on Render: `wss://porkour-server.onrender.com` (auto-deploys from main; the sandbox proxy blocks
    onrender.com, so it can't be reached from here).
 5. **M4.5 Real physics ("active ragdoll", user asked 2026-11-12)**: characters = several rigid bodies + joint motors that
    chase the procedural animation pose (Gang Beasts / Human Fall Flat / Party Animals); grab = a joint at the contact point
@@ -111,7 +111,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
   feel on a real PC (wobble, slap chance 30 %, grip 24 mashes, wolves, night length).
 - 2026-11-12: M4 online built & tested locally (2 headless browsers: lobby, chat, P2P, start, late join, movement).
-  2026-11-13: Google client id + Render server set; waiting for the user's first real online test (feel, lag, Google sign-in).
+  2026-11-13: Google client id + Render server set; privacy page `web/public/privacy.html` (for the consent screen).
+  ✅ User confirmed: 2 people joined the same lobby online. **Next: M4.5 real physics** (start with pigs: multi-body pig +
+  joint grab + real throw), then client-side prediction. Ask the user how actual online play felt (lag) when convenient.
   User feedback: don't base designs on Nice-Crash (a few-prompts game) — take inspiration from real games.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
