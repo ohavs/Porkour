@@ -78,6 +78,10 @@ export const G = {
   traps: null as any,
   /** Pen gates (world/gates.ts). */
   gates: null as any,
+  /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */
+  hittables: [] as { hit(x: number, y: number, z: number, reach: number, dir: THREE.Vector3, k: number, by: unknown): boolean }[],
+  /** Named spots of the current farm (world/farmKit.ts Places). */
+  places: null as null | import('../world/farmKit').Places,
   events: [] as GameEvent[],
   /** Times a pig got grilled this round. */
   grills: 0,

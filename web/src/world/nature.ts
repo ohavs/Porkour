@@ -116,3 +116,30 @@ export function hayBale(): THREE.Object3D {
   const sw2 = swirl.clone(); sw2.position.x = -0.48; g.add(sw2);
   return g;
 }
+
+/**
+ * Orchard fruit tree (world/orchard.ts): the tree (trunk + round canopy) and its fruit as two geometries, so the
+ * fruit can disappear once it has all been shaken down. Same blob style as the forest's apple trees.
+ */
+export function fruitTreeGeo(fruitColor: number, nFruit = 16): { tree: THREE.BufferGeometry; fruit: THREE.BufferGeometry } {
+  const parts: THREE.BufferGeometry[] = [], fruit: THREE.BufferGeometry[] = [];
+  const g = () => GREENS[rng.int(0, GREENS.length - 1)];
+  const h = 1.7;
+  parts.push(part(TRUNK, 0x8a5a35, M(0, h / 2, 0, 1.05, h, 1.05)));
+  for (const s of [-1, 1]) parts.push(part(TRUNK, 0x8a5a35, new THREE.Matrix4().compose(new THREE.Vector3(s * 0.32, h + 0.25, 0),
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -s * 0.7), new THREE.Vector3(0.55, 0.9, 0.55))));   // two big branches
+  const blobs: THREE.Vector3[] = [];
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng.range(0, 0.6), r = i === 0 ? 0 : rng.range(0.8, 1.15);
+    const s = 1.15 * rng.range(0.85, 1.1) * (i === 0 ? 1.15 : 1);
+    const p = new THREE.Vector3(Math.cos(a) * r, h + 0.95 + rng.range(-0.15, 0.35) + (i === 0 ? 0.45 : 0), Math.sin(a) * r);
+    blobs.push(p);
+    parts.push(part(BLOB, g(), M(p.x, p.y, p.z, s, s * 0.88, s)));
+  }
+  for (let i = 0; i < nFruit; i++) {
+    const b = blobs[rng.int(0, blobs.length - 1)], d = new THREE.Vector3(rng.range(-1, 1), rng.range(-0.5, 0.8), rng.range(-1, 1)).normalize();
+    fruit.push(part(BALL, fruitColor, M(b.x + d.x * 1.08, b.y + d.y * 0.98, b.z + d.z * 1.08, 0.15)));
+  }
+  return { tree: mergeGeometries(parts)!, fruit: mergeGeometries(fruit)! };
+}

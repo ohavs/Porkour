@@ -12,6 +12,8 @@ export const SETTINGS = {
   /** Coins + XP from finished rounds; what the shop sold me (game/shop.ts): items 'slot:id', gadget counts, the one I take along. */
   coins: 0, xp: 0,
   owned: [] as string[], gadgets: {} as Record<string, number>, loadout: '', shopInit: false,
+  /** Farm to play: 'farm1' | 'farm2' | 'random' (world/farms.ts). */
+  farm: 'random',
   /** Online server override (empty = the built-in one). */
   server: '',
 };

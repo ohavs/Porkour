@@ -380,6 +380,8 @@ export class Pig implements Holdable {
       else o.body.applyImpulse(v2.copy(dir).multiplyScalar(dv * o.mass), true);
       hit = true;
     }
+    // farm things that react to a hit (fruit trees shake, beehives get angry…)
+    for (const o of G.hittables) if (o.hit(hx, hy, hz, reach, dir, k, this)) hit = true;
     if (hit) {
       G.audio.play(wpn ? 'metal' : h ? (h.kind === 'prop' ? 'wood|thud' : 'body') : 'punch|body', { pos: this.pos, vol: wpn ? 1 : 0.9, pitch: wpn ? 0.9 : butt ? 0.85 : 1 });
       G.fx.bits(v1.set(hx, hy + 0.3, hz), { count: 8, color: 0xfff1a8, speed: 3, up: 1.5, life: 0.35, size: 0.12, grow: 0, drag: 3, alpha: 1 });
@@ -511,13 +513,16 @@ export class Pig implements Holdable {
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (sp < 7) return;
     world.contactPairsWith(this.collider, (c) => {
-      const o = owners.get(c.handle) as Holdable | undefined;
+      const o = owners.get(c.handle) as (Holdable & { onRam?: (by: Pig, dir: THREE.Vector3) => void }) | undefined;
       if (!o || o === this.held || this.rammed.has(o)) return;
       this.rammed.add(o);
       const dir = v1.set(this.vel.x / sp, 0.45, this.vel.z / sp).normalize();
-      const dv = Math.min(12, 520 / Math.max(o.mass, 5));
-      if (o.knock) o.knock(dir.multiplyScalar(dv), true);
-      else o.body.applyImpulse(dir.multiplyScalar(dv * o.mass), true);
+      if (o.onRam) o.onRam(this, dir);   // a static farm thing (fruit tree, beehive): it reacts, the pig bounces off
+      else {
+        const dv = Math.min(12, 520 / Math.max(o.mass, 5));
+        if (o.knock) o.knock(dir.multiplyScalar(dv), true);
+        else o.body.applyImpulse(dir.multiplyScalar(dv * o.mass), true);
+      }
       this.vel.x *= -0.25; this.vel.z *= -0.25; this.vel.y = 3;
       this.sprintUntil = this.now; this.hostTakes(0.4);
       G.audio.play('punch|body', { pos: this.pos, vol: 1 });

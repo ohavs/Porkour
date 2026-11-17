@@ -22,15 +22,18 @@ export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 
 
 export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell'
   | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond'
-  | 'smashPots' | 'melonSmash' | 'eggBob' | 'gnomePond' | 'undiesWell' | 'pieSteal' | 'mudPorch' | 'mazeTrophy' | 'cowsOut' | 'gateBreak';
+  | 'smashPots' | 'melonSmash' | 'eggBob' | 'gnomePond' | 'undiesWell' | 'pieSteal' | 'mudPorch' | 'mazeTrophy' | 'cowsOut' | 'gateBreak'
+  // farm 2 (orchard & beehives)
+  | 'shakeTrees' | 'appleBob' | 'ciderPress' | 'beeBob' | 'honeySteal' | 'goldApple';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
-  'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak'];
+  'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
+  'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple'];
 const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
-export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob';
+export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press';
 /** Counted pranks (progress shown as n / need). */
-const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2 };
+const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6 };
 /** Which props / critters a prank is about, and where they go. */
 /** Big pasture animals (they walk out on their own when the pasture gate is open). */
 const BIG = ['cow', 'horse', 'horse2', 'donkey'];
@@ -42,16 +45,13 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   hensOut: { critters: ['hen'], inCoop: true }, sheepOut: { critters: ['sheep'], inPen: true },
   cowsOut: { critters: BIG, inPasture: true },
   smashPots: { props: ['flowerPot'] }, melonSmash: { props: ['melon'] }, eggBob: { props: ['egg'], to: 'bob' },
+  appleBob: { props: ['apple'], to: 'bob' }, ciderPress: { props: ['apple'], to: 'press' },
+  honeySteal: { props: ['honeyPot'], to: 'stash' }, goldApple: { props: ['goldApple'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
 
-const COOP = { x0: 16, x1: 30, z0: -32, z1: -18 };
-const SHEEP_PEN = { x0: -63, x1: -50, z0: -52, z1: -34 };
-const PASTURE = { x0: 22, x1: 52, z0: -76, z1: -50 };
-const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
-const WELL = { x: 0, z: -56 };
-const POND = { x: 50, z: -2 };
+const inRect = (r: { x0: number; x1: number; z0: number; z1: number } | null, p: { x: number; z: number }) => !!r && p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const v1 = new THREE.Vector3();
 
 const CSS = `
@@ -151,7 +151,11 @@ export class Round {
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
     this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod());
-    const req = pick(REQ_POOL, 2), bonus = pick(BONUS_POOL.filter((m) => !req.includes(m)), 2);
+    const can = this.game.farm.missions, own = this.game.farm.featured ?? [];
+    // a farm with its own pranks: one of the two required ones is always one of them
+    const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
+    const req = [...first, ...pick(REQ_POOL.filter((m) => can.includes(m) && !first.includes(m)), 2 - first.length)];
+    const bonus = pick(BONUS_POOL.filter((m) => can.includes(m) && !req.includes(m)), 2);
     this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
     this.handOut();
   }
@@ -180,7 +184,10 @@ export class Round {
     if (this.phase === 'end') return;
     if (type === 'smashed' && text === 'flowerPot') this.count('smashPots');
     if (type === 'smashed' && text === 'melon') this.count('melonSmash');
-    if (type === 'splatBob') this.count('eggBob');
+    if (type === 'splatBob') this.count(text === 'apple' ? 'appleBob' : 'eggBob');
+    if (type === 'treeShaken') this.count('shakeTrees');
+    if (type === 'pressed') this.count('ciderPress');
+    if (type === 'bobStung') this.done('beeBob');
     if (type === 'knockdown') { this.done('knockBob'); this.done('staggerBob'); }
     if (type === 'stagger') this.done('staggerBob');
     if (type === 'bobCough') this.done('fartBob');
@@ -194,7 +201,7 @@ export class Round {
     if (this.phase === 'end' || !this.missions.length) return;
     this.elapsed += dt;
     this.secs = ADMIN.roundMins * 60;
-    const { props, critters } = this.game.farm;
+    const { props, critters, places: P } = this.game.farm;
     // players: solo = just you (the other pigs in the sty are idle extras); online = every connected pig
     const pigs = G.net === 'solo' ? [this.game.local] : this.game.pigs.filter((p) => !p.absent);
     this.quota = ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
@@ -213,11 +220,11 @@ export class Round {
     if (this.wants('mugPond')) this.check('mugPond', props.some((p) => p.def === PROPS.mug && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
     if (this.wants('catBath')) this.check('catBath', critters.some((c) => c.def.kind === 'cat' && inWater(c.pos.x, c.pos.z)));
     if (this.wants('lambStash')) this.check('lambStash', critters.some((c) => c.def.kind === 'sheep' && this.inStash(c.pos, 0.3)));
-    if (this.wants('hensOut')) this.check('hensOut', critters.filter((c) => c.def.kind === 'hen' && !(c.pos.x > COOP.x0 && c.pos.x < COOP.x1 && c.pos.z > COOP.z0 && c.pos.z < COOP.z1)).length >= 3);
+    if (this.wants('hensOut')) this.check('hensOut', critters.filter((c) => c.def.kind === 'hen' && !inRect(P.coop, c.pos)).length >= 3);
     if (this.wants('pumpkinWell')) this.check('pumpkinWell', props.some((p) => (p.def === PROPS.pumpkin || p.def === PROPS.bigPumpkin) && !p.banked && !p.heldBy
       && this.atWell(p.synced.currP)));
-    if (this.wants('sheepOut')) this.check('sheepOut', critters.filter((c) => c.def.kind === 'sheep' && !inRect(SHEEP_PEN, c.pos)).length >= 2);
-    if (this.wants('cowsOut')) this.check('cowsOut', critters.filter((c) => BIG.includes(c.def.kind) && !inRect(PASTURE, c.pos)).length >= 2);
+    if (this.wants('sheepOut')) this.check('sheepOut', critters.filter((c) => c.def.kind === 'sheep' && !inRect(P.sheepPen, c.pos)).length >= 2);
+    if (this.wants('cowsOut')) this.check('cowsOut', critters.filter((c) => BIG.includes(c.def.kind) && !inRect(P.pasture, c.pos)).length >= 2);
     if (this.wants('hayPond')) this.check('hayPond', props.some((p) => p.def === PROPS.hay && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
     if (this.wants('henPond')) this.check('henPond', critters.some((c) => c.def.kind === 'hen' && inWater(c.pos.x, c.pos.z)));
     if (this.wants('gnomePond')) this.check('gnomePond', props.some((p) => p.def === PROPS.gnome && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
@@ -240,7 +247,7 @@ export class Round {
     G.farmer?.setFloor(this.timeLeft < 120 ? 2 : this.mod === 'grumpy' ? MOD.grumpy.floor : 0);   // the last 2 minutes: at least "on alert"
   }
 
-  private atWell(p: THREE.Vector3) { return Math.hypot(p.x - WELL.x, p.z - WELL.z) < 1.6 && p.y > G.terrain.height(WELL.x, WELL.z) + 0.9; }
+  private atWell(p: THREE.Vector3) { const w = this.game.farm.places.well; return !!w && Math.hypot(p.x - w.x, p.z - w.z) < 1.6 && p.y > G.terrain.height(w.x, w.z) + 0.9; }
   private wants(id: MissionId) { return this.missions.some((m) => m.id === id && !m.done); }
   /** One more of a counted prank (pots smashed, eggs on Bob…). */
   private count(id: MissionId) {
@@ -265,6 +272,8 @@ export class Round {
     const value = Math.round(pr.value * (this.mod === 'grumpy' ? MOD.grumpy.loot : 1));
     this.banked += value;
     if (pr.def === PROPS.pie) this.done('pieSteal');
+    if (pr.def === PROPS.honeyPot) this.done('honeySteal');
+    if (pr.def === PROPS.goldApple) this.done('goldApple');
     if (pr.def === PROPS.trophy) this.done('mazeTrophy');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
@@ -348,15 +357,15 @@ export class Round {
   missionThings(): { obj: Prop | Critter | Gate; id: MissionId }[] {
     const out: { obj: Prop | Critter | Gate; id: MissionId }[] = [];
     if (this.phase === 'end') return out;
-    const { props, critters } = this.game.farm;
+    const { props, critters, places: P } = this.game.farm;
     for (const m of this.missions) {
       const d = MDEF[m.id]; if (m.done || !d) continue;
       if (d.props) for (const p of props) if (!p.banked && d.props.includes(p.def.id ?? '')) out.push({ obj: p, id: m.id });
       if (d.critters) for (const c of critters) {
         if (!d.critters.includes(c.def.kind)) continue;
-        if (d.inCoop && !inRect(COOP, c.pos)) continue;
-        if (d.inPen && !inRect(SHEEP_PEN, c.pos)) continue;
-        if (d.inPasture && !inRect(PASTURE, c.pos)) continue;
+        if (d.inCoop && !inRect(P.coop, c.pos)) continue;
+        if (d.inPen && !inRect(P.sheepPen, c.pos)) continue;
+        if (d.inPasture && !inRect(P.pasture, c.pos)) continue;
         out.push({ obj: c, id: m.id });
       }
       if (m.id === 'gateBreak') for (const g of (G.gates?.list ?? []) as Gate[]) if (g.state !== 'broken') out.push({ obj: g, id: m.id });
@@ -375,8 +384,10 @@ export class Round {
     return null;
   }
   wherePos(w: Where, out: THREE.Vector3) {
-    if (w === 'pond') out.set(POND.x, G.terrain.height(POND.x, POND.z), POND.z);
-    else if (w === 'well') out.set(WELL.x, G.terrain.height(WELL.x, WELL.z) + 2.2, WELL.z);
+    const { pond, well } = this.game.farm.places;
+    if (w === 'pond') out.set(pond.x, G.terrain.height(pond.x, pond.z), pond.z);
+    else if (w === 'well' && well) out.set(well.x, G.terrain.height(well.x, well.z) + 2.2, well.z);
+    else if (w === 'press' && this.game.farm.orchard?.pressAt) out.copy(this.game.farm.orchard.pressAt);
     else if (w === 'porch') out.copy(this.game.farm.zones.door);
     else if (w === 'bob' && G.farmer) out.copy(G.farmer.pos).setY(G.farmer.pos.y + 1);
     else out.copy(this.stash);

@@ -53,7 +53,7 @@ pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night
   '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
 pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/LICENSE'
 pack https://github.com/minetest/minetest_game minetest_game '/mods/tnt/sounds/' '/mods/tnt/README.md' '/mods/tnt/license.txt'
-pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*'
+pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
 OA=$CACHE/0ad/$A; WS=$CACHE/wesnoth/data/core/sounds; VE=$CACHE/veloren/assets/voxygen/audio/sfx/ambient
@@ -130,6 +130,8 @@ snd "$WS/ambient/morning.ogg" rooster -3 0 "$WSg"
 snd "$WS/ambient/night.ogg" night -6 0 "$WSg"
 for i in 1 2 3; do snd "$VE/crickets_$i.ogg" cricket$i -8 0 "$VEc"; done
 for i in 3 4 5; do snd "$VE/birdcall_0$i.ogg" bird$i -10 0 "$VEc"; done
+# angry bee swarm (farm 2): Veloren, author unlisted in its credits.ron → GPL-3.0 (replace before a commercial release)
+snd "$VE/bees_1.ogg" buzz -4 0 "Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown)"
 snd "$OA/ambient/dayscape/day_temperate_11.ogg" amb_day -10 0 "$OAc"
 snd "$OA/ambient/building/amb_farm_11.ogg" amb_farm -12 0 "$OAc"
 # weather (round modifier "rain")

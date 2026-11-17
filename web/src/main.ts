@@ -8,8 +8,8 @@ import { Wardrobe, walletHtml } from './game/wardrobe';
 import { initShop, outfitMsg } from './game/shop';
 import { PigVisual } from './pig/pigVisual';
 import * as THREE from 'three';
-import { loadSettings, SETTINGS } from './game/settings';
-import { initLang, applyDom, setLang, LANGS, lang, t, onLang, type Lang } from './i18n';
+import { loadSettings, saveSettings, SETTINGS } from './game/settings';
+import { initLang, applyDom, setLang, LANGS, lang, t, onLang, type Lang, type Key } from './i18n';
 import { Lobby } from './net/lobby';
 import { online } from './net/online';
 import { G, ADMIN } from './game/ctx';
@@ -17,6 +17,8 @@ import { GLB_MODELS } from './world/animalGlb';
 import { LOOT_MODELS } from './world/props';
 import { COVER_MODELS } from './world/hideouts';
 import { LANDMARK_MODELS } from './world/landmarks';
+import { FARM2_MODELS } from './world/farm2';
+import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -33,11 +35,20 @@ const MODELS = [
   ...['Carrot_4', 'Lettuce_4', 'Tomato_4', 'Beet_4', 'BushBerries_4', 'Watermelon_4'].map((n) => 'crops/' + n),
   ...COVER_MODELS, ...LANDMARK_MODELS,
 ];
+/** + the models only the farm this page plays needs. */
+const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : []);
 
 /** Tiny flag icons (emoji flags don't show on Windows). */
 const FLAGS: Record<string, string> = {
   en: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0 0l60 40M60 0 0 40" stroke="#fff" stroke-width="8"/><path d="M0 0l60 40M60 0 0 40" stroke="#c8102e" stroke-width="3"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="12"/><path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="7"/></svg>',
   es: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#aa151b"/><rect y="10" width="60" height="20" fill="#f1bf00"/></svg>',
+};
+
+/** Little farm icons for the title's farm picker: a red barn, an apple, a die. */
+const FARM_ICON: Record<string, string> = {
+  farm1: '<svg viewBox="0 0 20 20"><path d="M2 9 10 3l8 6v9H2z" fill="#c8402e"/><path d="M7 18v-6h6v6" fill="#fff4e0"/><path d="M7 12l6 6M13 12l-6 6" stroke="#c8402e" stroke-width="1.4"/></svg>',
+  farm2: '<svg viewBox="0 0 20 20"><circle cx="7.5" cy="12" r="5.5" fill="#e0302c"/><circle cx="12.5" cy="12" r="5.5" fill="#e0302c"/><path d="M10 7c0-2 1-4 2-5" stroke="#5a3a1e" stroke-width="1.6" fill="none"/><ellipse cx="13.5" cy="4.5" rx="3" ry="1.4" fill="#4fa636" transform="rotate(-25 13.5 4.5)"/></svg>',
+  random: '<svg viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="15" rx="3.5" fill="#fff4e0"/><g fill="#3b2412"><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/></g></svg>',
 };
 
 loadSettings();
@@ -56,7 +67,7 @@ async function boot() {
   const prog = () => (bar.style.width = `${(pModels * 0.8 + pSounds * 0.2) * 100}%`);
   await Promise.all([
     initPhysics(),
-    preload(MODELS, (f) => { pModels = f; prog(); }),
+    preload([...MODELS, ...farmModels()], (f) => { pModels = f; prog(); }),
     audio.loadAll('./assets/sfx/', (f) => { pSounds = f; prog(); }),
     audio.load('music_level', './assets/music/level_music.ogg'),
     audio.load('music_theme', './assets/music/theme_song.ogg'),
@@ -128,6 +139,23 @@ async function boot() {
     if (l && l !== lang()) setLang(l as Lang);
   });
   onLang(renderLangs);
+  // farm: the one this page built is lit; another one (or "random") reloads the page on it
+  const farmBox = document.getElementById('tFarm')!;
+  const renderFarms = () => {
+    farmBox.innerHTML = [...FARM_IDS, 'random' as const].map((k) =>
+      `<button data-f="${k}" class="${k === farmId() || (k === 'random' && SETTINGS.farm === 'random') ? 'on' : ''}">${FARM_ICON[k]}${t(('farm.' + k) as Key)}</button>`).join('');
+  };
+  renderFarms(); onLang(renderFarms);
+  document.getElementById('tFarmRow')!.classList.add('show');
+  farmBox.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const f = (e.target as HTMLElement).closest<HTMLElement>('[data-f]')?.dataset.f as FarmId | 'random' | undefined;
+    if (!f) return;
+    SETTINGS.farm = f; saveSettings();
+    if (f === 'random') { const q = new URLSearchParams(location.search); q.delete('farm'); location.href = location.pathname + (q.size ? '?' + q : ''); }
+    else if (f !== farmId()) reloadOnFarm(f);
+    else renderFarms();
+  });
   // leaving pointer lock (Esc) opens the menu (or just stops the lock-pick); clicking the game re-locks
   let escUntil = 0, escClosed = 0;
   const hint = document.getElementById('clickHint')!;

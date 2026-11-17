@@ -35,6 +35,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | boot4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | bray1.ogg | Garuda1982 (freesound 539505) via VoxeLibre, CC BY 3.0 |
 | bray2.ogg | JarredGibb (freesound 233131) via VoxeLibre, CC0 |
+| buzz.ogg | Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown) |
 | cluck1.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck2.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck3.ogg | VoxeLibre mobs_mc, CC0 |

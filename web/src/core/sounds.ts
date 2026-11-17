@@ -26,6 +26,7 @@ export const SOUND_SETS: Record<string, string[]> = {
   // ambience
   rooster: ['rooster'], night: ['night'], cricket: n('cricket', 3), bird: ['bird3', 'bird4', 'bird5'],
   amb_day: ['amb_day'], amb_farm: ['amb_farm'], rain: ['rain'], thunder: n('thunder', 2),
+  buzz: ['buzz'],
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */

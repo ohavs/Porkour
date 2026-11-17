@@ -34,7 +34,7 @@ export const CRITTERS: Record<string, CritterDef> = {
 
 const rng = new Rng(99);
 /** Guard dog off the leash (Bob's alert 2+): the whole farm is its beat. Smell range in the open / into a bush (m). */
-const DOG = { patrol: { x: 0, z: -40, r: 46 }, smell: 11, smellHidden: 4, give: 12, skip: 10, chew: 14, boneSee: 14, boneSkip: 45, tipEvery: 3 };
+const DOG = { smell: 11, smellHidden: 4, give: 12, skip: 10, chew: 14, boneSee: 14, boneSkip: 45, tipEvery: 3 };
 /**
  * Alarm birds (Untitled Goose Game's geese, on Bob's side). Rooster: sees a pig up to no good (holding something,
  * standing, sprinting) within 9 m — or any pig under 3.5 m — and crows: a loud noise right where the pig is, so Bob
@@ -225,7 +225,7 @@ export class Critter implements Holdable {
         this.target.y = p.y; this.nextThink = G.time + this.penT;   // out through the open gate / grazing outside
       }
       else {
-        const home = this.def.kind === 'dog' && ((G.farmer?.level ?? 0) >= 2 || G.farmer?.state === 'away') ? DOG.patrol : this.home;   // off the leash
+        const home = this.def.kind === 'dog' && ((G.farmer?.level ?? 0) >= 2 || G.farmer?.state === 'away') ? (G.places?.dogPatrol ?? this.home) : this.home;   // off the leash
         const a = rng.range(0, 6.28), r = Math.sqrt(rng.next()) * home.r;
         this.target.set(home.x + Math.cos(a) * r, p.y, home.z + Math.sin(a) * r);
         this.nextThink = G.time + rng.range(2.5, 7);

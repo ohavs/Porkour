@@ -130,7 +130,7 @@ async function control(ws, m) {
       if (r) leave(ws);
       const open = [...rooms.values()].filter((x) => x.public && x.peers.size < x.max)
         .sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1) || b.peers.size - a.peers.size)[0];
-      return open ? join(ws, open) : createRoom(ws, { public: true });
+      return open ? join(ws, open) : createRoom(ws, { public: true, farm: m.farm });
     }
     case 'leave': return leave(ws);
     case 'room': {   // host changes the room (state lobby / playing, name, public)

@@ -17,6 +17,8 @@ const PALETTE: Record<string, Record<string, number>> = {
   'kenney/crops_wheatStageB': { woodInner: 0xe2b84a, _defaultMat: 0xc99a3e },
   'kenney/rock_largeA': { dirt: 0x9b958e, grass: 0x6bb547 },
   'kenney/rock_smallA': { dirt: 0x9b958e, grass: 0x6bb547 },
+  // farm 2's tall-grass strips: the texture is a dry brown, tint it toward fresh meadow green
+  'nature/Grass_Wispy_Tall': { Grass: 0xb6f07a }, 'nature/Grass_Common_Tall': { Grass: 0xb6f07a },
 };
 function repaint(name: string, root: THREE.Object3D) {
   const p = PALETTE[name]; if (!p) return;

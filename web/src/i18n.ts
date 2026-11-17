@@ -271,6 +271,17 @@ const en = {
   'a.shop': 'Shop', 'a.coins': '+1000 coins', 'a.xp': '+1 level', 'a.shopReset': 'Reset shop (coins, items, gadgets)',
   'p.cherryBomb': 'Hold {lmb} and let go to throw it — BANG 2.5 s later (a hit lights it too)', 'p.stinkBomb': 'Throw it hard (hold {lmb}): it bursts into a stink cloud',
   'a.giveBomb': 'Cherry bomb in front of me', 'a.giveStink': 'Stink bomb in front of me', 'a.giveBone': 'Shop bone in front of me',
+  // farms (levels) + farm 2: orchard & beehives
+  'farm.farm1': 'Bob\'s family farm', 'farm.farm2': 'Orchard & beehives', 'farm.random': 'Random farm', 'title.farm': 'Farm',
+  'lobby.farm': 'Farm: {name}', 'net.farmSwitch': 'Loading the host\'s farm…',
+  'm.shakeTrees': 'Shake the apples off {n} trees', 'm.appleBob': 'Hit Bob with {n} apples', 'm.ciderPress': 'Fill the cider press with {n} apples',
+  'm.beeBob': 'Lead angry bees to Bob', 'm.honeySteal': 'Steal Bob\'s prize honey pot', 'm.goldApple': 'Steal the golden apple',
+  'where.press': 'Cider press',
+  'item.apple': 'Apple', 'item.goldApple': 'Golden apple', 'item.honey': 'Honey', 'item.honeyPot': 'Prize honey pot', 'item.cider': 'Cider',
+  'e.stung': 'Ouch! Bees!', 'e.stung2': 'Sprint away, jump in the pond or roll in mud', 'e.beesOut': 'Angry bees!', 'e.beesOut2': 'Lead them to Bob… or run!',
+  'e.bobStung': 'Bob got stung!',
+  'a.farm2': 'Orchard & bees', 'a.treeShake': 'Shake the nearest tree', 'a.beesMe': 'Angry bees after me', 'a.bringApples': '6 apples in front of me',
+  'a.farm': 'Farm (reloads the page)', 'a.orchard': 'Orchard', 'a.apiary': 'Beehives', 'a.press': 'Cider press', 'a.pond': 'Pond', 'a.mill': 'Windmill',
 } as const;
 
 export type Key = keyof typeof en;
@@ -529,6 +540,16 @@ const es: Record<Key, string> = {
   'a.shop': 'Tienda', 'a.coins': '+1000 monedas', 'a.xp': '+1 nivel', 'a.shopReset': 'Reiniciar tienda (monedas, objetos, artilugios)',
   'p.cherryBomb': 'Mantén {lmb} y suelta para tirarlo: ¡PUM! 2,5 s después (un golpe también lo enciende)', 'p.stinkBomb': 'Tírala con fuerza (mantén {lmb}): revienta en una nube apestosa',
   'a.giveBomb': 'Petardo delante de mí', 'a.giveStink': 'Bomba fétida delante de mí', 'a.giveBone': 'Hueso de la tienda delante de mí',
+  'farm.farm1': 'La granja familiar de Bob', 'farm.farm2': 'Huerto y colmenas', 'farm.random': 'Granja al azar', 'title.farm': 'Granja',
+  'lobby.farm': 'Granja: {name}', 'net.farmSwitch': 'Cargando la granja del anfitrión…',
+  'm.shakeTrees': 'Sacude las manzanas de {n} árboles', 'm.appleBob': 'Dale a Bob con {n} manzanas', 'm.ciderPress': 'Llena la prensa de sidra con {n} manzanas',
+  'm.beeBob': 'Lleva abejas furiosas hasta Bob', 'm.honeySteal': 'Roba el tarro de miel premiado de Bob', 'm.goldApple': 'Roba la manzana dorada',
+  'where.press': 'Prensa de sidra',
+  'item.apple': 'Manzana', 'item.goldApple': 'Manzana dorada', 'item.honey': 'Miel', 'item.honeyPot': 'Tarro de miel premiado', 'item.cider': 'Sidra',
+  'e.stung': '¡Ay! ¡Abejas!', 'e.stung2': 'Corre, salta al estanque o revuélcate en el barro', 'e.beesOut': '¡Abejas furiosas!', 'e.beesOut2': 'Llévalas hasta Bob… ¡o corre!',
+  'e.bobStung': '¡A Bob le picaron!',
+  'a.farm2': 'Huerto y abejas', 'a.treeShake': 'Sacudir el árbol más cercano', 'a.beesMe': 'Abejas furiosas tras de mí', 'a.bringApples': '6 manzanas delante de mí',
+  'a.farm': 'Granja (recarga la página)', 'a.orchard': 'Huerto', 'a.apiary': 'Colmenas', 'a.press': 'Prensa de sidra', 'a.pond': 'Estanque', 'a.mill': 'Molino',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;
