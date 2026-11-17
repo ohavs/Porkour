@@ -247,7 +247,7 @@ export class Game {
     // the pond washes the mud off
     for (const p of this.pigs) if (p.muddyUntil > G.time && this.farm.inWater(p.pos.x, p.pos.z)) {
       p.muddyUntil = G.time; G.audio.play('mudstep', { pos: p.pos, vol: 0.8 });
-      if (p === this.local) this.hud.toast(t('s.clean'), 1.2);
+      if (p === this.local) this.hud.emote(p, 'splash', 1.2, 1.3);
     }
     // bushes / crops rustle when a pig pushes through them fast: a sound Bob can hear
     for (const p of this.pigs) {
@@ -283,111 +283,43 @@ export class Game {
       this.farm.winter?.onEvent(e.type);
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
+      // Less text on screen (user): what happens to someone pops as an icon over them; only a few short toasts stay
+      // (coins, pranks, danger, the round's beats). No explanations under them.
+      const H = this.hud, bob = this.farmer;
       switch (e.type) {
-        case 'alarm': if (me) this.hud.toast(t('e.alarm'), 1.6); break;
-        case 'bobLost': if (me) this.hud.toast(t('e.lost'), 1.8); break;
-        case 'bobGaveUp': if (me) this.hud.toast(t('e.gaveUp'), 1.6); break;
-        case 'weaponBroke': if (me) this.hud.toast(t('e.broke', { what: e.text ? t(e.text as Key) : '?' }), 1.4); break;
-        case 'tidied': this.hud.toast(t('e.tidied', { what: e.text ? t(e.text as Key) : '?' }), 1.8); break;
-        case 'caught': this.hud.toast(me ? t('e.caughtMe') : t('e.caughtOther', { who }), 1.6); break;
-        case 'escaped': if (me) this.hud.toast(t('e.escaped'), 1.2); break;
-        case 'caged': if (me) this.hud.toast(t('e.caged'), 1.6); break;
-        case 'cage-open': this.hud.toast(this.local.cage === null && e.why ? t('e.cageOpenRun') : t('e.cageOpen'), 1.6); break;
-        case 'grilled':
-          this.hud.toast(me ? t('e.grilledMe') : t('e.grilledOther', { who }), 2);
-          break;
-        case 'knockdown': this.hud.toast(t('e.knockdown'), 1.4); break;
-        case 'stagger': this.hud.toast(t('e.stagger'), 1.2); break;
-        case 'slapped': this.hud.toast(t('e.slapped'), 2.4, (me ? '' : who + ': ') + t(e.text ?? 'insult.0')); break;
-        case 'fell': if (me) this.hud.toast(t('e.fell'), 1.8); break;
-        case 'night': this.hud.toast(t('e.night'), 2.5); break;
-        case 'dawn': this.hud.toast(t('e.dawn'), 2); break;
-        case 'wolves': this.hud.toast(t('e.wolves'), 2); break;
-        case 'wolfBit': if (me) this.hud.toast(t('e.wolfBit'), 1.4); break;
-        case 'wolfScared': break;
-        case 'lostToWolf': this.hud.toast(t('e.lostToWolf', { who }), 2); break;
-        case 'bobWakes': this.hud.toast(t('e.bobWakes'), 1.6); break;
-        case 'banked': this.hud.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.2, t((e.text ?? '') as Key)); break;
-        case 'missionDone': this.hud.toast(t('e.missionDone'), 2, t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') })); break;
-        case 'missionStep': this.hud.toast(e.why ?? '', 1.2, t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') })); break;
-        case 'splatBob': this.hud.toast(t('e.splat'), 1.2); break;
-        case 'roundEscape': this.hud.toast(t('e.roundEscape'), 3.5, t('e.roundEscape2')); break;
-        case 'lastMinute': this.hud.toast(t('e.lastMinute'), 2); break;
+        case 'caught': if (!me) H.emote(e.who, 'carry'); break;
+        case 'cage-open': H.toast(t('e.cageOpen'), 1.4, '', 'lock'); break;
+        case 'grilled': H.toast(me ? t('e.grilledMe') : t('e.grilledOther', { who }), 1.8, '', 'flame'); break;
+        case 'knockdown': case 'stagger': case 'bobSlipped': case 'bullBob': case 'cheeseBob': case 'catapultBob': case 'bobDunked': case 'bigSnowballBob':
+          H.emote(bob, 'stars', 1.4, 2.4); break;
+        case 'slapped': H.emote(e.who, 'stars', 1.2, 1.2); break;
+        case 'wolves': H.toast(t('e.wolves'), 1.8, '', 'wolf'); break;
+        case 'banked': H.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.1); break;
+        case 'missionDone': H.toast(t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') }), 2, '', 'check'); break;
+        case 'missionStep': H.toast(e.why ?? '', 0.9, '', 'check'); break;
+        case 'roundEscape': H.toast(t('e.roundEscape'), 3, '', 'stash'); break;
+        case 'lastMinute': H.toast('1:00', 1.6); break;
         case 'alert': {
           const l = Number(e.why ?? 0);
-          if (e.text === 'up' && l > 0) { this.hud.toast(t(('e.alert' + l) as Key), 3, t(('e.alert' + l + 'b') as Key)); G.audio.play(l >= 3 ? 'bob_oof' : 'bob_huh', { vol: 0.5 }); }
-          else if (e.text === 'down' && l < 2) this.hud.toast(t('e.alertDown'), 1.6);
-          this.hud.alertFlash();
+          if (e.text === 'up' && l > 0) { if (l >= 2) H.toast(t(('e.alert' + l) as Key), 1.8, '', 'alarm'); G.audio.play(l >= 3 ? 'bob_oof' : 'bob_huh', { vol: 0.5 }); }
+          H.alertFlash();
           break;
         }
-        case 'aim': if (me) this.hud.toast(t('e.aim'), 1.2); break;
-        case 'shotHit': if (me) this.hud.toast(t('e.shotHit'), 1.2); break;
-        case 'trapped': this.hud.toast(me ? t('e.trapped') : t('e.trappedOther', { who }), 1.8); break;
-        case 'trapFreed': if (me) this.hud.toast(t('e.trapFreed'), 1.2); break;
-        case 'dogFound': if (me) this.hud.toast(t('e.dogFound'), 1.6); break;
-        case 'dogBone': this.hud.toast(t('e.dogBone'), 1.8); break;
-        case 'mod': this.hud.toast(t(('mod.' + e.text) as Key), 5, t(('mod.' + e.text + '.d') as Key)); break;
-        case 'market': if (e.text === 'gone') this.hud.toast(t('e.marketGone'), 3, t('e.marketGone2')); else this.hud.toast(t('e.marketBack'), 2); break;
-        case 'birdAlarm':
-          if (me && G.time - (this.birdToast[e.text ?? ''] ?? -99) > 7) {
-            this.birdToast[e.text ?? ''] = G.time;
-            if (e.text === 'turkey') this.hud.toast(t('e.turkey'), 2.2, t('e.turkey2')); else this.hud.toast(t('e.rooster'), 2.2, t('e.rooster2'));
-          }
-          break;
-        case 'pecked': if (me) this.hud.toast(t(e.text === 'drop' ? 'e.peckedDrop' : 'e.pecked'), 1.2); break;
-        case 'gateBroken': {
-          const what = t((e.text ?? 'gate.sty') as Key);
-          if (me) this.hud.toast(t('e.gateBroken', { what }), 2.6, t('e.gateBroken2'));
-          else if (e.who) this.hud.toast(t('e.gateBrokenOther', { who, what }), 2);
-          break;
-        }
-        case 'gatePicked': if (me) this.hud.toast(t('e.gatePicked'), 1.6); break;
-        case 'padlockBroke': if (me) this.hud.toast(t('e.padlockBroke'), 1.6); break;
-        case 'gateRattle': if (me) this.hud.toast(t('e.gateRattle'), 2); break;
-        case 'gateFix': this.hud.toast(t('e.gateFix', { what: t((e.text ?? 'gate.sty') as Key) }), 2.2, t('e.gateFix2')); break;
-        case 'gateLocked':
-          if (G.time - (this.birdToast.lock ?? -99) > 25) { this.birdToast.lock = G.time; this.hud.toast(t('e.gateLocked', { what: t((e.text ?? 'gate.sty') as Key) }), 2.4, t('e.gateLocked2')); }
-          break;
-        case 'stung': if (me && G.time - (this.birdToast.sting ?? -99) > 6) { this.birdToast.sting = G.time; this.hud.toast(t('e.stung'), 2.2, t('e.stung2')); } break;
-        case 'beesOut': if (me || !e.who) this.hud.toast(t('e.beesOut'), 2.2, t('e.beesOut2')); break;
-        case 'bobStung': if (G.time - (this.birdToast.bob ?? -99) > 5) { this.birdToast.bob = G.time; this.hud.toast(t('e.bobStung'), 1.8); } break;
-        // farm 3: the bull, cow tipping, spilled milk, cheese
-        case 'bullSees': if (me && G.time - (this.birdToast.bull ?? -99) > 8) { this.birdToast.bull = G.time; this.hud.toast(t('e.bullSees'), 2.4, t('e.bullSees2')); } break;
-        case 'bullHit': if (me) this.hud.toast(t('e.bullHit'), 1.6); break;
-        case 'bullBob': this.hud.toast(t('e.bullBob'), 2.4); break;
-        case 'cowTipped': if (G.time - (this.birdToast.cow ?? -99) > 4) { this.birdToast.cow = G.time; this.hud.toast(t('e.cowTipped'), 1.4); } break;
-        case 'milkSpilled': if (G.time - (this.birdToast.milk ?? -99) > 4) { this.birdToast.milk = G.time; this.hud.toast(t('e.milkSpilled'), 2, t('e.milkSpilled2')); } break;
-        case 'bobSlipped': this.hud.toast(t(e.text === 'ice' ? 'e.bobSlippedIce' : 'e.bobSlipped'), 2); break;
-        case 'pigSlipped': if (me) this.hud.toast(t('e.pigSlipped'), 1.4); break;
-        case 'cheeseBob': this.hud.toast(t('e.cheeseBob'), 2); break;
-        // farm 4: the pumpkin farm at night
-        case 'lanternOut': if (me) this.hud.toast(t('e.lanternOut'), 1.3, t('e.lanternOut2')); break;
-        case 'pigLaunched': this.hud.toast(me ? t('e.launchedMe') : t('e.launchedOther', { who }), 1.6); break;
-        case 'catapultBob': this.hud.toast(t('e.catapultBob'), 2.2); break;
+        case 'aim': if (me) H.emote(bob, 'aim', 1, 2.4); break;
+        case 'dogFound': case 'bullSees': case 'birdAlarm': if (me) H.emote(this.local, 'bang', 1.4, 1.3); break;
+        case 'mod': H.toast(t(('mod.' + e.text) as Key), 2.4); break;
+        case 'market': H.toast(t(e.text === 'gone' ? 'e.marketGone' : 'e.marketBack'), 2, '', 'cart'); break;
+        case 'stung': case 'beesOut': if (me) H.emote(this.local, 'bee', 1.2, 1.3); break;
+        case 'bobStung': H.emote(bob, 'bee', 1.2, 2.4); break;
+        case 'pigSlipped': case 'pecked': case 'wolfBit': case 'shotHit': if (me) H.emote(this.local, 'stars', 1, 1.2); break;
         // farm 5: winter
-        case 'bobTracks': if (G.time - (this.birdToast.tracks ?? -99) > 12) { this.birdToast.tracks = G.time; this.hud.toast(t('e.bobTracks'), 2.6, t('e.bobTracks2')); } break;
-        case 'snowmanDown': this.hud.toast(t('e.snowmanDown'), 2); break;
-        case 'snowmanUp': this.hud.toast(t('e.snowmanUp'), 1.6); break;
-        case 'pigDunked': if (me) this.hud.toast(t('e.pigDunked'), 1.6); break;
-        case 'bobDunked': this.hud.toast(t('e.bobDunked'), 2.4); break;
-        case 'bigSnowballBob': this.hud.toast(t('e.bigSnowballBob'), 2.4); break;
-        case 'snowCoat': if (me && G.time - (this.birdToast.coat ?? -99) > 30) { this.birdToast.coat = G.time; this.hud.toast(t('e.snowCoat'), 2.4, t('e.snowCoat2')); } break;
+        case 'bobTracks': H.emote(bob, 'feet', 2, 2.4); break;
+        case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
+        case 'snowCoat': if (me) H.emote(this.local, 'snow', 1.4, 1.3); break;
         case 'roundEnd': break;
       }
     }
     G.events.length = 0;
-  }
-
-  private birdToast: Record<string, number> = {};
-  /** Farm 3: picking up the red rag / farm 5: a rolling snowball → a hint, once per grab (the snowball: once a round). */
-  private ragHeld = '';
-  private ragHint() {
-    const h = this.local.held as { def?: { id?: string } } | null, id = h?.def?.id ?? '';
-    if (id !== this.ragHeld) {
-      if (id === 'redRag') this.hud.toast(t('e.redRag'), 2.6, t('e.redRag2'));
-      if (id === 'snowboulder' && G.time - (this.birdToast.boulder ?? -999) > 120) { this.birdToast.boulder = G.time; this.hud.toast(t('e.boulder'), 2.8, t('e.boulder2')); }
-    }
-    this.ragHeld = id;
   }
 
   /** Host / solo: everything back to the start, new mission list. */
@@ -413,7 +345,7 @@ export class Game {
     G.grills = 0;
     cage.setOpen(false);
     this.round.start();
-    this.hud.toast(t('e.roundStart'), 2.5, t('e.roundStart2'));
+    this.hud.toast(t('e.roundStart'), 2.2);
   }
 
   /** Admin panel buttons. */
@@ -717,7 +649,6 @@ export class Game {
     this.farm.dairy?.render(dt);
     this.farm.pumpkins?.render(dt);
     this.farm.winter?.render(dt);
-    this.ragHint();
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;
@@ -734,6 +665,9 @@ export class Game {
     const goal = this.round.targetFor(this.local.held);
     this.hud.update(this.local, SETTINGS.fps ? this.fps : 0, goal ? t(('where.' + goal.where) as Key) : '');
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
+    // caged: a lock pulses over the latch (that's where you pick it) instead of a sentence
+    if (this.local.cage && !this.farm.cage.canPick(this.local)) this.hud.emote(this.farm.cage.latch, 'lock', 1.1, 0.5);
+    this.hud.updateEmotes(this.gfx.camera);
     if (this.farmer) {
       this.hud.updateFarmer(this.farmer, this.local, this.gfx.camera);
       // music: a little faster per alert level, fastest in a chase

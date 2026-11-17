@@ -12,6 +12,7 @@ import { POOL_IDS, type PoolId } from '../world/gadgets';
 import type { Game } from './game';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 import type { Spot } from '../world/pumpkins';
+import { IC, type IconId } from './icons';
 
 /**
  * M5 round loop (Burglin' Gnomes / Untitled Goose Game to-do list): steal loot into the stash in the sty (each item
@@ -65,6 +66,9 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
+
+/** Waypoint icons (the place a held thing goes). */
+const WHERE_IC: Record<Where, IconId> = { pond: 'water', well: 'well', stash: 'stash', porch: 'house', bob: 'bob', press: 'apple', hole: 'water' };
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number } | null, p: { x: number; z: number }) => !!r && p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const v1 = new THREE.Vector3();
@@ -372,7 +376,7 @@ export class Round {
     if (!id) return;
     consumeGadget(id);
     this.game.onLoadout?.();
-    setTimeout(() => this.game.hud.toast(t(('g.' + id) as Key), 4, t(('g.' + id + '.use') as Key, { rmb: t('key.rmb') })), 2800);   // after the round-start toast
+    setTimeout(() => this.game.hud.toast(t(('g.' + id) as Key), 2.2), 2600);   // after the round-start toast
   }
 
   /** The {n} of a mission text key ('m.smashPots' → 4, 'm.quota' → the quota). */
@@ -456,7 +460,7 @@ export class Round {
     this.panel.style.display = this.phase === 'end' ? 'none' : '';
     const rows = this.missions.map((x) => {
       const txt = this.mText(x);
-      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? '✔' : x.req ? '•' : '★'}</i><span>${txt}</span>${x.req ? '' : `<em>${t('m.bonus')}</em>`}</div>`;
+      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? '✔' : x.req ? '•' : '★'}</i><span>${txt}</span></div>`;
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
     this.panel.innerHTML = `<div class="mh"><span class="tm${left < 60 ? ' low' : ''}">⏱ ${mm}:${ss}</span><span><i class="coin"></i>${this.banked} / ${this.quota}</span></div>` +
@@ -469,10 +473,10 @@ export class Round {
     const list: { at: THREE.Vector3; label: string; mission: boolean }[] = [];
     if (this.phase !== 'end' && L && !L.out && !L.cage) {
       const tg = this.targetFor(L.held);
-      if (tg && tg.where !== 'bob') list.push({ at: this.wherePos(tg.where, this.wp[0]), label: t(('where.' + tg.where) as Key), mission: true });
-      if (this.wants('mudPorch') && L.muddy > 0 && !tg) list.push({ at: this.wherePos('porch', this.wp[0]), label: t('where.porch'), mission: true });
+      if (tg && tg.where !== 'bob') list.push({ at: this.wherePos(tg.where, this.wp[0]), label: IC[WHERE_IC[tg.where]], mission: true });
+      if (this.wants('mudPorch') && L.muddy > 0 && !tg) list.push({ at: this.wherePos('porch', this.wp[0]), label: IC.house, mission: true });
       if ((this.carrying() && tg?.where !== 'stash') || (this.phase === 'escape' && !this.inStash(L.pos)) || tg?.where === 'stash')
-        list.push({ at: this.wp[1].copy(this.stash), label: t('hud.stash'), mission: false });
+        list.push({ at: this.wp[1].copy(this.stash), label: IC.stash, mission: false });
     }
     let px = -1e9, py = -1e9;
     [this.mark, this.mark2].forEach((el, i) => {
@@ -482,14 +486,14 @@ export class Round {
       v1.copy(m.at).setY(m.at.y + 3).project(camera);
       const W = innerWidth, H = innerHeight;
       let x = (v1.x * 0.5 + 0.5) * W, y = (-v1.y * 0.5 + 0.5) * H;
-      if (v1.z > 1) { x = W - x; y = H - 40; }
-      x = Math.min(W - 60, Math.max(60, x)); y = Math.min(H - 40, Math.max(70, y));
+      if (v1.z > 1) { x = W - x; y = H - 130; }
+      x = Math.min(W - 60, Math.max(60, x)); y = Math.min(H - 130, Math.max(110, y));   // clear of the ability rings / Bob's chip
       if (Math.abs(x - px) < 150 && Math.abs(y - py) < 46) y = py - 48;   // two waypoints the same way: stack them
       px = x; py = y;
       el.style.left = x + 'px'; el.style.top = y + 'px';
       el.classList.toggle('mission', m.mission);
       const d = Math.hypot(L.pos.x - m.at.x, L.pos.z - m.at.z);
-      const html = `<b>▼</b>${m.label} · ${Math.round(d)} m`;
+      const html = `${m.label}<b>▼</b>${Math.round(d)} m`;
       if (el.innerHTML !== html) el.innerHTML = html;
     });
   }

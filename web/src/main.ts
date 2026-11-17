@@ -112,7 +112,9 @@ async function boot() {
     input.lock();
     game.running = true;
     if (G.net !== 'client' && game.round.no === 0) game.round.start();
-    game.hud.flashHelp(16);
+    // the controls card only pops up on your very first game (H shows it any time)
+    let seen = false; try { seen = !!localStorage.getItem('porkour.helpSeen'); localStorage.setItem('porkour.helpSeen', '1'); } catch { /* private mode */ }
+    if (!seen) game.hud.flashHelp(16);
   };
   // online lobby (title "Play online", invite links ?room=CODE, back from a game ?lobby=1)
   const lobby = new Lobby(game, {

@@ -5,6 +5,7 @@ import { ALERT, type Farmer } from '../farmer/farmer';
 import { G, ADMIN } from './ctx';
 import { t, onLang, type Key } from '../i18n';
 import { sightPoint } from '../world/cover';
+import { IC, kc, type IconId } from './icons';
 
 const v1 = new THREE.Vector3();
 
@@ -22,8 +23,38 @@ export const SVG = {
   menu: '<svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff6e6" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm9 4.6v-2.2l-2.4-.6a7 7 0 0 0-.7-1.7l1.3-2.1-1.6-1.6-2.1 1.3a7 7 0 0 0-1.7-.7L13.1 3h-2.2l-.6 2.4a7 7 0 0 0-1.7.7L6.5 4.8 4.9 6.4l1.3 2.1a7 7 0 0 0-.7 1.7L3 10.9v2.2l2.4.6c.2.6.4 1.2.7 1.7l-1.3 2.1 1.6 1.6 2.1-1.3c.5.3 1.1.5 1.7.7l.6 2.5h2.2l.6-2.4a7 7 0 0 0 1.7-.7l2.1 1.3 1.6-1.6-1.3-2.1c.3-.5.5-1.1.7-1.7z"/></svg>',
 };
 
+/** Icon-first HUD (user: "too much text"): prompts are key + icon, status is a row of badges, events pop over heads. */
+const CSS = `
+#prompt { display:flex; flex-direction:column; align-items:center; gap:4px; }
+#prompt .pr { display:flex; align-items:center; gap:14px; }
+.pp { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border-radius:12px; background: rgba(30,16,6,.55); }
+.pp.dim { opacity:.6; }
+.ic { display:block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+.pp .ic { width:30px; height:30px; }
+kbd.kc { font-family: Title; font-size:16px; color:#3b2412; background:#fff6e6; border-radius:6px; padding:1px 7px 2px; box-shadow: 0 2px 0 #c9b49a; line-height:1.25; }
+.mbar { width:120px; height:10px; border-radius:6px; background: rgba(0,0,0,.4); overflow:hidden; }
+.mbar i { display:block; height:100%; background: linear-gradient(90deg, var(--pink), var(--gold)); }
+.big { font-family: Title; font-size: 34px; color: var(--gold); }
+#status { display:flex; gap:8px; align-items:flex-end; }
+.sb { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border-radius:12px; background: rgba(30,16,6,.5); font-family: Title; font-size:18px; color: var(--cream); }
+.sb .ic { width:28px; height:28px; }
+.sb.warn { animation: sbFlash .6s ease-in-out infinite alternate; }
+@keyframes sbFlash { from { background: rgba(30,16,6,.5); } to { background: rgba(255,90,60,.55); } }
+#bob.ico { padding:2px 8px; display:flex; gap:2px; } #bob.ico .ic { width:30px; height:30px; }
+#alert span { display:none; }
+.ab .lbl { display:none; }
+.emote { position:absolute; left:0; top:0; pointer-events:none; animation: emPop .28s cubic-bezier(.3,1.6,.6,1) both; }
+.emote .ic { width:38px; height:38px; }
+.emote.out { opacity:0; transition: opacity .35s; }
+@keyframes emPop { from { transform: var(--tr) scale(.2); } to { transform: var(--tr) scale(1); } }
+.wpt .ic { width:30px; height:30px; margin: 0 auto 1px; }
+#toast .ic { display:inline-block; width:38px; height:38px; vertical-align:-8px; margin-right:6px; }
+`;
+
 /** HTML HUD: ability rings with cooldowns, clock, Bob's chip + marker, prompts, toasts, a controls card that fades out. */
 export class Hud {
+  /** Icons that pop over someone's head for a moment (what just happened to them) instead of a line of text. */
+  private emotes: { el: HTMLElement; at: { pos: THREE.Vector3 } | THREE.Vector3; h: number; until: number }[] = [];
   private ab: Record<string, { el: HTMLElement; cd: HTMLElement; lbl: HTMLElement; was: number }> = {};
   private prompt = document.getElementById('prompt')!;
   private status = document.getElementById('status')!;
@@ -44,6 +75,7 @@ export class Hud {
   private alertEl: HTMLElement; private alertKey = '';
 
   constructor() {
+    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     const box = document.getElementById('abilities')!;
     const defs: [string, string][] = [['grab', 'key.rmb'], ['sprint', 'key.shift'], ['fart', 'Q'], ['wallow', 'C'], ['stand', 'E']];
     for (const [id, key] of defs) {
@@ -75,8 +107,7 @@ export class Hud {
     this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
-      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') +
-      `<div class="tip">${t('help.tip1')}<br>${t('help.tip2')}<br>${t('help.tip3')}</div><div class="keys">${t('help.keys')}</div>`;
+      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
@@ -84,9 +115,33 @@ export class Hud {
     }
   }
 
-  toast(text: string, secs = 1.4, sub = '') {
-    this.toastEl.innerHTML = text + (sub ? `<small>${sub}</small>` : ''); this.toastEl.style.opacity = '1';
+  toast(text: string, secs = 1.4, sub = '', icon?: IconId) {
+    this.toastEl.innerHTML = (icon ? IC[icon] : '') + text + (sub ? `<small>${sub}</small>` : ''); this.toastEl.style.opacity = '1';
     this.toastUntil = performance.now() / 1000 + secs;
+  }
+  /** An icon pops over a pig / Bob / an animal (or a spot) for a moment. */
+  emote(at: { pos: THREE.Vector3 } | THREE.Vector3 | null | undefined, icon: IconId, secs = 1.6, h = 1.7) {
+    if (!at) return;
+    const tgt = (at as { pos?: THREE.Vector3 }).pos ?? (at as THREE.Vector3);
+    if (this.emotes.some((e) => e.at === at && e.el.dataset.i === icon && e.until > performance.now() / 1000 + 0.3)) return;
+    const el = document.createElement('div'); el.className = 'emote'; el.dataset.i = icon; el.innerHTML = IC[icon];
+    document.getElementById('hud')!.appendChild(el);
+    this.emotes.push({ el, at: (at as { pos?: THREE.Vector3 }).pos ? at as { pos: THREE.Vector3 } : tgt.clone(), h, until: performance.now() / 1000 + secs });
+  }
+  updateEmotes(cam: THREE.Camera) {
+    const now = performance.now() / 1000;
+    this.emotes = this.emotes.filter((e) => {
+      if (now > e.until + 0.4) { e.el.remove(); return false; }
+      if (now > e.until) e.el.classList.add('out');
+      const p = (e.at as { pos?: THREE.Vector3 }).pos ?? (e.at as THREE.Vector3);
+      v1.copy(p); v1.y += e.h + (1 - Math.max(0, e.until - now) / 2) * 0.4;
+      v1.project(cam);
+      if (v1.z > 1 || Math.abs(v1.x) > 1.1 || Math.abs(v1.y) > 1.1) { e.el.style.opacity = '0'; return true; }
+      e.el.style.opacity = '';
+      const tr = `translate(${((v1.x + 1) / 2) * innerWidth}px, ${((1 - v1.y) / 2) * innerHeight}px) translate(-50%, -100%)`;
+      e.el.style.setProperty('--tr', tr); e.el.style.transform = tr;
+      return true;
+    });
   }
   private ring(id: string, f: number, active = false) {
     const a = this.ab[id];
@@ -133,31 +188,34 @@ export class Hud {
   /** Bob's activity chip + the ? / ! marker over his head (clamped to the screen edge when he's off-screen). */
   updateFarmer(bob: Farmer, pig: Pig, cam: THREE.Camera) {
     this.alertEl.style.display = ADMIN.bob ? '' : 'none';
-    if (!ADMIN.bob) { this.bob.textContent = t('bob.off'); this.bob.className = 'txt'; this.mark.style.opacity = '0'; return; }
+    if (!ADMIN.bob) { this.bob.textContent = t('bob.off'); this.bob.className = 'txt'; this.bob.dataset.i = ''; this.mark.style.opacity = '0'; return; }
     this.updateAlert(bob);
     const s = bob.sus.get(pig) ?? 0;
     const onMe = bob.target === pig && bob.chasing;
-    let txt = t('bob.doing', { what: t(bob.activity) }), cls = '';
+    // Bob's chip: one icon for what he's up to (no sentence); the words stay as a tooltip
+    let txt = t('bob.doing', { what: t(bob.activity) }), cls = '', ic: IconId = bob.doing ? 'work' : 'walk';
     const st = bob.state;
-    if (bob.activity.startsWith('bob.')) txt = t(bob.activity);
-    if (st === 'carry') { txt = bob.carrying === pig ? t('bob.carryYou') : t('bob.carryPig'); cls = 'red'; }
-    else if (st === 'slapWind' || st === 'slap' || st === 'taunt') { txt = t('bob.slap'); cls = 'red'; }
-    else if (bob.chasing) { txt = onMe ? t('bob.chaseYou') : t('bob.chasePig'); cls = 'red'; if (st === 'pant') txt = t('bob.pant'); }
-    else if (st === 'suspect') { txt = t('bob.suspect'); cls = 'yellow'; }
-    else if (st === 'search' && bob.hunt) { txt = bob.hunt === pig ? t('bob.searchYou') : t('bob.searchPig'); cls = 'yellow'; }
-    else if (st === 'investigate' && bob.activity === 'bob.tracks') { txt = t('bob.tracks'); cls = 'yellow'; }
-    else if (st === 'investigate' || st === 'search') { txt = t('bob.heard'); cls = 'yellow'; }
-    else if (st === 'down') { txt = t('bob.down'); cls = 'green'; }
-    else if (st === 'stagger') { txt = t('bob.stagger'); cls = 'green'; }
-    else if (st === 'cough') { txt = t('bob.cough'); cls = 'green'; }
-    else if (st === 'fist') { txt = t('bob.fist'); cls = 'yellow'; }
-    else if (st === 'dance') { txt = t('bob.dance'); cls = 'green'; }
-    else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; }
-    else if (st === 'away') { txt = t('bob.market'); cls = 'blue'; }
-    else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; }
-    else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; }
-    if (st === 'aim' || st === 'shoot') { txt = t('bob.aim'); cls = 'red'; }
-    this.bob.textContent = txt; this.bob.className = 'txt ' + cls;
+    if (bob.activity.startsWith('bob.')) { txt = t(bob.activity); ic = 'work'; }
+    if (st === 'carry') { txt = bob.carrying === pig ? t('bob.carryYou') : t('bob.carryPig'); cls = 'red'; ic = 'carry'; }
+    else if (st === 'slapWind' || st === 'slap' || st === 'taunt') { txt = t('bob.slap'); cls = 'red'; ic = 'alarm'; }
+    else if (bob.chasing) { txt = onMe ? t('bob.chaseYou') : t('bob.chasePig'); cls = 'red'; ic = 'alarm'; if (st === 'pant') txt = t('bob.pant'); }
+    else if (st === 'suspect') { txt = t('bob.suspect'); cls = 'yellow'; ic = 'question'; }
+    else if (st === 'search' && bob.hunt) { txt = bob.hunt === pig ? t('bob.searchYou') : t('bob.searchPig'); cls = 'yellow'; ic = 'question'; }
+    else if (st === 'investigate' && bob.activity === 'bob.tracks') { txt = t('bob.tracks'); cls = 'yellow'; ic = 'feet'; }
+    else if (st === 'investigate' || st === 'search') { txt = t('bob.heard'); cls = 'yellow'; ic = 'question'; }
+    else if (st === 'down') { txt = t('bob.down'); cls = 'green'; ic = 'stars'; }
+    else if (st === 'stagger') { txt = t('bob.stagger'); cls = 'green'; ic = 'stars'; }
+    else if (st === 'cough') { txt = t('bob.cough'); cls = 'green'; ic = 'cough'; }
+    else if (st === 'fist') { txt = t('bob.fist'); cls = 'yellow'; ic = 'alarm'; }
+    else if (st === 'dance') { txt = t('bob.dance'); cls = 'green'; ic = 'note'; }
+    else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; ic = 'zzz'; }
+    else if (st === 'away') { txt = t('bob.market'); cls = 'blue'; ic = 'cart'; }
+    else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; ic = 'wolf'; }
+    else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; ic = 'trap'; }
+    else if (bob.doing && bob.chores[bob.choreIdx]?.anim === 'nap') ic = 'zzz';
+    if (st === 'aim' || st === 'shoot') { txt = t('bob.aim'); cls = 'red'; ic = 'aim'; }
+    if (this.bob.dataset.i !== ic + cls) { this.bob.dataset.i = ic + cls; this.bob.innerHTML = IC[ic]; this.bob.className = 'txt ico ' + cls; }
+    this.bob.title = txt;
     // marker
     let sym = '', col = '#ffd166', fill = 0;
     if (st === 'sleep' || st === 'away') { this.mark.style.opacity = '0'; return; }
@@ -210,59 +268,51 @@ export class Hud {
     this.ring('stand', 1, pig.standing);
     this.ring('grab', 1, !!pig.held);
     this.updateClock();
-    const K = (k: string) => `<b>${k}</b>`;
-    const keys = { space: K(t('key.space')), lmb: K(t('key.lmb')), rmb: K(t('key.rmb')), q: K('Q') };
-    // prompt
+    // prompt: key + icon pairs, no sentences (what a thing is and where it goes: the arrows / coin value show that)
+    const P = (...xs: string[]) => `<span class="pp">${xs.join('')}</span>`, row = (...xs: string[]) => `<div class="pr">${xs.join('')}</div>`;
+    const SPACE = kc(t('key.space')), mashBar = (n: number, need: number) => `<span class="mbar"><i style="width:${Math.round(clamp(n / Math.max(need, 1), 0, 1) * 100)}%"></i></span>`;
     let p = '';
     const gate = G.gates?.latchOf(pig) as { state: string; padHp: number; label: string } | null | undefined;
-    const gateWhat = gate ? `<b>${t(gate.label as Key)}</b>` : '';
     const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
       && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
-    if (pig.out) p = pig.outReason === 'wolf' ? t('p.dragged', { n: Math.ceil(pig.outUntil - pig.now) })
-      : `<b style="color:#ff7a4a;font-size:30px">${t('p.grilled')}</b><br>${t('p.backIn', { n: Math.ceil(pig.outUntil - pig.now) })}`;
-    else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = t('p.bobGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
-    else if (pig.mode === 'held' && pig.heldBy?.kind === 'wolf') p = t('p.wolfGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
-    else if (pig.mode === 'held' && pig.heldBy?.kind === 'trap') p = t('p.trapGotYou', { ...keys, n: Math.floor(pig.escape), need: pig.escapeNeed() });
-    else if (pig.mode === 'ragdoll') p = t('p.ragdoll', keys);
-    else if (pig.mode === 'held') p = t('p.held', keys);
-    else if (pig.cage) p = G.cage?.canPick(pig) ? t('p.pickLock', keys) : t('p.caged', keys);
-    else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
-      + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
-      + ((pig.held as { def?: { id?: string } }).def?.id === 'bone' ? `<br><span style="color:#ffd166">${t('p.bone')}</span>` : '')
-      + (['cherryBomb', 'stinkBomb'].includes((pig.held as { def?: { id?: string } }).def?.id ?? '') ? `<br><span style="color:#b6e36a">${t(('p.' + (pig.held as { def?: { id?: string } }).def?.id) as Key, keys)}</span>` : '')
-      + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '')
-      + (gate?.state === 'locked' && (pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.gateWhack', { ...keys, n: gate.padHp })}</span>`
-        : gate?.state === 'shut' ? `<br>${t('p.gateOpen', { ...keys, what: gateWhat })}` : '');
-    else if (G.cage?.canPick(pig)) p = t('p.pickLock', keys);
-    else if (gate) p = gate.state === 'locked' ? t('p.gateLocked', keys) : t('p.gateOpen', { ...keys, what: gateWhat });
-    else if (stuck) p = t('p.freeTrap', { ...keys, who: stuck.holding!.label.replace(/[<>&]/g, '') });
+    const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
+    if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
+    else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())), P(kc('Q'), ICONS.fart));
+    else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
+    else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
+    else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+      gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
+    else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
+    else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));
+    else if (stuck) p = row(P(IC.rmb, IC.trap));
     else {
       const tg = pig.findGrabTarget();
-      if (tg) p = t('p.grabThing', { ...keys, verb: t(tg.mass > pig.liftMax ? 'p.verbDrag' : 'p.verbGrab'), what: t(tg.label ?? '') + val(tg) });
-      else if (pig.standing && pig.wobble > 0.55) p = `<span style="color:#ffb38a">${t('p.wobbly')}</span>`;
-      else if (pig.standing) p = `<span style="opacity:.75">${t('p.punch', keys)}</span>`;
+      if (tg) p = row(P(IC.rmb, IC.grab, val(tg)));
+      else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
     const c = pig.charge();
-    this.prompt.innerHTML = p;
+    if (this.prompt.dataset.h !== p) { this.prompt.dataset.h = p; this.prompt.innerHTML = p; }
     this.charge.style.opacity = c > 0 ? '1' : '0';
     this.chargeBar.style.width = `${c * 100}%`;
     const w = pig.standing ? clamp(pig.wobble, 0, 1) : 0;
     this.wob.style.opacity = w > 0.25 ? '1' : '0';
     this.wobBar.style.width = `${w * 100}%`;
+    // status: a row of badges (icon + a number when it counts down)
     const st: string[] = [];
-    if (pig.muddy > 0) st.push(`<span style="color:#d9a066">${t('s.muddy', { n: Math.ceil(pig.muddyUntil - pig.now) })}</span>`);
-    if (pig.mode === 'wallow') st.push(t('s.playDead'));
+    const B = (ic: string, n = '', warn = false) => `<span class="sb${warn ? ' warn' : ''}">${ic}${n}</span>`;
+    if (pig.muddy > 0) st.push(B(G.snowy ? IC.snow : IC.mud, String(Math.ceil(pig.muddyUntil - pig.now))));
+    if (pig.mode === 'wallow') st.push(B(IC.dead));
     if (!pig.out && !pig.heldBy && G.traps?.list.some((tr: { active: boolean; armed: boolean; pos: THREE.Vector3 }) => tr.active && tr.armed
-      && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 3.5)) st.push(`<span style="color:#ff9a3c">${t('s.trapNear')}</span>`);
-    if (ADMIN.showSight && G.farmer) st.push(G.farmer.sees(pig) ? `<span style="color:#ff7a4a">${t('s.seen')}</span>` : t('s.unseen'));
-    if (!pig.out && !pig.cage && !pig.heldBy && G.cover.at(pig.pos))
-      st.push(G.cover.at(sightPoint(pig, v1)) ? `<span style="color:#9be36a">${t('s.hidden')}</span>` : `<span style="color:#ffd166">${t('s.peek')}</span>`);
+      && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 3.5)) st.push(B(IC.trap, '', true));
+    if (ADMIN.showSight && G.farmer) st.push(B(IC.eye, G.farmer.sees(pig) ? ' ✔' : ' ✘', G.farmer.sees(pig)));
+    if (!pig.out && !pig.cage && !pig.heldBy && G.cover.at(pig.pos)) st.push(G.cover.at(sightPoint(pig, v1)) ? B(IC.hidden) : B(IC.eye, '', true));
     // farm 4 at night: standing in a jack-o'-lantern's light = Bob sees you like by day
-    if (G.litAt && G.night > 0.5 && !pig.out && !pig.cage && !pig.heldBy && G.litAt(pig.pos.x, pig.pos.z)) st.push(`<span style="color:#ffb347">${t('s.lit')}</span>`);
-    if (pig.cage) st.push(`<span class="${pig.grillAt - pig.now < 20 ? 'flash' : ''}" style="color:#ff7a4a;font-size:24px">${t('s.caged', { n: Math.max(0, Math.ceil(pig.grillAt - pig.now)) })}</span>`);
-    if (G.grills) st.push(`<span style="color:#ffb38a">${t('s.grills', { n: G.grills })}</span>`);
-    if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') st.push(`<span style="color:#ff7a4a">${t('s.caught')}</span>`);
-    this.status.innerHTML = st.join('<br>');
+    if (G.litAt && G.night > 0.5 && !pig.out && !pig.cage && !pig.heldBy && G.litAt(pig.pos.x, pig.pos.z)) st.push(B(IC.light, '', true));
+    if (pig.cage) st.push(B(IC.flame, String(Math.max(0, Math.ceil(pig.grillAt - pig.now))), pig.grillAt - pig.now < 20));
+    if (G.grills) st.push(B(IC.pig, `${G.grills}/3`));
+    const sh = st.join('');
+    if (this.status.dataset.h !== sh) { this.status.dataset.h = sh; this.status.innerHTML = sh; }
     if (this.toastUntil && performance.now() / 1000 > this.toastUntil) { this.toastEl.style.opacity = '0'; this.toastUntil = 0; }
     this.fps.textContent = fps ? `${fps | 0} fps` : '';
   }
