@@ -400,6 +400,7 @@ export class Winter {
 
   // ================================================================== every browser
   render(dt: number) {
+    if (G.net === 'client') this.stepAll();   // players don't run the fixed steps: their prints come from where the pigs are drawn
     // prints fill in with snow: fade toward the snow colour, then gone
     this.colorT -= dt;
     if (this.colorT <= 0) {
