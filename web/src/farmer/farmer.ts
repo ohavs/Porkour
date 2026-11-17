@@ -597,6 +597,7 @@ export class Farmer {
     if (p.held) w = 1;
     if (p.standing) w = Math.max(w, 0.55);
     if (p.sprinting) w = Math.max(w, 0.3);
+    if (p.smoking) w = Math.max(w, 0.5);                       // a pig smoking a cigarette is NOT normal
     if (p.mode === 'ragdoll' && p.vel.length() > 4) w = Math.max(w, 0.5);
     if (this.zones.garden.some((r) => p.pos.x > r.x0 && p.pos.x < r.x1 && p.pos.z > r.z0 && p.pos.z < r.z1)) w = Math.max(w, 0.4);
     if (this.cage.pigs.length && this.cage.contains(p.pos, 2.2)) w = Math.max(w, 0.9);

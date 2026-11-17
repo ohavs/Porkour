@@ -37,6 +37,8 @@ export class Gfx {
   private passes: Pass[] = [];
   clouds = new THREE.Group();
   skyMat!: THREE.ShaderMaterial;
+  /** The sky dome + clouds ride along with the camera (the lobby stage is far from the farm). */
+  sky!: THREE.Mesh;
   hemi!: THREE.HemisphereLight;
   stars!: THREE.Points;
   moon!: THREE.Mesh;
@@ -72,7 +74,7 @@ export class Gfx {
     }));
     this.skyMat = sky.material as THREE.ShaderMaterial;
     sky.renderOrder = -10; sky.frustumCulled = false;
-    this.scene.add(sky);
+    this.scene.add(sky); this.sky = sky;
     this.scene.background = new THREE.Color(0xbfe6ff);
     this.scene.fog = new THREE.Fog(0xc8e8ff, 110, 330);
     this.makeClouds();
@@ -228,6 +230,7 @@ export class Gfx {
   render(dt: number) {
     if (this.lost) return;
     this.clouds.rotation.y += dt * 0.004;
+    this.sky.position.copy(this.camera.position); this.clouds.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.composer.render(dt);
   }
 }

@@ -26,6 +26,8 @@ export interface PropDef {
   r?: number; damp?: number;
   /** Key in PROPS (filled in below). */
   id?: string;
+  /** Snacks (world/snacks.ts): a food can's boost, a pack of cigarettes; how many bites / cigarettes it holds. */
+  snack?: 'beans' | 'spinach' | 'energy' | 'dogfood'; smokes?: boolean; servings?: number;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -52,12 +54,18 @@ export class Prop implements Holdable {
   pooled = false;
   /** Last time it was punched / headbutted / rammed (a cherry bomb lights). */
   lastKnock = -10;
+  /** Snacks: bites / cigarettes left (an eaten can loses its lid). */
+  left = 0;
+  private lid: THREE.Object3D | null = null;
+  setLeft(n: number) { this.left = n; if (this.lid) this.lid.visible = n > 0; }
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
     model.position.y = def.r ? -def.r : -size.y / 2;
     this.obj.add(model);
     if (def.make) rigidSkin(this.obj);
+    this.lid = this.obj.getObjectByName('lid') ?? null;
+    this.left = def.servings ?? 0;
     scene.add(this.obj);
     const shape = def.shape ?? 'box';
     const q = new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
@@ -112,7 +120,7 @@ export class Prop implements Holdable {
   }
   /** New round: back where it started. */
   reset() {
-    this.uses = 0; this.smashed = false; this.worth = null;
+    this.uses = 0; this.smashed = false; this.worth = null; this.setLeft(this.def.servings ?? 0);
     if (this.pooled) { this.bank(); this.putHome(); return; }
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
@@ -123,10 +131,11 @@ export class Prop implements Holdable {
   mass: number;
   label?: string;
 
-  netState(n: number[]) { n.push(carrierCode(this.heldBy), this.banked ? 1 : 0); }
+  netState(n: number[]) { n.push(carrierCode(this.heldBy), this.banked ? 1 : 0, this.left); }
   netApply(n: number[]) {
     if (!n.length) return;
     this.heldBy = carrierFrom(n[0]);
+    if (n[2] !== undefined && n[2] !== this.left) this.setLeft(n[2]);
     const b = n[1] === 1;
     if (b !== this.banked) { this.banked = b; this.obj.visible = !b; this.body.setEnabled(!b); const i = G.holdables.indexOf(this); if (b && i >= 0) G.holdables.splice(i, 1); else if (!b && i < 0) G.holdables.push(this); }
   }

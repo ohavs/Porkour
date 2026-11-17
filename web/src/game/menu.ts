@@ -36,6 +36,8 @@ export class Menu {
   onWardrobe?: () => void;
   /** Admin changed my coins / items (title wallet, online outfit message). */
   onShop?: () => void;
+  /** The lobby screen's wallet / party needs a redraw. */
+  onShopChanged?: () => void;
   onLeave?: () => void;
 
   constructor(private game: Game) {
@@ -98,7 +100,7 @@ export class Menu {
   close(lock = true) {
     this.menuOpen = false;
     this.menu.classList.remove('show');
-    if (lock) this.game.input.lock();
+    if (lock && this.game.mode === 'play') this.game.input.lock();
   }
 
   private renderMenu() {
@@ -236,6 +238,7 @@ export class Menu {
       `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}${hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : ''}</div>` +
       `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
       `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +
+      `<div class="sec">${t('a.snacks')}</div><div class="grid">${btn('snack:canBeans', 'a.canBeans')}${btn('snack:canSpinach', 'a.canSpinach')}${btn('snack:canEnergy', 'a.canEnergy')}${btn('snack:canDog', 'a.canDog')}${btn('snack:cigPack', 'a.cigPack')}${btn('smoke:me', 'a.smokeMe')}${btn('boosts:all', 'a.allBoosts')}</div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +

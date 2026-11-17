@@ -27,7 +27,11 @@ export class Lobby {
   private pendingCode = '';
   isOpen = false;
 
-  constructor(private game: Game, private opts: { start: () => void; wardrobe: () => void; outfit: () => string }) {
+  /** In a room that hasn't started: the party plays on the lobby stage (the game is already online). */
+  private preGame = false;
+  get inRoom() { return !!online.room && this.preGame && !this.inGame; }
+
+  constructor(private game: Game, private opts: { start: () => void; wardrobe: () => void; outfit: () => string; onRoom: () => void }) {
     this.el = document.getElementById('lobby')!;
     online.on('*', (m) => this.onMsg(m));
     onProfile(() => this.onProfileChange());
@@ -35,6 +39,7 @@ export class Lobby {
   }
 
   open(code = '') {
+    if (this.inRoom) { this.opts.onRoom(); return; }   // in a room: the party panel on the lobby screen is the room
     this.isOpen = true;
     this.pendingCode = code.toUpperCase();
     this.el.classList.add('show');
@@ -85,23 +90,24 @@ export class Lobby {
         const rf = asFarm(m.room.farm);
         if (rf && rf !== farmId()) { this.view = 'switching'; this.render(); setTimeout(() => reloadOnFarm(rf, { room: m.room.code }), 300); break; }
         if (m.room.state === 'playing') this.enterGame();   // late join: straight into the running game
-        else { this.view = 'room'; this.render(); }
+        else this.enterRoom();
         break;
       }
       case 'room':
         if (online.room?.state === 'playing' && !this.inGame && !online.isHost) this.enterGame();
-        else if (this.view === 'room') this.render();
+        else if (this.inRoom) this.opts.onRoom();
         break;
       case 'peer_join':
-        if (this.inGame) { g.syncPeers(); g.hud.toast(t('net.joined', { name: esc(m.peer.name) }), 1.6); if (online.isHost && g.net && 'needKey' in g.net) g.net.needKey.add(m.peer.id); }
-        else { this.chat.push({ name: '', text: t('net.joined', { name: m.peer.name }), sys: true }); this.render(); }
+        if (this.inGame || this.preGame) { g.syncPeers(); if (online.isHost && g.net && 'needKey' in g.net) g.net.needKey.add(m.peer.id); }
+        if (this.inGame) g.hud.toast(t('net.joined', { name: esc(m.peer.name) }), 1.6);
+        else { this.chat.push({ name: '', text: t('net.joined', { name: m.peer.name }), sys: true }); this.opts.onRoom(); }
         break;
       case 'peer_leave': {
-        if (this.inGame) { g.peerLeft(m.id); g.hud.toast(t('net.left'), 1.4); }
-        else this.render();
+        if (this.inGame || this.preGame) g.peerLeft(m.id);
+        if (this.inGame) g.hud.toast(t('net.left'), 1.4); else this.opts.onRoom();
         break;
       }
-      case 'peer_update': if (this.inGame) g.syncPeers(); else this.render(); break;
+      case 'peer_update': if (this.inGame || this.preGame) g.syncPeers(); if (!this.inGame) this.opts.onRoom(); break;
       case 'chat':
         this.chat.push({ name: m.name, text: m.text });
         if (this.chat.length > 60) this.chat.shift();
@@ -114,6 +120,7 @@ export class Lobby {
         setTimeout(() => { this.err = ''; if (this.view === 'browse') this.render(); }, 4000);
         break;
       case 'closed': case 'kicked': case 'disconnected':
+        if (this.preGame && !this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : 'net.closed'), 3); setTimeout(() => { location.href = location.pathname; }, 1500); break; }
         if (this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : 'net.closed'), 3); setTimeout(() => backToLobby(), 2500); }
         else if (m.op === 'disconnected') { this.view = 'error'; this.err = 'unreachable'; if (this.isOpen) this.render(); }
         else { this.err = m.op === 'kicked' ? 'kicked' : 'closed'; this.browse(); }
@@ -127,9 +134,21 @@ export class Lobby {
     online.setRoom({ state: 'playing' });
     this.enterGame();
   }
+  /** Joined a room that hasn't started: online right away, the party on the lobby stage, the menu closes. */
+  private enterRoom() {
+    if (!this.preGame) {
+      this.preGame = true;
+      this.game.goOnline(online.isHost ? 'host' : 'client');
+      this.game.enterLobby();
+    }
+    this.view = 'room'; this.close();
+    this.opts.onRoom();
+  }
   private enterGame() {
     if (this.inGame) return;
     this.inGame = true;
+    if (this.preGame) { this.close(); this.opts.start(); return; }   // already online on the lobby stage
+    this.isOpen = true; this.el.classList.add('show');
     this.view = 'joining'; this.render();
     this.game.goOnline(online.isHost ? 'host' : 'client');
     const go = () => { this.close(); this.opts.start(); };
@@ -214,8 +233,36 @@ export class Lobby {
       <button class="chip small" data-join="${r.code}">${t('net.joinBtn')}</button></div>`).join('') : `<div class="dim">${t('net.noRooms')}</div>`;
     box.querySelectorAll<HTMLElement>('[data-join]').forEach((b) => b.addEventListener('click', () => { online.join(b.dataset.join!); this.view = 'joining'; this.render(); }));
   }
+  /** The party panel on the lobby screen while in a room: code + invite, the 4 seats, chat, leave. */
+  partyHtml() {
+    const r = online.room!, host = online.isHost;
+    const slots = [0, 1, 2, 3].map((i) => {
+      const p = [...online.peers.values()].find((x) => x.slot === i);
+      return `<div class="pslot ${p ? (p.id === online.myId ? 'me' : '') : 'add'}"><i class="dot" style="background:${hex(PLAYER_COLORS[i])}"></i>${p ? this.peerHtml(p, host) : `<span class="dim">+</span>`}</div>`;
+    }).join('');
+    return `<div class="ptitle">${t('lobby.room')} <b>${r.code}</b><button class="chip small" data-a="invite">${t('net.copyInvite')}</button></div>${slots}` +
+      `<div id="lChat" class="pchat"></div><div class="prow"><input class="tin" id="lMsg" maxlength="160" placeholder="${esc(t('net.say'))}"><button class="chip small" data-a="say">↵</button></div>` +
+      (host ? `<label class="lchk"><input type="checkbox" id="lPub" ${r.public ? 'checked' : ''}> ${t('net.public')}</label>` : '') +
+      `<button class="chip small" data-a="leave">${t('lobby.leave')}</button>`;
+  }
+  wireParty(el: HTMLElement) {
+    const val = (id: string) => (el.querySelector<HTMLInputElement>('#' + id)?.value ?? '').trim();
+    el.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const a = b.dataset.a!;
+      if (a === 'say') { const m = val('lMsg'); if (m) { online.chat(m); (el.querySelector('#lMsg') as HTMLInputElement).value = ''; } return; }
+      if (a === 'leave') { online.leave(); location.href = location.pathname; return; }
+      if (a === 'invite') { const link = inviteLink(); navigator.clipboard?.writeText(link).then(() => { b.textContent = t('net.copied'); setTimeout(() => (b.textContent = t('net.copyInvite')), 1500); }, () => prompt(t('net.copyInvite'), link)); return; }
+    }));
+    el.querySelectorAll<HTMLElement>('[data-kick]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); online.kick(+b.dataset.kick!); }));
+    el.querySelector<HTMLInputElement>('#lPub')?.addEventListener('change', (e) => online.setRoom({ public: (e.target as HTMLInputElement).checked }));
+    const msg = el.querySelector<HTMLInputElement>('#lMsg');
+    msg?.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { const m = msg.value.trim(); if (m) { online.chat(m); msg.value = ''; } } });
+    msg?.addEventListener('keyup', (e) => e.stopPropagation());
+    this.renderChat();
+  }
   private renderChat() {
-    const box = this.el.querySelector('#lChat'); if (!box) return;
+    const box = document.getElementById('lChat'); if (!box) return;
     box.innerHTML = this.chat.map((c) => c.sys ? `<div class="dim">${esc(c.text)}</div>` : `<div><b>${esc(c.name)}:</b> ${esc(c.text)}</div>`).join('') || `<div class="dim">${t('net.chatHint')}</div>`;
     box.scrollTop = box.scrollHeight;
   }
@@ -236,7 +283,7 @@ export class Lobby {
     this.el.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => e.stopPropagation()));
   }
 
-  private action(a: string) {
+  action(a: string) {
     const val = (id: string) => (this.el.querySelector<HTMLInputElement>('#' + id)?.value ?? '').trim();
     switch (a) {
       case 'back':

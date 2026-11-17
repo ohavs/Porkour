@@ -6,10 +6,11 @@ import { G, ADMIN } from './ctx';
 import { t, onLang, type Key } from '../i18n';
 import { sightPoint } from '../world/cover';
 import { IC, kc, type IconId } from './icons';
+import { SNACK_IDS } from '../world/snacks';
 
 const v1 = new THREE.Vector3();
 
-const ICONS: Record<string, string> = {
+export const ICONS: Record<string, string> = {
   sprint: '<svg viewBox="0 0 24 24" width="30" height="30"><path fill="#fff6e6" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',
   fart: '<svg viewBox="0 0 24 24" width="32" height="32"><path fill="#b6e36a" d="M7 18a4 4 0 0 1-.6-8A5 5 0 0 1 16 8.5 3.8 3.8 0 0 1 17.5 18z"/><circle cx="4" cy="20" r="1.6" fill="#b6e36a"/><circle cx="2.4" cy="16.8" r="1" fill="#b6e36a"/></svg>',
   wallow: '<svg viewBox="0 0 24 24" width="32" height="32"><path fill="none" stroke="#c98a4b" stroke-width="2.6" stroke-linecap="round" d="M2 15c3-3 5 3 8 0s5 3 8 0 3-1 4-1M2 20c3-3 5 3 8 0s5 3 8 0 3-1 4-1"/><circle cx="12" cy="7" r="3.2" fill="#ffb3c7"/></svg>',
@@ -276,12 +277,14 @@ export class Hud {
     const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
       && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
+    const snack = pig.held as { def?: { snack?: string; smokes?: boolean }; left?: number } | null;
+    const useIc = snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
     if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())), P(kc('Q'), ICONS.fart));
     else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
     else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));
@@ -303,6 +306,8 @@ export class Hud {
     const B = (ic: string, n = '', warn = false) => `<span class="sb${warn ? ' warn' : ''}">${ic}${n}</span>`;
     if (pig.muddy > 0) st.push(B(G.snowy ? IC.snow : IC.mud, String(Math.ceil(pig.muddyUntil - pig.now))));
     if (pig.mode === 'wallow') st.push(B(IC.dead));
+    for (const k of SNACK_IDS) if (pig.boosted(k)) st.push(B(IC[`boost_${k}`], String(Math.ceil(pig.boostUntil[k] - pig.now))));
+    if (pig.smoking) st.push(B(IC.cig, String(Math.ceil(pig.cigUntil - pig.now))));
     if (!pig.out && !pig.heldBy && G.traps?.list.some((tr: { active: boolean; armed: boolean; pos: THREE.Vector3 }) => tr.active && tr.armed
       && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 3.5)) st.push(B(IC.trap, '', true));
     if (ADMIN.showSight && G.farmer) st.push(B(IC.eye, G.farmer.sees(pig) ? ' ✔' : ' ✘', G.farmer.sees(pig)));

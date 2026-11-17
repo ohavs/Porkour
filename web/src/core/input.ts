@@ -21,6 +21,9 @@ export class Input {
   private mdx = 0; private mdy = 0;
   private padPrev: boolean[] = [];
   locked = false;
+  /** Lobby: the mouse isn't locked; clicks on the game still count, and the pointer is an aim (NDC). */
+  free = false; mouseX = 0; mouseY = 0;
+  private lockedAt = 0;
   sensitivity = 0.0024;
   invertY = false;
   onKey?: (code: string) => void;
@@ -38,10 +41,11 @@ export class Input {
     addEventListener('keyup', (e) => { this.keys.delete(e.code); const b = KEYS[e.code]; if (b) this.up(b); });
     addEventListener('blur', () => { this.keys.clear(); for (const b of [...this.held]) this.up(b); });
     // the click that locks the pointer is not an attack
-    el.addEventListener('mousedown', (e) => { if (!this.locked) return; if (e.button === 0) this.down('attack'); if (e.button === 2) this.down('grab'); });
+    el.addEventListener('mousedown', (e) => { if (!this.locked && !this.free) return; if (e.button === 0) this.down('attack'); if (e.button === 2) this.down('grab'); });
     addEventListener('mouseup', (e) => { if (e.button === 0) this.up('attack'); if (e.button === 2) this.up('grab'); });
-    addEventListener('mousemove', (e) => { if (this.locked) { this.mdx += e.movementX; this.mdy += e.movementY; } });
-    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === this.el; });
+    addEventListener('mousemove', (e) => { this.mouseX = (e.clientX / innerWidth) * 2 - 1; this.mouseY = -(e.clientY / innerHeight) * 2 + 1; if (this.locked && performance.now() - this.lockedAt > 150 && Math.abs(e.movementX) < 300 && Math.abs(e.movementY) < 300) { this.mdx += e.movementX; this.mdy += e.movementY; } });
+    // the first moves right after the lock can carry the whole jump of the cursor: ignore them (the camera spun)
+    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === this.el; this.lockedAt = performance.now(); this.mdx = this.mdy = 0; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
   lock() { if (this.locked) return; try { (this.el.requestPointerLock?.() as any)?.catch?.(() => {}); } catch { /* needs a user gesture */ } }

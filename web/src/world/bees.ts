@@ -99,7 +99,7 @@ export class Bees {
   private valid(t: Pig | { kind: 'farmer' }) {
     if (t.kind === 'farmer') { const f = G.farmer; return !!f && !f.asleep && f.state !== 'down' && f.state !== 'off'; }
     const p = t as Pig;
-    return !p.out && !p.cage && !(p.heldBy?.kind === 'farmer') && p.muddy <= 0 && !this.inWater(p);
+    return !p.out && !p.cage && !(p.heldBy?.kind === 'farmer') && p.muddy <= 0 && !this.inWater(p) && !p.smoking;   // smoke calms bees
   }
   private inWater(p: Pig) { const w = G.places?.pond; return !!w && Math.hypot(p.pos.x - w.x, p.pos.z - w.z) < w.r - 0.3; }
   private tpos(t: Pig | { kind: 'farmer' }, out: THREE.Vector3) {
