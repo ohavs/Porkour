@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { G } from './ctx';
 import type { Game } from './game';
 import type { Prop } from '../world/props';
+import type { Gate } from '../world/gates';
 import type { Critter } from '../world/animals';
 
 const MAX = 160;
@@ -65,10 +66,11 @@ export class Markers {
     };
     const show = r.phase !== 'end' && g.running && !L.out;
     if (show) {
-      const mission = new Set<Prop | Critter>();
+      const mission = new Set<Prop | Critter | Gate>();
       for (const { obj } of r.missionThings()) {
         if (mission.has(obj) || obj === L.held || obj.heldBy === L) continue;
         mission.add(obj);
+        if (obj.kind === 'gate') { const p = (obj as Gate).markPos; put(p, 0, PINK, 36, 75, p.x); continue; }
         const isProp = obj.kind === 'prop';
         const p = isProp ? (obj as Prop).obj.position : ((obj as Critter).visual.root.position);
         put(p, isProp ? (obj as Prop).half : (obj as Critter).height * 0.5, PINK, 36, 75, p.x);

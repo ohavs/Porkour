@@ -5,6 +5,7 @@ import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
 import { PROPS, type Prop } from '../world/props';
 import type { Critter } from '../world/animals';
+import type { Gate } from '../world/gates';
 import { SETTINGS, saveSettings } from './settings';
 import type { Game } from './game';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
@@ -19,9 +20,9 @@ export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 
 
 export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell'
   | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond'
-  | 'smashPots' | 'melonSmash' | 'eggBob' | 'gnomePond' | 'undiesWell' | 'pieSteal' | 'mudPorch' | 'mazeTrophy';
+  | 'smashPots' | 'melonSmash' | 'eggBob' | 'gnomePond' | 'undiesWell' | 'pieSteal' | 'mudPorch' | 'mazeTrophy' | 'cowsOut' | 'gateBreak';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
-  'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch'];
+  'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak'];
 const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
@@ -29,12 +30,15 @@ export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob';
 /** Counted pranks (progress shown as n / need). */
 const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2 };
 /** Which props / critters a prank is about, and where they go. */
-const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; to?: Where; inCoop?: boolean; inPen?: boolean }>> = {
+/** Big pasture animals (they walk out on their own when the pasture gate is open). */
+const BIG = ['cow', 'horse', 'horse2', 'donkey'];
+const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; to?: Where; inCoop?: boolean; inPen?: boolean; inPasture?: boolean }>> = {
   mugPond: { props: ['mug'], to: 'pond' }, hayPond: { props: ['hay'], to: 'pond' }, gnomePond: { props: ['gnome'], to: 'pond' },
   catBath: { critters: ['cat'], to: 'pond' }, henPond: { critters: ['hen'], to: 'pond' },
   lambStash: { critters: ['sheep'], to: 'stash' }, pieSteal: { props: ['pie'], to: 'stash' }, mazeTrophy: { props: ['trophy'], to: 'stash' },
   pumpkinWell: { props: ['pumpkin', 'bigPumpkin'], to: 'well' }, undiesWell: { props: ['undies'], to: 'well' },
   hensOut: { critters: ['hen'], inCoop: true }, sheepOut: { critters: ['sheep'], inPen: true },
+  cowsOut: { critters: BIG, inPasture: true },
   smashPots: { props: ['flowerPot'] }, melonSmash: { props: ['melon'] }, eggBob: { props: ['egg'], to: 'bob' },
 };
 type Phase = 'play' | 'escape' | 'end';
@@ -42,6 +46,7 @@ const PHASES: Phase[] = ['play', 'escape', 'end'];
 
 const COOP = { x0: 16, x1: 30, z0: -32, z1: -18 };
 const SHEEP_PEN = { x0: -63, x1: -50, z0: -52, z1: -34 };
+const PASTURE = { x0: 22, x1: 52, z0: -76, z1: -50 };
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const WELL = { x: 0, z: -56 };
 const POND = { x: 50, z: -2 };
@@ -159,6 +164,7 @@ export class Round {
     if (type === 'wolfScared') this.done('wolfScare');
     if (type === 'bobGaveUp') this.done('loseBob');
     if (type === 'whacked') this.done('whackBob');
+    if (type === 'gateBroken') this.done('gateBreak');
   }
 
   step(dt: number) {
@@ -186,6 +192,7 @@ export class Round {
     if (this.wants('pumpkinWell')) this.check('pumpkinWell', props.some((p) => (p.def === PROPS.pumpkin || p.def === PROPS.bigPumpkin) && !p.banked && !p.heldBy
       && this.atWell(p.synced.currP)));
     if (this.wants('sheepOut')) this.check('sheepOut', critters.filter((c) => c.def.kind === 'sheep' && !inRect(SHEEP_PEN, c.pos)).length >= 2);
+    if (this.wants('cowsOut')) this.check('cowsOut', critters.filter((c) => BIG.includes(c.def.kind) && !inRect(PASTURE, c.pos)).length >= 2);
     if (this.wants('hayPond')) this.check('hayPond', props.some((p) => p.def === PROPS.hay && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
     if (this.wants('henPond')) this.check('henPond', critters.some((c) => c.def.kind === 'hen' && inWater(c.pos.x, c.pos.z)));
     if (this.wants('gnomePond')) this.check('gnomePond', props.some((p) => p.def === PROPS.gnome && !p.banked && inWater(p.synced.currP.x, p.synced.currP.z)));
@@ -298,8 +305,8 @@ export class Round {
 
   // ---------------------------------------------------------------- what to point at (markers.ts draws the arrows)
   /** Props / critters the open pranks are about (arrows over them). */
-  missionThings(): { obj: Prop | Critter; id: MissionId }[] {
-    const out: { obj: Prop | Critter; id: MissionId }[] = [];
+  missionThings(): { obj: Prop | Critter | Gate; id: MissionId }[] {
+    const out: { obj: Prop | Critter | Gate; id: MissionId }[] = [];
     if (this.phase === 'end') return out;
     const { props, critters } = this.game.farm;
     for (const m of this.missions) {
@@ -309,8 +316,10 @@ export class Round {
         if (!d.critters.includes(c.def.kind)) continue;
         if (d.inCoop && !inRect(COOP, c.pos)) continue;
         if (d.inPen && !inRect(SHEEP_PEN, c.pos)) continue;
+        if (d.inPasture && !inRect(PASTURE, c.pos)) continue;
         out.push({ obj: c, id: m.id });
       }
+      if (m.id === 'gateBreak') for (const g of (G.gates?.list ?? []) as Gate[]) if (g.state !== 'broken') out.push({ obj: g, id: m.id });
     }
     return out;
   }

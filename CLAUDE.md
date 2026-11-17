@@ -116,6 +116,7 @@ Dead by Daylight, Party Animals.
 | `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. **Alarm birds** (`BIRD`, s6): rooster (coop) crows at a pig holding / standing / sprinting ≤9 m (any ≤3.5 m) → `G.noise` 34 m at the pig, every 10 s; 3 turkeys (garden, ×1.4 scale, fan tail pops up with `excite`) gobble at a pig ≤6 m and charge 4.3 m/s for 6 s, peck = shove + you drop what you hold; fart scares them, asleep at night; Animalia turkey sounds (MIT). **Guard dog** (`dogBrain`, `DOG`): alert 2+ = off the leash (patrols the farm), sniffs pigs (11 m open / 4 m in a bush, rail fences don't block), stands next to the pig barking, `Farmer.tipOff` every 3 s, gives up after 12 s; a fart scares it off; a **bone** prop a pig moved / carries → fetch + chew 14 s (take it → it follows you). |
 | `game/modifiers.ts` | **Round modifiers** (2026-11-13 s6): one per round (`rollMod`, weights; admin forces one / `ADMIN.mod`), `G.mod`, synced in the round's strings: **rain** (grey sky, `render/rain.ts` streaks, 0 A.D. rain loop + thunder + lightning flash in `daynight.applyWeather`, Bob sight ×0.75 / hearing ×0.7, wallow anywhere = mud), **fog** (fog 3–62 m, sight ×0.6, ink lines fade with the fog: `InkOutline.setFade`), **grumpy** (alert floor 1, heat ×1.4, slap 55 %, no dancing, loot ×1.25, storm cloud over Bob), **market** (Bob walks to the south gate 9:00, state `away` like sleep until 13:00, the dog guards meanwhile, `tipOff` while away → he searches there when back; quota +150). |
 | `world/traps.ts` | **Bear traps** (pool of 4, one synced entity after the round): a `Carrier` (code 20+i) — snaps a pig by a hind leg (grip joint), mash Space (10, muddy 6) or a teammate RMB/LMB next to it; things thrown on it set it off; sprung traps vanish after 20 s; `G.traps`. |
+| `world/gates.ts` | **Pen gates** (s7: sty, chickens, pasture, garden, sheep; defs from `pen(..., gateId)` in farm1): real hinged leaf (dynamic body + revolute joint; limits / motor per mode; Bob's capsule doesn't collide with it). `shut` = latched (RMB / LMB at the latch) · `locked` = Bob's padlock (lock-pick puzzle, 2 weapon whacks, or ram) · `free` = swings (pen animals amble out: `Critter.pen` → `Gate.wander`; once out they graze outside till the round ends) · `broken` = rammed off its hinges (leaf tumbles, `gateBroken`). Bob opens gates he walks through and shuts them behind him (padlocked at alert 1+); `gate` state: sees one left open / smashed → closes / hammers it (6 s, busy view); alert 1+ padlocks a latched one every 18 s. Sty is never padlocked. One synced entity per gate (body + state). |
 | `world/wolf.ts` | Night wolves (`WolfPack`, 21:00–04:30): slip under the fence, chase pigs, bite + drag them off the farm (mash to escape, ram / punch / fart scares them, Bob shoos them), leave at dawn. |
 | `world/cage.ts` | Bob's cage + BBQ (`ADMIN.bbqTime`, default 90 s); latch (standing ×2), ram bursts the door. |
 | `world/terrain.ts`, `nature.ts`, `props.ts` | Ground (splat map, `mudAt`), instanced trees/bushes/hedges, `Prop` + `PROPS`. |
@@ -154,7 +155,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    whack Bob, hen in pond. Session 4: ✅ markers / waypoints, lock-pick puzzle, landmarks, 8 more pranks, breakables.
    Session 5: ✅ alert levels 0–3, guard dog + bone, bear traps, pitchfork, rock-salt shotgun.
    Session 6: ✅ round modifiers (rain / fog / grumpy Bob / market day), ✅ alarm birds (rooster + turkeys).
-   Next: Bob locks doors / repairs, more farms, shop (coins saved), more pranks with the new birds.
+   Session 7: ✅ pen gates (latch / padlock / ram), Bob shuts + padlocks + repairs them, animals walk out of open pens,
+   pranks "let 2 big animals out of the pasture" + "ram down a gate", 2 prize pumpkins in the garden.
+   Next: more farms, shop (coins saved), more pranks with the new birds.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -212,6 +215,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   modifier (now)" (+ "Random next round"), "Alarm birds" (rooster spots me, turkeys charge me, teleport to the garden).
   Checked headless solo (each modifier, Bob leaves / returns + searches the dog's spot, pecks, crow → Bob investigates) and
   2 browsers online. Sounds: 0 A.D. rain / thunder (CC BY-SA 3.0), Animalia turkey (MIT). No goose recording found → turkeys.
+- 2026-11-17 (session 7, "continue"): pen gates (see `gates.ts`). Admin → "Gates" (padlock / latch / open all, smash the
+  nearest, Bob deals with the nearest, teleport to the chicken gate). Checked headless solo (latch, pick, weapon whacks, ram,
+  Bob repair + padlock, Bob opens/shuts the chicken gate on his chore, cows / sheep / hens walk out) and 2 browsers online
+  (player's RMB / lock-pick act on the host, padlock + smashed leaf visible on the player). Local online tests need
+  `&server=ws://localhost:8080` (the built-in Render address wins otherwise).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -225,9 +233,13 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - Modifiers: is rain / fog too dark or too light, grumpy Bob too hard, market day (Bob away 9–13 ≈ 100 s) too long / short,
   how often (30 % normal days)?
 - Alarm birds: rooster too strict (crows every 10 s), turkeys too annoying (3 of them, drop loot on a peck)?
+- Gates: is padlocking too much (Bob locks one every 18 s when wary)? repair time 6 s, 2 weapon hits per padlock, do
+  animals walk out too fast / slow?
 
 ## Known issues / TODO
 - Lock-pick / round progress online still only covered by the session-5 smoke test (lobby → start → snapshots fine).
+- Gates: Bob walking right along a fence next to a gap may open / shut that gate as he passes (harmless). Hens flee a pig
+  standing in the doorway (they won't walk out past you — herd them from behind).
 - Guard dog walks straight lines (no nav grid): it can get stuck on buildings when a pig is behind one. The cause of the user's crashes isn't confirmed (likely GPU / driver: watch the admin crash note).
 - Camera clips into the boundary hedge (no collider) when a pig is held near the fence.
 - Your own pig is invisible inside a big bush (only the HUD says "Hidden"); maybe an outline / x-ray later.

@@ -95,6 +95,9 @@ export class Critter implements Holdable {
   // alarm birds: next call, the pig a turkey is chasing (since), next peck
   private callAt = 0; private chasePig: any = null; private chaseSince = 0; private peckAt = 0; private scanAt = 0;
   private chaseFrom = new THREE.Vector3();
+  /** Pen animals: their pen's gate (open = they amble out) and whether this one is on its way out. */
+  pen: { wander(p: { x: number; z: number }, out: THREE.Vector3, rnd: () => number, leaving: { on: boolean }): number } | null = null;
+  private leaving = { on: false }; private penT = 0;
   label: string;
   height: number;
   /** Night roost (hens → coop). */
@@ -134,7 +137,7 @@ export class Critter implements Holdable {
     this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
     this.parts.snap(); this.synced.capture(); this.synced.capture();
     this.sniffPig = null; this.chewUntil = 0; this.chewing = null; this.scaredUntil = 0; this.sicUntil = 0; this.pigSkip.clear();
-    this.chasePig = null; this.callAt = 0; this.excite = 0;
+    this.chasePig = null; this.callAt = 0; this.excite = 0; this.leaving.on = false;
   }
 
   get pos() { return this.synced.currP; }
@@ -213,6 +216,9 @@ export class Critter implements Holdable {
     const night = G.night > 0.6 && this.roost;
     if (!this.fleeing && G.time > this.nextThink) {
       if (night) { this.target.copy(this.roost!).add(v1.set(rng.range(-0.8, 0.8), 0, rng.range(-0.8, 0.8))); this.nextThink = G.time + 6; }
+      else if (this.pen && (this.penT = this.pen.wander(p, this.target, () => rng.next(), this.leaving)) > 0) {
+        this.target.y = p.y; this.nextThink = G.time + this.penT;   // out through the open gate / grazing outside
+      }
       else {
         const home = this.def.kind === 'dog' && ((G.farmer?.level ?? 0) >= 2 || G.farmer?.state === 'away') ? DOG.patrol : this.home;   // off the leash
         const a = rng.range(0, 6.28), r = Math.sqrt(rng.next()) * home.r;
