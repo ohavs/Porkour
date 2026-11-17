@@ -42,7 +42,7 @@ const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'gra
 const tmpV = new THREE.Vector3();
 const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
 /** Events the round counts (each one = +1): only seen inside the fixed step, never again in handleEvents. */
-const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed']);
+const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled']);
 
 export class Game {
   pigs: Pig[] = [];
@@ -116,7 +116,7 @@ export class Game {
     this.gadgets = new Gadgets(scene, this.farm.props);
     G.props = this.farm.props;
     // pen animals amble out when their gate is open
-    const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey'];
+    const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey', 'bull'];
     for (const c of this.farm.critters) {
       if (!PEN_KINDS.includes(c.def.kind)) continue;
       c.pen = this.gates.list.find((g) => { const r = g.def.rect; return c.home.x > r.x0 && c.home.x < r.x1 && c.home.z > r.z0 && c.home.z < r.z1; }) ?? null;
@@ -260,6 +260,7 @@ export class Game {
       this.gadgets.step();
       this.farm.orchard?.step();
       this.farm.bees?.step(FIXED);
+      this.farm.dairy?.stepHost();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -341,6 +342,15 @@ export class Game {
         case 'stung': if (me && G.time - (this.birdToast.sting ?? -99) > 6) { this.birdToast.sting = G.time; this.hud.toast(t('e.stung'), 2.2, t('e.stung2')); } break;
         case 'beesOut': if (me || !e.who) this.hud.toast(t('e.beesOut'), 2.2, t('e.beesOut2')); break;
         case 'bobStung': if (G.time - (this.birdToast.bob ?? -99) > 5) { this.birdToast.bob = G.time; this.hud.toast(t('e.bobStung'), 1.8); } break;
+        // farm 3: the bull, cow tipping, spilled milk, cheese
+        case 'bullSees': if (me && G.time - (this.birdToast.bull ?? -99) > 8) { this.birdToast.bull = G.time; this.hud.toast(t('e.bullSees'), 2.4, t('e.bullSees2')); } break;
+        case 'bullHit': if (me) this.hud.toast(t('e.bullHit'), 1.6); break;
+        case 'bullBob': this.hud.toast(t('e.bullBob'), 2.4); break;
+        case 'cowTipped': if (G.time - (this.birdToast.cow ?? -99) > 4) { this.birdToast.cow = G.time; this.hud.toast(t('e.cowTipped'), 1.4); } break;
+        case 'milkSpilled': if (G.time - (this.birdToast.milk ?? -99) > 4) { this.birdToast.milk = G.time; this.hud.toast(t('e.milkSpilled'), 2, t('e.milkSpilled2')); } break;
+        case 'bobSlipped': this.hud.toast(t('e.bobSlipped'), 2); break;
+        case 'pigSlipped': if (me) this.hud.toast(t('e.pigSlipped'), 1.4); break;
+        case 'cheeseBob': this.hud.toast(t('e.cheeseBob'), 2); break;
         case 'roundEnd': break;
       }
     }
@@ -348,6 +358,13 @@ export class Game {
   }
 
   private birdToast: Record<string, number> = {};
+  /** Farm 3: picking up the red rag → a hint, once per grab. */
+  private ragHeld = false;
+  private ragHint() {
+    const h = this.local.held as { def?: { id?: string } } | null, on = h?.def?.id === 'redRag';
+    if (on && !this.ragHeld) this.hud.toast(t('e.redRag'), 2.6, t('e.redRag2'));
+    this.ragHeld = on;
+  }
 
   /** Host / solo: everything back to the start, new mission list. */
   restartRound() {
@@ -364,6 +381,7 @@ export class Game {
     this.gates.reset();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
+    this.farm.dairy?.reset();
     this.gadgets.clear();
     this.daynight.setHour(ROUND_START_HOUR);
     G.grills = 0;
@@ -471,6 +489,22 @@ export class Game {
         const o = this.farm.orchard; if (!o) break;
         const f = L.forward;
         o.apples.filter((p) => p.banked).slice(0, 6).forEach((p, i) => p.unbank(new THREE.Vector3(L.pos.x + f.x * 1.4 + (i % 3 - 1) * 0.3, L.pos.y, L.pos.z + f.z * 1.4 + Math.floor(i / 3) * 0.3), 0));
+        break;
+      }
+      // farm 3: the dairy
+      case 'bull:me': this.farm.dairy?.sic(L); break;
+      case 'bull:out': { const g = this.gates.byId('bull'); if (g) this.farm.dairy?.letOut(g.outside); break; }
+      case 'milk:spill': { const f = L.forward; this.farm.dairy?.spillAt(L.pos.x + f.x * 2.2, L.pos.z + f.z * 2.2); break; }
+      case 'cow:tip': {
+        const c = this.farm.critters.filter((x) => x.def.kind === 'cow').sort((x, y) => x.pos.distanceTo(L.pos) - y.pos.distanceTo(L.pos))[0];
+        c?.knock(new THREE.Vector3(c.pos.x - L.pos.x, 0, c.pos.z - L.pos.z).normalize().multiplyScalar(2));
+        break;
+      }
+      case 'bringRag': case 'bringCheese': {
+        const id = a === 'bringRag' ? 'redRag' : 'cheeseWheel';
+        const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.4, L.pos.y + 0.7, L.pos.z + f.z * 1.4);
+        const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
+        if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); it.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
         break;
       }
       default: {
@@ -628,6 +662,8 @@ export class Game {
     this.gates.render(alpha);
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
+    this.farm.dairy?.render(dt);
+    this.ragHint();
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;

@@ -60,6 +60,9 @@ export class Terrain {
     c.restore();
   }
   noGrass(r: Rect) { this.noGrassRects.push(r); }
+  /** A round hill inside the farm (radius r, height h, a flat top of radius `flat`) — before build(). */
+  hill(x: number, z: number, r: number, h: number, flat = 0) { this.hills.push({ x, z, r, h, flat }); }
+  private hills: { x: number; z: number; r: number; h: number; flat: number }[] = [];
 
   private sample(x: number, z: number, ch: number) {
     const i = clamp(Math.floor(this.px(x)), 0, SPLAT - 1), j = clamp(Math.floor(this.px(z)), 0, SPLAT - 1);
@@ -81,6 +84,10 @@ export class Terrain {
     const out = Math.hypot(dx, dz);
     let h = (fbm(x * 0.035 + 3, z * 0.035 - 7, 3) - 0.5) * 0.7;
     h += smoothstep(8, 90, out) * (3 + 12 * fbm(x * 0.016, z * 0.016, 4));
+    for (const hl of this.hills) {
+      const d = Math.hypot(x - hl.x, z - hl.z);
+      if (d < hl.r) h += d <= hl.flat ? hl.h : hl.h * 0.5 * (1 + Math.cos((Math.PI * (d - hl.flat)) / (hl.r - hl.flat)));
+    }
     if (this.data) h -= this.mudAt(x, z) * 0.18;
     return h;
   }

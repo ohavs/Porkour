@@ -216,6 +216,7 @@ export class Menu {
       `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>` +
       `<div class="sec">${t('a.pranks')}</div><div class="grid">${btn('pick', 'a.pick')}${btn('bringPot', 'a.bringPot')}${btn('bringEgg', 'a.bringEgg')}${btn('bringGnome', 'a.bringGnome')}</div>` +
       (g.farm.orchard ? `<div class="sec">${t('a.farm2')}</div><div class="grid">${btn('tree:shake', 'a.treeShake')}${btn('bees:me', 'a.beesMe')}${btn('bringApples', 'a.bringApples')}</div>` : '') +
+      (g.farm.dairy ? `<div class="sec">${t('a.farm3')}</div><div class="grid">${btn('bull:me', 'a.bullMe')}${btn('bull:out', 'a.bullOut')}${btn('bringRag', 'a.bringRag')}${btn('cow:tip', 'a.cowTip')}${btn('milk:spill', 'a.milkSpill')}${btn('bringCheese', 'a.bringCheese')}</div>` : '') +
       `<div class="sec">${t('a.teleport')}</div><div class="tp">${g.farm.places.tp.filter(([k]) => k !== 'wheat' && k !== 'garden').map(([k]) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>` +
       (G.net === 'solo' ? `<div class="sec">${t('a.farm')}</div><div class="grid">${FARM_IDS.map((f) => `<button data-farm="${f}" class="${farmId() === f ? 'on' : ''}">${t(('farm.' + f) as Key)}</button>`).join('')}</div>` : '');
     this.admin.querySelectorAll<HTMLElement>('[data-tog]').forEach((s) => s.addEventListener('click', (e) => {

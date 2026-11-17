@@ -104,8 +104,9 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/medieval_village_pack/Hay.glb' '/public/glb/medieval_village_pack/Bags.glb' '/public/glb/medieval_village_pack/MarketStand_1.glb' '/public/glb/medieval_village_pack/MarketStand_2.glb' '/public/glb/survival_pack/WoodLog.glb' '/public/glb/survival_pack/BearTrap_Open.glb' '/public/glb/survival_pack/BearTrap_Closed.glb' '/public/glb/real_time_strategy_pack/Crate_Big_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack1.glb' '/public/glb/real_time_strategy_pack/Logs.glb' \
   '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb' '/public/glb/survival_pack/Shotgun_1.glb' \
   '/public/glb/platformer_pack/Bomb.glb' '/public/glb/rpg_items_pack/Key2.glb' \
-  '/public/glb/medieval_village_pack/Mill.glb' '/public/glb/medieval_village_pack/Stable.glb' '/public/glb/medieval_village_pack/Inn.glb' '/public/glb/medieval_village_pack/Sawmill.glb' '/public/glb/medieval_village_pack/Gazebo.glb' '/public/glb/medieval_village_pack/Bell_Tower.glb' '/public/glb/medieval_village_pack/Cart.glb' '/public/glb/medieval_village_pack/Bench_1.glb' '/public/glb/medieval_village_pack/Cauldron.glb' '/public/glb/nature_pack/Willow_1.glb' '/public/glb/nature_pack/Willow_2.glb' '/public/glb/nature_pack/TreeStump.glb'
-for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
+  '/public/glb/medieval_village_pack/Mill.glb' '/public/glb/medieval_village_pack/Stable.glb' '/public/glb/medieval_village_pack/Inn.glb' '/public/glb/medieval_village_pack/Sawmill.glb' '/public/glb/medieval_village_pack/Gazebo.glb' '/public/glb/medieval_village_pack/Bell_Tower.glb' '/public/glb/medieval_village_pack/Cart.glb' '/public/glb/medieval_village_pack/Bench_1.glb' '/public/glb/medieval_village_pack/Cauldron.glb' '/public/glb/nature_pack/Willow_1.glb' '/public/glb/nature_pack/Willow_2.glb' '/public/glb/nature_pack/TreeStump.glb' \
+  '/public/glb/medieval_village_pack/House_1.glb' '/public/glb/medieval_village_pack/House_2.glb' '/public/glb/medieval_village_pack/Blacksmith.glb' '/public/glb/medieval_village_pack/Bench_2.glb'
+for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca Bull; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
 done
@@ -130,7 +131,7 @@ grab loot "$Q/platformer_pack" 256 Bomb
 grab loot "$Q/rpg_items_pack" 256 Key2
 grab kaykit "$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Assets/gltf" 1024 smokebomb
 # farm 2 (orchard & beehives): Quaternius Medieval Village buildings + willows by the pond (CC0)
-grab village "$Q/medieval_village_pack" 256 Mill Stable Inn Sawmill Gazebo Bell_Tower Cart Bench_1 Cauldron
+grab village "$Q/medieval_village_pack" 256 Mill Stable Inn Sawmill Gazebo Bell_Tower Cart Bench_1 Cauldron House_1 House_2 Blacksmith Bench_2
 grab nature "$Q/nature_pack" 256 Willow_1 Willow_2 TreeStump
 
 # ---------------------------------------------------------------- repo art

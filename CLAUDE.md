@@ -109,6 +109,7 @@ Dead by Daylight, Party Animals.
 | `world/farms.ts`, `world/farmKit.ts` | **Farms = levels (s9)**: `FARM_IDS` farm1 / farm2, `farmId()` = `?farm=` → `SETTINGS.farm` ('random' = new pick each load). A farm is built once per page load: switching = reload (`reloadOnFarm`; title pills, admin → Farm). Online: the room carries the host's farm (`create` / `quick` send `farm`); a player whose page built another farm reloads with `?farm=X&room=CODE`. `farmKit(scene, t, out, bounds, seed)` = shared helpers (`building` / `decor` / `fence` / `pen` / `prop` / `critter` / `outerFence` / `hedgeRing` / `surroundings` / `scatter` / `finish`). `FarmBuild.places` = named spots the logic needs (pond, well, coop / sheep pen / pasture rects, stash, road gate, dog patrol, admin teleports `tp`); `missions` = pranks this farm can roll, `featured` = its own ones (one of the 2 required each round). Decor / cover pieces are reusable too (`decorKit`, `coverKit`, `sunflowers(c, rect)`). |
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
 | `world/farm2.ts`, `world/orchard.ts`, `world/bees.ts` | **Farm 2 — orchard & beehives (s9)** (Quaternius Medieval Village buildings: Inn = farmhouse, Mill, Stable, Sawmill = cider house, Gazebo = honey stand; `FARM2_MODELS` preloaded only on farm 2). **Orchard** (synced entity): 63 apple trees as instanced tree + fruit meshes; headbutt / punch / whack (`G.hittables`), sprint-ram (`onRam` on the trunk collider's owner) or a hard throw (`onImpact` in the step callback) shakes a tree → wiggle + rustle + noise 12 m, 2–3 apples drop (pool of 30 `apple` props, 4 per tree, fruit mesh hidden when empty), one golden-apple tree. **Cider press** eats apples dropped in its hopper; the 6th → a jug of cider (loot). **Bees** (synced entity): 6 hives; a hit / ram / throw → a swarm (≤3) chases the nearest pig or Bob at 5.3 m/s (> walk, < sprint), stings every 1 s (hop + squeal, drops what you hold; Bob: `stung()` = stagger, drops a pig), loses muddy pigs / pigs in the pond, a fart / stink cloud scatters it, sleeps at night; buzz = Veloren `bees_1.ogg` (GPL-3). Pranks: shake 5 trees, 3 apples on Bob, fill the press (6), lead bees to Bob, steal the prize honey pot / the golden apple. |
+| `world/farm3.ts`, `world/dairy.ts` | **Farm 3 — dairy & cheese + the bull (s10)** (`FARM3_MODELS`: Quaternius Medieval Village House_1/2, Blacksmith = creamery; Quaternius `Bull` GLB + brass nose ring). **Cheese hill** = `Terrain.hill(x, z, r, h, flat)` (flat top: 4 cheese wheels on edge + the prize cheese; a push sends a wheel rolling down). Props: `milkChurn`, `cheeseWheel` / `prizeCheese` (shape `'wheel'` = round cylinder along x, rolls), `redRag`. **Dairy** (synced entity; `CritterBrain` of the bull via `Critter.brain`): bull notices a pig in his paddock (15 m) / anyone holding the red rag (26 m) / a rag on the ground / Bob once loose → `notice` → `paw` (1.4 s, dust + steam) → `charge` (9.2 m/s, turns 0.95 rad/s: dodge sideways) runs over pigs (ragdoll), props, cows (tip), closed gates (smash → loose), Bob (`Farmer.bullHit` = flung + down, then 35 s calm) → `rest`; slows on a fence = `dazed`. A pig ram / hit = `provoked`. Churns knocked over (tilt) spill → milk puddles (8, 75 s); Bob walking in one `slip()`s (down), pigs sprinting / standing slip. Cows: ram / any hit = `Critter.tip` (6.5 s on her side). Rolling cheese into Bob = `cheesed` (stagger / down with the prize). Pranks: bullBob, bullOut, cowTip (3), cheeseBob, prizeCheese, spillMilk (3), milkSlip. Sounds: 0 A.D. cattle (bull, played low), Wesnoth tusker charge, Animalia cow hurt, VoxeLibre milk + splash (CC0). |
 | `world/cover.ts`, `world/hideouts.ts` | **Hiding (2026-11-13)**: `G.cover` = soft cover (bushes / corn / wheat: no collider, pigs walk in; Bob's sight ray through it is blocked, a pig inside is found only ≤1.7 m, or ≤5 m if moving; standing pigs poke their head over wheat / small bushes — `sightPoint`). Fast moves inside rustle (sound + leaves + `G.noise`). `hideouts.ts` places big bush clusters (`Forest` 'bigBush'), the east wheat field, a 2nd corn patch, climbable straw-bale stacks, log piles / crate stacks / sacks / fallen logs / farm stands (Quaternius CC0, `assets/cover`). Rail fences are `SEE_THROUGH` for Bob. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
@@ -164,7 +165,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    lucky horseshoe, skeleton key).
    Session 9: ✅ farms as levels (farm kit + registry + picker, online room farm), ✅ **farm 2: orchard & beehives**
    (shakeable trees, apples, cider press, angry bee swarms, golden apple, honey, 6 new pranks).
-   Next: farm 3 (GDD: dairy & cheese + a bull), then pumpkin night, winter; more pranks with the birds / gadgets.
+   Session 10: ✅ **farm 3: dairy & cheese + the bull** (charging bull + red rag, cow tipping, spilled milk slips,
+   rolling cheese wheels off cheese hill, prize cheese, 7 new pranks).
+   Next: farm 4 (GDD: pumpkin farm at night), then winter (ice); more pranks with the birds / gadgets.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -242,6 +245,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   layout shots, headbutt / ram / admin shake → apples, press → cider after 6, swarm chases + stings, muddy pig ignored →
   Bob stung (stagger), apple splat on Bob counts; farm 1 unchanged; 2 browsers online (player on farm 1 reloads into the
   host's farm-2 room; shaken tree + swarm seen on the player).
+- 2026-11-17 (session 10, "continue"): **farm 3 — dairy & cheese + the bull** (see `farm3.ts` / `dairy.ts`). Title pill
+  "Dairy & the bull". Admin → "Dairy & bull" (bull charges me, let the bull out, red rag / cheese wheel in front of me, tip
+  the nearest cow, spill milk). Also fixed: farm 2's chore names showed raw keys in Bob's HUD chip.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -259,10 +265,14 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   (Bob drops a pig he carries)?
 - Gates: is padlocking too much (Bob locks one every 18 s when wary)? repair time 6 s, 2 weapon hits per padlock, do
   animals walk out too fast / slow?
+- Farm 3 (dairy & bull): is the bull fair (9.2 m/s charge, you dodge sideways or sprint)? Cow tipping / milk slips fun?
+  Does rolling cheese off the hill work for you?
 - Farm 2 (orchard & beehives): fun? Bees too fast / too slow (5.3 m/s, you outrun them only by sprinting)? Random farm
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Farm 3: the bull doesn't path around obstacles (straight charges, by design) and grazes outside once loose until the
+  round ends; Bob doesn't lead him back. Milk puddles are flat decals (they float a bit on slopes).
 - Farm 2: Bob only hears a shaken tree (noise), he doesn't notice empty trees / pressed apples; fruit on a tree shows
   all-or-nothing (hidden only when it's empty); the honey table is the picnic-table piece. Bees don't fly around obstacles.
 - Lock-pick / round progress online still only covered by the session-5 smoke test (lobby → start → snapshots fine).

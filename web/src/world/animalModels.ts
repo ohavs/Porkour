@@ -10,7 +10,7 @@ import { damp, clamp } from '../core/util';
  * Animals face +z, origin on the ground between the feet.
  */
 export type AnimalKind = 'hen' | 'chick' | 'cow' | 'dog' | 'cat' | 'bunny' | 'wolf' | 'sheep' | 'duck' | 'horse' | 'horse2' | 'donkey' | 'alpaca'
-  | 'rooster' | 'turkey';
+  | 'rooster' | 'turkey' | 'bull';
 /** Two-legged birds (waddle, peck, flap). */
 export const BIRDS = new Set<AnimalKind>(['hen', 'chick', 'duck', 'rooster', 'turkey']);
 
@@ -264,11 +264,11 @@ function quad(kind: 'cow' | 'dog' | 'cat' | 'wolf' | 'sheep' | 'bunny', root: TH
 export function buildAnimal(kind: AnimalKind, root: THREE.Group): AnimalRig {
   if (kind === 'hen' || kind === 'chick' || kind === 'duck') return bird(kind, root);
   if (kind === 'rooster' || kind === 'turkey') return fowl(kind, root);
-  return quad(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' ? 'cow' : kind, root);
+  return quad(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' || kind === 'bull' ? 'cow' : kind, root);
 }
 
 export interface AnimalPose {
-  speed: number; run: boolean; t: number; dt: number; mode: 'idle' | 'move' | 'eat' | 'tumble' | 'held' | 'howl' | 'bite' | 'swim'; excite: number;
+  speed: number; run: boolean; t: number; dt: number; mode: 'idle' | 'move' | 'eat' | 'tumble' | 'held' | 'howl' | 'bite' | 'swim' | 'paw' | 'charge' | 'dazed'; excite: number;
   /** Limp (tumbling / held): physical rotations of head + legs relative to the body. */
   limp?: boolean; rel?: THREE.Quaternion[];
 }

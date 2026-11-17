@@ -485,6 +485,8 @@ export class Farmer {
       // eggs / melons / pots thrown at him: SPLAT (a prank; he's furious but it barely hurts)
       const br = o as unknown as { def?: { fragile?: number; id?: string }; smash?: (how: string) => void; banked?: boolean };
       if (br.def?.fragile && rel > 2.5 && !br.banked) { br.smash?.('bob'); this.splatted(ov, br.def.id); return; }
+      // a cheese wheel rolled into him (farm 3): bowled over like a skittle
+      if ((br.def?.id === 'cheeseWheel' || br.def?.id === 'prizeCheese') && rel > 3.2) { this.cheesed(ov, br.def.id === 'prizeCheese'); return; }
       if (rel < 6.5 || o.mass < 2) return;
       if ((this.hitBy.get(o) ?? -10) > this.now - 0.6) return;
       this.hitBy.set(o, this.now);
@@ -1343,6 +1345,48 @@ export class Farmer {
     this.body.setTranslation({ x: p.x, y: Math.max(p.y, G.terrain.height(p.x, p.z) + CENTER + 0.05), z: p.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.vel.set(0, 0, 0);
+  }
+
+  /** A rolling cheese wheel bowled into him (farm 3): stagger, or flat on his back (the prize cheese / a second one). */
+  private cheesed(dir: THREE.Vector3, big: boolean) {
+    if ((this.hitBy.get('cheese') ?? -10) > this.now - 0.8) return;
+    this.hitBy.set('cheese', this.now);
+    G.audio.play('thud|body', { pos: this.pos, vol: 1, pitch: 0.8 });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 0.6), { count: 14, color: 0xffd34d, speed: 3.5, up: 2, life: 0.6, size: 0.12, grow: 0, drag: 3, alpha: 1 });
+    G.events.push({ type: 'cheeseBob' });
+    this.raise('splat');
+    this.hit(big ? BOB.knockdown + 10 : BOB.stagger + 10, v2.copy(dir));
+  }
+
+  /**
+   * Farm 3's bull ran him over: flung through the air, flat on his back (drops a pig he carries). False = he wasn't
+   * there to be hit (asleep, away, already down).
+   */
+  bullHit(dir: THREE.Vector3): boolean {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
+    this.stun('down', BOB.downTime + 1.6);
+    const d = Math.hypot(dir.x, dir.z) || 1;
+    this.body.setLinvel({ x: (dir.x / d) * 8, y: 7, z: (dir.z / d) * 8 }, true);
+    this.body.setAngvel({ x: (dir.z / d) * 5, y: (Math.random() - 0.5) * 3, z: -(dir.x / d) * 5 }, true);
+    this.parts.matchVelocity();
+    this.voice('oof', 1);
+    G.events.push({ type: 'bullBob' });
+    return true;
+  }
+
+  /** He stepped in spilled milk (farm 3): feet up, flat on his back. */
+  slip(): boolean {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away' || this.riding) return false;
+    if ((this.hitBy.get('slip') ?? -10) > this.now - 4) return false;
+    this.hitBy.set('slip', this.now);
+    this.stun('down', BOB.downTime);
+    const f = this.forward;
+    this.body.setLinvel({ x: f.x * 3.5, y: 3.5, z: f.z * 3.5 }, true);
+    this.body.setAngvel({ x: -Math.cos(this.yaw) * 6, y: 0, z: Math.sin(this.yaw) * 6 }, true);   // feet fly forward, head back
+    this.parts.matchVelocity();
+    G.audio.play('whoosh', { pos: this.pos, vol: 1, pitch: 0.8 });
+    G.events.push({ type: 'bobSlipped' });
+    return true;
   }
 
   /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */

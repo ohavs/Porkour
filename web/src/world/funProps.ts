@@ -118,3 +118,57 @@ export function makeCiderJug() {
   add(g, new THREE.BoxGeometry(0.14, 0.1, 0.01), 0xfff4d6, 0, 0.18, 0.17);
   return g;
 }
+
+// ---------------------------------------------------------------- farm 3 (dairy & cheese)
+/** A dented old milk churn (full: spill it by knocking it over). */
+export function makeMilkChurn() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.17, 0.19, 0.42, 16), 0xb9c4cc, 0, 0.21, 0);
+  add(g, new THREE.CylinderGeometry(0.1, 0.17, 0.12, 16), 0xb9c4cc, 0, 0.48, 0);           // shoulder
+  add(g, new THREE.CylinderGeometry(0.1, 0.1, 0.1, 14), 0xa6b2ba, 0, 0.59, 0);              // neck
+  add(g, new THREE.CylinderGeometry(0.12, 0.12, 0.04, 14), 0x8e9aa3, 0, 0.65, 0);            // lid
+  add(g, new THREE.SphereGeometry(0.035, 8, 6), 0x8e9aa3, 0, 0.69, 0);
+  for (const s of [-1, 1]) add(g, new THREE.TorusGeometry(0.05, 0.014, 6, 10, Math.PI), 0x8e9aa3, s * 0.15, 0.5, 0, 0, Math.PI / 2, 0);   // handles
+  add(g, new THREE.TorusGeometry(0.19, 0.012, 6, 24), 0x8e9aa3, 0, 0.03, 0, Math.PI / 2);   // rims
+  add(g, new THREE.TorusGeometry(0.18, 0.012, 6, 24), 0x8e9aa3, 0, 0.3, 0, Math.PI / 2);
+  add(g, new THREE.BoxGeometry(0.16, 0.1, 0.01), 0xfff4d6, 0, 0.2, 0.185);                    // label
+  return g;
+}
+
+/**
+ * A wheel of cheese standing on its edge (it rolls!): waxed rind, a cut wedge on the prize one + a blue ribbon.
+ * The geometry's axis is x (a 'wheel' prop: the collider is a cylinder lying along x).
+ */
+export function makeCheeseWheel(prize = false) {
+  const g = new THREE.Group();
+  const r = prize ? 0.62 : 0.34, w = prize ? 0.42 : 0.2;
+  const rind = prize ? 0xe8a417 : 0xf3c23a, wax = prize ? 0xc22d2d : 0xf0d36b;
+  add(g, new THREE.CylinderGeometry(r, r, w, 28), rind, 0, r, 0, 0, 0, Math.PI / 2);
+  add(g, new THREE.CylinderGeometry(r * 0.94, r * 0.94, w * 1.03, 28), 0xffdf6e, 0, r, 0, 0, 0, Math.PI / 2);   // the paler face
+  add(g, new THREE.TorusGeometry(r * 0.97, 0.025 * (prize ? 1.6 : 1), 6, 30), wax, w / 2, r, 0, 0, Math.PI / 2, 0);
+  add(g, new THREE.TorusGeometry(r * 0.97, 0.025 * (prize ? 1.6 : 1), 6, 30), wax, -w / 2, r, 0, 0, Math.PI / 2, 0);
+  // holes (dark dots on both faces)
+  for (let i = 0; i < (prize ? 9 : 5); i++) {
+    const a = i * 2.39, d = r * (0.25 + ((i * 37) % 10) / 16);
+    for (const s of [-1, 1]) add(g, new THREE.CircleGeometry(r * 0.07 * (1 + (i % 3) * 0.3), 10), 0xd9a62c, s * (w / 2 + 0.017), r + Math.sin(a) * d * 0.9, Math.cos(a) * d * 0.9, 0, (s * Math.PI) / 2, 0);
+  }
+  if (prize) {   // blue-ribbon rosette on the face
+    add(g, new THREE.CircleGeometry(0.16, 16), 0x2f6fd6, w / 2 + 0.03, r + 0.12, 0, 0, Math.PI / 2, 0);
+    add(g, new THREE.CircleGeometry(0.08, 12), 0xffd166, w / 2 + 0.035, r + 0.12, 0, 0, Math.PI / 2, 0);
+    for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.01, 0.2, 0.06), 0x2f6fd6, w / 2 + 0.03, r - 0.05, s * 0.05, s * 0.3, 0, 0);
+  }
+  return g;
+}
+
+/** Red rag on a stick (a matador's cape): the bull charges whoever waves it. */
+export function makeRedRag() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.018, 0.018, 0.9, 6), 0x8a5a35, 0, 0.45, 0, 0, 0, Math.PI / 2);
+  const cloth = new THREE.PlaneGeometry(0.62, 0.5, 6, 4);
+  const pa = cloth.attributes.position;
+  for (let i = 0; i < pa.count; i++) pa.setZ(i, Math.sin(pa.getX(i) * 9) * 0.04);
+  cloth.computeVertexNormals();
+  add(g, cloth, 0xd11f2a, 0.05, 0.22, 0);
+  add(g, cloth, 0xd11f2a, 0.05, 0.22, 0, 0, Math.PI, 0);   // the back (single-sided materials)
+  return g;
+}

@@ -35,11 +35,16 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | boot4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | bray1.ogg | Garuda1982 (freesound 539505) via VoxeLibre, CC BY 3.0 |
 | bray2.ogg | JarredGibb (freesound 233131) via VoxeLibre, CC0 |
+| bull4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| bull5.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| bull7.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | buzz.ogg | Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown) |
+| charge.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | cluck1.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck2.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck3.ogg | VoxeLibre mobs_mc, CC0 |
 | coins.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| cowhurt.ogg | Animalia by ElCeejo, MIT |
 | crackle.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | creak.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | cricket1.ogg | Veloren (DaforLynx), CC BY 4.0 |
@@ -64,6 +69,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | metal2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | metal3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | metal4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| milk.ogg | Klaraschick (freesound 415312) via VoxeLibre, CC0 |
 | moo1.ogg | VoxeLibre mobs_mc, CC0 |
 | moo2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | mudstep1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
@@ -91,6 +97,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | slap1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | slap2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | snap.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| splash.ogg | tran5ient (freesound 190080) via VoxeLibre mcl_fishing, CC0 |
 | splat1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | splat2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | squawk.ogg | VoxeLibre mobs_mc, CC0 |

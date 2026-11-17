@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RAPIER } from '../core/physics';
 import { gltf, instance } from '../core/assets';
-import { RAMP } from '../render/toon';
+import { RAMP, toonMat } from '../render/toon';
 import { googly } from '../render/googly';
 import type { LimbDef } from '../core/ragdoll';
 import { damp, clamp } from '../core/util';
@@ -26,6 +26,8 @@ export const GLB_ANIMALS: Partial<Record<AnimalKind, GlbSpec>> = {
   horse: { model: 'animals/Horse', size: 2.3, walk: 1.3, gallop: 5, head: 1.35, eye: 1.6 },
   horse2: { model: 'animals/Horse_White', size: 2.3, walk: 1.3, gallop: 5, head: 1.35, eye: 1.6 },
   donkey: { model: 'animals/Donkey', size: 1.65, walk: 1.0, gallop: 3.5, head: 1.45, eye: 1.6, colors: { Main: 0x9a9aa3, Main_Light: 0xdedee3 } },
+  // farm 3's bull: dark, big-headed, a brass nose ring (added in the visual)
+  bull: { model: 'animals/Bull', size: 2.05, walk: 1.0, gallop: 4.5, head: 1.5, eye: 1.45, colors: { Main: 0x4b2a1a, Main_Light: 0x7b4a2c, Muzzle: 0xe0a08c, Horns: 0xfff0cc, Hooves: 0x2a1c14 } },
   alpaca: { model: 'animals/Alpaca', size: 1.9, walk: 1.0, gallop: 3.5, head: 1.5, eye: 1.6, colors: { Main: 0xf2dcc0, Main_Light: 0xfff5e6 } },
 };
 export const GLB_MODELS = [...new Set(Object.values(GLB_ANIMALS).map((s) => s!.model))];
@@ -39,12 +41,14 @@ const prepared = new Set<string>();
  * (geometry space).
  */
 const eyeInfo = new Map<string, { at: number; c: THREE.Vector3; r: number }[]>();
+/** Per model: the muzzle's vertices (merged mesh) — the bull's nose ring hangs from the front of it. */
+const muzzleInfo = new Map<string, number[]>();
 
 /** Once per model: all primitives → one SkinnedMesh with vertex colours (1 draw call per animal instead of 4–8). */
 function prepare(name: string, colors?: Record<string, number>) {
   if (prepared.has(name)) return;
   prepared.add(name);
-  const eyes: number[][] = [[], []];
+  const eyes: number[][] = [[], []], muzzle: number[] = [];
   let base = 0;
   const g = gltf(name); if (!g) return;
   vcMat ??= new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: RAMP });
@@ -57,6 +61,7 @@ function prepare(name: string, colors?: Record<string, number>) {
       const mat = m.material as THREE.MeshToonMaterial;
       const c = colors?.[mat.name] !== undefined ? new THREE.Color(colors[mat.name]) : (mat.color ?? new THREE.Color(1, 1, 1)).clone().offsetHSL(0, 0.12, 0.05);
       const n = geo.attributes.position.count, col = new Float32Array(n * 3);
+      if (/muzzle/i.test(mat.name)) for (let i = 0; i < n; i++) muzzle.push(base + i);
       if (/eye/i.test(mat.name)) {
         const pa = geo.attributes.position;
         for (let i = 0; i < n; i++) eyes[pa.getX(i) > 0 ? 0 : 1].push(base + i);
@@ -76,6 +81,7 @@ function prepare(name: string, colors?: Record<string, number>) {
     for (const m of meshes) parent.remove(m);
     parent.add(sm);
     const pa = merged.attributes.position as THREE.BufferAttribute;
+    muzzleInfo.set(name, muzzle);
     eyeInfo.set(name, eyes.filter((e) => e.length > 0).map((idx) => {
       const pts = idx.map((i) => new THREE.Vector3().fromBufferAttribute(pa, i));
       const c = pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length);
@@ -150,6 +156,25 @@ export class GlbAnimalVisual {
         eyes.add(a, r * spec.head);
       });
     }
+    // the bull: a brass ring through his nose (front-bottom of the muzzle)
+    const mz = muzzleInfo.get(spec.model);
+    if (kind === 'bull' && headBone && mesh && mz?.length) {
+      const sm = mesh as THREE.SkinnedMesh, pa = sm.geometry.attributes.position;
+      let best: THREE.Vector3 | null = null, bs = -Infinity;
+      for (const i of mz) {
+        const w = sm.applyBoneTransform(i, new THREE.Vector3().fromBufferAttribute(pa, i)).applyMatrix4(sm.matrixWorld);
+        const sc = w.z - w.y * 0.6;
+        if (sc > bs) { bs = sc; best = w; }
+      }
+      if (best) {
+        const r = spec.size * 0.045;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.22, 6, 14), toonMat(0xe0b040));
+        ring.castShadow = true;
+        headBone.add(ring);
+        ring.position.copy(headBone.worldToLocal(best.clone().add(new THREE.Vector3(0, -r * 0.7, -r * 0.2))));
+        ring.quaternion.copy(headBone.getWorldQuaternion(new THREE.Quaternion()).invert());   // upright, facing forward
+      }
+    }
     for (const n of ['Head', 'Ear1.L', 'Ear1.R']) { const b = bone(n); if (b) { b.scale.setScalar(spec.head); this.big.push(b); } }
     this.mixer = new THREE.AnimationMixer(model);
     for (const clip of gltf(spec.model)?.animations ?? []) {
@@ -189,6 +214,9 @@ export class GlbAnimalVisual {
     const S = this.spec, dt = p.dt;
     const flail = p.mode === 'tumble' || p.mode === 'held';
     if (flail) this.play('Gallop', 0.15, 1.8);
+    else if (p.mode === 'paw') this.play('Attack_Kick', 0.15, 1.6);        // the bull scrapes the ground
+    else if (p.mode === 'charge') this.play('Gallop', 0.15, 1.7);
+    else if (p.mode === 'dazed') this.play('Idle_HitReact_Left', 0.2, 0.6);
     else if (p.mode === 'eat') this.play('Eating');
     else if (p.mode === 'bite') this.play(this.actions.has('Attack') ? 'Attack' : 'Attack_Headbutt', 0.15, 1.3);
     else if (p.mode === 'move' || p.mode === 'swim') {
@@ -231,5 +259,5 @@ export type AnyAnimalVisual = AnimalVisual | GlbAnimalVisual;
 export function animalVisual(kind: AnimalKind): AnyAnimalVisual {
   const spec = GLB_ANIMALS[kind];
   if (spec && gltf(spec.model)) return new GlbAnimalVisual(kind, spec);
-  return new AnimalVisual(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' ? 'cow' : kind);
+  return new AnimalVisual(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' || kind === 'bull' ? 'cow' : kind);
 }
