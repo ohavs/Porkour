@@ -60,6 +60,8 @@ const VIEW = {
   nap: { cos: 2, range: 0 },
   alert: { cos: Math.cos(1.25), range: 26 },
   flashlight: { cos: Math.cos(0.42), range: 16 },
+  /** At night: a pig standing in a lit spot (farm 4's jack-o'-lanterns) is seen like by day. */
+  lit: { cos: Math.cos(1.1), range: 24 },
 };
 type View = keyof typeof VIEW;
 
@@ -71,7 +73,17 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job';
+
+/** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
+export interface BobJob {
+  at: THREE.Vector3; look: THREE.Vector3; dur: number;
+  /** HUD chip text key while he's on it. */
+  activity: string;
+  /** Still needs him (someone may have fixed / moved it meanwhile). */
+  still(): boolean;
+  done(): void;
+}
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
@@ -171,6 +183,8 @@ export class Farmer {
   /** The gate he's going to shut / repair / padlock, when he looks for gates next, when he padlocks the next one. */
   private gateJob: Gate | null = null; private gateNext = 0; private lockNext = 0;
   private gateSkip = new WeakMap<Gate, number>(); private gatePt = new THREE.Vector3();
+  /** A farm job (relight a lantern…) he's on, when he looks for one next. */
+  private job: BobJob | null = null; private jobNext = 0;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -219,7 +233,9 @@ export class Farmer {
   /** In the house asleep or off to the market (not on the farm, but he'll be back). */
   private get gone() { return this.state === 'sleep' || this.state === 'away'; }
   private get gate() { return v1.copy(this.zones.roadGate); }
-  get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down'; }
+  get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down' && !this.dozing; }
+  /** Dozing on a chore (the porch rocker): eyes shut, flashlight off — also at night. */
+  private get dozing() { return this.state === 'routine' && this.doing && this.chores[this.choreIdx]?.view === 'nap'; }
   escapeNeed(p: Pig) { return ADMIN.easyEscape && p === G.localPig ? 1 : p.muddy > 0 ? BOB.escapeNeedMuddy : BOB.escapeNeed; }
 
   private go(s: State) {
@@ -322,7 +338,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -437,6 +453,7 @@ export class Farmer {
         break;
       case 'setTrap': want = this.setTrap(dt); break;
       case 'gate': want = this.gateStep(dt); break;
+      case 'job': want = this.jobStep(dt); break;
       case 'market': want = this.toMarket(dt); break;
       case 'fist': {
         const t = this.target;
@@ -537,10 +554,11 @@ export class Farmer {
 
   // ================================================================== perception
   private view(): View {
+    if (this.dozing) return 'nap';
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
-    if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate') && this.doing)) return 'busy';
-    if (this.state === 'setTrap' || this.state === 'gate') return 'normal';
+    if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') && this.doing)) return 'busy';
+    if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') return 'normal';
     if (this.state === 'routine' || this.state === 'dust' || this.state === 'carry') return 'normal';
     return 'alert';
   }
@@ -599,7 +617,9 @@ export class Farmer {
     for (const p of this.pigs) {
       let s = this.sus.get(p) ?? 0;
       const w = this.suspicious(p);
-      const near = v.range > 0 && !p.out && !p.cage && (!p.heldBy || p.heldBy.kind === 'trap') ? this.canSee(p, v) : 0;
+      // at night a pig in a lit spot (jack-o'-lanterns) is seen like by day, not only in his flashlight's beam
+      const vp = v === VIEW.flashlight && G.litAt?.(p.pos.x, p.pos.z) ? VIEW.lit : v;
+      const near = v.range > 0 && !p.out && !p.cage && (!p.heldBy || p.heldBy.kind === 'trap') ? this.canSee(p, vp) : 0;
       const seen = near > 0;
       if (seen) {
         if (this.now - (this.seenAt.get(p) ?? -10) > 0.1) this.seenSince.set(p, this.now);   // a new glimpse
@@ -648,6 +668,17 @@ export class Farmer {
       this.gateNext = this.now + 0.6;
       const g = this.spotGate(v);
       if (g) { this.startGate(g); return; }
+    }
+    // farm jobs (a jack-o'-lantern that went out…): he goes and fixes what he notices
+    if (this.state === 'routine' && !this.carrying && this.now > this.jobNext && G.jobs.length) {
+      this.jobNext = this.now + 0.7;
+      for (const src of G.jobs) {
+        const j = src.spot(this) as BobJob | null;
+        if (!j) continue;
+        this.stopRiding(); this.doing = false; this.path = [];
+        this.job = j; this.go('job'); this.voice('huh', 0.7);
+        return;
+      }
     }
     // noises
     if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance') {
@@ -777,7 +808,7 @@ export class Farmer {
     for (const h of G.holdables) {
       if (h.kind !== 'prop') continue;
       const pr = h as unknown as Prop;
-      if (pr.value < 15 || pr.banked || pr.heldBy || (this.tidySkip.get(pr) ?? -1) > this.now) continue;
+      if (pr.value < 15 || pr.banked || pr.heldBy || pr.mass > 60 || (this.tidySkip.get(pr) ?? -1) > this.now) continue;   // not the giant pumpkin
       const p = pr.synced.currP, d = Math.hypot(p.x - this.pos.x, p.z - this.pos.z);
       if (d > bd || pr.synced.preVel.lengthSq() > 0.4 || pr.homeDist() < 5) continue;
       if (this.canSee({ pos: v3.set(p.x, p.y - 0.25, p.z) }, v) <= 0) continue;
@@ -1016,6 +1047,30 @@ export class Farmer {
       this.voice(final === 'locked' ? 'ha' : 'mutter', 0.6);
       this.gateSkip.set(g, this.now + 8);
       this.gateJob = null; this.doing = false;
+      this.backToWork();
+    }
+    return 0;
+  }
+
+  /** Can he see this spot from here (farm jobs: wide view, no pig rules)? */
+  looksAt(pt: THREE.Vector3, range = 28, cos = Math.cos(1.1)) { return this.canSee({ pos: pt }, { cos, range }) > 0; }
+  /** Admin / farm: send him to a job now. */
+  jobNow(j: BobJob) { if (this.gone) this.wake(); if (this.calm() && !this.carrying) { this.stopRiding(); this.doing = false; this.path = []; this.job = j; this.go('job'); } }
+  /** Walk over, fiddle with it for a while (fix pose), done. */
+  private jobStep(dt: number) {
+    const j = this.job;
+    if (!j || this.now - this.stateT > 35 || (!this.doing && !j.still())) { this.job = null; this.backToWork(); return 0; }
+    this.activity = j.activity;
+    if (!this.doing) {
+      const d = this.moveTo(j.at, BOB.walk * 1.1, dt);
+      if (d < 0.7 || (d < 2.4 && this.stuck >= 2)) { this.stuck = 0; this.doing = true; this.choreUntil = this.now + j.dur; }
+      return BOB.walk * 1.1;
+    }
+    this.face(j.look, dt, 6);
+    if (this.now > this.choreUntil) {
+      if (j.still()) j.done();
+      this.voice('mutter', 0.5);
+      this.job = null; this.doing = false;
       this.backToWork();
     }
     return 0;
@@ -1389,6 +1444,18 @@ export class Farmer {
     return true;
   }
 
+  /** Farm 4's catapult landed a shot on him (a pumpkin, a hen, a pig…): knocked silly (stagger: drops a pig he carries). */
+  catapulted(): boolean {
+    if (this.asleep || this.state === 'off' || this.state === 'away') return false;
+    if ((this.hitBy.get('catapult') ?? -10) > this.now - 1.5) return false;
+    this.hitBy.set('catapult', this.now);
+    G.events.push({ type: 'catapultBob' });
+    this.raise('splat');
+    this.voice('oof', 1);
+    if (this.state !== 'stagger' && this.state !== 'down') this.stun('stagger', BOB.staggerTime + 0.6);
+    return true;
+  }
+
   /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */
   startle(at: THREE.Vector3) {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
@@ -1600,7 +1667,7 @@ export class Farmer {
       case 'dance': return 'dance';
       case 'aim': return 'aim';
       case 'shoot': return 'shoot';
-      case 'setTrap': case 'gate': return this.doing ? 'fix' : 'idle';
+      case 'setTrap': case 'gate': case 'job': return this.doing ? 'fix' : 'idle';
       default: return 'idle';
     }
   }

@@ -11,6 +11,7 @@ import { gadget, consumeGadget, loadout, level, levelProgress, HORSESHOE_BONUS, 
 import { POOL_IDS, type PoolId } from '../world/gadgets';
 import type { Game } from './game';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
+import type { Spot } from '../world/pumpkins';
 
 /**
  * M5 round loop (Burglin' Gnomes / Untitled Goose Game to-do list): steal loot into the stash in the sty (each item
@@ -26,17 +27,20 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // farm 2 (orchard & beehives)
   | 'shakeTrees' | 'appleBob' | 'ciderPress' | 'beeBob' | 'honeySteal' | 'goldApple'
   // farm 3 (dairy & cheese)
-  | 'bullBob' | 'bullOut' | 'cowTip' | 'cheeseBob' | 'prizeCheese' | 'spillMilk' | 'milkSlip';
+  | 'bullBob' | 'bullOut' | 'cowTip' | 'cheeseBob' | 'prizeCheese' | 'spillMilk' | 'milkSlip'
+  // farm 4 (pumpkin farm at night)
+  | 'lanternsOut' | 'catapultBob' | 'pigLaunch' | 'giantPumpkin' | 'pumpkinSmash';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
-  'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip'];
+  'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
+  'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash'];
 const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
 export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press';
 /** Counted pranks (progress shown as n / need). */
-const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3 };
+const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5 };
 /** Which props / critters a prank is about, and where they go. */
 /** Big pasture animals (they walk out on their own when the pasture gate is open). */
 const BIG = ['cow', 'horse', 'horse2', 'donkey'];
@@ -53,6 +57,7 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   bullBob: { critters: ['bull'], props: ['redRag'], to: 'bob' }, bullOut: { critters: ['bull'], inBullPen: true }, cowTip: { critters: ['cow'] },
   cheeseBob: { props: ['cheeseWheel'], to: 'bob' }, prizeCheese: { props: ['prizeCheese'], to: 'stash' },
   spillMilk: { props: ['milkChurn'] }, milkSlip: { props: ['milkChurn'] },
+  giantPumpkin: { props: ['giantPumpkin'], to: 'stash' }, pumpkinSmash: { props: ['patchPumpkin', 'patchPumpkinY'] },
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
@@ -156,7 +161,7 @@ export class Round {
     this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false;
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
-    this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod());
+    this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod(this.game.farm.noMods));
     const can = this.game.farm.missions, own = this.game.farm.featured ?? [];
     // a farm with its own pranks: one of the two required ones is always one of them
     const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
@@ -206,6 +211,10 @@ export class Round {
     if (type === 'bullBob') this.done('bullBob');
     if (type === 'cheeseBob') this.done('cheeseBob');
     if (type === 'bobSlipped') this.done('milkSlip');
+    if (type === 'lanternOut') this.count('lanternsOut');
+    if (type === 'smashed' && (text === 'patchPumpkin' || text === 'patchPumpkinY')) this.count('pumpkinSmash');
+    if (type === 'catapultBob') this.done('catapultBob');
+    if (type === 'pigLaunched') this.done('pigLaunch');
   }
 
   step(dt: number) {
@@ -288,6 +297,7 @@ export class Round {
     if (pr.def === PROPS.goldApple) this.done('goldApple');
     if (pr.def === PROPS.trophy) this.done('mazeTrophy');
     if (pr.def === PROPS.prizeCheese) this.done('prizeCheese');
+    if (pr.def === PROPS.giantPumpkin) this.done('giantPumpkin');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
@@ -367,8 +377,8 @@ export class Round {
 
   // ---------------------------------------------------------------- what to point at (markers.ts draws the arrows)
   /** Props / critters the open pranks are about (arrows over them). */
-  missionThings(): { obj: Prop | Critter | Gate; id: MissionId }[] {
-    const out: { obj: Prop | Critter | Gate; id: MissionId }[] = [];
+  missionThings(): { obj: Prop | Critter | Gate | Spot; id: MissionId }[] {
+    const out: { obj: Prop | Critter | Gate | Spot; id: MissionId }[] = [];
     if (this.phase === 'end') return out;
     const { props, critters, places: P } = this.game.farm;
     for (const m of this.missions) {
@@ -383,6 +393,10 @@ export class Round {
         out.push({ obj: c, id: m.id });
       }
       if (m.id === 'gateBreak') for (const g of (G.gates?.list ?? []) as Gate[]) if (g.state !== 'broken') out.push({ obj: g, id: m.id });
+      // farm 4: the lanterns still lit, the catapult
+      const pk = this.game.farm.pumpkins;
+      if (m.id === 'lanternsOut' && pk) for (const sp of pk.litSpots()) out.push({ obj: sp, id: m.id });
+      if ((m.id === 'catapultBob' || m.id === 'pigLaunch') && pk?.cat) out.push({ obj: pk.cat.spot, id: m.id });
     }
     return out;
   }

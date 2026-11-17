@@ -119,7 +119,7 @@ const en = {
   'm.smashPots': 'Smash {n} flower pots', 'm.melonSmash': 'Smash {n} melons', 'm.eggBob': 'Hit Bob with {n} eggs',
   'm.gnomePond': 'Drown the garden gnome in the pond', 'm.undiesWell': 'Drop Bob\'s undies down the well',
   'm.pieSteal': 'Steal the pie from the picnic table', 'm.mudPorch': 'Get muddy and stomp on Bob\'s porch',
-  'm.mazeTrophy': 'Find the golden trophy in the hedge maze',
+  'm.mazeTrophy': 'Find the golden trophy in the middle of the maze',
   'where.pond': 'Pond', 'where.well': 'Well', 'where.porch': 'Bob\'s porch', 'where.bob': 'Bob', 'where.stash': 'Stash', 'e.splat': 'SPLAT!',
   'item.egg': 'Egg', 'item.flowerPot': 'Flower pot', 'item.gnome': 'Garden gnome', 'item.undies': 'Bob\'s undies', 'item.pie': 'Cherry pie', 'item.trophy': 'Golden trophy',
   'm.henPond': 'Throw a hen in the pond', 'm.bonus': 'bonus', 'm.escape': 'All pigs to the stash = finish!',
@@ -298,6 +298,20 @@ const en = {
   'a.farm3': 'Dairy & bull', 'a.bullMe': 'Bull charges me', 'a.bullOut': 'Let the bull out', 'a.bringRag': 'Red rag in front of me',
   'a.cowTip': 'Tip the nearest cow', 'a.milkSpill': 'Spill milk in front of me', 'a.bringCheese': 'Cheese wheel in front of me',
   'a.dairy': 'Dairy barn', 'a.bull': 'Bull paddock', 'a.hill': 'Cheese hill', 'a.cheese': 'Cheese house', 'a.garden': 'Garden',
+  // farm 4: the pumpkin farm at night
+  'farm.farm4': 'Pumpkin night',
+  'm.lanternsOut': 'Snuff out {n} jack-o\'-lanterns', 'm.catapultBob': 'Hit Bob with a catapult shot', 'm.pigLaunch': 'Fly a pig out of the catapult',
+  'm.giantPumpkin': 'Roll the giant prize pumpkin to the stash', 'm.pumpkinSmash': 'Smash {n} pumpkins from the patch',
+  'item.giantPumpkin': 'Giant prize pumpkin', 'item.candyJar': 'Jar of candy',
+  'chore.carve': 'carving pumpkins on the porch', 'chore.prize': 'guarding his prize pumpkin', 'chore.doze': 'dozing in the rocking chair',
+  'bob.relight': 'Bob is relighting a jack-o\'-lantern',
+  'e.lanternOut': 'Lantern out!', 'e.lanternOut2': 'The dark hides you — Bob will come and light it again', 'e.launchedMe': 'Wheee!',
+  'e.launchedOther': '{who} flies!', 'e.catapultBob': 'Bullseye! The catapult got Bob',
+  's.lit': 'In the light — Bob can see you',
+  'a.farm4': 'Pumpkin farm', 'a.lanternOut': 'Snuff the nearest lantern', 'a.lanternsOut': 'All lanterns out', 'a.lanternsOn': 'All lanterns on',
+  'a.bobRelight': 'Bob relights the nearest', 'a.catapultMe': 'Into the catapult basket', 'a.catapultFire': 'Fire the catapult',
+  'a.catapultBob': 'Aim the catapult at Bob', 'a.bringPumpkin': 'Pumpkin in front of me', 'a.giantMe': 'Giant pumpkin in front of me',
+  'a.patch': 'Pumpkin patch', 'a.giant': 'Giant pumpkin', 'a.catapult': 'Catapult', 'a.graves': 'Graveyard',
 } as const;
 
 export type Key = keyof typeof en;
@@ -581,6 +595,20 @@ const es: Record<Key, string> = {
   'a.cowTip': 'Tumbar la vaca más cercana', 'a.milkSpill': 'Derramar leche delante de mí', 'a.bringCheese': 'Rueda de queso delante de mí',
   'a.dairy': 'Establo lechero', 'a.bull': 'Cercado del toro', 'a.hill': 'Colina del queso', 'a.cheese': 'Quesería', 'a.garden': 'Huerto',
   'a.farm': 'Granja (recarga la página)', 'a.orchard': 'Huerto', 'a.apiary': 'Colmenas', 'a.press': 'Prensa de sidra', 'a.pond': 'Estanque', 'a.mill': 'Molino',
+  // granja 4: calabazas de noche
+  'farm.farm4': 'Noche de calabazas',
+  'm.lanternsOut': 'Apaga {n} calabazas de Halloween', 'm.catapultBob': 'Dale a Bob con un disparo de la catapulta', 'm.pigLaunch': 'Haz volar a un cerdo con la catapulta',
+  'm.giantPumpkin': 'Rueda la calabaza gigante premiada hasta el escondite', 'm.pumpkinSmash': 'Revienta {n} calabazas del huerto',
+  'item.giantPumpkin': 'Calabaza gigante premiada', 'item.candyJar': 'Tarro de caramelos',
+  'chore.carve': 'tallando calabazas en el porche', 'chore.prize': 'vigilando su calabaza premiada', 'chore.doze': 'dormitando en la mecedora',
+  'bob.relight': 'Bob está volviendo a encender una calabaza',
+  'e.lanternOut': '¡Calabaza apagada!', 'e.lanternOut2': 'La oscuridad te esconde — Bob vendrá a encenderla otra vez', 'e.launchedMe': '¡Yujuuu!',
+  'e.launchedOther': '¡{who} sale volando!', 'e.catapultBob': '¡En el blanco! La catapulta le dio a Bob',
+  's.lit': 'En la luz — Bob te puede ver',
+  'a.farm4': 'Granja de calabazas', 'a.lanternOut': 'Apagar la calabaza más cercana', 'a.lanternsOut': 'Apagar todas', 'a.lanternsOn': 'Encender todas',
+  'a.bobRelight': 'Bob enciende la más cercana', 'a.catapultMe': 'A la cesta de la catapulta', 'a.catapultFire': 'Disparar la catapulta',
+  'a.catapultBob': 'Apuntar la catapulta a Bob', 'a.bringPumpkin': 'Calabaza delante de mí', 'a.giantMe': 'Calabaza gigante delante de mí',
+  'a.patch': 'Huerto de calabazas', 'a.giant': 'Calabaza gigante', 'a.catapult': 'Catapulta', 'a.graves': 'Cementerio',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

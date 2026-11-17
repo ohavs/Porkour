@@ -172,3 +172,14 @@ export function makeRedRag() {
   add(g, cloth, 0xd11f2a, 0.05, 0.22, 0, 0, Math.PI, 0);   // the back (single-sided materials)
   return g;
 }
+
+/** Farm 4's giant prize pumpkin (county-fair winner): a KayKit pumpkin blown up, with a blue-ribbon rosette. */
+export function makeGiantPumpkin(fit: (model: string, h: number) => THREE.Object3D) {
+  const g = new THREE.Group();
+  const p = fit('kaykit/pumpkin_orange', 2); g.add(p);
+  // rosette on its front (+z), a bit above the middle
+  add(g, new THREE.CircleGeometry(0.24, 16), 0x2f6fd6, 0, 1.2, 1.12, -0.15, 0, 0);
+  add(g, new THREE.CircleGeometry(0.12, 12), 0xffd166, 0, 1.2, 1.135, -0.15, 0, 0);
+  for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.1, 0.34, 0.01), 0x2f6fd6, s * 0.08, 0.9, 1.15, -0.2, 0, s * 0.3);
+  return g;
+}

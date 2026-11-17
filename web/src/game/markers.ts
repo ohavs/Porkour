@@ -4,6 +4,7 @@ import type { Game } from './game';
 import type { Prop } from '../world/props';
 import type { Gate } from '../world/gates';
 import type { Critter } from '../world/animals';
+import type { Spot } from '../world/pumpkins';
 
 const MAX = 160;
 const VERT = `attribute vec4 aColor; attribute float aSize; uniform float uPx; varying vec4 vColor;
@@ -66,11 +67,11 @@ export class Markers {
     };
     const show = r.phase !== 'end' && g.running && !L.out;
     if (show) {
-      const mission = new Set<Prop | Critter | Gate>();
+      const mission = new Set<Prop | Critter | Gate | Spot>();
       for (const { obj } of r.missionThings()) {
         if (mission.has(obj) || obj === L.held || obj.heldBy === L) continue;
         mission.add(obj);
-        if (obj.kind === 'gate') { const p = (obj as Gate).markPos; put(p, 0, PINK, 36, 75, p.x); continue; }
+        if (obj.kind === 'gate' || obj.kind === 'spot') { const p = (obj as Gate | Spot).markPos; put(p, 0, PINK, 36, 75, p.x); continue; }
         const isProp = obj.kind === 'prop';
         const p = isProp ? (obj as Prop).obj.position : ((obj as Critter).visual.root.position);
         put(p, isProp ? (obj as Prop).half : (obj as Critter).height * 0.5, PINK, 36, 75, p.x);

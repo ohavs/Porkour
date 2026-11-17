@@ -55,7 +55,7 @@ export const ADMIN = {
 /** Shared game context (set up once in Game). */
 export const G = {
   time: 0,
-  /** Clock: hour of day 0..24 and day number. 1 game hour = SECS_PER_HOUR real seconds. */
+  /** Clock: hour of day 0..24 and day number. 1 game hour = G.secsPerHour real seconds (SECS_PER_HOUR by default). */
   hour: 7, day: 1,
   /** 0 = full day, 1 = full night (smooth over dusk / dawn). */
   night: 0,
@@ -80,6 +80,12 @@ export const G = {
   gates: null as any,
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */
   hittables: [] as { hit(x: number, y: number, z: number, reach: number, dir: THREE.Vector3, k: number, by: unknown): boolean }[],
+  /** Farm things Bob fixes when he notices them (farm 4's jack-o'-lanterns): `spot(bob)` → a BobJob or null. */
+  jobs: [] as { spot(bob: any): unknown }[],
+  /** Farm 4: is this spot lit at night (a jack-o'-lantern's glow)? Bob sees a pig there like by day. */
+  litAt: null as null | ((x: number, z: number) => boolean),
+  /** Real seconds per game hour (farm 4's night runs slower so a round stays between dusk and dawn). */
+  secsPerHour: 25,
   /** Named spots of the current farm (world/farmKit.ts Places). */
   places: null as null | import('../world/farmKit').Places,
   events: [] as GameEvent[],

@@ -110,6 +110,7 @@ Dead by Daylight, Party Animals.
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
 | `world/farm2.ts`, `world/orchard.ts`, `world/bees.ts` | **Farm 2 — orchard & beehives (s9)** (Quaternius Medieval Village buildings: Inn = farmhouse, Mill, Stable, Sawmill = cider house, Gazebo = honey stand; `FARM2_MODELS` preloaded only on farm 2). **Orchard** (synced entity): 63 apple trees as instanced tree + fruit meshes; headbutt / punch / whack (`G.hittables`), sprint-ram (`onRam` on the trunk collider's owner) or a hard throw (`onImpact` in the step callback) shakes a tree → wiggle + rustle + noise 12 m, 2–3 apples drop (pool of 30 `apple` props, 4 per tree, fruit mesh hidden when empty), one golden-apple tree. **Cider press** eats apples dropped in its hopper; the 6th → a jug of cider (loot). **Bees** (synced entity): 6 hives; a hit / ram / throw → a swarm (≤3) chases the nearest pig or Bob at 5.3 m/s (> walk, < sprint), stings every 1 s (hop + squeal, drops what you hold; Bob: `stung()` = stagger, drops a pig), loses muddy pigs / pigs in the pond, a fart / stink cloud scatters it, sleeps at night; buzz = Veloren `bees_1.ogg` (GPL-3). Pranks: shake 5 trees, 3 apples on Bob, fill the press (6), lead bees to Bob, steal the prize honey pot / the golden apple. |
 | `world/farm3.ts`, `world/dairy.ts` | **Farm 3 — dairy & cheese + the bull (s10)** (`FARM3_MODELS`: Quaternius Medieval Village House_1/2, Blacksmith = creamery; Quaternius `Bull` GLB + brass nose ring). **Cheese hill** = `Terrain.hill(x, z, r, h, flat)` (flat top: 4 cheese wheels on edge + the prize cheese; a push sends a wheel rolling down). Props: `milkChurn`, `cheeseWheel` / `prizeCheese` (shape `'wheel'` = round cylinder along x, rolls), `redRag`. **Dairy** (synced entity; `CritterBrain` of the bull via `Critter.brain`): bull notices a pig in his paddock (15 m) / anyone holding the red rag (26 m) / a rag on the ground / Bob once loose → `notice` → `paw` (1.4 s, dust + steam) → `charge` (9.2 m/s, turns 0.95 rad/s: dodge sideways) runs over pigs (ragdoll), props, cows (tip), closed gates (smash → loose), Bob (`Farmer.bullHit` = flung + down, then 35 s calm) → `rest`; slows on a fence = `dazed`. A pig ram / hit = `provoked`. Churns knocked over (tilt) spill → milk puddles (8, 75 s); Bob walking in one `slip()`s (down), pigs sprinting / standing slip. Cows: ram / any hit = `Critter.tip` (6.5 s on her side). Rolling cheese into Bob = `cheesed` (stagger / down with the prize). Pranks: bullBob, bullOut, cowTip (3), cheeseBob, prizeCheese, spillMilk (3), milkSlip. Sounds: 0 A.D. cattle (bull, played low), Wesnoth tusker charge, Animalia cow hurt, VoxeLibre milk + splash (CC0). |
+| `world/farm4.ts`, `world/pumpkins.ts` | **Farm 4 — pumpkin night (s11)** (`FARM4_MODELS`: KayKit Halloween Bits in `assets/halloween` — autumn pines, dead trees, graves, crypt, iron fence; Quaternius House_1 = farmhouse). Played at NIGHT: `FarmBuild.clock` (start 19:30, `G.secsPerHour` 62 → the round ends just before dawn), `darkNight` 0.5 (`DayNight.darkNight`), `wolfHours` [0, 4], `noMods` ['market']. **Jack-o'-lanterns** (`Pumpkins`, synced entity: lit string + catapult): 23 carved pumpkins = switchable lights (`DayNight.addLight` → `Lamp.k`), glowing faces (the atlas' dark face triangles, one InstancedMesh) + additive ground pools; `G.litAt(x, z)` = in a lit pool (r 4.4, + porch / lane lamps `fixedLit`) → at night Bob sees that pig with `VIEW.lit` (wide, 24 m) instead of only his flashlight beam. Snuff = headbutt / punch / whack (`G.hittables`), ram (`onRam`), thrown thing (`onImpact`), fart / bang cloud nearby. Bob relights one he sees dark ≥ 4 s (**generic farm jobs**: `G.jobs` sources → `BobJob` → state `job`, fix pose; `Farmer.looksAt`, `jobNow`). **Catapult** (`Catapult`): anything ≤ 60 kg in the basket (props, critters, pigs) flies when the frame is hit; ram the side = turn ±0.32 rad; aim assist onto Bob within ±0.62 rad / 10–46 m (lead); shots tracked in flight → `Farmer.catapulted()` (stagger, `catapultBob`). Props: `patchPumpkin(Y)` (fragile 8 m/s), `giantPumpkin` (140 kg ball r 1.0, `PropDef.r` / `damp`, roll it home; Bob doesn't tidy props > 60 kg), `candyJar`. Corn maze (`maze()` DFS + loops, soft cover walls, trophy in the middle), old family plot. Pranks: lanternsOut (6), catapultBob, pigLaunch, giantPumpkin, pumpkinSmash (5). Bob dozes on the porch (view `nap` also at night, flashlight off). |
 | `world/cover.ts`, `world/hideouts.ts` | **Hiding (2026-11-13)**: `G.cover` = soft cover (bushes / corn / wheat: no collider, pigs walk in; Bob's sight ray through it is blocked, a pig inside is found only ≤1.7 m, or ≤5 m if moving; standing pigs poke their head over wheat / small bushes — `sightPoint`). Fast moves inside rustle (sound + leaves + `G.noise`). `hideouts.ts` places big bush clusters (`Forest` 'bigBush'), the east wheat field, a 2nd corn patch, climbable straw-bale stacks, log piles / crate stacks / sacks / fallen logs / farm stands (Quaternius CC0, `assets/cover`). Rail fences are `SEE_THROUGH` for Bob. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
@@ -167,7 +168,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    (shakeable trees, apples, cider press, angry bee swarms, golden apple, honey, 6 new pranks).
    Session 10: ✅ **farm 3: dairy & cheese + the bull** (charging bull + red rag, cow tipping, spilled milk slips,
    rolling cheese wheels off cheese hill, prize cheese, 7 new pranks).
-   Next: farm 4 (GDD: pumpkin farm at night), then winter (ice); more pranks with the birds / gadgets.
+   Session 11: ✅ **farm 4: pumpkin night** (whole round at night, jack-o'-lanterns = light Bob sees you in, snuff them,
+   Bob relights; catapult for pumpkins / hens / pigs; giant prize pumpkin to roll home; corn maze; 5 new pranks).
+   Next: farm 5 winter (ice); more pranks with the birds / gadgets.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -248,6 +251,13 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - 2026-11-17 (session 10, "continue"): **farm 3 — dairy & cheese + the bull** (see `farm3.ts` / `dairy.ts`). Title pill
   "Dairy & the bull". Admin → "Dairy & bull" (bull charges me, let the bull out, red rag / cheese wheel in front of me, tip
   the nearest cow, spill milk). Also fixed: farm 2's chore names showed raw keys in Bob's HUD chip.
+- 2026-11-17 (session 11, "continue"): **farm 4 — pumpkin night** (see `farm4.ts` / `pumpkins.ts`). Title pill "Pumpkin
+  night". Admin → "Pumpkin farm" (snuff nearest / all, all on, Bob relights the nearest, into the catapult basket, fire,
+  aim at Bob, pumpkin / giant pumpkin in front of me), teleports patch / giant / catapult / maze / graves. Checked headless:
+  headbutt + fart snuff, Bob walks over and relights, Bob sees a pig in a lit pool but not in the dark (same spot), pig
+  launched 34–38 m, pumpkin shot staggers Bob (prank ticks), giant pumpkin rolls (push 7.5 m / 3 s, ram ~10 m) and banks
+  250, night routine soak (patrol / prize / wolves after midnight), 2 browsers online (player reloads into farm 4, clock /
+  lanterns / catapult in sync, player's headbutt snuffs on the host).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -267,10 +277,14 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   animals walk out too fast / slow?
 - Farm 3 (dairy & bull): is the bull fair (9.2 m/s charge, you dodge sideways or sprint)? Cow tipping / milk slips fun?
   Does rolling cheese off the hill work for you?
+- Farm 4 (pumpkin night): too dark / too bright? Is snuffing lanterns + staying in the dark fun? Catapult: fun to aim
+  (ram it to turn), too easy to hit Bob? Giant pumpkin too easy / too hard to roll home (≈70 m)? Round 19:30 → 05:00 OK?
 - Farm 2 (orchard & beehives): fun? Bees too fast / too slow (5.3 m/s, you outrun them only by sprinting)? Random farm
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Farm 4: Bob walks through the corn maze (not in his nav grid); lanterns can't be picked up (static); the catapult's
+  arm has no collider (things in the basket sit on the ground); Bob doesn't miss his giant pumpkin once it's gone.
 - Farm 3: the bull doesn't path around obstacles (straight charges, by design) and grazes outside once loose until the
   round ends; Bob doesn't lead him back. Milk puddles are flat decals (they float a bit on slopes).
 - Farm 2: Bob only hears a shaken tree (noise), he doesn't notice empty trees / pressed apples; fruit on a tree shows

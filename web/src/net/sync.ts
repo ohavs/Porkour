@@ -33,7 +33,7 @@ const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab', 'attack'] as 
 const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 
 export function entities(game: Game): NetEnt[] {
-  const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
+  const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy, game.farm.pumpkins].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
   return [...game.pigs, game.farmer!, game.farm.cage, game.round, game.traps, ...game.gates.list, ...extra, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
 }
 
