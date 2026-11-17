@@ -229,6 +229,7 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   gadgets tab, wallet on the title), handout + count used up + next round, bang → Bob staggers / drops the pig, stink →
   cough, 2 browsers online (player's gadget handed out by the host, counted on the player, bang / cloud seen).
   Also fixed: hidden props (stash, gadgets) left an invisible collider on online players' machines.
+  Also fixed: an online player in seat 2–4 saw a random outfit on their own pig (`goOnline` now dresses it).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
