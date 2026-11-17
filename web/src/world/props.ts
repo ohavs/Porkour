@@ -6,9 +6,10 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
-import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug } from './funProps';
+import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag } from './funProps';
 
-export type PropShape = 'box' | 'ball' | 'cyl';
+/** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
+export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
 export interface PropDef {
   model?: string; make?: () => THREE.Object3D; height?: number; scale?: number; mass: number; shape?: PropShape;
   sound?: string; label?: string; friction?: number; bounce?: number;
@@ -37,7 +38,9 @@ export class Prop implements Holdable {
   /** Smashed to bits (breakables): hidden like banked, but not loot. */
   smashed = false;
   private home: { p: THREE.Vector3; q: THREE.Quaternion };
-  get value() { return this.def.value ?? 0; }
+  get value() { return this.worth ?? this.def.value ?? 0; }
+  /** Value override for this round (a spilled milk churn is just an empty can). */
+  worth: number | null = null;
   /** Hits a weapon has landed on Bob this round. */
   uses = 0;
   /** Half its height (the body's centre → its top; markers float above it). */
@@ -60,6 +63,8 @@ export class Prop implements Holdable {
     let d: RAPIER.ColliderDesc;
     if (shape === 'ball') d = RAPIER.ColliderDesc.ball(Math.max(size.x, size.y, size.z) / 2);
     else if (shape === 'cyl') d = RAPIER.ColliderDesc.cylinder(size.y / 2, Math.max(size.x, size.z) / 2);
+    else if (shape === 'wheel') d = RAPIER.ColliderDesc.roundCylinder(size.x / 2 - 0.03, Math.max(size.y, size.z) / 2 - 0.03, 0.03)
+      .setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 });
     else d = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
     d.setMass(def.mass).setFriction(def.friction ?? 0.7).setRestitution(def.bounce ?? 0.15)
       .setCollisionGroups(groups(L.PROP)).setActiveHooks(HOOKS)
@@ -104,7 +109,7 @@ export class Prop implements Holdable {
   }
   /** New round: back where it started. */
   reset() {
-    this.uses = 0; this.smashed = false;
+    this.uses = 0; this.smashed = false; this.worth = null;
     if (this.pooled) { this.bank(); this.putHome(); return; }
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
@@ -219,6 +224,12 @@ export const PROPS: Record<string, PropDef> = {
   honey: { make: makeHoneyJar, mass: 1.5, shape: 'cyl', sound: 'wood', label: 'item.honey', value: 35 },
   honeyPot: { make: makeHoneyPot, mass: 5, shape: 'ball', sound: 'wood', label: 'item.honeyPot', value: 110 },
   cider: { make: makeCiderJug, mass: 3, shape: 'ball', sound: 'wood', label: 'item.cider', value: 60 },
+  // farm 3 (dairy & cheese): milk churns (knock one over = spilled milk, Bob slips in it), cheese wheels that roll,
+  // the prize cheese (big, heavy: stand up or bring a friend), the red rag (the bull charges whoever holds it)
+  milkChurn: { make: makeMilkChurn, mass: 9, shape: 'cyl', sound: 'metal', label: 'item.milkChurn', value: 30, friction: 0.6 },
+  cheeseWheel: { make: () => makeCheeseWheel(), mass: 12, shape: 'wheel', sound: 'thud', label: 'item.cheeseWheel', value: 45, friction: 0.9, bounce: 0.1 },
+  prizeCheese: { make: () => makeCheeseWheel(true), mass: 45, shape: 'wheel', sound: 'thud', label: 'item.prizeCheese', value: 220, friction: 0.9, bounce: 0.05 },
+  redRag: { make: makeRedRag, mass: 1, shape: 'box', sound: 'thud', label: 'item.redRag', friction: 0.9 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

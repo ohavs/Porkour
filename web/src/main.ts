@@ -18,6 +18,7 @@ import { LOOT_MODELS } from './world/props';
 import { COVER_MODELS } from './world/hideouts';
 import { LANDMARK_MODELS } from './world/landmarks';
 import { FARM2_MODELS } from './world/farm2';
+import { FARM3_MODELS } from './world/farm3';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
 
 const MODELS = [
@@ -36,7 +37,7 @@ const MODELS = [
   ...COVER_MODELS, ...LANDMARK_MODELS,
 ];
 /** + the models only the farm this page plays needs. */
-const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : []);
+const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : []);
 
 /** Tiny flag icons (emoji flags don't show on Windows). */
 const FLAGS: Record<string, string> = {
@@ -44,10 +45,11 @@ const FLAGS: Record<string, string> = {
   es: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#aa151b"/><rect y="10" width="60" height="20" fill="#f1bf00"/></svg>',
 };
 
-/** Little farm icons for the title's farm picker: a red barn, an apple, a die. */
+/** Little farm icons for the title's farm picker: a red barn, an apple, a cheese wedge, a die. */
 const FARM_ICON: Record<string, string> = {
   farm1: '<svg viewBox="0 0 20 20"><path d="M2 9 10 3l8 6v9H2z" fill="#c8402e"/><path d="M7 18v-6h6v6" fill="#fff4e0"/><path d="M7 12l6 6M13 12l-6 6" stroke="#c8402e" stroke-width="1.4"/></svg>',
   farm2: '<svg viewBox="0 0 20 20"><circle cx="7.5" cy="12" r="5.5" fill="#e0302c"/><circle cx="12.5" cy="12" r="5.5" fill="#e0302c"/><path d="M10 7c0-2 1-4 2-5" stroke="#5a3a1e" stroke-width="1.6" fill="none"/><ellipse cx="13.5" cy="4.5" rx="3" ry="1.4" fill="#4fa636" transform="rotate(-25 13.5 4.5)"/></svg>',
+  farm3: '<svg viewBox="0 0 20 20"><path d="M2 15 17 6v9z" fill="#ffd34d"/><path d="M2 15 17 6l-3-2z" fill="#ffe98a"/><circle cx="8" cy="13" r="1.3" fill="#d9a62c"/><circle cx="13" cy="11.5" r="1.6" fill="#d9a62c"/><circle cx="14.5" cy="14" r="0.9" fill="#d9a62c"/></svg>',
   random: '<svg viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="15" rx="3.5" fill="#fff4e0"/><g fill="#3b2412"><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/></g></svg>',
 };
 

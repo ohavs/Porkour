@@ -39,7 +39,7 @@ snd() {
 
 # ---------------------------------------------------------------- sources
 pack https://github.com/VoxeLibre/VoxeLibre VoxeLibre '/mods/ENTITIES/mobs_mc/sounds/' '/mods/ENTITIES/mobs_mc/LICENSE-media.md' \
-  '/mods/CORE/mcl_sounds/sounds/' '/mods/CORE/mcl_sounds/README.txt'
+  '/mods/CORE/mcl_sounds/sounds/' '/mods/CORE/mcl_sounds/README.txt' '/mods/ITEMS/mcl_fishing/sounds/' '/mods/ITEMS/mcl_fishing/README.txt'
 A=binaries/data/mods/public/audio
 pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fauna/animal/chicken_*" "/$A/actor/fauna/animal/cattle_*" \
   "/$A/actor/singlesteps/fs_grass*" "/$A/actor/singlesteps/fs_gravel[1-4]*" "/$A/attack/impact/fleshimp_*" \
@@ -50,8 +50,8 @@ pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night
   '/data/core/sounds/bite-small.ogg' '/data/core/sounds/club.ogg' '/data/core/sounds/dwarf-laugh.wav' '/data/core/sounds/fanfare-short.wav' \
   '/data/core/sounds/fist.ogg' '/data/core/sounds/gold.ogg' '/data/core/sounds/groan.wav' '/data/core/sounds/human-old-*' \
   '/data/core/sounds/miss-*' '/data/core/sounds/mud-*' '/data/core/sounds/open-chest.wav' '/data/core/sounds/squishy-*' \
-  '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
-pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/LICENSE'
+  '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/core/sounds/tusker-charge.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
+pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/sounds/cow/' '/LICENSE'
 pack https://github.com/minetest/minetest_game minetest_game '/mods/tnt/sounds/' '/mods/tnt/README.md' '/mods/tnt/license.txt'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg'
 
@@ -125,6 +125,13 @@ snd "$VL/mobs_mc_cat_idle.2.ogg" meow -4 0 "$VLc"
 snd "$VL/mobs_mc_animal_eat_generic.ogg" munch -4 0 "$VLc"
 AN=$CACHE/animalia/sounds/turkey; ANm="Animalia by ElCeejo, MIT"
 snd "$AN/animalia_turkey.ogg" gobble1 -2 0 "$ANm"; snd "$AN/animalia_turkey_hurt.ogg" gobble2 -2 0 "$ANm"
+# farm 3 (dairy & cheese): the bull (0 A.D. cattle, played low), his charge (Wesnoth tusker), a tipped cow's protest,
+# milking + spilled milk (VoxeLibre, CC0)
+for i in 4 5 7; do snd "$OA/actor/fauna/animal/cattle_0$i.ogg" bull$i -2 0 "$OAc"; done
+snd "$WS/tusker-charge.ogg" charge -2 0 "$WSg"
+snd "$CACHE/animalia/sounds/cow/animalia_cow_hurt.ogg" cowhurt -3 0 "$ANm"
+snd "$VL/mobs_mc_cow_milk.ogg" milk -4 0 "Klaraschick (freesound 415312) via VoxeLibre, CC0"
+snd "$CACHE/VoxeLibre/mods/ITEMS/mcl_fishing/sounds/watersplash.ogg" splash -3 0 "tran5ient (freesound 190080) via VoxeLibre mcl_fishing, CC0"
 # ---------------------------------------------------------------- ambience (day / night)
 snd "$WS/ambient/morning.ogg" rooster -3 0 "$WSg"
 snd "$WS/ambient/night.ogg" night -6 0 "$WSg"

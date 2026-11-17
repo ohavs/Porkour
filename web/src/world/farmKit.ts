@@ -13,6 +13,7 @@ import type { GateDef, GateState } from './gates';
 import type { MissionId } from '../game/round';
 import type { Orchard } from './orchard';
 import type { Bees } from './bees';
+import type { Dairy } from './dairy';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 
@@ -51,6 +52,8 @@ export interface FarmBuild {
   featured?: MissionId[];
   /** Farm 2: shakeable fruit trees + cider press, angry beehives (synced entities). */
   orchard?: Orchard; bees?: Bees;
+  /** Farm 3: the bull's brain, milk churns + spilled milk, cow tipping (one synced entity). */
+  dairy?: Dairy;
 }
 
 export interface FarmDef {

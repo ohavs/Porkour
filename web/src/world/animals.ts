@@ -29,6 +29,8 @@ export const CRITTERS: Record<string, CritterDef> = {
   alpaca: { kind: 'alpaca', mass: 70, speed: 1.0, flee: 2.5, radius: 0.36, label: 'item.alpaca', sound: 'llama', soundEvery: 45 },
   rooster: { kind: 'rooster', mass: 3.5, speed: 1.7, flee: 0, radius: 0.24, label: 'item.rooster', sound: 'cluck', soundEvery: 16, scared: 'squawk', alarm: 'rooster' },
   turkey: { kind: 'turkey', mass: 9, speed: 1.3, flee: 0, radius: 0.36, label: 'item.turkey', sound: 'gobble', soundEvery: 24, scared: 'gobble', alarm: 'turkey' },
+  // farm 3: the bull (world/dairy.ts drives him: notices, paws the ground, charges)
+  bull: { kind: 'bull', mass: 650, speed: 1.0, flee: 0, radius: 0.62, label: 'item.bull', sound: 'bull', soundEvery: 26 },
   duck: { kind: 'duck', mass: 2, speed: 1.2, flee: 4, radius: 0.16, label: 'item.duck', sound: 'cluck', soundEvery: 18, scared: 'squawk' },
 };
 
@@ -45,6 +47,11 @@ const DOG = { smell: 11, smellHidden: 4, give: 12, skip: 10, chew: 14, boneSee: 
 const BIRD = { see: 9, close: 3.5, crowEvery: 10, turkeySee: 6, gobbleEvery: 3.5, chase: 4.3, chaseFor: 6, leash: 15, skip: 8, peckR: 0.85,
   peckEvery: 1.2, crowNoise: 34, gobbleNoise: 22 };
 const v1 = new THREE.Vector3();
+/** Turn toward an angle by at most `max` radians. */
+function turnTo(a: number, b: number, max: number) {
+  let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+  return a + Math.max(-max, Math.min(max, d));
+}
 const DOWN = new THREE.Vector3(0, -1, 0);
 
 /** Body parts of an animal (head + legs), measured from its procedural model (root at the feet, facing +z). */
@@ -66,6 +73,17 @@ export function animalLimbs(rig: AnimalRig, mass: number): LimbDef[] {
 }
 
 /**
+ * A custom brain for one animal (farm 3's bull): each step it may steer (set `target`) and return the speed to go at
+ * (+ how fast it can turn); null = the usual wandering. `mode` overrides the animation (paw / charge / dazed).
+ */
+export interface CritterBrain {
+  step(c: Critter, p: { x: number; y: number; z: number }, dt: number): { speed: number; turn?: number } | null;
+  mode?(c: Critter): 'paw' | 'charge' | 'dazed' | null;
+  /** Rammed / hit (the bull: he goes for the nearest pig). */
+  provoked?(c: Critter): void;
+}
+
+/**
  * Farm animal: wanders inside its home area, flees pigs and wolves, can be grabbed / thrown (small ones), tumbles when hit.
  * Hens go back to the coop at night; the dog barks at wolves (wakes Bob).
  */
@@ -79,15 +97,19 @@ export class Critter implements Holdable {
   /** Head + legs as real bodies: limp (flailing) when tumbling or dangling from a grip. */
   parts: Ragdoll;
   private relQ: THREE.Quaternion[];
-  private target = new THREE.Vector3();
-  private nextThink = 0;
-  private yaw = rng.range(0, 6.28);
+  target = new THREE.Vector3();
+  nextThink = 0;
+  yaw = rng.range(0, 6.28);
   private tumbleUntil = 0;
-  private vel = new THREE.Vector3();
-  private eatUntil = 0;
+  vel = new THREE.Vector3();
+  eatUntil = 0;
   private soundT = rng.range(2, 20);
   private fleeing = false;
-  private excite = 0;
+  excite = 0;
+  /** Custom brain (the bull). */
+  brain: CritterBrain | null = null;
+  /** Cow tipped over on its side (until): cow tipping, farm 3. */
+  tipped = 0;
   // guard dog: chewing a bone until, bones it's done with, the pig it's onto (since), pigs it gave up on, bark / tip-off clocks
   private chewUntil = 0; private chewing: Holdable | null = null; private boneSkip = new WeakMap<object, number>(); private bones: Holdable[] | null = null;
   private sniffAt = 0; private sniffPig: any = null; private sniffSince = 0; private pigSkip = new Map<unknown, number>();
@@ -137,7 +159,7 @@ export class Critter implements Holdable {
     this.tumbleUntil = 0; this.body.lockRotations(true, true); this.vel.set(0, 0, 0); this.target.copy(a);
     this.parts.snap(); this.synced.capture(); this.synced.capture();
     this.sniffPig = null; this.chewUntil = 0; this.chewing = null; this.scaredUntil = 0; this.sicUntil = 0; this.pigSkip.clear();
-    this.chasePig = null; this.callAt = 0; this.excite = 0; this.leaving.on = false;
+    this.chasePig = null; this.callAt = 0; this.excite = 0; this.leaving.on = false; this.tipped = 0;
   }
 
   get pos() { return this.synced.currP; }
@@ -148,10 +170,33 @@ export class Critter implements Holdable {
   }
   onReleased(_by: any, thrown: boolean) { if (thrown) this.tumble(); else this.tumble(0.7, 2); }
   knock(dv: THREE.Vector3) {
+    if (this.def.kind === 'cow' && this.tip(dv)) return;
+    if (this.def.kind === 'bull') { this.brain?.provoked?.(this); return; }   // 650 kg: a pig bounces off him (and makes him mad)
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dv.x, y: lv.y + dv.y, z: lv.z + dv.z }, true);
     this.tumble();
     if (this.def.scared) G.audio.play(this.def.scared, { pos: v1.copy(this.synced.currP), vol: 0.8, minGap: 0.3 });
+  }
+  /**
+   * Cow tipping (farm 3): rammed / punched over onto her side, legs in the air, for a few seconds; a moo of protest.
+   * Host only. False = already down (the hit is ignored).
+   */
+  tip(dv: THREE.Vector3): boolean {
+    if (G.net === 'client' || this.heldBy) return true;
+    if (G.time < this.tumbleUntil) return true;
+    const d = Math.hypot(dv.x, dv.z) || 1;
+    this.tumbleUntil = this.tipped = G.time + 6.5;
+    this.body.lockRotations(false, true);
+    // roll away from the push: axis = up × push
+    this.body.setAngvel({ x: (dv.z / d) * 3.4, y: 0, z: -(dv.x / d) * 3.4 }, true);
+    const lv = this.body.linvel(); this.body.setLinvel({ x: lv.x + (dv.x / d) * 1.2, y: lv.y + 1.2, z: lv.z + (dv.z / d) * 1.2 }, true);
+    const p = v1.copy(this.synced.currP);
+    G.audio.play('cowhurt', { pos: p, vol: 1, pitch: 0.85, minGap: 0.3 });
+    G.audio.play('thud|body', { pos: p, vol: 1, pitch: 0.6 });
+    G.fx.puff(p.setY(p.y - this.height / 2), { count: 10, color: 0xd8c29a, speed: 2, up: 0.6, life: 0.9, size: 0.9, alpha: 0.6 });
+    G.noise(this.synced.currP, 12);
+    G.events.push({ type: 'cowTipped' });
+    return true;
   }
   private tumble(dur = 2.2, spin = 9) {
     this.tumbleUntil = G.time + dur;
@@ -196,11 +241,15 @@ export class Critter implements Holdable {
     if (this.tumbleUntil > 0) { // back on the feet
       this.tumbleUntil = 0; this.body.lockRotations(true, true);
       this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
+      const gy = G.terrain.height(p.x, p.z) + this.height / 2 + 0.05;
+      if (p.y < gy) this.body.setTranslation({ x: p.x, y: gy, z: p.z }, true);   // a big animal that lay on its side
+      if (this.tipped) { this.tipped = 0; G.audio.play('moo', { pos: v1.set(p.x, p.y, p.z), vol: 0.8, pitch: 0.9 }); }
       this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
-    const th = this.threat(p);
+    const th = this.brain ? null : this.threat(p);
     this.fleeing = !!th;
+    const ov = this.brain?.step(this, p, dt) ?? null;   // a custom brain (the bull) steers
     if (th) {
       const dx = p.x - th.x, dz = p.z - th.z, d = Math.hypot(dx, dz) || 1;
       this.target.set(p.x + (dx / d) * 4 + rng.range(-1, 1), p.y, p.z + (dz / d) * 4 + rng.range(-1, 1));
@@ -219,7 +268,7 @@ export class Critter implements Holdable {
     }
     if (this.def.alarm && !this.fleeing) this.birdBrain(p, dt);
     const night = G.night > 0.6 && this.roost;
-    if (!this.fleeing && G.time > this.nextThink) {
+    if (!this.fleeing && !ov && G.time > this.nextThink) {
       if (night) { this.target.copy(this.roost!).add(v1.set(rng.range(-0.8, 0.8), 0, rng.range(-0.8, 0.8))); this.nextThink = G.time + 6; }
       else if (this.pen && (this.penT = this.pen.wander(p, this.target, () => rng.next(), this.leaving)) > 0) {
         this.target.y = p.y; this.nextThink = G.time + this.penT;   // out through the open gate / grazing outside
@@ -233,7 +282,7 @@ export class Critter implements Holdable {
       }
     }
     const dx = this.target.x - p.x, dz = this.target.z - p.z, d = Math.hypot(dx, dz);
-    const speed = d > 0.4 && G.time > this.eatUntil ? (this.fleeing ? this.def.speed * 2 : this.chasePig ? BIRD.chase : this.def.speed * (this.excite > 0 ? 2 : 1)) : 0;
+    const speed = ov ? (d > 0.4 ? ov.speed : 0) : d > 0.4 && G.time > this.eatUntil ? (this.fleeing ? this.def.speed * 2 : this.chasePig ? BIRD.chase : this.def.speed * (this.excite > 0 ? 2 : 1)) : 0;
     const tx = d > 0.01 ? (dx / d) * speed : 0, tz = d > 0.01 ? (dz / d) * speed : 0;
     const grounded = !!raycast(v1.set(p.x, p.y, p.z), DOWN, this.height / 2 + 0.15, L.STATIC, this.body);
     const k = grounded ? 1 - Math.exp(-8 * dt) : 0.02;
@@ -241,7 +290,7 @@ export class Critter implements Holdable {
     if (grounded && this.fleeing && rng.next() < dt * 0.8 && this.def.mass < 5) this.vel.y = 4;   // panic hop
     if (grounded && this.def.kind === 'bunny' && speed > 0.1 && rng.next() < dt * 2) this.vel.y = 3; // bunny hops
     this.body.setLinvel(this.vel, true);
-    if (speed > 0.1) this.yaw = dampAngle(this.yaw, Math.atan2(tx, tz), 6, dt);
+    if (speed > 0.1) this.yaw = ov?.turn !== undefined ? turnTo(this.yaw, Math.atan2(tx, tz), ov.turn * dt) : dampAngle(this.yaw, Math.atan2(tx, tz), 6, dt);
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
     // idle calls
     this.soundT -= dt;
@@ -440,7 +489,8 @@ export class Critter implements Holdable {
     this.synced.rot(alpha, r.quaternion);
     r.position.sub(v1.set(0, this.height / 2, 0).applyQuaternion(r.quaternion));   // feet below the centre, also when tumbling / dangling
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    const mode = this.heldBy ? 'held' : G.time < this.tumbleUntil ? 'tumble' : G.time < this.eatUntil ? 'eat' : sp > 0.15 ? 'move' : 'idle';
+    const bm = this.brain?.mode?.(this) ?? null;
+    const mode = this.heldBy ? 'held' : G.time < this.tumbleUntil ? 'tumble' : bm ? bm : G.time < this.eatUntil ? 'eat' : sp > 0.15 ? 'move' : 'idle';
     const limp = mode === 'held' || mode === 'tumble';
     if (limp) this.relQ.forEach((q, i) => this.parts.rel(i, q, G.net === 'client'));
     this.visual.update({ speed: sp, run: this.fleeing || sp > this.def.speed * 1.4, t: G.time, dt, mode, excite: this.excite, limp, rel: this.relQ });
