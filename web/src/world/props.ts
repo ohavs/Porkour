@@ -6,7 +6,8 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
-import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin } from './funProps';
+import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
+  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket } from './funProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -237,6 +238,19 @@ export const PROPS: Record<string, PropDef> = {
   patchPumpkinY: { model: 'halloween/pumpkin_yellow_small', height: 0.44, mass: 5, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25, value: 10, fragile: 8, bits: 0xf2c23a, smashSound: 'splat|squish' },
   candyJar: { model: 'kaykit/jar_A_large', height: 0.42, mass: 2.5, shape: 'cyl', sound: 'wood', label: 'item.candyJar', value: 45 },
   giantPumpkin: { make: () => makeGiantPumpkin((m, h) => fitted(m, { height: h })), mass: 140, shape: 'ball', r: 1.0, damp: 1.4, sound: 'thud', label: 'item.giantPumpkin', value: 250, friction: 1, bounce: 0.05 },
+  // farm 5 (winter): snowballs (the piles restock them, world/winter.ts), a snowball to roll up big, presents under the
+  // tree + Bob's big present, the snowman's parts once he's knocked over, Bob's ice-fishing catch, a sled
+  snowball: { make: makeSnowball, mass: 0.5, shape: 'ball', r: 0.13, sound: 'snowhit', label: 'item.snowball', fragile: 4.5, bits: 0xffffff, smashSound: 'snowhit', bounce: 0.1, friction: 0.9 },
+  snowboulder: { make: makeSnowBoulder, mass: 10, shape: 'ball', r: 0.42, damp: 0.45, sound: 'snowhit', label: 'item.snowboulder', friction: 1, bounce: 0.02 },
+  present: { make: () => makePresent(0.42, 0.34, 0.42, 0xd8342c, 0xffd166), mass: 3, sound: 'thud', label: 'item.present', value: 40 },
+  presentG: { make: () => makePresent(0.52, 0.26, 0.36, 0x2f9a5a, 0xd8342c), mass: 3, sound: 'thud', label: 'item.present', value: 35 },
+  presentB: { make: () => makePresent(0.3, 0.46, 0.3, 0x3d6fd1, 0xfff4e6), mass: 2.5, sound: 'thud', label: 'item.present', value: 45 },
+  bigPresent: { make: () => makePresent(1.0, 0.85, 1.0, 0xffc93a, 0xd8342c), mass: 45, sound: 'thud', label: 'item.bigPresent', value: 200, friction: 0.8 },
+  snowBase: { make: () => makeSnowmanBall('base'), mass: 30, shape: 'ball', r: 0.62, damp: 0.9, sound: 'snowhit', label: 'item.snowman', friction: 1, bounce: 0.02 },
+  snowMid: { make: () => makeSnowmanBall('mid'), mass: 14, shape: 'ball', r: 0.45, damp: 0.9, sound: 'snowhit', label: 'item.snowman', friction: 1, bounce: 0.02 },
+  snowHead: { make: () => makeSnowmanBall('head'), mass: 5, shape: 'ball', r: 0.33, damp: 0.7, sound: 'snowhit', label: 'item.snowmanHead', friction: 1, bounce: 0.05 },
+  fishBucket: { make: makeFishBucket, mass: 4, shape: 'cyl', sound: 'metal', label: 'item.fishBucket', value: 45 },
+  sled: { model: 'winter/sled', height: 0.42, mass: 8, sound: 'wood', label: 'item.sled', value: 30, friction: 0.06 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

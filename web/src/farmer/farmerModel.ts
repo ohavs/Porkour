@@ -19,6 +19,9 @@ export interface FarmerRig {
 const SKIN = 0xf3b38f, NOSE = 0xec8f78, SHIRT = 0xd8403a, DENIM = 0x3f6fb5, BOOT = 0x6a4128, HAIR = 0x9b8f86,
   STACHE = 0x7a4a2a, STRAW = 0xf0cb6c, BAND = 0xb33b2b;
 
+/** Farm 5 dresses Bob for the snow (set before he's built): bobble hat instead of the straw hat + a long scarf. */
+export const BOB_STYLE = { winter: false };
+
 /**
  * Farmer Bob, built from smooth shapes in the same cartoon style as the pigs: big round belly in denim overalls,
  * red shirt, rolled-up sleeves, straw hat, bushy moustache, big nose, boots. Returns a rig for procedural animation.
@@ -85,13 +88,27 @@ export function buildFarmer(root: THREE.Group): FarmerRig {
   }
   const brow = (s: number) => mesh(new THREE.CapsuleGeometry(0.018, 0.07, 4, 8), stache, [s * 0.088, 0.3, 0.215], head, undefined, [0, 0, Math.PI / 2]);
   const browL = brow(1), browR = brow(-1);
-  // straw hat
   const hat = group(head, [0, 0.36, -0.01]);
   hat.rotation.set(-0.08, 0, 0.06);
-  mesh(new THREE.CylinderGeometry(0.43, 0.45, 0.025, 36), straw, [0, 0, 0], hat);
-  mesh(new THREE.CylinderGeometry(0.2, 0.235, 0.19, 28), straw, [0, 0.1, 0], hat);
-  mesh(sphere, straw, [0, 0.19, 0], hat, [0.2, 0.05, 0.2]);
-  mesh(new THREE.CylinderGeometry(0.238, 0.238, 0.05, 28), band, [0, 0.04, 0], hat);
+  if (BOB_STYLE.winter) {
+    // woolly bobble hat (red with white stripes, a fat pompom, a little floppy) + a long striped scarf
+    const wool = toonMat(0xd6332f), cream = toonMat(0xfff4e6), green = toonMat(0x2f8a4e);
+    const bn = group(hat, [0, -0.07, -0.03]);   // worn on the back of the head, the front edge above the brows
+    bn.rotation.x = -0.3;
+    mesh(new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2), wool, [0, 0, 0], bn, [0.232, 0.26, 0.228]);
+    mesh(new THREE.TorusGeometry(0.222, 0.048, 10, 32), cream, [0, 0.01, 0], bn, undefined, [Math.PI / 2, 0, 0]);
+    mesh(new THREE.TorusGeometry(0.185, 0.02, 8, 28), cream, [0, 0.13, 0], bn, undefined, [Math.PI / 2, 0, 0]);
+    mesh(sphere, wool, [0.02, 0.27, -0.03], bn, [0.09, 0.12, 0.09], [0, 0, -0.5]);
+    mesh(sphere, cream, [0.075, 0.35, -0.05], bn, [0.085, 0.085, 0.085]);   // the pompom
+    mesh(new THREE.TorusGeometry(0.15, 0.06, 10, 24), green, [0, 0.69, 0.01], torso, [1.05, 1, 1.2], [Math.PI / 2 - 0.1, 0, 0]);
+    for (let i = 0; i < 3; i++) mesh(new THREE.BoxGeometry(0.11, 0.13, 0.035), i % 2 ? cream : green, [0.11, 0.6 - i * 0.12, 0.3 + i * 0.065], torso, undefined, [0.45, 0, 0.08]);   // the tail
+  } else {
+    // straw hat
+    mesh(new THREE.CylinderGeometry(0.43, 0.45, 0.025, 36), straw, [0, 0, 0], hat);
+    mesh(new THREE.CylinderGeometry(0.2, 0.235, 0.19, 28), straw, [0, 0.1, 0], hat);
+    mesh(sphere, straw, [0, 0.19, 0], hat, [0.2, 0.05, 0.2]);
+    mesh(new THREE.CylinderGeometry(0.238, 0.238, 0.05, 28), band, [0, 0.04, 0], hat);
+  }
 
   // ---------------------------------------------------------------- arms (pivot at the shoulder, hanging down)
   const arm = (s: number) => {

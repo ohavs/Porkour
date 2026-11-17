@@ -72,7 +72,7 @@ export class Grass {
     for (let cx = f.x0 - 8; cx < f.x1 + 8; cx += C) {
       for (let cz = f.z0 - 8; cz < f.z1 + 8; cz += C) {
         const pts: number[] = [];
-        const n = Math.floor(C * C * density);
+        const n = terrain.snow ? 0 : Math.floor(C * C * density);   // farm 5: under the snow
         for (let i = 0; i < n; i++) {
           const x = cx + rng.next() * C, z = cz + rng.next() * C;
           if (terrain.isBare(x, z)) continue;
