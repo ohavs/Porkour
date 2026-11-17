@@ -119,6 +119,11 @@
   .panel .adv .field { font-size: 14px; padding: 5px 0; }
   .panel .adv .seg button { padding: 3px 9px; font-size: 13px; }
   .panel .adv .hint { font-size: 12px; opacity: .65; padding: 4px 0 6px; line-height: 1.35; }
+  .panel .srow { padding: 9px 0; font-size: 18px; }
+  .panel .srow .sl { display:flex; align-items:center; gap: 10px; }
+  .panel .srow .sl svg { flex: none; }
+  .panel .srow input[type=range] { width: 200px; }
+  .panel .langPick { background: transparent; border: 0; padding: 0; }
   .panel .rv { display:flex; align-items:center; gap: 8px; } .panel .rv b { min-width: 38px; text-align:right; }
   #pausedHint { margin-top: 10px; opacity: .7; font-size: 14px; text-align:center; }
   /* admin */
@@ -243,6 +248,7 @@
   <div id="topbtns">
     <button class="ibtn" id="bSound" data-i18n-title="btn.sound"><span class="k">M</span></button>
     <button class="ibtn" id="bHelp" data-i18n-title="btn.help"><span class="k">H</span></button>
+    <button class="ibtn" id="bFull" data-i18n-title="btn.full"></button>
     <button class="ibtn" id="bMenu" data-i18n-title="btn.settings"><span class="k">Esc</span></button>
   </div>
   <div id="help" class="txt"></div>

@@ -293,6 +293,7 @@ export class Game {
         case 'knockdown': case 'stagger': case 'bobSlipped': case 'bullBob': case 'cheeseBob': case 'catapultBob': case 'bobDunked': case 'bigSnowballBob':
           H.emote(bob, 'stars', 1.4, 2.4); break;
         case 'slapped': H.emote(e.who, 'stars', 1.2, 1.2); break;
+        case 'bobDance': H.emote(bob, 'note', 1.6, 2.4); break;
         case 'wolves': H.toast(t('e.wolves'), 1.8, '', 'wolf'); break;
         case 'banked': H.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.1); break;
         case 'missionDone': H.toast(t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') }), 2, '', 'check'); break;
@@ -376,6 +377,7 @@ export class Game {
       case 'bobDown': if (f && ADMIN.bob) f.knockDown(); break;
       case 'bobCarry': if (f && ADMIN.bob && !L.out && !L.cage) { if (L.heldBy) L.heldBy.release(false); f.carryMe(L); } break;
       case 'dance': f?.forceDance(); break;
+      case 'danceNear': f?.danceSoon(); break;
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;
       case 'mow': f?.forceMow(); break;
       case 'bed': f?.forceBed(); break;

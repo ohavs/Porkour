@@ -22,6 +22,7 @@ import { FARM3_MODELS } from './world/farm3';
 import { FARM4_MODELS } from './world/farm4';
 import { FARM5_MODELS } from './world/farm5';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
+import { FLAGS } from './game/flags';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -40,12 +41,6 @@ const MODELS = [
 ];
 /** + the models only the farm this page plays needs. */
 const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : farmId() === 'farm4' ? FARM4_MODELS : farmId() === 'farm5' ? FARM5_MODELS : []);
-
-/** Tiny flag icons (emoji flags don't show on Windows). */
-const FLAGS: Record<string, string> = {
-  en: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0 0l60 40M60 0 0 40" stroke="#fff" stroke-width="8"/><path d="M0 0l60 40M60 0 0 40" stroke="#c8102e" stroke-width="3"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="12"/><path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="7"/></svg>',
-  es: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#aa151b"/><rect y="10" width="60" height="20" fill="#f1bf00"/></svg>',
-};
 
 /** Little farm icons for the title's farm picker: a red barn, an apple, a cheese wedge, a die. */
 const FARM_ICON: Record<string, string> = {

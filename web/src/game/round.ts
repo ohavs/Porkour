@@ -67,6 +67,18 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
 
+/**
+ * One colour per line of the mission list (user: each mission has its own coloured arrow; the arrows in the world
+ * have the colour of their mission). Line 0 = the loot quota (gold, like the loot arrows).
+ */
+export const MISSION_COLORS = ['#ffd166', '#ff6fd0', '#4fd8ff', '#8cf04a', '#ff8a3a', '#b58cff', '#ff4d5e'];
+export const missionColor = (i: number) => (i <= 0 ? MISSION_COLORS[0] : MISSION_COLORS[1 + ((i - 1) % (MISSION_COLORS.length - 1))]);
+/** Little down arrow in a mission's colour (mission list, waypoints). */
+export const arrowSvg = (c: string, w = 14) => `<svg class="marr" viewBox="0 0 14 14" width="${w}" height="${w}"><path d="M2 2.5h10L7 12z" fill="${c}" stroke="#3b2412" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+/** Pranks done to Bob himself: the arrow sits over him. */
+const ON_BOB = new Set<MissionId>(['knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob']);
+export interface MissionMark { at: THREE.Vector3; top: number; color: string; i: number }
+
 /** Waypoint icons (the place a held thing goes). */
 const WHERE_IC: Record<Where, IconId> = { pond: 'water', well: 'well', stash: 'stash', porch: 'house', bob: 'bob', press: 'apple', hole: 'water' };
 
@@ -80,7 +92,8 @@ const CSS = `
 #missions .bar { height: 8px; border-radius: 5px; background: rgba(255,246,230,.15); margin: 5px 0 7px; overflow:hidden; }
 #missions .bar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--gold), #fff3b0); transition: width .4s; }
 #missions .m { display:flex; gap: 7px; align-items: baseline; margin: 2px 0; opacity: .95; }
-#missions .m i { font-style: normal; width: 16px; flex: none; color: var(--gold); }
+#missions .m i { font-style: normal; width: 16px; flex: none; color: var(--gold); align-self: center; display:flex; }
+#missions .m s { text-decoration: none; margin-left: auto; color: var(--gold); font-size: 13px; opacity: .8; }
 #missions .m.done { opacity: .55; text-decoration: line-through; }
 #missions .m em { font-style: normal; font-size: 11px; color: #b6e36a; margin-left: auto; }
 #missions .goal { color:#b6e36a; font-size: 14px; margin-top: 4px; }
@@ -389,32 +402,83 @@ export class Round {
   }
 
   // ---------------------------------------------------------------- what to point at (markers.ts draws the arrows)
-  /** Props / critters the open pranks are about (arrows over them). */
-  missionThings(): { obj: Prop | Critter | Gate | Spot; id: MissionId }[] {
-    const out: { obj: Prop | Critter | Gate | Spot; id: MissionId }[] = [];
+  /**
+   * One arrow per open prank, in its colour (markers.ts draws them), showing the NEXT step only: the thing to take
+   * (the nearest one, not all of them) → once someone holds it, where it goes. Animals that live in a pen (hens,
+   * sheep, cows…) get one arrow at their pen's gate, not one each. Pranks on Bob: over Bob.
+   */
+  missionMarks(): MissionMark[] {
+    const out: MissionMark[] = [];
     if (this.phase === 'end') return out;
-    const { props, critters, places: P } = this.game.farm;
-    for (const m of this.missions) {
-      const d = MDEF[m.id]; if (m.done || !d) continue;
-      if (d.props && !d.noArrow) for (const p of props) if (!p.banked && d.props.includes(p.def.id ?? '') && p.worth === null) out.push({ obj: p, id: m.id });
-      if (d.critters) for (const c of critters) {
-        if (!d.critters.includes(c.def.kind)) continue;
-        if (d.inCoop && !inRect(P.coop, c.pos)) continue;
-        if (d.inPen && !inRect(P.sheepPen, c.pos)) continue;
-        if (d.inPasture && !inRect(P.pasture, c.pos)) continue;
-        if (d.inBullPen && this.game.farm.dairy?.loose) continue;
-        out.push({ obj: c, id: m.id });
+    const g = this.game, L = g.local, { props, critters, places: P } = g.farm;
+    const near = <T>(list: T[], pos: (x: T) => THREE.Vector3) => {
+      let best: T | null = null, bd = Infinity;
+      for (const x of list) { const p = pos(x), d = (p.x - L.pos.x) ** 2 + (p.z - L.pos.z) ** 2; if (d < bd) { bd = d; best = x; } }
+      return best;
+    };
+    const bob = G.farmer;
+    let onBob = 0;
+    const mark = (i: number, at: THREE.Vector3 | null | undefined, top = 0) => { if (at) out.push({ at: at.clone(), top, color: missionColor(i), i }); };
+    const atBob = (i: number) => { if (bob && bob.visual.root.visible) { const v = bob.visual.root.position; out.push({ at: v.clone(), top: 2.1, color: missionColor(i), i, ...{ off: onBob++ } } as MissionMark); } };
+    const pens = [P.coop, P.sheepPen, P.pasture].filter(Boolean) as { x0: number; x1: number; z0: number; z1: number }[];
+    /** A pen's spot to aim at: its gate if it has one, else its middle. */
+    const penSpot = (r: { x0: number; x1: number; z0: number; z1: number }) => {
+      const gate = ((G.gates?.list ?? []) as Gate[]).find((x) => { const q = x.def.rect; return q.x0 === r.x0 && q.z0 === r.z0 && q.x1 === r.x1 && q.z1 === r.z1; })
+        ?? ((G.gates?.list ?? []) as Gate[]).find((x) => inRect(r, x.center));
+      if (gate) return gate.markPos;
+      const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+      return new THREE.Vector3(cx, G.terrain.height(cx, cz) + 1, cz);
+    };
+    this.missions.forEach((m, i) => {
+      if (m.done || m.id === 'quota') return;
+      const d = MDEF[m.id];
+      const isMine = (h: unknown) => !!h && !!d && ((d.props?.includes((h as Prop).def?.id ?? '') && (h as Prop).kind === 'prop')
+        || ((h as Critter).kind === 'critter' && !!d.critters?.includes((h as Critter).def.kind)));
+      // 1) somebody already holds the thing: where it goes
+      if (d?.to && g.pigs.some((p) => !p.out && isMine(p.held))) {
+        if (d.to === 'bob') atBob(i); else mark(i, this.wherePos(d.to, new THREE.Vector3()), 0.6);
+        return;
       }
-      if (m.id === 'gateBreak') for (const g of (G.gates?.list ?? []) as Gate[]) if (g.state !== 'broken') out.push({ obj: g, id: m.id });
-      // farm 4: the lanterns still lit, the catapult
-      const pk = this.game.farm.pumpkins;
-      if (m.id === 'lanternsOut' && pk) for (const sp of pk.litSpots()) out.push({ obj: sp, id: m.id });
-      if ((m.id === 'catapultBob' || m.id === 'pigLaunch') && pk?.cat) out.push({ obj: pk.cat.spot, id: m.id });
-      // farm 5: the snowman while it stands, the ice-fishing hole
-      const w = this.game.farm.winter;
-      if (m.id === 'snowmanDown' && w) for (const sp of w.snowmanSpots()) out.push({ obj: sp, id: m.id });
-      if ((m.id === 'iceHole' || m.id === 'bobIce') && w?.holeSpot) out.push({ obj: w.holeSpot, id: m.id });
-    }
+      switch (m.id) {
+        case 'gateBreak': { const gt = near(((G.gates?.list ?? []) as Gate[]).filter((x) => x.state !== 'broken'), (x) => x.center); mark(i, gt?.markPos); return; }
+        case 'lanternsOut': { const sp = near(g.farm.pumpkins?.litSpots() ?? [], (x) => x.markPos); mark(i, sp?.markPos); return; }
+        case 'catapultBob': case 'pigLaunch': mark(i, g.farm.pumpkins?.cat?.spot.markPos); return;
+        case 'snowmanDown': mark(i, g.farm.winter?.snowmanSpots()[0]?.markPos); return;
+        case 'iceHole': if (L.held?.kind === 'prop') { mark(i, this.wherePos('hole', new THREE.Vector3()), 0.6); return; } mark(i, g.farm.winter?.holeSpot?.markPos); return;
+        case 'bobIce': atBob(i); return;
+        case 'mudPorch': if (L.muddy > 0) mark(i, this.wherePos('porch', new THREE.Vector3()), 1.4); return;
+        case 'wolfScare': { const w = near((G.wolves as { active: boolean; pos: THREE.Vector3 }[]).filter((x) => x.active), (x) => x.pos); if (w) mark(i, w.pos, 1.2); return; }
+        case 'whackBob': {
+          const wpn = (h: unknown) => !!(h as Prop)?.def?.weapon;
+          if (wpn(L.held)) { atBob(i); return; }
+          const pr = near(props.filter((p) => !p.banked && !p.heldBy && p.def.weapon), (p) => p.obj.position);
+          if (pr) mark(i, pr.obj.position, pr.half);
+          return;
+        }
+      }
+      if (ON_BOB.has(m.id)) { atBob(i); return; }
+      if (!d) return;
+      // 2) the thing to take / smash / tip: the nearest one
+      const pr = d.props ? near(props.filter((p) => !p.banked && !p.heldBy && d.props!.includes(p.def.id ?? '') && p.worth === null), (p) => p.obj.position) : null;
+      if (pr && !d.critters) { mark(i, pr.obj.position, pr.half); return; }
+      if (d.critters) {
+        const cs = critters.filter((c) => {
+          if (!d.critters!.includes(c.def.kind) || c.heldBy) return false;
+          if (d.inCoop && !inRect(P.coop, c.pos)) return false;
+          if (d.inPen && !inRect(P.sheepPen, c.pos)) return false;
+          if (d.inPasture && !inRect(P.pasture, c.pos)) return false;
+          if (d.inBullPen && g.farm.dairy?.loose) return false;
+          return true;
+        });
+        // the bull and its rag: the rag first (whoever holds it gets charged)
+        if (pr && d.to === 'bob') { mark(i, pr.obj.position, pr.half); return; }
+        const c = near(cs, (x) => x.pos);
+        if (!c) { if (pr) mark(i, pr.obj.position, pr.half); return; }
+        const pen = pens.find((r) => inRect(r, c.pos));
+        if (pen) mark(i, penSpot(pen));
+        else mark(i, c.visual.root.position, c.height * 0.5);
+      }
+    });
     return out;
   }
   /** Where an open prank wants this thing taken (null = nowhere special). */
@@ -458,9 +522,9 @@ export class Round {
     this.panelKey = key;
     if (!this.missions.length) { this.panel.style.display = 'none'; return; }
     this.panel.style.display = this.phase === 'end' ? 'none' : '';
-    const rows = this.missions.map((x) => {
+    const rows = this.missions.map((x, i) => {
       const txt = this.mText(x);
-      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? '✔' : x.req ? '•' : '★'}</i><span>${txt}</span></div>`;
+      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? "✔" : arrowSvg(missionColor(i), 16)}</i><span>${txt}</span>${x.req || x.done ? '' : '<s>★</s>'}</div>`;
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
     this.panel.innerHTML = `<div class="mh"><span class="tm${left < 60 ? ' low' : ''}">⏱ ${mm}:${ss}</span><span><i class="coin"></i>${this.banked} / ${this.quota}</span></div>` +
@@ -470,13 +534,14 @@ export class Round {
   /** Waypoints: where the thing you hold goes (a prank's place, the stash), Bob's porch when you're muddy for that prank. */
   private renderMark(camera: THREE.Camera) {
     const L = this.game.local;
-    const list: { at: THREE.Vector3; label: string; mission: boolean }[] = [];
+    const list: { at: THREE.Vector3; label: string; mission: boolean; color: string }[] = [];
+    const col = (id: MissionId) => missionColor(this.missions.findIndex((m) => m.id === id));
     if (this.phase !== 'end' && L && !L.out && !L.cage) {
       const tg = this.targetFor(L.held);
-      if (tg && tg.where !== 'bob') list.push({ at: this.wherePos(tg.where, this.wp[0]), label: IC[WHERE_IC[tg.where]], mission: true });
-      if (this.wants('mudPorch') && L.muddy > 0 && !tg) list.push({ at: this.wherePos('porch', this.wp[0]), label: IC.house, mission: true });
+      if (tg && tg.where !== 'bob') list.push({ at: this.wherePos(tg.where, this.wp[0]), label: IC[WHERE_IC[tg.where]], mission: true, color: col(tg.id) });
+      if (this.wants('mudPorch') && L.muddy > 0 && !tg) list.push({ at: this.wherePos('porch', this.wp[0]), label: IC.house, mission: true, color: col('mudPorch') });
       if ((this.carrying() && tg?.where !== 'stash') || (this.phase === 'escape' && !this.inStash(L.pos)) || tg?.where === 'stash')
-        list.push({ at: this.wp[1].copy(this.stash), label: IC.stash, mission: false });
+        list.push({ at: this.wp[1].copy(this.stash), label: IC.stash, mission: false, color: MISSION_COLORS[0] });
     }
     let px = -1e9, py = -1e9;
     [this.mark, this.mark2].forEach((el, i) => {
@@ -492,8 +557,9 @@ export class Round {
       px = x; py = y;
       el.style.left = x + 'px'; el.style.top = y + 'px';
       el.classList.toggle('mission', m.mission);
+      el.style.color = m.color;
       const d = Math.hypot(L.pos.x - m.at.x, L.pos.z - m.at.z);
-      const html = `${m.label}<b>▼</b>${Math.round(d)} m`;
+      const html = `${m.label}<b>${arrowSvg(m.color, 26)}</b>${Math.round(d)} m`;
       if (el.innerHTML !== html) el.innerHTML = html;
     });
   }
