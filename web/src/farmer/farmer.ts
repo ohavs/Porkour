@@ -32,6 +32,8 @@ export const BOB = {
   // hunting a pig he lost: suspicion drains slowly while it stays out of sight; he checks hiding spots near where
   // he lost it and recognises it (even acting natural) when it's this close
   huntDecay: 0.035, unseenDecay: 0.06, seenDecay: 0.12, huntSpots: 4, lookAround: 2.4, recognise: 9, huntMax: 45,
+  // farm 5: grip on ice (× accel); hurrying across it (faster than iceSlip m/s) he goes down now and then (per second)
+  ice: 0.14, iceSlip: 3.1, iceSlipRate: 0.9,
 };
 
 /**
@@ -185,6 +187,8 @@ export class Farmer {
   private gateSkip = new WeakMap<Gate, number>(); private gatePt = new THREE.Vector3();
   /** A farm job (relight a lantern…) he's on, when he looks for one next. */
   private job: BobJob | null = null; private jobNext = 0;
+  /** Farm 5: following footprints in the snow (the investigate state's label + when he looks for the next trail). */
+  private clueNext = 0; private tracking = false;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -240,6 +244,7 @@ export class Farmer {
 
   private go(s: State) {
     if (this.state === 'tidy' && s !== 'tidy') this.dropProp();
+    if (s !== 'investigate') this.tracking = false;
     this.state = s; this.stateT = this.now;
   }
   /** Day chores, evening flashlight round, bed at night — but on alert (2+) he keeps patrolling all night. */
@@ -375,7 +380,7 @@ export class Farmer {
       case 'routine': want = this.routine(dt); break;
       case 'guard': want = this.guard(dt); break;
       case 'investigate': {
-        this.activity = 'bob.heard';
+        this.activity = this.tracking ? 'bob.tracks' : 'bob.heard';
         const d = this.moveTo(this.searchAt, BOB.walk, dt);
         want = BOB.walk;
         if (d < 1.2 || this.now - this.stateT > 15) this.startSearch(this.searchAt, this.hunt, this.hunt ? 3 : 2);
@@ -474,7 +479,8 @@ export class Farmer {
     }
     // apply velocity
     const target = want === 0 ? v1.set(0, 0, 0) : v1.copy(this.moveVel);
-    const dx = target.x - this.vel.x, dz = target.z - this.vel.z, dl = Math.hypot(dx, dz), mx = BOB.accel * dt;
+    const onIce = !!G.iceAt?.(this.pos.x, this.pos.z) && !this.riding;
+    const dx = target.x - this.vel.x, dz = target.z - this.vel.z, dl = Math.hypot(dx, dz), mx = BOB.accel * dt * (onIce ? BOB.ice : 1);
     if (dl > mx) { this.vel.x += (dx / dl) * mx; this.vel.z += (dz / dl) * mx; } else { this.vel.x = target.x; this.vel.z = target.z; }
     this.body.setLinvel(this.vel, true);
     const sp = Math.hypot(this.vel.x, this.vel.z);
@@ -483,10 +489,16 @@ export class Farmer {
     this.holdCarried(dt);
     this.holdProp(dt);
     if (this.riding) this.mower.ride(this.pos, this.yaw, sp, dt);
+    // farm 5: in a hurry on the ice → whoops (feet up, flat on his back)
+    if (onIce && sp > BOB.iceSlip && G.net !== 'client' && Math.random() < dt * BOB.iceSlipRate * (sp / BOB.iceSlip)) this.slip('ice');
     // footsteps
     if (sp > 0.8 && !this.lying && !this.riding) {
       this.stepT += dt * sp * (sp > 4 ? 0.62 : 0.85);
-      if (this.stepT > 1) { this.stepT = 0; G.audio.play('boot', { pos: this.pos, vol: sp > 4 ? 0.9 : 0.55, pitch: 0.85 }); }
+      if (this.stepT > 1) {
+        this.stepT = 0;
+        const snd = !G.snowy ? 'boot' : onIce ? 'icestep' : G.terrain.dirtAt(this.pos.x, this.pos.z) > 0.3 ? 'boot' : 'snowstep';
+        G.audio.play(snd, { pos: this.pos, vol: sp > 4 ? 0.9 : 0.55, pitch: 0.85 });
+      }
     }
   }
   private moveVel = new THREE.Vector3();
@@ -504,6 +516,8 @@ export class Farmer {
       if (br.def?.fragile && rel > 2.5 && !br.banked) { br.smash?.('bob'); this.splatted(ov, br.def.id); return; }
       // a cheese wheel rolled into him (farm 3): bowled over like a skittle
       if ((br.def?.id === 'cheeseWheel' || br.def?.id === 'prizeCheese') && rel > 3.2) { this.cheesed(ov, br.def.id === 'prizeCheese'); return; }
+      // a snowball rolled up big (farm 5)
+      if (br.def?.id === 'snowboulder' && rel > 2.4) { this.snowballed(ov, o.radius); return; }
       if (rel < 6.5 || o.mass < 2) return;
       if ((this.hitBy.get(o) ?? -10) > this.now - 0.6) return;
       this.hitBy.set(o, this.now);
@@ -591,7 +605,10 @@ export class Farmer {
     this.eye.copy(this.pos).setY(this.pos.y + 1.7);
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, d = Math.hypot(dx, dz);
     let range = v.range * (p.standing ? 1.25 : 1) * ALERT.sight[this.level] * modSight();
-    if ((p.muddy ?? 0) > 0) range *= G.terrain.isBare(p.pos.x, p.pos.z) ? 0.5 : 0.75;   // mud = camouflage
+    if ((p.muddy ?? 0) > 0) {   // mud = camouflage (farm 5: a snow-white coat on the snow)
+      const bare = G.terrain.isBare(p.pos.x, p.pos.z);
+      range *= G.snowy ? (bare ? 0.85 : 0.5) : bare ? 0.5 : 0.75;
+    }
     if (G.night > 0.5 && this.state === 'chase') range *= 0.75;
     if (d > range && d > 2.2) return 0;
     if (d > 2.2) {   // inside 2.2 m he notices you anyway
@@ -680,6 +697,19 @@ export class Farmer {
         return;
       }
     }
+    // clues (farm 5: fresh footprints in the snow): he follows the trail to where it ends
+    if (this.state === 'routine' && !this.carrying && this.now > this.clueNext && G.clues.length) {
+      this.clueNext = this.now + 0.8;
+      for (const src of G.clues) {
+        const at = src.spot(this);
+        if (!at) continue;
+        this.stopRiding(); this.doing = false; this.path = [];
+        this.searchAt.copy(at); this.go('investigate'); this.tracking = true;
+        this.voice('huh', 0.8); this.raise('noise');
+        G.events.push({ type: 'bobTracks' });
+        return;
+      }
+    }
     // noises
     if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance') {
       for (const n of G.noises) {
@@ -692,7 +722,7 @@ export class Farmer {
         this.searchAt.set(n.x, n.y, n.z);
         this.voice(asleep ? 'yawn' : 'huh');
         this.doing = false;
-        this.go('investigate'); this.path = []; this.raise('noise');
+        this.go('investigate'); this.path = []; this.raise('noise'); this.tracking = false;
         break;
       }
     } else if (G.noises.length) this.noiseT = G.noises[G.noises.length - 1].t;
@@ -1231,8 +1261,8 @@ export class Farmer {
   private splatted(dir: THREE.Vector3, what = '') {
     if ((this.hitBy.get('splat') ?? -10) > this.now - 0.2) return;
     this.hitBy.set('splat', this.now);
-    G.audio.play('splat|squish', { pos: this.pos, vol: 1 });
-    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.6), { count: 14, color: what === 'apple' ? 0xf2e6b0 : 0xffe27a, speed: 2.5, up: 1, grav: 10, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
+    G.audio.play(what === 'snowball' ? 'snowhit' : 'splat|squish', { pos: this.pos, vol: 1 });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.6), { count: 14, color: what === 'apple' ? 0xf2e6b0 : what === 'snowball' ? 0xffffff : 0xffe27a, speed: 2.5, up: 1, grav: 10, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
     G.events.push({ type: 'splatBob', text: what });
     this.raise('splat');
     this.hit(8, v2.copy(dir));
@@ -1429,8 +1459,8 @@ export class Farmer {
     return true;
   }
 
-  /** He stepped in spilled milk (farm 3): feet up, flat on his back. */
-  slip(): boolean {
+  /** He stepped in spilled milk (farm 3) / hurried across the ice (farm 5): feet up, flat on his back. */
+  slip(on: 'milk' | 'ice' = 'milk'): boolean {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away' || this.riding) return false;
     if ((this.hitBy.get('slip') ?? -10) > this.now - 4) return false;
     this.hitBy.set('slip', this.now);
@@ -1440,8 +1470,36 @@ export class Farmer {
     this.body.setAngvel({ x: -Math.cos(this.yaw) * 6, y: 0, z: Math.sin(this.yaw) * 6 }, true);   // feet fly forward, head back
     this.parts.matchVelocity();
     G.audio.play('whoosh', { pos: this.pos, vol: 1, pitch: 0.8 });
-    G.events.push({ type: 'bobSlipped' });
+    if (on === 'ice') G.audio.play('icecrack', { pos: this.pos, vol: 0.8, pitch: 1.1 });
+    G.events.push({ type: 'bobSlipped', text: on });
     return true;
+  }
+
+  /** Farm 5: he went through the ice-fishing hole — splash, out he scrambles, soaked and flat on his back. */
+  dunked(): boolean {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
+    if ((this.hitBy.get('dunk') ?? -10) > this.now - 6) return false;
+    this.hitBy.set('dunk', this.now);
+    this.stun('down', BOB.downTime + 1.2);
+    this.body.setLinvel({ x: (Math.random() - 0.5) * 3, y: 6.5, z: (Math.random() - 0.5) * 3 }, true);
+    this.parts.matchVelocity();
+    this.voice('oof', 1);
+    G.audio.play('splash', { pos: this.pos, vol: 1 });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 0.3), { count: 26, color: 0xbfe3ff, speed: 4, up: 4, grav: 12, life: 0.8, size: 0.1, grow: 0, alpha: 1 });
+    G.events.push({ type: 'bobDunked' });
+    this.raise('splat');
+    return true;
+  }
+
+  /** Farm 5: a snowball he rolled into him: a big one (≥ 0.75 m) bowls him over, a small one staggers him. */
+  private snowballed(dir: THREE.Vector3, r: number) {
+    if ((this.hitBy.get('snowball') ?? -10) > this.now - 1) return;
+    this.hitBy.set('snowball', this.now);
+    G.audio.play('snowhit', { pos: this.pos, vol: 1, pitch: 0.7 });
+    G.fx.puff(v1.copy(this.pos).setY(this.pos.y + 0.8), { count: 16, color: 0xffffff, speed: 3, up: 1.5, life: 1, size: 0.8, alpha: 0.85 });
+    if (r >= 0.75) G.events.push({ type: 'bigSnowballBob' });
+    this.raise('splat');
+    this.hit(r >= 0.75 ? BOB.knockdown + 10 : BOB.stagger + 10, v2.copy(dir));
   }
 
   /** Farm 4's catapult landed a shot on him (a pumpkin, a hen, a pig…): knocked silly (stagger: drops a pig he carries). */

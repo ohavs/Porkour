@@ -19,9 +19,13 @@ const PALETTE: Record<string, Record<string, number>> = {
   'kenney/rock_smallA': { dirt: 0x9b958e, grass: 0x6bb547 },
   // farm 2's tall-grass strips: the texture is a dry brown, tint it toward fresh meadow green
   'nature/Grass_Wispy_Tall': { Grass: 0xb6f07a }, 'nature/Grass_Common_Tall': { Grass: 0xb6f07a },
+  // farm 5's decorated tree: Kenney's teal → a real fir green
+  'winter/treeDecorated': { leaves: 0x2f8048 },
 };
+/** Quaternius snowy trees / rocks (farm 5): their "snow" is a dull lilac grey and the pines almost black — bright cartoon snow. */
+const SNOWY: Record<string, number> = { Snow: 0xf3f7ff, Green: 0x2f6e43, Wood: 0x6e4a2e, Rock: 0x8a909c };
 function repaint(name: string, root: THREE.Object3D) {
-  const p = PALETTE[name]; if (!p) return;
+  const p = PALETTE[name] ?? (name.startsWith('winter/') && /_Snow/.test(name) ? SNOWY : null); if (!p) return;
   root.traverse((o) => {
     const m = o as THREE.Mesh; if (!m.isMesh) return;
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {

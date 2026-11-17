@@ -20,6 +20,7 @@ import { LANDMARK_MODELS } from './world/landmarks';
 import { FARM2_MODELS } from './world/farm2';
 import { FARM3_MODELS } from './world/farm3';
 import { FARM4_MODELS } from './world/farm4';
+import { FARM5_MODELS } from './world/farm5';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
 
 const MODELS = [
@@ -38,7 +39,7 @@ const MODELS = [
   ...COVER_MODELS, ...LANDMARK_MODELS,
 ];
 /** + the models only the farm this page plays needs. */
-const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : farmId() === 'farm4' ? FARM4_MODELS : []);
+const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : farmId() === 'farm4' ? FARM4_MODELS : farmId() === 'farm5' ? FARM5_MODELS : []);
 
 /** Tiny flag icons (emoji flags don't show on Windows). */
 const FLAGS: Record<string, string> = {
@@ -52,6 +53,7 @@ const FARM_ICON: Record<string, string> = {
   farm2: '<svg viewBox="0 0 20 20"><circle cx="7.5" cy="12" r="5.5" fill="#e0302c"/><circle cx="12.5" cy="12" r="5.5" fill="#e0302c"/><path d="M10 7c0-2 1-4 2-5" stroke="#5a3a1e" stroke-width="1.6" fill="none"/><ellipse cx="13.5" cy="4.5" rx="3" ry="1.4" fill="#4fa636" transform="rotate(-25 13.5 4.5)"/></svg>',
   farm3: '<svg viewBox="0 0 20 20"><path d="M2 15 17 6v9z" fill="#ffd34d"/><path d="M2 15 17 6l-3-2z" fill="#ffe98a"/><circle cx="8" cy="13" r="1.3" fill="#d9a62c"/><circle cx="13" cy="11.5" r="1.6" fill="#d9a62c"/><circle cx="14.5" cy="14" r="0.9" fill="#d9a62c"/></svg>',
   farm4: '<svg viewBox="0 0 20 20"><ellipse cx="10" cy="11.5" rx="8" ry="6.5" fill="#f08a24"/><path d="M10 5c0-2 1-3 2-3.5" stroke="#5a3a1e" stroke-width="1.6" fill="none"/><path d="M5.5 9.5l2 1.6-2.2.4zM14.5 9.5l-2 1.6 2.2.4zM5.5 13.5l2 1 1.2-1 1.3 1 1.3-1 1.2 1 2-1-1.3 2.5h-6.4z" fill="#ffd34d"/></svg>',
+  farm5: '<svg viewBox="0 0 20 20"><circle cx="10" cy="14" r="5.2" fill="#f4f8ff"/><circle cx="10" cy="7" r="3.6" fill="#f4f8ff"/><path d="M6.6 4.6h6.8v-.9H11.7V1h-3.4v2.7H6.6z" fill="#26232a"/><path d="M10 7.2l3.2.8-3.2.6z" fill="#ff7a1f"/><circle cx="8.8" cy="6.2" r=".55" fill="#26232a"/><circle cx="11" cy="6.2" r=".55" fill="#26232a"/><path d="M6.8 10h6.4" stroke="#d8342c" stroke-width="1.6"/></svg>',
   random: '<svg viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="15" rx="3.5" fill="#fff4e0"/><g fill="#3b2412"><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="13.5" cy="13.5" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="6.5" cy="13.5" r="1.5"/></g></svg>',
 };
 
@@ -110,7 +112,9 @@ async function boot() {
     input.lock();
     game.running = true;
     if (G.net !== 'client' && game.round.no === 0) game.round.start();
-    game.hud.flashHelp(16);
+    // the controls card only pops up on your very first game (H shows it any time)
+    let seen = false; try { seen = !!localStorage.getItem('porkour.helpSeen'); localStorage.setItem('porkour.helpSeen', '1'); } catch { /* private mode */ }
+    if (!seen) game.hud.flashHelp(16);
   };
   // online lobby (title "Play online", invite links ?room=CODE, back from a game ?lobby=1)
   const lobby = new Lobby(game, {

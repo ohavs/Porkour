@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RAPIER, world, groups, L } from '../core/physics';
 import { fbm, smoothstep, clamp } from '../core/util';
-import { grassTexture, dirtTexture, mudTexture } from '../render/textures';
+import { grassTexture, dirtTexture, mudTexture, snowTexture } from '../render/textures';
 import { RAMP } from '../render/toon';
 
 export const WORLD = 380;          // ground plane size (m)
@@ -23,6 +23,8 @@ export class Terrain {
   private noGrassRects: Rect[] = [];
   mudZones: { x: number; z: number; rx: number; rz: number }[] = [];
   collider!: RAPIER.Collider;
+  /** Farm 5: snow instead of grass (paths = shovelled gravel, the farmland outside = snowy fields). Set before build(). */
+  snow = false;
 
   constructor(farm: Rect) {
     this.farm = farm;
@@ -63,6 +65,10 @@ export class Terrain {
   /** A round hill inside the farm (radius r, height h, a flat top of radius `flat`) — before build(). */
   hill(x: number, z: number, r: number, h: number, flat = 0) { this.hills.push({ x, z, r, h, flat }); }
   private hills: { x: number; z: number; r: number; h: number; flat: number }[] = [];
+  /** A dead-flat round spot (a frozen pond's ice lies on it): the ground there is the noise height at its centre. */
+  flatten(x: number, z: number, r: number, edge = 3) { this.flats.push({ x, z, r, edge, h: this.noiseH(x, z) }); }
+  private flats: { x: number; z: number; r: number; edge: number; h: number }[] = [];
+  private noiseH(x: number, z: number) { return (fbm(x * 0.035 + 3, z * 0.035 - 7, 3) - 0.5) * 0.7; }
 
   private sample(x: number, z: number, ch: number) {
     const i = clamp(Math.floor(this.px(x)), 0, SPLAT - 1), j = clamp(Math.floor(this.px(z)), 0, SPLAT - 1);
@@ -82,7 +88,11 @@ export class Terrain {
     const f = this.farm;
     const dx = Math.max(f.x0 - x, 0, x - f.x1), dz = Math.max(f.z0 - z, 0, z - f.z1);
     const out = Math.hypot(dx, dz);
-    let h = (fbm(x * 0.035 + 3, z * 0.035 - 7, 3) - 0.5) * 0.7;
+    let h = this.noiseH(x, z);
+    for (const fl of this.flats) {
+      const d = Math.hypot(x - fl.x, z - fl.z);
+      if (d < fl.r + fl.edge) h += (fl.h - h) * (1 - smoothstep(fl.r, fl.r + fl.edge, d));
+    }
     h += smoothstep(8, 90, out) * (3 + 12 * fbm(x * 0.016, z * 0.016, 4));
     for (const hl of this.hills) {
       const d = Math.hypot(x - hl.x, z - hl.z);
@@ -104,7 +114,8 @@ export class Terrain {
     for (let i = 0; i < pos.count; i++) pos.setY(i, this.height(pos.getX(i), pos.getZ(i)));
     geo.computeVertexNormals();
 
-    const mat = new THREE.MeshToonMaterial({ map: grassTexture(), gradientMap: RAMP });
+    const mat = new THREE.MeshToonMaterial({ map: this.snow ? snowTexture() : grassTexture(), gradientMap: RAMP });
+    const SNOW = this.snow ? 1 : 0;
     const F = this.farm;
     const dirt = dirtTexture(), mudT = mudTexture();
     mat.onBeforeCompile = (sh) => {
@@ -119,11 +130,12 @@ export class Terrain {
           vec2 uvW = vW * 0.19;
           vec4 g = texture2D(map, uvW);
           vec4 g2 = texture2D(map, uvW * 0.21 + 0.37);
-          g.rgb = mix(g.rgb, g2.rgb * vec3(1.05, 0.95, 0.8), 0.4);
+          g.rgb = mix(g.rgb, g2.rgb * ${SNOW ? 'vec3(0.97, 0.98, 1.0)' : 'vec3(1.05, 0.95, 0.8)'}, 0.4);
           vec4 dt = texture2D(dirtMap, uvW * 0.75);
           vec4 md = texture2D(mudMap, uvW * 1.2);
           vec3 sp = texture2D(splatMap, (vW + ${HALF.toFixed(1)}) / ${WORLD.toFixed(1)}).rgb;
-          float dirtW = smoothstep(0.22, 0.7, sp.r + (g.g - 0.45) * 0.5);
+          float dirtW = smoothstep(0.22, 0.7, sp.r + (g.g - ${SNOW ? '0.88' : '0.45'}) * 0.5)${SNOW ? ' * 0.9' : ''};
+          ${SNOW ? 'dt.rgb = mix(dt.rgb * vec3(0.78, 0.76, 0.78), vec3(0.86, 0.9, 0.98), 0.25 + 0.3 * smoothstep(0.4, 0.8, g.r));' : ''}
           float mudW = smoothstep(0.25, 0.65, sp.g + (dt.r - 0.5) * 0.4);
           vec4 col = mix(g, dt, dirtW);
           col = mix(col, md * vec4(0.8, 0.78, 0.75, 1.0), mudW);
@@ -142,6 +154,7 @@ export class Terrain {
                       : hsh < 0.7 ? vec3(0.48, 0.74, 0.3) : mix(vec3(0.4, 0.66, 0.26), vec3(0.36, 0.6, 0.24), stripe);
           float hedge = 1.0 - smoothstep(0.6, 1.3, min(min(inC.x, cs.x - inC.x), min(inC.y, cs.y - inC.y)));
           fieldC = mix(fieldC, vec3(0.2, 0.45, 0.16), hedge);
+          ${SNOW ? 'fieldC = mix(vec3(0.9, 0.93, 1.0), vec3(0.8, 0.85, 0.94), stripe * step(0.4, hsh) * 0.6) - hedge * vec3(0.32, 0.26, 0.2);' : ''}
           diffuseColor.rgb = mix(diffuseColor.rgb, fieldC * (0.92 + g.g * 0.2), outW);`);
     };
     this.mesh = new THREE.Mesh(geo, mat);

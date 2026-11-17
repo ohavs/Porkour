@@ -10,7 +10,7 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const SNOUT_DIR = SNOUT_TIP.clone().sub(NECK).normalize();
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
 const _e = new THREE.Euler();
-const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620);
+const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620), SNOW_COAT = new THREE.Color(0xf6f9ff);
 
 export interface PigPose {
   speed: number; grounded: boolean; vy: number; standing: boolean; mode: string;
@@ -176,7 +176,7 @@ export class PigVisual {
     // mud / burnt tint
     const m = clamp(p.muddy, 0, 1) * 0.8;
     const b = clamp(p.burnt ?? 0, 0, 1) * 0.75;
-    for (const s of R.skin) s.mat.color.copy(s.base).lerp(MUD, m).lerp(BURNT, b);
+    for (const s of R.skin) s.mat.color.copy(s.base).lerp(G.snowy ? SNOW_COAT : MUD, m).lerp(BURNT, b);
     if (b > 0 && Math.random() < p.dt * 6 * b) G.fx.puff(this.root.position, { count: 1, color: 0x555555, spread: 0.2, speed: 0.2, up: 0.8, life: 1.2, size: 0.4, grow: 0.6, alpha: 0.35 });
   }
 }

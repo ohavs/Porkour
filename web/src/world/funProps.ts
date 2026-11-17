@@ -183,3 +183,83 @@ export function makeGiantPumpkin(fit: (model: string, h: number) => THREE.Object
   for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.1, 0.34, 0.01), 0x2f6fd6, s * 0.08, 0.9, 1.15, -0.2, 0, s * 0.3);
   return g;
 }
+
+// ---------------------------------------------------------------- farm 5 (winter)
+const SNOW = 0xf6f9ff, COAL = 0x26232a;
+const LUMP = new THREE.IcosahedronGeometry(1, 2);
+/** A lumpy ball of packed snow (radius r, sitting on y = 0). */
+function snowLump(g: THREE.Group, r: number, y: number, sq = 1) {
+  const m = add(g, LUMP, SNOW, 0, y, 0); m.scale.set(r, r * sq, r); return m;
+}
+/** A snowball to throw (smashes into powder on a hit). */
+export function makeSnowball() { const g = new THREE.Group(); snowLump(g, 0.13, 0.13); return g; }
+/** A snowball to roll: it grows as it rolls over fresh snow (world/winter.ts scales it). */
+export function makeSnowBoulder() {
+  const g = new THREE.Group(); snowLump(g, 0.42, 0.42);
+  for (let i = 0; i < 5; i++) {   // a few clumps stuck on it (shows it turning)
+    const a = i * 2.4, b = (i % 3) * 0.9 - 0.9, m = add(g, LUMP, 0xe2ebf7, Math.cos(a) * 0.36 * Math.cos(b), 0.42 + Math.sin(b) * 0.36, Math.sin(a) * 0.36 * Math.cos(b));
+    m.scale.setScalar(0.1);
+  }
+  return g;
+}
+/** A wrapped present: box + ribbon cross + a bow on top. */
+export function makePresent(w: number, h: number, d: number, box: number, ribbon: number) {
+  const g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(w, h, d), box, 0, h / 2, 0);
+  add(g, new THREE.BoxGeometry(w * 0.16, h + 0.01, d + 0.01), ribbon, 0, h / 2, 0);
+  add(g, new THREE.BoxGeometry(w + 0.01, h + 0.01, d * 0.16), ribbon, 0, h / 2, 0);
+  const loop = new THREE.TorusGeometry(Math.min(w, d) * 0.16, Math.min(w, d) * 0.045, 6, 14);
+  for (const s of [-1, 1]) add(g, loop, ribbon, s * Math.min(w, d) * 0.14, h + Math.min(w, d) * 0.12, 0, 0, s * 0.5, 0);
+  return g;
+}
+/** Bob's prize snowman (the static one standing in the yard): 3 balls, coal face, carrot nose, stick arms, scarf, top hat. */
+export const SNOWMAN = { base: 0.62, mid: 0.45, head: 0.33, yBase: 0.56, yMid: 1.36, yHead: 1.98 };
+function snowmanHead(g: THREE.Group, y: number) {
+  const r = SNOWMAN.head;
+  snowLump(g, r, y);
+  for (const s of [-1, 1]) add(g, new THREE.SphereGeometry(0.045, 8, 6), COAL, s * 0.11, y + 0.09, r * 0.88);
+  add(g, new THREE.ConeGeometry(0.05, 0.3, 10), 0xff7a1f, 0, y, r + 0.1, Math.PI / 2, 0, 0);          // carrot nose
+  for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.32; add(g, new THREE.SphereGeometry(0.026, 6, 5), COAL, Math.sin(a) * 0.15, y - 0.12 + Math.abs(i - 2) * 0.03, r * 0.93); }
+  const hat = new THREE.Group(); hat.position.set(0.04, y + r * 0.82, -0.02); hat.rotation.set(-0.15, 0, -0.22); g.add(hat);
+  add(hat, new THREE.CylinderGeometry(0.3, 0.3, 0.03, 18), COAL, 0, 0, 0);
+  add(hat, new THREE.CylinderGeometry(0.2, 0.21, 0.36, 18), COAL, 0, 0.18, 0);
+  add(hat, new THREE.CylinderGeometry(0.212, 0.212, 0.07, 18), 0xd8342c, 0, 0.06, 0);
+}
+export function makeSnowman() {
+  const g = new THREE.Group(), S = SNOWMAN;
+  snowLump(g, S.base, S.yBase, 0.92);
+  snowLump(g, S.mid, S.yMid, 0.95);
+  for (let i = 0; i < 3; i++) add(g, new THREE.SphereGeometry(0.05, 8, 6), COAL, 0, S.yMid + 0.2 - i * 0.18, S.mid * 0.95 - Math.abs(i - 1) * 0.03);
+  for (const s of [-1, 1]) {   // stick arms with twig fingers, waving
+    const arm = add(g, new THREE.CylinderGeometry(0.025, 0.035, 0.85, 6), 0x6a4428, s * 0.72, S.yMid + 0.22, 0, 0, 0, s * (Math.PI / 2 - 0.55));
+    void arm;
+    add(g, new THREE.CylinderGeometry(0.015, 0.02, 0.22, 5), 0x6a4428, s * 1.05, S.yMid + 0.55, 0, 0, 0, s * 0.2);
+  }
+  add(g, new THREE.TorusGeometry(0.3, 0.07, 8, 20), 0xd8342c, 0, S.yHead - 0.3, 0, Math.PI / 2, 0, 0);   // scarf
+  add(g, new THREE.BoxGeometry(0.14, 0.42, 0.05), 0xd8342c, 0.16, S.yHead - 0.52, 0.3, 0.25, 0, 0.15);
+  snowmanHead(g, S.yHead);
+  return g;
+}
+/** The snowman's parts once he's knocked over: they roll (props, world/winter.ts). */
+export function makeSnowmanBall(part: 'base' | 'mid' | 'head') {
+  const g = new THREE.Group(), r = SNOWMAN[part];
+  if (part === 'head') snowmanHead(g, r);
+  else {
+    snowLump(g, r, r);
+    if (part === 'mid') for (let i = 0; i < 3; i++) add(g, new THREE.SphereGeometry(0.05, 8, 6), COAL, 0, r + 0.2 - i * 0.18, r * 0.95 - Math.abs(i - 1) * 0.03);
+  }
+  return g;
+}
+/** Bob's ice-fishing catch: a bucket with fish tails sticking out. */
+export function makeFishBucket() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.2, 0.16, 0.3, 14), 0x8c99ad, 0, 0.15, 0);
+  add(g, new THREE.TorusGeometry(0.2, 0.015, 6, 18), 0x5d6778, 0, 0.3, 0, Math.PI / 2, 0, 0);
+  const body = new THREE.SphereGeometry(0.06, 10, 8), tail = new THREE.ConeGeometry(0.05, 0.08, 4);
+  for (let i = 0; i < 3; i++) {
+    const a = i * 2.1, x = Math.cos(a) * 0.07, z = Math.sin(a) * 0.07;
+    add(g, body, i === 1 ? 0xf08a5a : 0x9fc4dd, x, 0.33, z, 0.3 - i * 0.2, a, 0.4).scale.set(0.8, 2.2, 0.5);
+    add(g, tail, i === 1 ? 0xf08a5a : 0x9fc4dd, x * 1.3, 0.46, z * 1.3, 0, a, 0);
+  }
+  return g;
+}

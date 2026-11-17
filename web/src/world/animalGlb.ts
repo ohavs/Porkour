@@ -18,7 +18,11 @@ import { AnimalVisual, type AnimalKind, type AnimalPose } from './animalModels';
  * Goofy on purpose (user: animals and characters as goofy / ragdolly as possible): big head (`head` = scale of the
  * head + ear bones), huge googly eyes, brighter colours (`colors` = new colour per pack material name).
  */
-export interface GlbSpec { model: string; size: number; walk: number; gallop: number; head: number; eye: number; colors?: Record<string, number> }
+export interface GlbSpec {
+  model: string; size: number; walk: number; gallop: number; head: number; eye: number; colors?: Record<string, number>;
+  /** Packs with unnamed materials ("Material.003"): their usual names (Main / Main_Light / Eye_* / Muzzle…). */
+  rename?: Record<string, string>;
+}
 export const GLB_ANIMALS: Partial<Record<AnimalKind, GlbSpec>> = {
   cow: { model: 'animals/Cow', size: 1.75, walk: 0.9, gallop: 3, head: 1.45, eye: 1.6, colors: { Main: 0xfaf6ee, Main_Light: 0x2e2a2a, Muzzle: 0xffa3b5, Horns: 0xf2e3b3 } },
   dog: { model: 'animals/ShibaInu', size: 0.78, walk: 1.0, gallop: 3.5, head: 1.5, eye: 1.4, colors: { Main: 0xe08a3c, Main_Light: 0xfff0d8 } },
@@ -28,9 +32,19 @@ export const GLB_ANIMALS: Partial<Record<AnimalKind, GlbSpec>> = {
   donkey: { model: 'animals/Donkey', size: 1.65, walk: 1.0, gallop: 3.5, head: 1.45, eye: 1.6, colors: { Main: 0x9a9aa3, Main_Light: 0xdedee3 } },
   // farm 3's bull: dark, big-headed, a brass nose ring (added in the visual)
   bull: { model: 'animals/Bull', size: 2.05, walk: 1.0, gallop: 4.5, head: 1.5, eye: 1.45, colors: { Main: 0x4b2a1a, Main_Light: 0x7b4a2c, Muzzle: 0xe0a08c, Horns: 0xfff0cc, Hooves: 0x2a1c14 } },
+  // farm 5's reindeer (Quaternius stag + deer): Bob's sleigh team in the paddock
+  reindeer: { model: 'animals/Stag', size: 2.3, walk: 1.1, gallop: 4.5, head: 1.4, eye: 1.6,
+    rename: { Material: 'Main', 'Material.003': 'Main_Light', 'Material.010': 'Antlers', 'Material.001': 'Hooves', 'Material.011': 'Eye_Black' },
+    colors: { Main: 0x8f5c38, Main_Light: 0xeee2cc, Antlers: 0x7a5638, Hooves: 0x2a1c14 } },
+  doe: { model: 'animals/Deer', size: 1.7, walk: 1.1, gallop: 4.5, head: 1.45, eye: 1.6 },
   alpaca: { model: 'animals/Alpaca', size: 1.9, walk: 1.0, gallop: 3.5, head: 1.5, eye: 1.6, colors: { Main: 0xf2dcc0, Main_Light: 0xfff5e6 } },
 };
-export const GLB_MODELS = [...new Set(Object.values(GLB_ANIMALS).map((s) => s!.model))];
+/** Preloaded on every farm (farm 5's reindeer + husky are preloaded only there: FARM5_MODELS). */
+export const GLB_MODELS = [...new Set(Object.values(GLB_ANIMALS).map((s) => s!.model))].filter((m) => m !== 'animals/Stag' && m !== 'animals/Deer');
+/** Farm 5's guard dog is a husky (swapped in before the farm's animals are made). */
+export const HUSKY: GlbSpec = { model: 'animals/Husky', size: 0.9, walk: 1.0, gallop: 3.5, head: 1.5, eye: 1.4,
+  rename: { Material: 'Main', 'Material.001': 'Main_Light', 'Material.006': 'Black', 'Material.003': 'Eyes_White', 'Material.002': 'Eyes_Black' },
+  colors: { Main: 0x4a5262, Main_Light: 0xf5f6f8, Black: 0x1c1c22 } };
 
 const LIMB_BONES = ['Neck1', 'FrontUpperLeg.L', 'FrontUpperLeg.R', 'BackUpperLeg.L', 'BackUpperLeg.R'];
 let vcMat: THREE.MeshToonMaterial | null = null;
@@ -45,7 +59,7 @@ const eyeInfo = new Map<string, { at: number; c: THREE.Vector3; r: number }[]>()
 const muzzleInfo = new Map<string, number[]>();
 
 /** Once per model: all primitives → one SkinnedMesh with vertex colours (1 draw call per animal instead of 4–8). */
-function prepare(name: string, colors?: Record<string, number>) {
+function prepare(name: string, colors?: Record<string, number>, rename?: Record<string, string>) {
   if (prepared.has(name)) return;
   prepared.add(name);
   const eyes: number[][] = [[], []], muzzle: number[] = [];
@@ -59,10 +73,11 @@ function prepare(name: string, colors?: Record<string, number>) {
       const geo = m.geometry.clone();
       for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'skinIndex', 'skinWeight'].includes(k)) geo.deleteAttribute(k);
       const mat = m.material as THREE.MeshToonMaterial;
-      const c = colors?.[mat.name] !== undefined ? new THREE.Color(colors[mat.name]) : (mat.color ?? new THREE.Color(1, 1, 1)).clone().offsetHSL(0, 0.12, 0.05);
+      const mn = rename?.[mat.name] ?? mat.name;
+      const c = colors?.[mn] !== undefined ? new THREE.Color(colors[mn]) : (mat.color ?? new THREE.Color(1, 1, 1)).clone().offsetHSL(0, 0.12, 0.05);
       const n = geo.attributes.position.count, col = new Float32Array(n * 3);
-      if (/muzzle/i.test(mat.name)) for (let i = 0; i < n; i++) muzzle.push(base + i);
-      if (/eye/i.test(mat.name)) {
+      if (/muzzle/i.test(mn)) for (let i = 0; i < n; i++) muzzle.push(base + i);
+      if (/eye/i.test(mn)) {
         const pa = geo.attributes.position;
         for (let i = 0; i < n; i++) eyes[pa.getX(i) > 0 ? 0 : 1].push(base + i);
       }
@@ -112,7 +127,7 @@ export class GlbAnimalVisual {
   private pts: { neck: THREE.Vector3; head: THREE.Vector3; hips: THREE.Vector3[]; scale: number };
 
   constructor(public kind: AnimalKind, public spec: GlbSpec) {
-    prepare(spec.model, spec.colors);
+    prepare(spec.model, spec.colors, spec.rename);
     const model = instance(spec.model);
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model);
@@ -259,5 +274,5 @@ export type AnyAnimalVisual = AnimalVisual | GlbAnimalVisual;
 export function animalVisual(kind: AnimalKind): AnyAnimalVisual {
   const spec = GLB_ANIMALS[kind];
   if (spec && gltf(spec.model)) return new GlbAnimalVisual(kind, spec);
-  return new AnimalVisual(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' || kind === 'bull' ? 'cow' : kind);
+  return new AnimalVisual(kind === 'horse' || kind === 'horse2' || kind === 'donkey' || kind === 'alpaca' || kind === 'bull' || kind === 'reindeer' || kind === 'doe' ? 'cow' : kind);
 }

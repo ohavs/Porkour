@@ -1,0 +1,72 @@
+/**
+ * Small HUD icons (24×24 SVG, cartoon: fat shapes with a dark brown outline) so the HUD can show things instead of
+ * telling them: what a key does, what's going on with you, what just happened over someone's head.
+ */
+const O = 'stroke="#3b2412" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"';
+const svg = (body: string, w = 24) => `<svg class="ic" viewBox="0 0 ${w} 24" width="${w}" height="24">${body}</svg>`;
+
+export const IC = {
+  /** Mouse with the left / right button lit. */
+  lmb: svg(`<rect x="5" y="2" width="14" height="20" rx="7" fill="#fff6e6" ${O}/><path d="M12 2v8H5V9a7 7 0 0 1 7-7z" fill="#ffd166" ${O}/><path d="M12 2v8M5 10h14" fill="none" ${O}/>`),
+  rmb: svg(`<rect x="5" y="2" width="14" height="20" rx="7" fill="#fff6e6" ${O}/><path d="M12 2v8h7V9a7 7 0 0 0-7-7z" fill="#ffd166" ${O}/><path d="M12 2v8M5 10h14" fill="none" ${O}/>`),
+  /** Hoof grabbing. */
+  grab: svg(`<path d="M6 13V8.5a1.6 1.6 0 0 1 3.2 0V12m0-5.5a1.6 1.6 0 0 1 3.2 0V12m0-4.6a1.6 1.6 0 0 1 3.2 0V12m0-2.6a1.6 1.6 0 0 1 3.2 0v4.8a7 7 0 0 1-7 7h-.6A6.6 6.6 0 0 1 6 13z" fill="#ffb3c7" ${O}/>`),
+  /** Put it down. */
+  drop: svg(`<path d="M12 3v11m-5-5 5 5 5-5" fill="none" stroke="#fff6e6" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 20h14" stroke="#ffd166" stroke-width="3" stroke-linecap="round"/>`),
+  /** Throw (an arc). */
+  throw: svg(`<path d="M3 20C5 9 13 5 20 6" fill="none" stroke="#fff6e6" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 4.2"/><path d="m15.5 2.6 5.3 3.2-3.6 4.9" fill="none" stroke="#ffd166" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4" cy="19" r="2.6" fill="#ffd166" ${O}/>`),
+  /** Hold the button (a filling ring). */
+  hold: svg(`<circle cx="12" cy="12" r="8" fill="none" stroke="rgba(255,246,230,.3)" stroke-width="3.4"/><path d="M12 4a8 8 0 1 1-7.6 10.5" fill="none" stroke="#ffd166" stroke-width="3.4" stroke-linecap="round"/>`),
+  fist: svg(`<rect x="5" y="6" width="13" height="12" rx="4.5" fill="#ffb3c7" ${O}/><path d="M9 6v5m4-5v5m-8 2h6" fill="none" ${O}/><path d="M19 8l3-2M19.5 12h3M19 16l3 2" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
+  /** Whack with a weapon. */
+  whack: svg(`<rect x="3" y="3" width="11" height="7" rx="2" transform="rotate(-35 8.5 6.5)" fill="#c9ced8" ${O}/><path d="m10 10 9 10" stroke="#8a5a35" stroke-width="3.4" stroke-linecap="round"/><path d="M17 3.5l2-2M20 7l3-.5" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
+  check: svg(`<circle cx="12" cy="12" r="10" fill="#7cc95a" ${O}/><path d="m7 12.5 3.4 3.4L17.5 8.6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`),
+  lock: svg(`<path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#c9ced8" stroke-width="3"/><rect x="5" y="10.5" width="14" height="11" rx="2.5" fill="#ffd166" ${O}/><circle cx="12" cy="15.5" r="1.6" fill="#3b2412"/><path d="M12 16.5v2.2" ${O}/>`),
+  /** Mash the key. */
+  mash: svg(`<rect x="2" y="9" width="20" height="9" rx="3" fill="#fff6e6" ${O}/><path d="M6 6 4.5 3.5M12 5.5V2.5M18 6l1.5-2.5" stroke="#ffd166" stroke-width="2.2" stroke-linecap="round"/>`),
+  /** Hidden (closed eye with leaves). */
+  hidden: svg(`<path d="M3 11c4 5 14 5 18 0" fill="none" stroke="#9be36a" stroke-width="2.6" stroke-linecap="round"/><path d="M6 14.5 4.5 17M12 16v3M18 14.5l1.5 2.5" stroke="#9be36a" stroke-width="2.2" stroke-linecap="round"/>`),
+  /** Seen / head sticking out (open eye). */
+  eye: svg(`<path d="M2 12s4-6.5 10-6.5S22 12 22 12s-4 6.5-10 6.5S2 12 2 12z" fill="#fff6e6" ${O}/><circle cx="12" cy="12" r="3.6" fill="#3b2412"/><circle cx="13.2" cy="10.8" r="1.1" fill="#fff"/>`),
+  trap: svg(`<path d="M3 15a9 7 0 0 1 18 0z" fill="#9aa0aa" ${O}/><path d="m5 15 2-3 2 3 2-3 2 3 2-3 2 3 2-3 1 3" fill="none" stroke="#fff6e6" stroke-width="1.6" stroke-linejoin="round"/><path d="M2 18h20" stroke="#ff5a3c" stroke-width="2.6" stroke-linecap="round"/>`),
+  flame: svg(`<path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6 0 2 1 3 2 3-1-3 0-6 1-9z" fill="#ff7a3c" ${O}/><path d="M12 13c1.5 1.5 2.5 2.5 2.5 4a2.5 2.5 0 0 1-5 0c0-1.5 1-2.5 2.5-4z" fill="#ffd166"/>`),
+  /** In the light (a lit lantern's glow). */
+  light: svg(`<circle cx="12" cy="12" r="5" fill="#ffd166" ${O}/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="#ffd166" stroke-width="2.2" stroke-linecap="round"/>`),
+  mud: svg(`<path d="M12 3c3 4.5 6 8 6 11a6 6 0 0 1-12 0c0-3 3-6.5 6-11z" fill="#8a5a35" ${O}/><circle cx="10" cy="14" r="1.6" fill="#b07a4a"/>`),
+  snow: svg(`<path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7" stroke="#eaf4ff" stroke-width="2.6" stroke-linecap="round"/><path d="m9.5 3.5 2.5 2.5 2.5-2.5M9.5 20.5 12 18l2.5 2.5" fill="none" stroke="#eaf4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`),
+  /** Playing dead (pig on its back). */
+  dead: svg(`<ellipse cx="12" cy="15" rx="8" ry="5" fill="#ffb3c7" ${O}/><path d="M7 10V7m3.5 3V6.5m3 3.5V6.5M17 10V7" stroke="#ffb3c7" stroke-width="2.4" stroke-linecap="round"/><path d="m8 15 2 2m0-2-2 2m6-2 2 2m0-2-2 2" stroke="#3b2412" stroke-width="1.4" stroke-linecap="round"/>`),
+  pig: svg(`<circle cx="12" cy="13" r="8" fill="#ffb3c7" ${O}/><path d="M6 7 4.5 3.5 9 5.5M18 7l1.5-3.5L15 5.5" fill="#ffb3c7" ${O}/><ellipse cx="12" cy="15" rx="3.6" ry="2.6" fill="#ff8fab" ${O}/><circle cx="10.8" cy="15" r=".8" fill="#3b2412"/><circle cx="13.2" cy="15" r=".8" fill="#3b2412"/><circle cx="9" cy="10.5" r="1" fill="#3b2412"/><circle cx="15" cy="10.5" r="1" fill="#3b2412"/>`),
+  /** Footprints in the snow. */
+  feet: svg(`<ellipse cx="8" cy="16" rx="2.6" ry="3.6" fill="#9db2d4" ${O}/><ellipse cx="15.5" cy="8" rx="2.6" ry="3.6" fill="#9db2d4" ${O}/><path d="M8 13.2v5.6M15.5 5.2v5.6" stroke="#3b2412" stroke-width="1.2"/>`),
+  /** Dizzy stars. */
+  stars: svg(`<path d="m12 2 2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 7.3l5-.7z" fill="#fff1a8" ${O}/><circle cx="4" cy="19" r="2" fill="#fff1a8"/><circle cx="19.5" cy="19.5" r="1.6" fill="#fff1a8"/>`),
+  bee: svg(`<ellipse cx="13" cy="14" rx="7" ry="5" fill="#ffd23a" ${O}/><path d="M11 9.4v9.2M15 9.4v9.2" stroke="#3b2412" stroke-width="2"/><ellipse cx="10" cy="7" rx="3" ry="4" fill="#dff2ff" ${O} transform="rotate(-30 10 7)"/><path d="M20 14h3" ${O}/>`),
+  splash: svg(`<path d="M6 4c1.5 2.5 3 4.2 3 5.8a3 3 0 0 1-6 0C3 8.2 4.5 6.5 6 4zM17 7c2 3 4 5 4 7a4 4 0 0 1-8 0c0-2 2-4 4-7zM9 14c1.3 2 2.5 3.3 2.5 4.6a2.5 2.5 0 0 1-5 0c0-1.3 1.2-2.6 2.5-4.6z" fill="#8fd3ff" ${O}/>`),
+  /** ! burst (you've been noticed). */
+  bang: svg(`<path d="m12 1 2.6 5.4 5.9-1.6-2.5 5.6L23 13.7l-5.8 1.6 1 5.9-5.3-3L8 22l-.4-6L2 13.8l4.9-3.4L4.6 5l5.6 1.4z" fill="#ff5a3c" ${O}/><path d="M12 7.5v5.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="16.2" r="1.4" fill="#fff"/>`),
+  /** Bob's moods / doings. */
+  question: svg(`<circle cx="12" cy="12" r="10" fill="#ffd166" ${O}/><path d="M9 9.2a3 3 0 1 1 4.4 2.7c-1 .5-1.4 1.1-1.4 2.1" fill="none" stroke="#3b2412" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.4" fill="#3b2412"/>`),
+  alarm: svg(`<circle cx="12" cy="12" r="10" fill="#ff5a3c" ${O}/><path d="M12 6.5v7" stroke="#fff" stroke-width="2.8" stroke-linecap="round"/><circle cx="12" cy="17.4" r="1.5" fill="#fff"/>`),
+  work: svg(`<path d="M14.5 3.5a5 5 0 0 0-5.7 6.8l-6 6a2 2 0 0 0 2.9 2.9l6-6a5 5 0 0 0 6.8-5.7l-3 3-2.8-.7-.7-2.8z" fill="#c9ced8" ${O}/>`),
+  walk: svg(`<circle cx="13" cy="4.5" r="2.4" fill="#ffd9b8" ${O}/><path d="M12.5 8 10 14l3 3v5M10 14l-3 7M12.5 8l4 4 3-1M12 10l-4 2-1 3" fill="none" stroke="#fff6e6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`),
+  zzz: svg(`<path d="M4 9h6l-6 7h6M13 4h5l-5 6h5M16 14h4l-4 5h4" fill="none" stroke="#cfe8ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`),
+  note: svg(`<path d="M9 18V5l11-2v13" fill="none" stroke="#ff9ad2" stroke-width="2.6"/><circle cx="6.5" cy="18" r="3" fill="#ff9ad2" ${O}/><circle cx="17.5" cy="16" r="3" fill="#ff9ad2" ${O}/>`),
+  cough: svg(`<path d="M7 18a4 4 0 0 1-.6-8A5 5 0 0 1 16 8.5 3.8 3.8 0 0 1 17.5 18z" fill="#b6e36a" ${O}/>`),
+  cart: svg(`<path d="M2 4h3l2.5 11h11L21 7H6.5" fill="none" stroke="#fff6e6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19.5" r="1.8" fill="#ffd166" ${O}/><circle cx="17" cy="19.5" r="1.8" fill="#ffd166" ${O}/>`),
+  aim: svg(`<circle cx="12" cy="12" r="8" fill="none" stroke="#ff5a3c" stroke-width="2.6"/><circle cx="12" cy="12" r="2.4" fill="#ff5a3c"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5" stroke="#ff5a3c" stroke-width="2.4" stroke-linecap="round"/>`),
+  carry: svg(`<circle cx="12" cy="13" r="7" fill="#ffb3c7" ${O}/><path d="M5 7l3 3m11-3-3 3" stroke="#ffd9b8" stroke-width="3" stroke-linecap="round"/><path d="m9 13 1.5 1.5M9 14.5 10.5 13m3.5 0 1.5 1.5M14 14.5l1.5-1.5" stroke="#3b2412" stroke-width="1.3"/>`),
+  /** Places a waypoint can point at. */
+  stash: svg(`<circle cx="12" cy="12" r="9.5" fill="#ffd166" ${O}/><circle cx="12" cy="12" r="6" fill="none" stroke="#c98a1b" stroke-width="1.6"/><path d="M12 8.5v7" stroke="#c98a1b" stroke-width="2" stroke-linecap="round"/>`),
+  water: svg(`<path d="M12 3c3 4.5 6 8 6 11a6 6 0 0 1-12 0c0-3 3-6.5 6-11z" fill="#8fd3ff" ${O}/>`),
+  well: svg(`<path d="M4 9 12 3l8 6" fill="#c8402e" ${O}/><path d="M6 9v12M18 9v12" ${O}/><rect x="4" y="14" width="16" height="7" rx="1.5" fill="#9aa0aa" ${O}/>`),
+  house: svg(`<path d="M3 11 12 3l9 8v10H3z" fill="#e8c9a0" ${O}/><rect x="10" y="14" width="4" height="7" fill="#8a5a35" ${O}/>`),
+  apple: svg(`<circle cx="9" cy="14" r="6" fill="#e0302c" ${O}/><circle cx="15" cy="14" r="6" fill="#e0302c" ${O}/><path d="M12 8c0-2 1-4 2-5" stroke="#5a3a1e" stroke-width="2" fill="none"/>`),
+  bob: svg(`<circle cx="12" cy="13" r="8" fill="#f3b38f" ${O}/><path d="M4 9h16" stroke="#f0cb6c" stroke-width="3.4" stroke-linecap="round"/><circle cx="9" cy="12.5" r="1.2" fill="#3b2412"/><circle cx="15" cy="12.5" r="1.2" fill="#3b2412"/><path d="M8.5 16.5c2 1.2 5 1.2 7 0" stroke="#7a4a2a" stroke-width="2.2" stroke-linecap="round"/>`),
+  gate: svg(`<path d="M3 5v16M21 5v16M3 8h18M3 13h18M3 18h18M5 18 19 8" stroke="#c9a06a" stroke-width="2.4" stroke-linecap="round"/><circle cx="18.5" cy="13" r="2" fill="#ff5a3c" ${O}/>`),
+  wolf: svg(`<path d="M4 4l4 5h8l4-5v9a8 8 0 0 1-16 0z" fill="#7d8696" ${O}/><circle cx="9" cy="12" r="1.2" fill="#ffd166"/><circle cx="15" cy="12" r="1.2" fill="#ffd166"/><path d="M10 16h4l-2 2z" fill="#3b2412"/>`),
+};
+export type IconId = keyof typeof IC;
+
+/** A key cap (letters / Space / Shift) in the HUD style. */
+export const kc = (k: string) => `<kbd class="kc">${k}</kbd>`;

@@ -43,6 +43,26 @@ export function grassTexture() {
   });
 }
 
+/** Farm 5's snow: soft blue-white drifts with faint sparkle and wind ripples (same tiling as the grass). */
+export function snowTexture() {
+  return canvasTex(512, (ctx, img) => {
+    const d = img.data, n = 512;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const v = tileNoise(x, y, n, 10), w = tileNoise(x, y, n, 46, 2);
+      const i = (y * n + x) * 4;
+      d[i] = 222 + v * 18 + w * 10; d[i + 1] = 230 + v * 14 + w * 8; d[i + 2] = 246 + v * 8; d[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const r = new Rng(11);
+    for (let k = 0; k < 1400; k++) {   // wind ripples: soft blue arcs
+      const x = r.range(0, n), y = r.range(0, n), l = r.range(8, 22);
+      ctx.strokeStyle = `rgba(150,175,215,${r.range(0.06, 0.14)})`; ctx.lineWidth = r.range(1, 2.2);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + l / 2, y - r.range(1, 3), x + l, y); ctx.stroke();
+    }
+    for (let k = 0; k < 2600; k++) { ctx.fillStyle = `rgba(255,255,255,${r.range(0.5, 0.9)})`; ctx.fillRect(r.range(0, n), r.range(0, n), 1.3, 1.3); }   // sparkle
+  });
+}
+
 export function dirtTexture() {
   return canvasTex(512, (ctx, img) => {
     const d = img.data, n = 512;

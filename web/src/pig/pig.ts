@@ -34,7 +34,7 @@ export interface RemotePose { x: number; y: number; z: number; vx: number; vy: n
 export const PIG = {
   mass: 30, walk: 4.8, standWalk: 3.5, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
   jump: 7.6, standJump: 7.0, fartUp: 9.8, fartFwd: 6, fartCd: 6, sprintCd: 5, sprintDur: 1.6,
-  wallowDur: 1.1, mudTime: 60, hitSpeed: 9.5, landSpeed: 13, ragMin: 1.0, ragMax: 4,
+  wallowDur: 1.1, mudTime: 60, ice: 0.1, iceSprint: 0.16, hitSpeed: 9.5, landSpeed: 13, ragMin: 1.0, ragMax: 4,
   liftMax: 26, dragMax: 90, throwMin: 5, throwMax: 16, grabRange: 1.7,
   // standing on two legs: strong hooves (punch, lift, throw, latch) but wobbly
   liftMaxStand: 50, throwStand: 1.35, punchCd: 0.45, punchRange: 1.15, punchPoise: 34, wobbleFall: 1,
@@ -263,6 +263,7 @@ export class Pig implements Holdable {
     let tx = mx * speed, tz = mz * speed;
     if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
+    if (this.grounded && G.iceAt?.(this.pos.x, this.pos.z)) acc *= this.sprinting ? PIG.iceSprint : PIG.ice;   // farm 5: hooves on ice
     if (!this.grounded && !moving && this.ownJump) acc = PIG.airBrake;
     if (!this.grounded && !moving && !this.ownJump) acc = 1.5; // thrown / launched: keep momentum
     const dx = tx - this.vel.x, dz = tz - this.vel.z, dl = Math.hypot(dx, dz), maxD = acc * dt;
@@ -443,7 +444,14 @@ export class Pig implements Holdable {
     if (this.standing) { this.standing = false; this.setShape('four'); }
     // rainy day: the whole farm is mud
     const mud = Math.max(G.terrain.mudAt(this.pos.x, this.pos.z), G.mod === 'rain' ? MOD.rain.mud : 0);
-    if (mud > 0.3) {
+    if (G.snowy && mud < 0.3 && G.terrain.dirtAt(this.pos.x, this.pos.z) < 0.3 && !G.iceAt?.(this.pos.x, this.pos.z)) {
+      // farm 5: a roll in the snow = a snow-white coat (camouflage on snow, Bob sees you later)
+      this.muddyUntil = this.now + PIG.mudTime;
+      G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.2), { count: 14, color: 0xffffff, speed: 2, up: 1.4, life: 1, size: 0.6, alpha: 0.8 });
+      G.fx.bits(v1.copy(this.pos), { count: 20, color: 0xf4f8ff, speed: 3, up: 3, grav: 10, life: 0.7, size: 0.1, grow: 0, alpha: 1 });
+      G.audio.play('snowstep', { pos: this.pos, vol: 1, pitch: 0.8 });
+      G.events.push({ type: 'snowCoat', who: this });
+    } else if (mud > 0.3) {
       this.muddyUntil = this.now + PIG.mudTime;
       G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: 26, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });
       G.audio.play('splat', { pos: this.pos, vol: 0.9 });
@@ -971,9 +979,9 @@ export class Pig implements Holdable {
     });
     // dust while sprinting, mud drips
     if (this.sprinting && this.grounded && Math.random() < dt * 30)
-      G.fx.puff(v1.copy(r.position).setY(r.position.y - 0.35), { count: 1, color: 0xd6c29b, speed: 0.6, up: 0.5, life: 0.7, size: 0.6, alpha: 0.45 });
+      G.fx.puff(v1.copy(r.position).setY(r.position.y - 0.35), { count: 1, color: G.snowy ? 0xf2f6ff : 0xd6c29b, speed: 0.6, up: 0.5, life: 0.7, size: 0.6, alpha: 0.45 });
     if (this.muddy > 0 && Math.random() < dt * 4 * this.muddy)
-      G.fx.bits(v1.copy(r.position), { count: 1, color: 0x4a2f18, spread: 0.3, speed: 0.2, up: -0.5, grav: 9, life: 0.6, size: 0.07, grow: 0, alpha: 1 });
+      G.fx.bits(v1.copy(r.position), { count: 1, color: G.snowy ? 0xffffff : 0x4a2f18, spread: 0.3, speed: 0.2, up: -0.5, grav: 9, life: 0.6, size: 0.07, grow: 0, alpha: 1 });
     void wrapAngle;
   }
 }

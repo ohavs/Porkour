@@ -45,7 +45,8 @@ pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fa
   "/$A/actor/singlesteps/fs_grass*" "/$A/actor/singlesteps/fs_gravel[1-4]*" "/$A/attack/impact/fleshimp_*" \
   "/$A/attack/impact/shield_wood_0*" "/$A/attack/impact/shield_metal_0[1-4]*" "/$A/attack/impact/arrow_dirt_0[1-6]*" \
   "/$A/attack/fire/c_1[1-3]*" "/$A/attack/fire/sz1[1-3]*" "/$A/ambient/dayscape/day_temperate_1*" "/$A/ambient/building/amb_farm_1*" \
-  "/$A/ambient/weather/rain_1*" "/$A/ambient/weather/thunder_1*" "/$A/LICENSE.txt"
+  "/$A/ambient/weather/rain_1*" "/$A/ambient/weather/thunder_1*" "/$A/LICENSE.txt" \
+  "/$A/ambient/weather/wind_11.ogg" "/$A/ambient/weather/windgust_11.ogg" "/$A/actor/singlesteps/fs_snow_1*"
 pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night.ogg' '/data/core/sounds/ambient/morning.ogg' \
   '/data/core/sounds/bite-small.ogg' '/data/core/sounds/club.ogg' '/data/core/sounds/dwarf-laugh.wav' '/data/core/sounds/fanfare-short.wav' \
   '/data/core/sounds/fist.ogg' '/data/core/sounds/gold.ogg' '/data/core/sounds/groan.wav' '/data/core/sounds/human-old-*' \
@@ -144,6 +145,13 @@ snd "$OA/ambient/building/amb_farm_11.ogg" amb_farm -12 0 "$OAc"
 # weather (round modifier "rain")
 snd "$OA/ambient/weather/rain_11.ogg" rain -8 0 "$OAc"
 snd "$OA/ambient/weather/thunder_10.ogg" thunder1 -2 0 "$OAc"; snd "$OA/ambient/weather/thunder_11.ogg" thunder2 -2 0 "$OAc"
+# farm 5 (winter): wind ambience + snow footsteps (0 A.D.), ice cracking / ice steps (VoxeLibre mcl_sounds, CC BY 3.0)
+snd "$OA/ambient/weather/wind_11.ogg" wind -9 48 "$OAc"
+snd "$OA/ambient/weather/windgust_11.ogg" gust -6 0 "$OAc"
+for i in 1 2 3 4; do snd "$OA/actor/singlesteps/fs_snow_1$i.ogg" snowstep$i -4 0 "$OAc"; done
+snd "$OA/actor/singlesteps/fs_snow_17.ogg" snowhit1 -2 0 "$OAc"; snd "$OA/actor/singlesteps/fs_snow_18.ogg" snowhit2 -2 0 "$OAc"
+snd "$VS/default_ice_dug.ogg" icecrack -2 0 "Angel_Perez_Grandi (freesound 49190) via VoxeLibre mcl_sounds, CC BY 3.0"
+for i in 1 2 3; do snd "$VS/default_ice_footstep.$i.ogg" icestep$i -5 0 "InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0"; done
 
 # ---------------------------------------------------------------- the user's own audio (Unity Assets/Audio)
 AU="$REPO/Assets/Audio"

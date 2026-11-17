@@ -7,10 +7,22 @@ import { Rng } from '../core/util';
 export type TreeKind = 'oak' | 'pine' | 'apple' | 'poplar' | 'bush' | 'flowerBush' | 'hedge' | 'bigBush';
 
 const rng = new Rng(4242);
+/** Farm 5: every tree / bush / hedge gets a cap of snow and darker winter greens (call before the first tree). */
+let snowy = false;
+export function snowyForest(on = true) { snowy = on; }
+const caps: THREE.BufferGeometry[] = [];
+const SNOW_C = 0xf3f7ff;
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 function part(g: THREE.BufferGeometry, color: number, m: THREE.Matrix4) {
+  if (snowy && color !== SNOW_C && (g === BLOB || g === CONE)) {
+    m.decompose(_p, _q, _s);
+    caps.push(g === BLOB ? part(BLOB, SNOW_C, M(_p.x, _p.y + _s.y * 0.5, _p.z, _s.x * 0.9, _s.y * 0.52, _s.z * 0.9))
+      : part(CONE, SNOW_C, M(_p.x, _p.y + _s.y * 0.26, _p.z, _s.x * 0.66, _s.y * 0.5, _s.z * 0.66)));
+  }
   const ng = (g.index ? g.toNonIndexed() : g.clone()).applyMatrix4(m);
   ng.deleteAttribute('uv');
   const c = new THREE.Color(color), n = ng.attributes.position.count, arr = new Float32Array(n * 3);
+  if (snowy && color !== SNOW_C && g !== BALL) c.offsetHSL(0.04, -0.2, -0.1);
   for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
   ng.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   return ng;
@@ -75,7 +87,7 @@ function variant(kind: TreeKind): THREE.BufferGeometry {
       parts.push(part(BALL, rng.next() < 0.5 ? 0xff7fb5 : 0xffe066, M(d.x * 0.75, 0.55 + d.y * 0.6, d.z * 0.75, 0.09)));
     }
   }
-  return mergeGeometries(parts)!;
+  return mergeGeometries([...parts, ...caps.splice(0)])!;
 }
 
 export class Forest {

@@ -4,15 +4,16 @@ import { buildFarm1 } from './farm1';
 import { buildFarm2 } from './farm2';
 import { buildFarm3 } from './farm3';
 import { buildFarm4 } from './farm4';
+import { buildFarm5 } from './farm5';
 import type { FarmDef } from './farmKit';
 
 /**
  * The levels (GDD "Farms"). A farm is built once when the page loads; switching farms reloads the page with
  * `?farm=<id>` (online: the room says which farm, a player whose page built another one reloads into the room).
  */
-export type FarmId = 'farm1' | 'farm2' | 'farm3' | 'farm4';
-export const FARM_IDS: FarmId[] = ['farm1', 'farm2', 'farm3', 'farm4'];
-export const FARM_BUILDERS: Record<FarmId, (scene: THREE.Scene) => FarmDef> = { farm1: buildFarm1, farm2: buildFarm2, farm3: buildFarm3, farm4: buildFarm4 };
+export type FarmId = 'farm1' | 'farm2' | 'farm3' | 'farm4' | 'farm5';
+export const FARM_IDS: FarmId[] = ['farm1', 'farm2', 'farm3', 'farm4', 'farm5'];
+export const FARM_BUILDERS: Record<FarmId, (scene: THREE.Scene) => FarmDef> = { farm1: buildFarm1, farm2: buildFarm2, farm3: buildFarm3, farm4: buildFarm4, farm5: buildFarm5 };
 
 const isFarm = (x: unknown): x is FarmId => FARM_IDS.includes(x as FarmId);
 let current: FarmId | null = null;

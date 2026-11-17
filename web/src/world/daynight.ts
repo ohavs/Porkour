@@ -5,6 +5,7 @@ import { clamp, smoothstep, lerp } from '../core/util';
 import type { Loop } from '../core/audio';
 import { damp } from '../core/util';
 import { RainFx } from '../render/rain';
+import { SnowFx } from '../render/snow';
 import { MOD } from '../game/modifiers';
 
 /** Palette key at an hour. Colours are hex, the rest scalars. */
@@ -56,6 +57,10 @@ export class DayNight {
   weather = { rain: 0, fog: 0 };
   private rainFx: RainFx;
   private rainLoop: Loop | null = null;
+  /** Farm 5: winter all round — pale sky, snow light bouncing off the ground, falling snow, wind instead of birds. */
+  winter = false;
+  private snowFx: SnowFx | null = null;
+  private gustT = 8;
   private thunderAt = 0; private flash = 0; private flashes: number[] = []; private boomAt = 0;
 
   constructor(private gfx: Gfx) { this.rainFx = new RainFx(gfx.scene); }
@@ -207,20 +212,39 @@ export class DayNight {
       u.uTop.value.lerp(ca.setHex(0xe8eeff), k * 0.6); u.uHorizon.value.lerp(ca.setHex(0xf2f5ff), k * 0.5);
     }
     this.rainFx.update(dt, cam, r, G.night);
+    if (this.winter) {
+      const n = G.night;
+      u.uTop.value.lerp(ca.setHex(0x86acd6), 0.35 * day); u.uHorizon.value.lerp(ca.setHex(0xe3ecf7), 0.5 * day);
+      u.uBottom.value.lerp(ca.setHex(0xdbe5f0), 0.6 * day);
+      g.hemi.groundColor.lerp(ca.setHex(day > 0.5 ? 0xc6d2e4 : 0x3c4c6e), 0.75);   // the snow lights everything from below
+      g.hemi.intensity *= 1.06;
+      g.sun.color.lerp(ca.setHex(0xf2f5ff), 0.4);
+      g.cloudMat.color.lerp(ca.setHex(0xdfe5ee), 0.4 * day);
+      fog.color.lerp(ca.setHex(n > 0.5 ? 0x34425e : 0xe2eaf5), 0.5);
+      fog.near *= 0.7; fog.far *= 0.78;
+      (g.scene.background as THREE.Color).copy(u.uHorizon.value);
+      this.snowFx ??= new SnowFx(g.scene);
+      this.snowFx.update(dt, cam, Math.max(0.65, r), G.time);
+    }
   }
 
   private sounds(dt: number, cam: THREE.Vector3) {
     const A = G.audio; if (!A || A.ctx.state !== 'running') return;
-    if (!this.ambDay) this.ambDay = A.loop('amb_day', { vol: 0 });
+    if (!this.ambDay) this.ambDay = A.loop(this.winter ? 'wind' : 'amb_day', { vol: 0 });
     if (!this.ambNight) this.ambNight = A.loop('night', { vol: 0 });
     if (!this.rainLoop && this.weather.rain > 0.01) this.rainLoop = A.loop('rain', { vol: 0, bus: 'amb' });
     this.rainLoop?.setVolume(this.weather.rain * 0.55, 1);
-    this.ambDay?.setVolume((1 - G.night) * 0.35 * (1 - this.weather.rain * 0.7), 1.5);
-    this.ambNight?.setVolume(G.night * 0.32, 1.5);
+    this.ambDay?.setVolume(this.winter ? 0.32 : (1 - G.night) * 0.35 * (1 - this.weather.rain * 0.7), 1.5);
+    this.ambNight?.setVolume(G.night * (this.winter ? 0.1 : 0.32), 1.5);
     A.musicDuck(1 - G.night * 0.55);
     // scattered calls around the listener
     const around = () => cam.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, 2, (Math.random() - 0.5) * 30));
     this.birdT -= dt; this.cricketT -= dt;
+    if (this.winter) {   // no birds or crickets in the snow: gusts of wind now and then
+      this.gustT -= dt;
+      if (this.gustT <= 0) { this.gustT = 10 + Math.random() * 16; A.play('gust', { pos: around(), vol: 0.45, bus: 'amb', rand: 0.15 }); }
+      return;
+    }
     if (this.birdT <= 0) { this.birdT = 3 + Math.random() * 6; if (G.night < 0.3 && this.weather.rain < 0.3) A.play('bird', { pos: around(), vol: 0.5, bus: 'amb', rand: 0.15 }); }
     if (this.cricketT <= 0) { this.cricketT = 0.4 + Math.random() * 1.2; if (G.night > 0.6) A.play('cricket', { pos: around(), vol: 0.55, bus: 'amb', rand: 0.1, minGap: 0.2 }); }
   }

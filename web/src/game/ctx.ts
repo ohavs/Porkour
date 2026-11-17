@@ -84,6 +84,12 @@ export const G = {
   jobs: [] as { spot(bob: any): unknown }[],
   /** Farm 4: is this spot lit at night (a jack-o'-lantern's glow)? Bob sees a pig there like by day. */
   litAt: null as null | ((x: number, z: number) => boolean),
+  /** Farm 5 (winter): the ground is snow (a wallow = a snow-white coat, footprints, snowballs). */
+  snowy: false,
+  /** Farm 5: is this spot ice (pigs and Bob slide, Bob slips when he hurries)? */
+  iceAt: null as null | ((x: number, z: number) => boolean),
+  /** Things that lead Bob somewhere (farm 5's footprints in the snow): `spot(bob)` → where to look, or null. */
+  clues: [] as { spot(bob: any): THREE.Vector3 | null }[],
   /** Real seconds per game hour (farm 4's night runs slower so a round stays between dusk and dawn). */
   secsPerHour: 25,
   /** Named spots of the current farm (world/farmKit.ts Places). */

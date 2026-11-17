@@ -29,6 +29,8 @@ export const SOUND_SETS: Record<string, string[]> = {
   buzz: ['buzz'],
   // farm 3: the bull, a tipped cow, milking + spilled milk
   bull: ['bull4', 'bull5', 'bull7'], charge: ['charge'], cowhurt: ['cowhurt'], milk: ['milk'], splash: ['splash'],
+  // farm 5: winter (wind, snow footsteps, snowball hits, cracking ice)
+  wind: ['wind'], gust: ['gust'], snowstep: n('snowstep', 4), snowhit: n('snowhit', 2), icecrack: ['icecrack'], icestep: n('icestep', 3),
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */

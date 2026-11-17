@@ -62,7 +62,12 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | growl4.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | grunt1.ogg | VoxeLibre mobs_mc, CC0 |
 | grunt2.ogg | VoxeLibre mobs_mc, CC0 |
+| gust.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | howl.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| icecrack.ogg | Angel_Perez_Grandi (freesound 49190) via VoxeLibre mcl_sounds, CC BY 3.0 |
+| icestep1.ogg | InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0 |
+| icestep2.ogg | InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0 |
+| icestep3.ogg | InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0 |
 | llama.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | meow.ogg | VoxeLibre mobs_mc, CC0 |
 | metal1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
@@ -97,6 +102,12 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | slap1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | slap2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | snap.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| snowhit1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| snowhit2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| snowstep1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| snowstep2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| snowstep3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| snowstep4.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | splash.ogg | tran5ient (freesound 190080) via VoxeLibre mcl_fishing, CC0 |
 | splat1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | splat2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
@@ -119,6 +130,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | whoosh1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh3.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| wind.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | wood1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | wood2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | wood3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |

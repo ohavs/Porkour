@@ -15,6 +15,7 @@ import type { Orchard } from './orchard';
 import type { Bees } from './bees';
 import type { Dairy } from './dairy';
 import type { Pumpkins } from './pumpkins';
+import type { Winter } from './winter';
 import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
@@ -58,6 +59,8 @@ export interface FarmBuild {
   dairy?: Dairy;
   /** Farm 4: jack-o'-lanterns (lit pools, snuffed / relit) + the catapult (one synced entity). */
   pumpkins?: Pumpkins;
+  /** Farm 5: ice + the fishing hole, footprints, snowballs, the prize snowman (one synced entity). */
+  winter?: Winter;
   /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
   clock?: { start: number; secsPerHour: number };
   /** 0..1 darker nights (farm 4). */

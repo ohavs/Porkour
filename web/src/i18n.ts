@@ -312,6 +312,25 @@ const en = {
   'a.bobRelight': 'Bob relights the nearest', 'a.catapultMe': 'Into the catapult basket', 'a.catapultFire': 'Fire the catapult',
   'a.catapultBob': 'Aim the catapult at Bob', 'a.bringPumpkin': 'Pumpkin in front of me', 'a.giantMe': 'Giant pumpkin in front of me',
   'a.patch': 'Pumpkin patch', 'a.giant': 'Giant pumpkin', 'a.catapult': 'Catapult', 'a.graves': 'Graveyard',
+  // farm 5: the winter farm
+  'farm.farm5': 'Winter farm',
+  'm.snowballBob': 'Hit Bob with {n} snowballs', 'm.bigSnowball': 'Bowl Bob over with a giant snowball', 'm.snowmanDown': 'Knock over Bob\'s prize snowman',
+  'm.bobIce': 'Make Bob slip on the ice (or fall in the ice hole)', 'm.iceHole': 'Drop {n} things down Bob\'s ice-fishing hole',
+  'm.bigPresent': 'Steal the big present to the stash',
+  'item.snowball': 'Snowball', 'item.snowboulder': 'Rolling snowball', 'item.present': 'Present', 'item.bigPresent': 'Big present',
+  'item.snowman': 'Snowman ball', 'item.snowmanHead': 'Snowman\'s head', 'item.fishBucket': 'Bucket of fish', 'item.sled': 'Sled', 'item.reindeer': 'Reindeer',
+  'chore.grit': 'gritting the icy lane', 'chore.fish': 'ice fishing', 'chore.snowman': 'admiring his prize snowman', 'chore.reindeer': 'feeding the reindeer',
+  'chore.cocoa': 'drinking hot cocoa by the tree', 'chore.presents': 'counting the presents',
+  'bob.tracks': 'Bob is following footprints in the snow', 'bob.snowman': 'Bob is rebuilding his snowman',
+  'e.bobTracks': 'Bob found your tracks!', 'e.bobTracks2': 'Hoofprints show in fresh snow — the shovelled paths and the ice leave none',
+  'e.snowmanDown': 'Bob\'s snowman is down!', 'e.snowmanUp': 'Bob built his snowman again', 'e.pigDunked': 'Brrr! Into the ice hole',
+  'e.bobDunked': 'Splash! Bob fell in the ice hole', 'e.bobSlippedIce': 'Whoops! Bob slipped on the ice', 'e.bigSnowballBob': 'Strike! A giant snowball flattened Bob',
+  'e.snowCoat': 'Snow coat!', 'e.snowCoat2': 'All white: Bob sees you less on the snow', 'e.boulder': 'Rolling snowball',
+  'e.boulder2': 'Roll it over fresh snow and it grows — a big one bowls Bob over',
+  'a.farm5': 'Winter farm', 'a.snowmanDown': 'Knock the snowman over', 'a.snowmanBob': 'Bob rebuilds the snowman', 'a.bringSnowball': 'Snowball in front of me',
+  'a.bigBall': 'Giant snowball in front of me', 'a.bobIce': 'Bob slips on the ice', 'a.snowCoat': 'Snow coat on me',
+  'a.rink': 'Frozen pond', 'a.hole': 'Ice-fishing hole', 'a.snowman': 'Snowman', 'a.tree': 'Decorated tree', 'a.sled': 'Sledding hill',
+  'a.paddock': 'Reindeer paddock', 'a.woodshed': 'Woodshed',
 } as const;
 
 export type Key = keyof typeof en;
@@ -609,6 +628,25 @@ const es: Record<Key, string> = {
   'a.bobRelight': 'Bob enciende la más cercana', 'a.catapultMe': 'A la cesta de la catapulta', 'a.catapultFire': 'Disparar la catapulta',
   'a.catapultBob': 'Apuntar la catapulta a Bob', 'a.bringPumpkin': 'Calabaza delante de mí', 'a.giantMe': 'Calabaza gigante delante de mí',
   'a.patch': 'Huerto de calabazas', 'a.giant': 'Calabaza gigante', 'a.catapult': 'Catapulta', 'a.graves': 'Cementerio',
+  // granja 5: la granja de invierno
+  'farm.farm5': 'Granja de invierno',
+  'm.snowballBob': 'Dale a Bob con {n} bolas de nieve', 'm.bigSnowball': 'Derriba a Bob con una bola de nieve gigante', 'm.snowmanDown': 'Tira el muñeco de nieve premiado de Bob',
+  'm.bobIce': 'Haz que Bob resbale en el hielo (o caiga al agujero)', 'm.iceHole': 'Tira {n} cosas por el agujero de pesca de Bob',
+  'm.bigPresent': 'Lleva el regalo grande al escondite',
+  'item.snowball': 'Bola de nieve', 'item.snowboulder': 'Bola de nieve rodante', 'item.present': 'Regalo', 'item.bigPresent': 'Regalo grande',
+  'item.snowman': 'Bola del muñeco de nieve', 'item.snowmanHead': 'Cabeza del muñeco de nieve', 'item.fishBucket': 'Cubo de peces', 'item.sled': 'Trineo', 'item.reindeer': 'Reno',
+  'chore.grit': 'echando arena en el camino helado', 'chore.fish': 'pescando en el hielo', 'chore.snowman': 'admirando su muñeco de nieve premiado', 'chore.reindeer': 'dando de comer a los renos',
+  'chore.cocoa': 'tomando chocolate caliente junto al árbol', 'chore.presents': 'contando los regalos',
+  'bob.tracks': 'Bob está siguiendo huellas en la nieve', 'bob.snowman': 'Bob está reconstruyendo su muñeco de nieve',
+  'e.bobTracks': '¡Bob encontró tus huellas!', 'e.bobTracks2': 'Las pezuñas se marcan en la nieve fresca — los caminos despejados y el hielo no dejan huellas',
+  'e.snowmanDown': '¡El muñeco de nieve de Bob se cayó!', 'e.snowmanUp': 'Bob volvió a hacer su muñeco de nieve', 'e.pigDunked': '¡Brrr! Al agujero del hielo',
+  'e.bobDunked': '¡Chof! Bob cayó al agujero del hielo', 'e.bobSlippedIce': '¡Uy! Bob resbaló en el hielo', 'e.bigSnowballBob': '¡Pleno! Una bola de nieve gigante aplastó a Bob',
+  'e.snowCoat': '¡Abrigo de nieve!', 'e.snowCoat2': 'Todo blanco: Bob te ve menos en la nieve', 'e.boulder': 'Bola de nieve rodante',
+  'e.boulder2': 'Ruédala por nieve fresca y crece — una grande derriba a Bob',
+  'a.farm5': 'Granja de invierno', 'a.snowmanDown': 'Tirar el muñeco de nieve', 'a.snowmanBob': 'Bob rehace el muñeco', 'a.bringSnowball': 'Bola de nieve delante de mí',
+  'a.bigBall': 'Bola gigante delante de mí', 'a.bobIce': 'Bob resbala en el hielo', 'a.snowCoat': 'Abrigo de nieve',
+  'a.rink': 'Estanque helado', 'a.hole': 'Agujero de pesca', 'a.snowman': 'Muñeco de nieve', 'a.tree': 'Árbol decorado', 'a.sled': 'Colina de trineos',
+  'a.paddock': 'Cercado de renos', 'a.woodshed': 'Leñera',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;
