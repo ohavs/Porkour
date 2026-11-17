@@ -9,6 +9,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | amb_day.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | amb_farm.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | baa1.ogg | Blender Foundation via VoxeLibre, CC BY 3.0 |
+| bang.ogg | TumeniNodes / steveygos93 (freesound 80401) via Minetest Game, CC0 |
 | bark1.ogg | VoxeLibre mobs_mc, CC0 |
 | bark2.ogg | VoxeLibre mobs_mc, CC0 |
 | bark3.ogg | VoxeLibre mobs_mc, CC0 |
@@ -46,6 +47,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | fanfare.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | fart_deep.ogg | User's own audio (Assets/Audio) |
 | fart_short.ogg | User's own audio (Assets/Audio) |
+| fuse.ogg | TumeniNodes / theneedle.tv (freesound 316682) via Minetest Game, CC0 |
 | gobble1.ogg | Animalia by ElCeejo, MIT |
 | gobble2.ogg | Animalia by ElCeejo, MIT |
 | growl1.ogg | VoxeLibre mobs_mc, CC0 |
@@ -123,3 +125,4 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 - Battle for Wesnoth: https://www.wesnoth.org — GPL-2.0-or-later
 - Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/
 - Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo
+- Minetest Game: https://github.com/minetest/minetest_game (mods/tnt/README.md) — CC0 audio

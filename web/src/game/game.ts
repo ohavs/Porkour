@@ -19,6 +19,8 @@ import { MOD, type ModId } from './modifiers';
 import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
 import { Gates, type Gate } from '../world/gates';
+import { Gadgets, type PoolId } from '../world/gadgets';
+import { gadgetOfMsg } from './shop';
 import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
@@ -53,6 +55,10 @@ export class Game {
   wolves!: WolfPack;
   traps!: Traps;
   gates!: Gates;
+  /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
+  gadgets!: Gadgets;
+  /** My gadget count changed (a round used one): tell the host what I bring next. */
+  onLoadout?: () => void;
   /** What the lock-pick puzzle is open on (the cage or a gate's padlock). */
   private pickOn: Gate | null = null;
   private acc = 0;
@@ -103,6 +109,8 @@ export class Game {
     this.wolves = new WolfPack(scene, this.nav, FARM);
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
+    this.gadgets = new Gadgets(scene, this.farm.props);
+    G.props = this.farm.props;
     // pen animals amble out when their gate is open
     const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey'];
     for (const c of this.farm.critters) {
@@ -127,10 +135,10 @@ export class Game {
       }
       // RMB at the cage latch: the lock-pick puzzle (the pig itself doesn't grab there)
       const L = this.local, cage = this.farm.cage;
-      if (b === 'grab' && !L.held && cage.canPick(L)) { this.pickOn = null; this.lockpick.open(cage.pickOpts(L)); this.input.clearPresses(); return; }
+      if (b === 'grab' && !L.held && cage.canPick(L)) { this.pickOn = null; this.lockpick.open(this.keyed(cage.pickOpts(L))); this.input.clearPresses(); return; }
       // RMB at a padlocked gate: the same puzzle on Bob's padlock
       const g = b === 'grab' && !L.held ? this.gates.latchOf(L) : null;
-      if (g?.state === 'locked') { this.pickOn = g; this.lockpick.open(g.pickOpts(L)); this.input.clearPresses(); }
+      if (g?.state === 'locked') { this.pickOn = g; this.lockpick.open(this.keyed(g.pickOpts(L))); this.input.clearPresses(); }
     };
     this.input.onKey = (code) => {
       if (code === 'Backquote') { this.menu.toggleAdmin(); return; }
@@ -241,6 +249,7 @@ export class Game {
     G.clouds = G.clouds.filter((c) => c.until > G.time);
     if (G.net !== 'client') {
       this.round.step(FIXED);
+      this.gadgets.step();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -338,6 +347,7 @@ export class Game {
     this.wolves.clear();
     this.traps.clear();
     this.gates.reset();
+    this.gadgets.clear();
     this.daynight.setHour(ROUND_START_HOUR);
     G.grills = 0;
     cage.setOpen(false);
@@ -400,7 +410,7 @@ export class Game {
       case 'tp:sunflowers': tp(21, -95.5); break;
       case 'tp:junkyard': tp(-50, 5); break;
       case 'tp:greenhouse': tp(-37, -77); break;
-      case 'pick': { tp(cage.latch.x + 0.4, cage.latch.z + 0.9); this.menu.toggleAdmin(); setTimeout(() => { if (cage.canPick(L)) this.lockpick.open(cage.pickOpts(L)); else this.hud.toast(t('a.pickNo'), 1.4); }, 300); break; }
+      case 'pick': { tp(cage.latch.x + 0.4, cage.latch.z + 0.9); this.menu.toggleAdmin(); setTimeout(() => { if (cage.canPick(L)) this.lockpick.open(this.keyed(cage.pickOpts(L))); else this.hud.toast(t('a.pickNo'), 1.4); }, 300); break; }
       case 'alert:0': case 'alert:1': case 'alert:2': case 'alert:3': f?.setAlert(Number(a.slice(6))); break;
       case 'trapMe': { const fw = L.forward; this.traps.place(new THREE.Vector3(L.pos.x + fw.x * 2, 0, L.pos.z + fw.z * 2)); break; }
       case 'dogMe': {
@@ -434,6 +444,11 @@ export class Game {
         break;
       }
       case 'tp:garden': tp(-24, -54); break;
+      case 'gadget:cherryBomb': case 'gadget:stinkBomb': case 'gadget:bone': {
+        const p = this.gadgets.giveAny(a.slice(7) as PoolId, L.pos, L.yaw);
+        if (p) p.body.setTranslation({ x: p.body.translation().x, y: L.pos.y + 0.6, z: p.body.translation().z }, true);
+        break;
+      }
       case 'bringPot': case 'bringEgg': case 'bringGnome': case 'bringBone': {
         const id = a === 'bringPot' ? 'flowerPot' : a === 'bringEgg' ? 'egg' : a === 'bringBone' ? 'bone' : 'gnome';
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
@@ -444,6 +459,12 @@ export class Game {
     }
   }
 
+  /** Lock-pick puzzle options, easier with the shop's skeleton key this round (fewer pins, wider gold band, slower). */
+  private keyed<T extends { pins: number; zone: number; speed: number }>(o: T): T {
+    if (this.round.myGadget() !== 'key') return o;
+    return { ...o, pins: Math.max(2, o.pins - 2), zone: o.zone * 1.5, speed: o.speed * 0.8 };
+  }
+
   // ---------------------------------------------------------------- online
   /** Start (or join) the online game: host simulates, players show the host's world. */
   goOnline(role: 'host' | 'client') {
@@ -451,6 +472,7 @@ export class Game {
     const slot = online.mySlot();
     this.local = this.pigs[slot]; G.localPig = this.local;
     this.local.yaw = Math.PI;
+    this.local.visual.setOutfit(SETTINGS.outfit ?? defaultOutfit());   // my seat's pig wears my outfit (a seat other than 1 had a random one)
     if (role === 'host') {
       this.net = new NetHost(this, online);
       this.startBackgroundTicks();
@@ -469,7 +491,7 @@ export class Game {
       const peer = bySlot.get(i);
       if (peer) {
         pig.label = peer.name;
-        if (pig !== this.local) { const o = parseOutfit(peer.outfit); if (o) pig.visual.setOutfit(o); }
+        if (pig !== this.local) { const o = parseOutfit(peer.outfit); if (o) pig.visual.setOutfit(o); pig.gadget = gadgetOfMsg(peer.outfit); }
       }
       if (G.net === 'host') pig.setPresent(!!peer || pig === this.local);
     });

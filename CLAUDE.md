@@ -88,7 +88,7 @@ Dead by Daylight, Party Animals.
   `tilakpatell/tilakverse-assets` + `trebeljahr/quaternius-showcase` (GLBs: animals, RPG items, Survival, Ultimate Crops, house
   interior, weapons, buildings… — check it first for new content; `chibifire-stages/quaternius-stage` has every pack as .usda), repo art (Quaternius Farm Buildings FBX → GLB via `fbx2gltf`, Medieval kit) via `gltf-transform`.
   KayKit hats / capes are cut out of the character GLBs by `tools/extract_nodes.mjs`. Sounds: VoxeLibre (CC0 / MIT; rustle = mcl_sounds grass, CC BY 3.0), 0 A.D.
-  (CC BY-SA 3.0), horse / donkey / sheep (VoxeLibre, CC BY 3.0 / CC0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), user's own
+  (CC BY-SA 3.0), horse / donkey / sheep (VoxeLibre, CC BY 3.0 / CC0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), Minetest Game tnt fuse / bang (CC0), user's own
   farts + music (`Assets/Audio`). Credits: `public/assets/sfx/CREDITS.md`. User drop-ins: `web/sfx_user/` → `fetch_sounds.sh`.
 
 ## Structure (`web/src`)
@@ -101,7 +101,8 @@ Dead by Daylight, Party Animals.
 | `game/ctx.ts` | `G` shared context (time, hour/day/night, fx, audio, pigs, farmer, wolves, noises, clouds…), `ADMIN` switches, `SECS_PER_HOUR` 25 (day = 10 min). |
 | `game/hud.ts` | HUD: ability rings (+ labels), clock dial, Bob chip + ?/! marker, prompts, wobble bar, controls card (shown 16 s at start, H). |
 | `game/menu.ts` | Top-right buttons (sound / controls / settings), settings menu (language, graphics, volumes, sensitivity, invert), admin panel. |
-| `game/wardrobe.ts`, `game/settings.ts` | Wardrobe overlay (own preview renderer); localStorage settings (incl. outfit). |
+| `game/wardrobe.ts`, `game/settings.ts` | Wardrobe **& shop** overlay (own preview renderer, item thumbnails; locked items show price / level, click = try on, bar below = buy; Gadgets tab); localStorage settings (incl. outfit, coins, xp, owned, gadgets, loadout). |
+| `game/shop.ts`, `world/gadgets.ts` | **Shop (s8)**: prices + level gates per wardrobe item (`P`, the rest free; the outfit worn before the shop is kept = `initShop`), level from XP (`xpForLevel` = 150·n(n−1)), gadgets bought one at a time, ONE `loadout` per round, used up at round start. Online: the gadget rides in the outfit message (`outfitMsg` → `g`), host reads `pig.gadget`, `Round.given` (synced string) says who got what → each browser consumes its own. **Gadgets**: cherry bomb (lights when thrown / hit, 2.5 s fuse, bang = noise 34 m, Bob ≤3.6 m staggers + drops a pig, animals / dog scatter (`Cloud.kind` 'bang'), pigs / props blown, chain), stink bomb (bursts on a hard landing → 9 s cloud, Bob coughs every 3 s inside), bone (dog), lucky horseshoe (+25 % coins, local), skeleton key (easier lock-picks, local `Game.keyed`). Props = pool of 4 per kind (pooled `Prop`s, hidden until handed out next to the pig). |
 | `core/ragdoll.ts`, `core/grip.ts`, `pig/pigBody.ts` | Active ragdoll parts (generic), grip hand + joint, pig part layout (`CENTER` per shape, `SCRUFF`). |
 | `pig/pig.ts` | **Pig** (tune in `PIG`, grip targets in `GRIP`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
 | `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
@@ -157,7 +158,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 6: ✅ round modifiers (rain / fog / grumpy Bob / market day), ✅ alarm birds (rooster + turkeys).
    Session 7: ✅ pen gates (latch / padlock / ram), Bob shuts + padlocks + repairs them, animals walk out of open pens,
    pranks "let 2 big animals out of the pasture" + "ram down a gate", 2 prize pumpkins in the garden.
-   Next: more farms, shop (coins saved), more pranks with the new birds.
+   Session 8: ✅ shop (wardrobe prices + level gates, player level from XP, gadgets: cherry bomb, stink bomb, bone,
+   lucky horseshoe, skeleton key).
+   Next: more farms (GDD: orchard & beehives, dairy + bull, pumpkin night, winter), more pranks with the birds / gadgets.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -220,6 +223,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   Bob repair + padlock, Bob opens/shuts the chicken gate on his chore, cows / sheep / hens walk out) and 2 browsers online
   (player's RMB / lock-pick act on the host, padlock + smashed leaf visible on the player). Local online tests need
   `&server=ws://localhost:8080` (the built-in Render address wins otherwise).
+- 2026-11-17 (session 8, "continue"): **shop + gadgets** (see `shop.ts` / `gadgets.ts`). Admin → "Shop" (+1000 coins,
+  +1 level, reset shop, cherry / stink bomb / bone in front of me). Sounds: Minetest Game tnt fuse + bang (CC0). Models:
+  Quaternius Platformer `Bomb`, RPG `Key2`, KayKit `smokebomb`. Checked headless: shop UI (try-on, buy, level lock,
+  gadgets tab, wallet on the title), handout + count used up + next round, bang → Bob staggers / drops the pig, stink →
+  cough, 2 browsers online (player's gadget handed out by the host, counted on the player, bang / cloud seen).
+  Also fixed: hidden props (stash, gadgets) left an invisible collider on online players' machines.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -233,6 +242,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 - Modifiers: is rain / fog too dark or too light, grumpy Bob too hard, market day (Bob away 9–13 ≈ 100 s) too long / short,
   how often (30 % normal days)?
 - Alarm birds: rooster too strict (crows every 10 s), turkeys too annoying (3 of them, drop loot on a peck)?
+- Shop: are prices / level gates fair (crown 2000 + level 10, a win ≈ 500 coins)? Gadgets fun? Cherry bomb too strong
+  (Bob drops a pig he carries)?
 - Gates: is padlocking too much (Bob locks one every 18 s when wary)? repair time 6 s, 2 weapon hits per padlock, do
   animals walk out too fast / slow?
 

@@ -187,7 +187,50 @@
   #wItems .nm { font-size: 14px; line-height: 1.15; }
   #wItems button.on { border-color: var(--gold); background: rgba(255,209,102,.18); color: var(--gold); }
   #wItems .sw { display:inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin-right: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
-  #wBottom { display:flex; gap:10px; justify-content:flex-end; margin-top: 10px; }
+  #wBottom { display:flex; gap:10px; justify-content:flex-end; align-items:center; margin-top: 10px; }
+  /* shop (wardrobe prices, wallet, gadgets) */
+  .coin { display:inline-block; width: .8em; height: .8em; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff3b0, #ffd166 45%, #c98a1b); box-shadow: 0 0 0 1.5px #7a4b12; vertical-align: -1px; margin-right: 3px; }
+  #wHead { display:flex; align-items:center; justify-content:space-between; gap: 10px; }
+  #wHead h2 { margin: 6px 0 10px; }
+  .wallet { display:flex; align-items:center; gap: 12px; font-size: 18px; }
+  .wallet .coins { color: var(--gold); font-size: 20px; }
+  .wallet .lv { display:flex; flex-direction:column; align-items:center; font-size: 14px; line-height: 1.1; }
+  .wallet .lv i { display:block; width: 64px; height: 5px; border-radius: 4px; background: rgba(0,0,0,.35); overflow:hidden; margin-top: 3px; }
+  .wallet .lv b { display:block; height:100%; background: linear-gradient(90deg, var(--pink), var(--gold)); }
+  .wallet.pop .coins { animation: pulse .5s ease-in-out 1; }
+  #tWallet { padding: 6px 14px; cursor: default; }
+  #tWallet:hover { border-color: rgba(255,246,230,.35); color: inherit; }
+  #tWallet:empty { display:none; }
+  #wTabs button.gt { color: #b6e36a; }
+  #wTabs button.gt.on { border-color: #b6e36a; }
+  #wItems .pr { font-size: 13px; color: var(--gold); display:flex; align-items:center; gap: 2px; }
+  #wItems .pr.poor { color: #e0b98f; opacity: .75; }
+  #wItems .pr.need { color: #ffb38a; }
+  .lk { width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
+  #wItems button.locked .th img { filter: saturate(.6) brightness(.9); }
+  #wItems button.locked { border-style: dashed; }
+  #wItems button.trying { border-color: #b6e36a; border-style: solid; background: rgba(182,227,106,.12); }
+  #wBuy { flex: 1; display:flex; align-items:center; gap: 10px; flex-wrap: wrap; min-width: 0; font-size: 15px; }
+  #wBuy .what { color: #e8f6c8; }
+  #wBuy .why { color: #ffb38a; }
+  #wBuy .hint { opacity: .7; font-size: 14px; }
+  #wBuy .chip.buy { background: #5e8f2a; border-color: #b6e36a; color: #fff; }
+  #wBuy .chip.buy:hover { color: var(--gold); }
+  #wBuy .chip.buy.off { background: var(--panel); border-color: rgba(255,246,230,.25); color: rgba(255,246,230,.6); }
+  #wBuy .flash { color: #ffb38a; } #wBuy .flash.ok { color: #b6e36a; }
+  #wItems.gadgets { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+  #wItems .ghint { grid-column: 1 / -1; font-size: 14px; opacity: .8; margin-bottom: 2px; }
+  #wItems .gd { display:flex; gap: 10px; padding: 8px; border-radius: 12px; background: rgba(255,246,230,.07); border: 2px solid rgba(255,246,230,.15); cursor:pointer; align-items:center; }
+  #wItems .gd:hover { border-color: rgba(255,209,102,.6); }
+  #wItems .gd.sel { border-color: rgba(255,246,230,.55); }
+  #wItems .gd.on { border-color: #b6e36a; background: rgba(182,227,106,.14); }
+  #wItems .gd.locked .th img { filter: saturate(.4) brightness(.8); }
+  #wItems .gd .th { width: 84px; flex: none; }
+  #wItems .gd .gi { display:flex; flex-direction:column; gap: 3px; min-width: 0; }
+  #wItems .gd .ds { font-size: 12.5px; line-height: 1.2; opacity: .8; }
+  #wItems .gd .ft { display:flex; align-items:center; gap: 8px; margin-top: 2px; }
+  #wItems .gd .cnt { font-size: 14px; color: #e8f6c8; } #wItems .gd .cnt.zero { opacity: .45; }
+  #wItems .gd .take { font-size: 12px; background: #b6e36a; color: #2c3a12; border-radius: 8px; padding: 1px 7px; text-shadow: none; }
 </style>
 </head>
 <body>
@@ -217,10 +260,10 @@
 <div id="wardrobe" class="overlay"><div class="panel txt">
   <div id="wPreview"></div>
   <div id="wSide">
-    <h2 data-i18n="w.title">Wardrobe</h2>
+    <div id="wHead"><h2 data-i18n="w.title">Wardrobe</h2><div id="wWallet" class="wallet"></div></div>
     <div id="wTabs"></div>
     <div id="wItems"></div>
-    <div id="wBottom"><button class="chip" id="wRandom" data-i18n="w.random">Surprise me!</button><button class="chip" id="wDone" data-i18n="w.done">Done</button></div>
+    <div id="wBottom"><div id="wBuy"></div><button class="chip" id="wRandom" data-i18n="w.random">Surprise me!</button><button class="chip" id="wDone" data-i18n="w.done">Done</button></div>
   </div>
 </div></div>
 <div id="title">
@@ -231,6 +274,7 @@
   <div id="titleBtns">
     <button class="chip txt" id="tOnline" data-i18n="title.online">Play online</button>
     <button class="chip txt" id="tWardrobe" data-i18n="title.wardrobe">Wardrobe</button>
+    <div id="tWallet" class="wallet chip txt"></div>
     <div class="langPick txt" id="tLang"></div>
   </div>
 </div>

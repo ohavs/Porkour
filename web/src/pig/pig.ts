@@ -101,6 +101,8 @@ export class Pig implements Holdable {
   outReason: 'grill' | 'wolf' = 'grill';
   /** Online: no player in this slot (the pig isn't in the game). */
   absent = false;
+  /** Shop gadget this player brings (online players: from their outfit message; host reads it at round start). */
+  gadget = '';
   /** Online: escape mashes needed (players get it from the host). */
   private netNeed = 0;
   private setVel = new THREE.Vector3();

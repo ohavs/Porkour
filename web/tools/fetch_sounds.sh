@@ -6,6 +6,7 @@
 #   Wesnoth    github.com/wesnoth/wesnoth       GPL-2.0-or-later
 #   Veloren    github.com/veloren/veloren       crickets / birdcalls by DaforLynx, CC BY 4.0
 #   Animalia   github.com/ElCeejo/animalia      turkey, MIT
+#   Minetest Game github.com/minetest/minetest_game  tnt sounds (firecracker gadget), CC0 (TumeniNodes, from freesound)
 # Drop-in replacements: put <name>.ogg (or .mp3/.wav, converted by this script from web/sfx_user/) — see SOUNDS in src/core/sounds.ts.
 # Usage: cd web && bash tools/fetch_sounds.sh        (idempotent; output is committed)
 set -euo pipefail
@@ -51,6 +52,7 @@ pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night
   '/data/core/sounds/miss-*' '/data/core/sounds/mud-*' '/data/core/sounds/open-chest.wav' '/data/core/sounds/squishy-*' \
   '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
 pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/LICENSE'
+pack https://github.com/minetest/minetest_game minetest_game '/mods/tnt/sounds/' '/mods/tnt/README.md' '/mods/tnt/license.txt'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
@@ -100,6 +102,10 @@ snd "$WS/gold.ogg" coins -4 0 "$WSg"
 # Bob furious: rock-salt blunderbuss; bear trap snapping shut
 snd "$WS/thunderstick.ogg" shot1 -1 0 "$WSg"; snd "$WS/gunshot.wav" shot2 -1 0 "$WSg"
 snd "$WS/pincers.ogg" snap -1 0 "$WSg"
+# gadgets: firecracker fuse + bang (Minetest Game tnt, CC0)
+MT=$CACHE/minetest_game/mods/tnt/sounds
+snd "$MT/tnt_ignite.ogg" fuse -6 2.6 "TumeniNodes / theneedle.tv (freesound 316682) via Minetest Game, CC0"
+snd "$MT/tnt_explode.ogg" bang -1 0 "TumeniNodes / steveygos93 (freesound 80401) via Minetest Game, CC0"
 # ---------------------------------------------------------------- animals
 snd "$VL/mobs_mc_cow.ogg" moo1 -3 0 "$VLc"; snd "$OA/actor/fauna/animal/cattle_02.ogg" moo2 -3 0 "$OAc"
 snd "$VL/mobs_mc_horse_random.1.ogg" neigh1 -3 0 "GoodListener (freesound 322454) via VoxeLibre, CC BY 3.0"
@@ -163,5 +169,6 @@ fi
   echo "- Battle for Wesnoth: https://www.wesnoth.org — GPL-2.0-or-later"
   echo "- Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/"
   echo "- Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo"
+  echo "- Minetest Game: https://github.com/minetest/minetest_game (mods/tnt/README.md) — CC0 audio"
 } > "$CREDITS"
 echo "sfx: $(ls "$OUT"/*.ogg | wc -l) files, $(du -sh "$OUT" | cut -f1)"
