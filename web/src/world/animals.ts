@@ -167,6 +167,11 @@ export class Critter implements Holdable {
       const d = Math.hypot(p.x - pig.pos.x, p.z - pig.pos.z);
       if (d < this.def.flee && d < bd) { bd = d; best = pig.pos; }
     }
+    if (this.def.mass < 150) for (const c of G.clouds) {
+      if (c.kind !== 'bang') continue;
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d < c.r * 1.5 && d < bd) { bd = d; best = c; }
+    }
     for (const w of G.wolves) {
       if (!w.active) continue;
       const d = Math.hypot(p.x - w.pos.x, p.z - w.pos.z);
@@ -273,7 +278,7 @@ export class Critter implements Holdable {
       if (rng.next() < dt * 0.7) G.audio.play('munch', { pos: v1.set(p.x, p.y, p.z), vol: 0.6, minGap: 0.6 });
       return;
     }
-    this.bones ??= G.holdables.filter((h) => (h as { def?: { id?: string } }).def?.id === 'bone');
+    this.bones ??= (G.props as Holdable[]).filter((h) => (h as { def?: { id?: string } }).def?.id === 'bone');   // also the shop's bones (hidden until handed out)
     let bone: Holdable | null = null, bd = DOG.boneSee;
     for (const b of this.bones) {
       if ((b as { banked?: boolean }).banked || (this.boneSkip.get(b) ?? 0) > now) continue;

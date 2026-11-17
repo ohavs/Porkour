@@ -6,6 +6,7 @@ import { t, setLang, lang, LANGS, onLang, type Lang, type Key } from '../i18n';
 import { SVG } from './hud';
 import { online } from '../net/online';
 import { inviteLink } from '../net/lobby';
+import { level, xpForLevel, ownedOnly } from './shop';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -20,6 +21,8 @@ export class Menu {
   private panel = $('menuPanel');
   private admin = $('admin');
   onWardrobe?: () => void;
+  /** Admin changed my coins / items (title wallet, online outfit message). */
+  onShop?: () => void;
   onLeave?: () => void;
 
   constructor(private game: Game) {
@@ -199,6 +202,8 @@ export class Menu {
       `<div class="sec">${t('a.gates')}</div><div class="grid">${btn('gates:lock', 'a.gatesLock')}${btn('gates:shut', 'a.gatesShut')}${btn('gates:open', 'a.gatesOpen')}` +
       `${btn('gate:smash', 'a.gateSmash')}${btn('gate:bob', 'a.gateBob')}${btn('tp:gate', 'a.tpGate')}</div>` +
       `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}<button data-tp="garden">${t('a.tpGarden')}</button></div>` +
+      `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
+      `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +
@@ -230,5 +235,16 @@ export class Menu {
       if (b.dataset.a!.startsWith('mod:')) this.renderAdmin();   // show which modifier is on
     }));
     this.admin.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) => b.addEventListener('click', () => g.adminAction('tp:' + b.dataset.tp)));
+    // shop test switches (my own coins / items: work for online players too)
+    this.admin.querySelectorAll<HTMLElement>('[data-shop]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.shop;
+      if (k === 'coins') SETTINGS.coins += 1000;
+      if (k === 'xp') SETTINGS.xp = xpForLevel(level() + 1);
+      if (k === 'reset') Object.assign(SETTINGS, { coins: 0, xp: 0, owned: [], gadgets: {}, loadout: '' });
+      if (k === 'reset' && SETTINGS.outfit) SETTINGS.outfit = ownedOnly(SETTINGS.outfit);
+      saveSettings();
+      this.game.hud.toast(`${t('a.shop')}: ${SETTINGS.coins} · ${t('shop.level', { n: level() })}`, 1.4);
+      this.onShop?.();
+    }));
   }
 }

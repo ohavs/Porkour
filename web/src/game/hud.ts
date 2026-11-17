@@ -228,6 +228,7 @@ export class Hud {
     else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
       + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
       + ((pig.held as { def?: { id?: string } }).def?.id === 'bone' ? `<br><span style="color:#ffd166">${t('p.bone')}</span>` : '')
+      + (['cherryBomb', 'stinkBomb'].includes((pig.held as { def?: { id?: string } }).def?.id ?? '') ? `<br><span style="color:#b6e36a">${t(('p.' + (pig.held as { def?: { id?: string } }).def?.id) as Key, keys)}</span>` : '')
       + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '')
       + (gate?.state === 'locked' && (pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.gateWhack', { ...keys, n: gate.padHp })}</span>`
         : gate?.state === 'shut' ? `<br>${t('p.gateOpen', { ...keys, what: gateWhat })}` : '');

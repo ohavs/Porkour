@@ -7,6 +7,8 @@ import { PROPS, type Prop } from '../world/props';
 import type { Critter } from '../world/animals';
 import type { Gate } from '../world/gates';
 import { SETTINGS, saveSettings } from './settings';
+import { gadget, consumeGadget, loadout, level, levelProgress, HORSESHOE_BONUS, type GadgetId } from './shop';
+import { POOL_IDS, type PoolId } from '../world/gadgets';
 import type { Game } from './game';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 
@@ -86,6 +88,11 @@ const CSS = `
 #results .sum { font-size: 20px; margin: 10px 0 2px; } #results .sum b { color: var(--gold); }
 #results .tot { font-size: 15px; opacity: .8; margin-bottom: 14px; }
 #results .btns { display:flex; gap: 12px; justify-content:center; }
+#results .tot.shoe { color: #b6e36a; opacity: 1; margin: -6px 0 6px; }
+#results .lvl { margin: -6px auto 14px; width: 240px; font-size: 15px; }
+#results .lvl .xp { height: 8px; border-radius: 6px; background: rgba(0,0,0,.35); overflow: hidden; margin-top: 4px; }
+#results .lvl .xp div { height: 100%; background: linear-gradient(90deg, var(--pink), var(--gold)); }
+#results .lvl.up b { color: var(--gold); font-size: 22px; font-family: Title; font-weight: normal; animation: pulse 1s ease-in-out 3; display: inline-block; }
 `;
 
 export class Round {
@@ -102,7 +109,9 @@ export class Round {
   /** This round's modifier (rain / fog / grumpy Bob / market day), mirrored in G.mod. */
   mod: ModId = 'none';
   stash: THREE.Vector3;
-  private paid = -1;
+  /** The shop gadget each pig slot got at the start of this round ('' = none). */
+  given: string[] = [];
+  private paid = -1; private usedNo = -1;
   private lastMin = false;
   private panel: HTMLElement; private mark: HTMLElement; private mark2: HTMLElement; private res: HTMLElement;
   private ring: THREE.Mesh; private coin: THREE.Object3D;
@@ -144,7 +153,21 @@ export class Round {
     this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod());
     const req = pick(REQ_POOL, 2), bonus = pick(BONUS_POOL.filter((m) => !req.includes(m)), 2);
     this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
+    this.handOut();
   }
+
+  /** Shop gadgets (host): each player's pick for this round; the props ones wait right in front of the pig. */
+  private handOut() {
+    const g = this.game;
+    this.given = g.pigs.map((pig) => {
+      if (pig.absent || (G.net === 'solo' && pig !== g.local)) return '';
+      const id = pig === g.local ? loadout() : (gadget(pig.gadget) ? pig.gadget : '');
+      if (POOL_IDS.includes(id as PoolId)) g.gadgets.give(id as PoolId, g.pigs.indexOf(pig), pig.pos, pig.yaw);
+      return id;
+    });
+  }
+  /** The gadget my pig has this round. */
+  myGadget(): GadgetId | '' { return (this.given[this.game.pigs.indexOf(this.game.local)] ?? '') as GadgetId | ''; }
 
   /** Host: this round's modifier (admin can switch it live). Everyone gets a toast through the event. */
   setMod(m: ModId) {
@@ -175,6 +198,8 @@ export class Round {
     // players: solo = just you (the other pigs in the sty are idle extras); online = every connected pig
     const pigs = G.net === 'solo' ? [this.game.local] : this.game.pigs.filter((p) => !p.absent);
     this.quota = ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
+    // a player who left takes their gadget slot along (someone joining that seat mid-round didn't bring it)
+    if (this.given.some((x, i) => x && this.game.pigs[i]?.absent)) this.given = this.given.map((x, i) => (this.game.pigs[i]?.absent ? '' : x));
     // loot dropped in the stash
     for (const pr of props) {
       if (pr.banked || pr.value <= 0 || pr.heldBy) continue;
@@ -256,12 +281,14 @@ export class Round {
   stars() { return this.won ? Math.min(3, 1 + this.missions.filter((m) => !m.req && m.done).length) : 0; }
   pranks() { return this.missions.filter((m) => m.id !== 'quota' && m.done).length; }
   coinsEarned() { return this.won ? this.banked + ROUND.prankCoins * this.pranks() : Math.floor(this.banked * 0.25); }
+  /** What I get: + the lucky horseshoe's bonus if I brought one. */
+  myCoins() { return Math.round(this.coinsEarned() * (this.myGadget() === 'horseshoe' ? HORSESHOE_BONUS : 1)); }
 
   // ================================================================== network (synced entity, no body)
   netState(n: number[], s: string[]) {
     let bits = 0; this.missions.forEach((m, i) => { if (m.done) bits |= 1 << i; });
     n.push(PHASES.indexOf(this.phase), Math.round(this.elapsed * 10) / 10, this.secs, this.banked, this.quota, this.won ? 1 : 0, bits, this.no, ...this.missions.map((m) => m.n));
-    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason, this.mod);
+    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason, this.mod, this.given.join(','));
   }
   netApply(n: number[], s: string[]) {
     if (n.length < 8) return;
@@ -278,6 +305,7 @@ export class Round {
       if (m !== this.mod && m !== 'none') G.events.push({ type: 'mod', text: m });   // set outside the host's steps: not in its recorded events
       this.mod = m; G.mod = m;
     }
+    if (s[3] !== undefined) this.given = s[3].split(',').map((x) => (gadget(x) ? x : ''));
   }
 
   // ================================================================== every frame (all browsers)
@@ -292,6 +320,18 @@ export class Round {
     this.renderPanel();
     this.renderMark(camera);
     this.renderResults();
+    this.useGadget();
+  }
+
+  /** A new round started with my gadget: one fewer in my bag, and say where it is / what it does. */
+  private useGadget() {
+    if (this.no === this.usedNo || this.no <= 0 || this.phase === 'end') return;
+    this.usedNo = this.no;
+    const id = this.myGadget();
+    if (!id) return;
+    consumeGadget(id);
+    this.game.onLoadout?.();
+    setTimeout(() => this.game.hud.toast(t(('g.' + id) as Key), 4, t(('g.' + id + '.use') as Key, { rmb: t('key.rmb') })), 2800);   // after the round-start toast
   }
 
   /** The {n} of a mission text key ('m.smashPots' → 4, 'm.quota' → the quota). */
@@ -398,13 +438,15 @@ export class Round {
     });
   }
   private wp = [new THREE.Vector3(), new THREE.Vector3()];
+  private lvUp = 0;
 
   private renderResults() {
     if (this.phase !== 'end') { if (this.resNo !== -1) { this.res.style.display = 'none'; this.resNo = -1; } return; }
     if (this.resNo === this.no) return;
     this.resNo = this.no;
-    const earned = this.coinsEarned();
-    if (this.paid !== this.no) { this.paid = this.no; SETTINGS.coins += earned; SETTINGS.xp += earned; saveSettings(); }
+    const earned = this.myCoins(), lv0 = level();
+    if (this.paid !== this.no) { this.paid = this.no; SETTINGS.coins += earned; SETTINGS.xp += earned; saveSettings(); this.lvUp = level() > lv0 ? level() : 0; }
+    const lv = level(), shoe = this.myGadget() === 'horseshoe' && earned > 0;
     const stars = this.stars();
     const can = G.net !== 'client';
     const li = this.missions.map((x) => {
@@ -415,7 +457,9 @@ export class Round {
       `<div class="why">${t(('r.why.' + (this.reason || 'time')) as Key)}</div>` + this.modLine() +
       `<div class="stars">${[0, 1, 2].map((i) => (i < stars ? '<b>★</b>' : '★')).join('')}</div><ul>${li}</ul>` +
       `<div class="sum">${t('r.loot')}: <b><i class="coin"></i>${this.banked}</b> · ${t('r.coins')}: <b><i class="coin"></i>${earned}</b></div>` +
+      (shoe ? `<div class="tot shoe">${t('r.horseshoe')}</div>` : '') +
       `<div class="tot">${t('r.total', { n: SETTINGS.coins })}</div>` +
+      `<div class="lvl${this.lvUp ? ' up' : ''}"><b>${this.lvUp ? t('r.levelUp', { n: lv }) : t('shop.level', { n: lv })}</b><div class="xp"><div style="width:${Math.round(levelProgress() * 100)}%"></div></div></div>` +
       `<div class="btns">${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
     this.res.style.display = 'flex';
     document.exitPointerLock?.();

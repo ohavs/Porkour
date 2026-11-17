@@ -102,7 +102,8 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/crops_pack/Carrot_4.glb' '/public/glb/crops_pack/Lettuce_4.glb' '/public/glb/crops_pack/Tomato_4.glb' '/public/glb/crops_pack/Beet_4.glb' '/public/glb/crops_pack/BushBerries_4.glb' '/public/glb/crops_pack/Watermelon_4.glb' '/public/glb/crops_pack/Pumpkin_4.glb' '/public/glb/crops_pack/Wheat_4.glb' '/public/glb/crops_pack/Flowers_Crop.glb' '/public/glb/crops_pack/Apple_Crop.glb' '/public/glb/crops_pack/Orange_Crop.glb' \
   '/public/glb/rpg_items_pack/Gold_Ingots.glb' '/public/glb/rpg_items_pack/Chest_Closed.glb' '/public/glb/rpg_items_pack/Crown.glb' '/public/glb/rpg_items_pack/Chalice.glb' '/public/glb/rpg_items_pack/Coin.glb' '/public/glb/rpg_items_pack/Necklace1.glb' \
   '/public/glb/medieval_village_pack/Hay.glb' '/public/glb/medieval_village_pack/Bags.glb' '/public/glb/medieval_village_pack/MarketStand_1.glb' '/public/glb/medieval_village_pack/MarketStand_2.glb' '/public/glb/survival_pack/WoodLog.glb' '/public/glb/survival_pack/BearTrap_Open.glb' '/public/glb/survival_pack/BearTrap_Closed.glb' '/public/glb/real_time_strategy_pack/Crate_Big_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack2.glb' '/public/glb/real_time_strategy_pack/Crate_Stack1.glb' '/public/glb/real_time_strategy_pack/Logs.glb' \
-  '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb' '/public/glb/survival_pack/Shotgun_1.glb'
+  '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb' '/public/glb/survival_pack/Shotgun_1.glb' \
+  '/public/glb/platformer_pack/Bomb.glb' '/public/glb/rpg_items_pack/Key2.glb'
 for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
@@ -123,6 +124,10 @@ grab cover "$Q/real_time_strategy_pack" 256 Crate_Big_Stack2 Crate_Stack2 Crate_
 # Bob furious (alert 3): rock-salt shotgun (Quaternius Survival); dog bone to distract the guard dog (KayKit Halloween) — CC0
 grab loot "$Q/survival_pack" 256 Shotgun_1
 grab kaykit "$CACHE/kk-halloween/addons/kaykit_halloween_bits/Assets/gltf" 512 bone_A
+# shop gadgets: cherry bomb (Quaternius Platformer), skeleton key (Quaternius RPG Items), stink bomb (KayKit smokebomb) — CC0
+grab loot "$Q/platformer_pack" 256 Bomb
+grab loot "$Q/rpg_items_pack" 256 Key2
+grab kaykit "$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Assets/gltf" 1024 smokebomb
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)

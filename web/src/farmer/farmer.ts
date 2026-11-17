@@ -1345,6 +1345,16 @@ export class Farmer {
     this.vel.set(0, 0, 0);
   }
 
+  /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */
+  startle(at: THREE.Vector3) {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
+    if (Math.hypot(at.x - this.pos.x, at.z - this.pos.z) > 3.6 || Math.abs(at.y - this.pos.y - 0.8) > 2.5) return false;
+    this.voice('oof', 1);
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 2), { count: 8, color: 0xfff1a8, speed: 2.5, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });
+    this.stun('stagger', BOB.staggerTime + 0.8);
+    return true;
+  }
+
   private cough() {
     if (this.state === 'down' || this.state === 'stagger') return;
     this.stun('cough', BOB.cough);
@@ -1357,7 +1367,7 @@ export class Farmer {
   private checkClouds() {
     const cx = this.pos.x, cy = this.pos.y + 1.2, cz = this.pos.z;
     for (const c of G.clouds) {
-      if (this.usedClouds.has(c)) continue;
+      if (this.usedClouds.has(c) || c.kind === 'bang') continue;
       if (Math.hypot(c.x - cx, (c.y - cy) * 0.7, c.z - cz) < c.r * 0.8 + 0.3) {
         this.usedClouds.add(c);
         this.cough();

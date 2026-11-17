@@ -28,7 +28,8 @@ export interface Carrier {
 }
 
 export interface Noise { x: number; y: number; z: number; radius: number; t: number }
-export interface Cloud { x: number; y: number; z: number; r: number; until: number }
+/** Fart / stink cloud (Bob coughs, animals run) or a cherry bomb's bang (`kind` 'bang': animals run, no cough). */
+export interface Cloud { x: number; y: number; z: number; r: number; until: number; kind?: 'bang' | 'stink' }
 /** Things the HUD / round logic react to. */
 export interface GameEvent { type: string; why?: string; who?: any; text?: string }
 
@@ -64,6 +65,8 @@ export const G = {
   /** Bushes / crops / hay pigs can hide in (Bob can't see through). */
   cover: new CoverMap(),
   holdables: [] as Holdable[],
+  /** Every loose prop (also the hidden ones: banked loot, pooled gadgets). */
+  props: [] as any[],
   noises: [] as Noise[],
   clouds: [] as Cloud[],
   localPig: null as any,

@@ -4,7 +4,8 @@ import { Input } from './core/input';
 import { Audio } from './core/audio';
 import { Gfx } from './render/gfx';
 import { Game, PLAYER_COLORS } from './game/game';
-import { Wardrobe } from './game/wardrobe';
+import { Wardrobe, walletHtml } from './game/wardrobe';
+import { initShop, outfitMsg } from './game/shop';
 import { PigVisual } from './pig/pigVisual';
 import * as THREE from 'three';
 import { loadSettings, SETTINGS } from './game/settings';
@@ -25,7 +26,7 @@ const MODELS = [
   'kit/Prop_Crate', 'kit/Prop_Wagon',
   ...['crate_carrots', 'crate_potatoes', 'crate_tomatoes', 'crate_cheese', 'food_ingredient_ham', 'mug_full', 'sword_1handed', 'axe_1handed',
     'post_lantern', 'pumpkin_orange', 'pumpkin_orange_jackolantern', 'bone_A'].map((n) => 'kaykit/' + n),
-  'loot/Shotgun_1', 'cover/BearTrap_Open', 'cover/BearTrap_Closed',
+  'loot/Shotgun_1', 'cover/BearTrap_Open', 'cover/BearTrap_Closed', 'kaykit/smokebomb', 'loot/Key2',
   ...['wizard_hat', 'viking_helmet', 'knight_helmet', 'skull_helmet', 'dark_wizard_hat', 'hood', 'cape_knight', 'cape_mage', 'cape_barbarian', 'cape_rogue'].map((n) => 'cosm/' + n),
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
   ...GLB_MODELS, ...LOOT_MODELS, 'loot/Coin',
@@ -40,6 +41,7 @@ const FLAGS: Record<string, string> = {
 };
 
 loadSettings();
+initShop();
 initLang();
 applyDom();
 const params = new URLSearchParams(location.search);
@@ -72,7 +74,12 @@ async function boot() {
 
   // wardrobe (title screen + menu)
   const wardrobe = new Wardrobe(PLAYER_COLORS[0]);
-  wardrobe.onChange = (o) => { game.local.visual.setOutfit(o); if (online.connected) online.setOutfit(JSON.stringify(o)); };
+  const sendOutfit = () => { if (online.connected) online.setOutfit(outfitMsg(wardrobe.outfit)); };
+  const wallet = () => { document.getElementById('tWallet')!.innerHTML = walletHtml(); };
+  wardrobe.onChange = (o) => { game.local.visual.setOutfit(o); sendOutfit(); };
+  wardrobe.onShop = () => { wallet(); sendOutfit(); };
+  game.onLoadout = sendOutfit;
+  game.menu.onShop = () => { wardrobe.onShop?.(); if (SETTINGS.outfit) { game.local.visual.setOutfit(SETTINGS.outfit); wardrobe.set(SETTINGS.outfit); } };
   wardrobe.onClose = () => { if (game.running) input.lock(); };
   game.menu.onWardrobe = () => wardrobe.open();
   (window as any).__wardrobe = wardrobe;
@@ -94,7 +101,7 @@ async function boot() {
   const lobby = new Lobby(game, {
     start: () => { started = false; start(); },
     wardrobe: () => wardrobe.open(),
-    outfit: () => JSON.stringify(game.local.visual.outfit),
+    outfit: () => outfitMsg(wardrobe.outfit),
   });
   game.menu.onLeave = () => import('./net/lobby').then((m) => m.backToLobby());
   (window as any).__online = online; (window as any).__lobby = lobby;
@@ -107,6 +114,7 @@ async function boot() {
   go.addEventListener('click', start);
   title.addEventListener('click', (e) => { if (e.target === title || (e.target as HTMLElement).tagName === 'H1') start(); });
   const btns = document.getElementById('titleBtns')!; btns.classList.add('show');
+  wallet(); onLang(wallet);
   document.getElementById('tWardrobe')!.addEventListener('click', (e) => { e.stopPropagation(); audio.unlock(); wardrobe.open(); });
   // language: two pill buttons with little flags (a native <select> looks like the operating system, not the game)
   const langBox = document.getElementById('tLang')!;

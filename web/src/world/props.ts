@@ -18,6 +18,8 @@ export interface PropDef {
   weapon?: number; breaks?: number;
   /** Breakable: smashes when it hits something faster than this (m/s), or gets punched / headbutted. `bits` = shard colour. */
   fragile?: number; bits?: number;
+  /** Sound when it smashes (default wood / thud). */
+  smashSound?: string;
   /** Key in PROPS (filled in below). */
   id?: string;
 }
@@ -40,6 +42,10 @@ export class Prop implements Holdable {
   uses = 0;
   /** Half its height (the body's centre → its top; markers float above it). */
   half = 0.3;
+  /** Shop gadget from a pool (world/gadgets.ts): hidden until handed out, hidden again on a new round. */
+  pooled = false;
+  /** Last time it was punched / headbutted / rammed (a cherry bomb lights). */
+  lastKnock = -10;
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
@@ -86,9 +92,20 @@ export class Prop implements Holdable {
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
+  /** Out of the stash / pool again, at a spot (gadget handed out). */
+  unbank(at: THREE.Vector3, yaw = 0) {
+    this.banked = false; this.smashed = false; this.uses = 0;
+    this.body.setEnabled(true); this.obj.visible = true;
+    if (!G.holdables.includes(this)) G.holdables.push(this);
+    this.body.setTranslation({ x: at.x, y: at.y + this.half + 0.05, z: at.z }, true);
+    this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.synced.capture(); this.synced.capture();
+  }
   /** New round: back where it started. */
   reset() {
     this.uses = 0; this.smashed = false;
+    if (this.pooled) { this.bank(); this.putHome(); return; }
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -103,10 +120,11 @@ export class Prop implements Holdable {
     if (!n.length) return;
     this.heldBy = carrierFrom(n[0]);
     const b = n[1] === 1;
-    if (b !== this.banked) { this.banked = b; this.obj.visible = !b; const i = G.holdables.indexOf(this); if (b && i >= 0) G.holdables.splice(i, 1); else if (!b && i < 0) G.holdables.push(this); }
+    if (b !== this.banked) { this.banked = b; this.obj.visible = !b; this.body.setEnabled(!b); const i = G.holdables.indexOf(this); if (b && i >= 0) G.holdables.splice(i, 1); else if (!b && i < 0) G.holdables.push(this); }
   }
 
   knock(dv: THREE.Vector3) {
+    this.lastKnock = G.time;
     if (this.def.fragile && !this.heldBy) { this.smash(); return; }
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dv.x, y: lv.y + dv.y, z: lv.z + dv.z }, true);
@@ -134,7 +152,7 @@ Prop.prototype.smash = function (this: Prop, how = '') {
   const p = this.body.translation(), at = new THREE.Vector3(p.x, p.y, p.z);
   G.fx.bits(at, { count: 22, color: this.def.bits ?? 0xc8673a, spread: 0.2, speed: 4, up: 3.5, grav: 12, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
   G.fx.puff(at, { count: 6, color: 0xe8d9c0, speed: 1.2, up: 0.6, life: 0.7, size: 0.5, alpha: 0.5 });
-  G.audio.play(this.def.id === 'egg' || this.def.id === 'melon' ? 'splat|squish' : 'wood|thud', { pos: at, vol: 1, pitch: this.def.id === 'flowerPot' ? 1.4 : 1 });
+  G.audio.play(this.def.smashSound ?? (this.def.id === 'egg' || this.def.id === 'melon' ? 'splat|squish' : 'wood|thud'), { pos: at, vol: 1, pitch: this.def.id === 'flowerPot' ? 1.4 : 1 });
   G.noise(at, 8);
   this.smashed = true;
   this.bank();
@@ -191,6 +209,10 @@ export const PROPS: Record<string, PropDef> = {
   trashcan: { model: 'loot/Trashcan', height: 0.8, mass: 9, shape: 'cyl', sound: 'metal', label: 'item.trashcan', value: 10 },
   // the guard dog drops everything for a bone (KayKit Halloween, CC0)
   bone: { model: 'kaykit/bone_A', height: 0.13, mass: 0.6, shape: 'box', sound: 'thud', label: 'item.bone', friction: 0.8 },
+  // shop gadgets (world/gadgets.ts): cherry bomb (Quaternius Platformer) lights when thrown / hit, bangs 2.5 s later;
+  // stink bomb (KayKit smokebomb) bursts into a stink cloud when it lands hard
+  cherryBomb: { model: 'loot/Bomb', height: 0.3, mass: 1.2, shape: 'ball', sound: 'thud', label: 'item.cherryBomb', bounce: 0.3, friction: 0.9 },
+  stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;
 export const LOOT_MODELS = Object.values(PROPS).map((d) => d.model).filter((m): m is string => !!m && m.startsWith('loot/'));
