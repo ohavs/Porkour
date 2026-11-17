@@ -80,7 +80,11 @@
   .playBtn:hover { filter: brightness(1.08); } .playBtn:active { transform: skewX(-6deg) translateY(4px); box-shadow: 0 2px 0 #b77d12; }
   .playBtn.wait { font-size: 20px; background: linear-gradient(180deg, #9a8a72, #7a6a52); box-shadow: 0 6px 0 #4a3a22; color: #fff6e6; cursor: default; }
   body.inLobby #hud > :not(.emote):not(.tag):not(#toast) { display:none !important; }
-  @media (max-width: 760px) { #lTabs button { font-size: 15px; padding: 0 7px; } #lTop .logo { display:none; } #lParty { width: 170px; } #lPlayBox { width: 200px; } .playBtn { font-size: 32px; } #lKeys { display:none; } }
+  #lParty { max-height: calc(100vh - 150px); overflow: auto; }
+  #lParty .ptitle .chip { margin-left: auto; font-size: 12px; padding: 3px 8px; }
+  .farmCard.locked { cursor: default; } .farmCard.locked .fcur i { display:none; }
+  @media (max-width: 1100px) { #lKeys { display:none; } #lTop { gap: 8px; } #lTop .logo { font-size: 24px; } #lTabs button { font-size: 17px; padding: 0 9px; } #lParty { width: 200px; } #lPlayBox { width: 240px; } .playBtn { font-size: 36px; } }
+  @media (max-width: 760px) { #lTabs button { font-size: 14px; padding: 0 6px; } #lTop .logo { display:none; } #lTop .lRight .wallet { display:none; } #lParty { width: 165px; } #lPlayBox { width: 190px; } .playBtn { font-size: 28px; } }
   #bar { width: min(420px, 70vw); height: 12px; border-radius: 8px; background: rgba(0,0,0,.35); margin-top: 28px; overflow:hidden; }
   #bar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--pink), var(--gold)); transition: width .2s; }
   @keyframes pulse { 50% { transform: scale(1.08); } }

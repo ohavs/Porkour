@@ -34,9 +34,10 @@ Dead by Daylight, Party Animals.
 - Claude CAN run the game here: `cd web && npx vite build && npx vite preview --port 4173`, then headless Chromium via Playwright
   (`--use-angle=swiftshader`, `?auto=1&q=low`; software GL ≈ 10 fps so the sim runs slower than real time — wait on
   `window.__G.time`, not wall time). Test hooks: `window.__game` (`scripted` input override, `cam`, `local`, `pigs`, `farmer`,
-  `daynight`, `adminAction(...)`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`, `__online`, `__lobby`. URL: `?hour=21.5`, `?bob=0`, `?admin=1`.
+  `daynight`, `adminAction(...)`, `mode` 'lobby' | 'play', `stage`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`, `__online`, `__lobby`, `__lobbyUI`.
+  URL: `?auto=1` (skips the lobby: straight into a round), `?hour=21.5`, `?bob=0`, `?admin=1`.
   Online tests: `cd server && npm test` (protocol); `DEBUG=1 PORT=8080 node server.js` + two Playwright contexts
-  (host creates via `#tOnline` → `[data-a=create]` → `[data-a=start]` (force click), player opens `?room=CODE`). Software GL is
+  (host: `#tOnline` → `[data-a=create]` (force) → wait `__lobby.inRoom`; player opens `?room=CODE`; host clicks `#lPlay` = start). Software GL is
   very slow with 2 pages (first frame compiles shaders for a minute+): use small viewports and generous timeouts.
 
 ## Tech (`web/`)
@@ -98,7 +99,10 @@ Dead by Daylight, Party Animals.
 ## Structure (`web/src`)
 | Path | What |
 |---|---|
-| `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, title (play / online / wardrobe / language), Esc → menu. |
+| `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, `game.enterLobby()` + `LobbyUI`, PLAY → `game.startPlay()`, Esc → menu. |
+| `game/lobbyStage.ts`, `game/lobbyUI.ts` | **Lobby (s13, "Fortnite style, but the pig moves")**: `LobbyStage` = a farmyard diorama at z 760 (far from every farm; sky + clouds ride with the camera), fixed camera, invisible walls on the screen edges (rebuilt on resize; online every machine uses 16:9 walls), throwables (beach ball, apples, eggs, pie, crate, 2 cans, cigarettes: lobby copies with value 0, respawn). `Game.mode` 'lobby' (clock frozen at 16:24, `G.lobby`: idle pigs face the camera, holding / clicking = face the pointer, W = away from the camera, mouse not locked: `Input.free` + `mouseX/Y`) / 'play'. `LobbyUI`: top bar (Play / Wardrobe / Shop = wardrobe's gadget tab / Online, wallet, sound, full screen, settings), party (left), controls as icons, farm card + PLAY. Online: joining a waiting room = `goOnline` right away, the party plays on the stage, party panel = room (code, seats, chat, leave = reload); host's PLAY = start for all. |
+| `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
+| `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
 | `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
 | `game/game.ts` | Game loop: fixed steps (clock, pigs, Bob, critters, wolves, physics, cage, pond cleans mud), render, camera, events → toasts, `adminAction`. |
@@ -109,7 +113,7 @@ Dead by Daylight, Party Animals.
 | `game/shop.ts`, `world/gadgets.ts` | **Shop (s8)**: prices + level gates per wardrobe item (`P`, the rest free; the outfit worn before the shop is kept = `initShop`), level from XP (`xpForLevel` = 150·n(n−1)), gadgets bought one at a time, ONE `loadout` per round, used up at round start. Online: the gadget rides in the outfit message (`outfitMsg` → `g`), host reads `pig.gadget`, `Round.given` (synced string) says who got what → each browser consumes its own. **Gadgets**: cherry bomb (lights when thrown / hit, 2.5 s fuse, bang = noise 34 m, Bob ≤3.6 m staggers + drops a pig, animals / dog scatter (`Cloud.kind` 'bang'), pigs / props blown, chain), stink bomb (bursts on a hard landing → 9 s cloud, Bob coughs every 3 s inside), bone (dog), lucky horseshoe (+25 % coins, local), skeleton key (easier lock-picks, local `Game.keyed`). Props = pool of 4 per kind (pooled `Prop`s, hidden until handed out next to the pig). |
 | `core/ragdoll.ts`, `core/grip.ts`, `pig/pigBody.ts` | Active ragdoll parts (generic), grip hand + joint, pig part layout (`CENTER` per shape, `SCRUFF`). |
 | `pig/pig.ts` | **Pig** (tune in `PIG`, grip targets in `GRIP`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
-| `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
+| `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); **arms (s13)**: front legs = shoulder → elbow → cloven-hoof hand (2 toes), `ARM` lengths, each segment in its own group (stretch without shear); standing = two-bone IK (`solveArm`, rubber-hose stretch ≤1.9×): T-rex idle, one hoof on each side of what it holds (the held thing's real position), punch extends the right arm, windmill, hand to mouth to eat / smoke; four legs = trot with knee fold. Cigarette mesh rides the right hoof (standing, hooves free) or the mouth corner. Animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
 | `world/farms.ts`, `world/farmKit.ts` | **Farms = levels (s9)**: `FARM_IDS` farm1 / farm2, `farmId()` = `?farm=` → `SETTINGS.farm` ('random' = new pick each load). A farm is built once per page load: switching = reload (`reloadOnFarm`; title pills, admin → Farm). Online: the room carries the host's farm (`create` / `quick` send `farm`); a player whose page built another farm reloads with `?farm=X&room=CODE`. `farmKit(scene, t, out, bounds, seed)` = shared helpers (`building` / `decor` / `fence` / `pen` / `prop` / `critter` / `outerFence` / `hedgeRing` / `surroundings` / `scatter` / `finish`). `FarmBuild.places` = named spots the logic needs (pond, well, coop / sheep pen / pasture rects, stash, road gate, dog patrol, admin teleports `tp`); `missions` = pranks this farm can roll, `featured` = its own ones (one of the 2 required each round). Decor / cover pieces are reusable too (`decorKit`, `coverKit`, `sunflowers(c, rect)`). |
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
 | `world/farm2.ts`, `world/orchard.ts`, `world/bees.ts` | **Farm 2 — orchard & beehives (s9)** (Quaternius Medieval Village buildings: Inn = farmhouse, Mill, Stable, Sawmill = cider house, Gazebo = honey stand; `FARM2_MODELS` preloaded only on farm 2). **Orchard** (synced entity): 63 apple trees as instanced tree + fruit meshes; headbutt / punch / whack (`G.hittables`), sprint-ram (`onRam` on the trunk collider's owner) or a hard throw (`onImpact` in the step callback) shakes a tree → wiggle + rustle + noise 12 m, 2–3 apples drop (pool of 30 `apple` props, 4 per tree, fruit mesh hidden when empty), one golden-apple tree. **Cider press** eats apples dropped in its hopper; the 6th → a jug of cider (loot). **Bees** (synced entity): 6 hives; a hit / ram / throw → a swarm (≤3) chases the nearest pig or Bob at 5.3 m/s (> walk, < sprint), stings every 1 s (hop + squeal, drops what you hold; Bob: `stung()` = stagger, drops a pig), loses muddy pigs / pigs in the pond, a fart / stink cloud scatters it, sleeps at night; buzz = Veloren `bees_1.ogg` (GPL-3). Pranks: shake 5 trees, 3 apples on Bob, fill the press (6), lead bees to Bob, steal the prize honey pot / the golden apple. |
@@ -139,6 +143,7 @@ Dead by Daylight, Party Animals.
 WASD move · mouse look · Space jump · **RMB grab / drop** (user 2026-11-13) · **LMB click = hit** (punch standing, headbutt on four legs,
 weapon whack, bash with what you hold) · **LMB hold = wind up + throw** what you hold · Shift sprint · Q fart · C wallow (hold = play dead) ·
 E stand · F oink · H controls · M sound · P next graphics preset · Esc menu / **closes any open overlay** · `` ` `` admin.
+**LMB click with a snack = eat it / light a cigarette.** Lobby: WASD on the screen, the pointer aims (grab / hit / throw toward it).
 Gamepad: A jump, B fart, X wallow, Y stand, LT grab, RT hit / throw, LB/L3 sprint. Input `Button`s `grab` (RMB) + `attack` (LMB); `PigInput`
 has `attack*` + `pickP` / `pickFailP` (12 press bits on the wire).
 
@@ -177,7 +182,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Bob relights; catapult for pumpkins / hens / pigs; giant prize pumpkin to roll home; corn maze; 5 new pranks).
    Session 12: ✅ **farm 5: winter** (ice + fishing hole, footprints Bob follows, snowballs, growing snowballs,
    prize snowman, snow coat, reindeer, husky), ✅ **HUD text pass** (icons instead of sentences, see "Less text").
-   Next: ask the user how the icon HUD reads; more pranks with the birds / gadgets; maybe the mission list as icons.
+   Session 13: ✅ **Fortnite-style lobby** (movable pig on a stage, party, online room on the stage), ✅ **pig arms**
+   (elbows, hoof hands, IK), ✅ **snacks** (food cans with boosts, cigarettes), ✅ coloured mission arrows (one per
+   mission, next step only), ✅ Bob dances next to pigs, ✅ full screen, ✅ simpler settings.
+   Next: user feedback on the lobby / arms; maybe show the outfit on the lobby stage while in the wardrobe.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -274,9 +282,23 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   (snowman / snowball size / dunk synced, the player sees its own prints). **HUD text pass** (see "Less text"): checked
   shots of near-item / holding / status / Bob chip / event pops. Sounds: 0 A.D. wind + snow steps (CC BY-SA 3.0),
   VoxeLibre ice crack / ice steps (CC BY 3.0).
+- 2026-11-17 (session 13, user list): Bob dances at a pig next to him (25 % once per pig per 20 s, 12 % in a chase,
+  4.5 s, then the chase goes on; admin "Bob: dance when I come close"); full screen (button + settings, Keyboard Lock
+  Esc); settings = language / graphics / sound / music / mouse / full screen + "More options"; mission colours
+  (`MISSION_COLORS`, list arrows, world arrows, waypoints) and `Round.missionMarks()` (one arrow per mission: the
+  nearest thing → where it goes once someone holds it; pen animals = their gate; Bob pranks over Bob); pig arms;
+  snacks (admin → Snacks); the lobby. Also fixed: the camera could spin on the first mouse move after the pointer lock.
+  Checked headless: lobby (walls, grab / throw, PLAY → round), 2 browsers online (room on the stage, moves synced,
+  host START → both in the round), eating / spinach / smoking shots, Bob near-pig dance.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- New lobby: fun to move / throw there? Camera distance OK (pig size)? Is the party / PLAY layout clear?
+- Pig arms: do eating / smoking / punching / holding read now? Are the stretchy arms OK (rubber-hose) or too odd?
+- Snacks: boosts strong enough / too strong (30 s)? How many cans / packs on the farm (8 + 3)?
+- Bob's random dance next to a pig: too often / too rare (25 %)?
+- Mission arrows in colours: clear which arrow is which mission?
+- Settings: simple enough now? Full screen works on your PC (Esc opens the menu, hold Esc to leave)?
 - New icon HUD (less text): is it clear without the words? Anything still too wordy (the mission list?) or now unclear?
 - Farm 5 (winter): ice too slippery / not enough? Does Bob following footprints feel fair (walk on shovelled paths to
   leave none)? Growing snowballs fun? Snowman rebuild time OK?
