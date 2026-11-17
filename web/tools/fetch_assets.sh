@@ -44,7 +44,7 @@ grab() { # grab <dest subdir> <src dir> <tex> names...
 pack https://github.com/ETdoFresh/kenney.nl kenney \
   '/kenney_natureKit_2.1/Models/GLTF format/' '/fantasy-town-kit-1.0/Models/GLTF format/' \
   '/carkit_v1.4/Models/GLTF format/' '/kenney_platformerkit/Models/GLTF format/' \
-  '/kenney_impactsounds/License.txt' '/particlePack_1.1/PNG (Transparent)/' 
+  '/kenney_impactsounds/License.txt' '/particlePack_1.1/PNG (Transparent)/' '/kenney_holidaypack/Models/GLTF format/' '/kenney_holidaypack/License.txt' 
 K=$CACHE/kenney
 grab kenney "$K/kenney_natureKit_2.1/Models/GLTF format" 512 \
   fence_simple fence_simpleHigh fence_gate fence_planks fence_planksDouble fence_corner \
@@ -105,8 +105,9 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/survival_pack/Radio.glb' '/public/glb/survival_pack/Phone.glb' '/public/glb/survival_pack/GasCan.glb' '/public/glb/survival_pack/Pan.glb' '/public/glb/survival_pack/PropaneTank.glb' '/public/glb/survival_pack/FirstAidKit.glb' '/public/glb/survival_pack/Backpack.glb' '/public/glb/survival_pack/Trashcan.glb' '/public/glb/survival_pack/Shovel.glb' '/public/glb/survival_pack/Shotgun_1.glb' \
   '/public/glb/platformer_pack/Bomb.glb' '/public/glb/rpg_items_pack/Key2.glb' \
   '/public/glb/medieval_village_pack/Mill.glb' '/public/glb/medieval_village_pack/Stable.glb' '/public/glb/medieval_village_pack/Inn.glb' '/public/glb/medieval_village_pack/Sawmill.glb' '/public/glb/medieval_village_pack/Gazebo.glb' '/public/glb/medieval_village_pack/Bell_Tower.glb' '/public/glb/medieval_village_pack/Cart.glb' '/public/glb/medieval_village_pack/Bench_1.glb' '/public/glb/medieval_village_pack/Cauldron.glb' '/public/glb/nature_pack/Willow_1.glb' '/public/glb/nature_pack/Willow_2.glb' '/public/glb/nature_pack/TreeStump.glb' \
-  '/public/glb/medieval_village_pack/House_1.glb' '/public/glb/medieval_village_pack/House_2.glb' '/public/glb/medieval_village_pack/Blacksmith.glb' '/public/glb/medieval_village_pack/Bench_2.glb'
-for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca Bull; do
+  '/public/glb/medieval_village_pack/House_1.glb' '/public/glb/medieval_village_pack/House_2.glb' '/public/glb/medieval_village_pack/Blacksmith.glb' '/public/glb/medieval_village_pack/Bench_2.glb' \
+  '/public/glb/nature_pack/*_Snow*.glb'
+for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca Bull Husky Stag Deer; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
 done
@@ -138,6 +139,14 @@ grab halloween "$CACHE/kk-halloween/addons/kaykit_halloween_bits/Assets/gltf" 51
   pumpkin_yellow_small tree_dead_large tree_dead_medium tree_dead_small \
   tree_pine_orange_large tree_pine_orange_medium tree_pine_yellow_large tree_pine_yellow_medium \
   gravestone grave_A grave_B gravemarker_A gravemarker_B fence arch_gate crypt candle_triple skull_candle bench_decorated
+# farm 5 (winter farm): Kenney Holiday Kit (snowmen, sled, presents, decorated tree, snowy pines) + Quaternius snowy
+# trees / rocks / bushes (Ultimate Nature) + husky (guard dog) / stag + deer (Bob's reindeer) — all CC0
+grab winter "$K/kenney_holidaypack/Models/GLTF format" 512 \
+  snowman snowmanFancy sled snowFort snowPatch present presentRound presentLow treeDecorated treePineSnow \
+  treePineSnowRound treePineSnowed wreath lightsMulti candyCane lightpost rockFormationLarge rockFormationMedium
+grab winter "$Q/nature_pack" 256 PineTree_Snow_1 PineTree_Snow_2 PineTree_Snow_3 PineTree_Snow_4 CommonTree_Snow_1 \
+  CommonTree_Snow_2 BirchTree_Snow_1 CommonTree_Dead_Snow_1 Bush_Snow_1 Bush_Snow_2 Rock_Snow_1 Rock_Snow_2 Rock_Snow_3 \
+  TreeStump_Snow WoodLog_Snow
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)
