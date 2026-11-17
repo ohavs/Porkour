@@ -18,6 +18,7 @@ import { DayNight } from '../world/daynight';
 import { MOD, type ModId } from './modifiers';
 import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
+import { Gates, type Gate } from '../world/gates';
 import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
@@ -51,6 +52,9 @@ export class Game {
   daynight!: DayNight;
   wolves!: WolfPack;
   traps!: Traps;
+  gates!: Gates;
+  /** What the lock-pick puzzle is open on (the cage or a gate's padlock). */
+  private pickOn: Gate | null = null;
   private acc = 0;
   private last = performance.now();
   private frames = 0; private fpsT = 0; fps = 0;
@@ -98,6 +102,13 @@ export class Game {
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
     this.wolves = new WolfPack(scene, this.nav, FARM);
     this.traps = new Traps(scene);
+    this.gates = new Gates(scene, this.farm.gates);
+    // pen animals amble out when their gate is open
+    const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey'];
+    for (const c of this.farm.critters) {
+      if (!PEN_KINDS.includes(c.def.kind)) continue;
+      c.pen = this.gates.list.find((g) => { const r = g.def.rect; return c.home.x > r.x0 && c.home.x < r.x1 && c.home.z > r.z0 && c.home.z < r.z1; }) ?? null;
+    }
     this.round = new Round(scene, this, new THREE.Vector3(30, terrain.height(30, 7.5), 7.5));
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
@@ -116,7 +127,10 @@ export class Game {
       }
       // RMB at the cage latch: the lock-pick puzzle (the pig itself doesn't grab there)
       const L = this.local, cage = this.farm.cage;
-      if (b === 'grab' && !L.held && cage.canPick(L)) { this.lockpick.open(cage.pickOpts(L)); this.input.clearPresses(); }
+      if (b === 'grab' && !L.held && cage.canPick(L)) { this.pickOn = null; this.lockpick.open(cage.pickOpts(L)); this.input.clearPresses(); return; }
+      // RMB at a padlocked gate: the same puzzle on Bob's padlock
+      const g = b === 'grab' && !L.held ? this.gates.latchOf(L) : null;
+      if (g?.state === 'locked') { this.pickOn = g; this.lockpick.open(g.pickOpts(L)); this.input.clearPresses(); }
     };
     this.input.onKey = (code) => {
       if (code === 'Backquote') { this.menu.toggleAdmin(); return; }
@@ -199,6 +213,7 @@ export class Game {
     this.farmer?.postStep();
     this.traps.step(FIXED);
     this.farm.cage.update(FIXED, this.pigs);
+    this.gates.step(FIXED);
     for (const c of this.farm.critters) c.postStep();
     for (const w of this.wolves.wolves) w.postStep();
     this.wolves.update();
@@ -207,6 +222,7 @@ export class Game {
       const y = pr.synced.currP.y;
       if (y < -20) { pr.body.setTranslation({ x: 0, y: 3, z: 6 }, true); pr.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
     }
+    this.gates.capture();
     // the pond washes the mud off
     for (const p of this.pigs) if (p.muddyUntil > G.time && this.farm.inWater(p.pos.x, p.pos.z)) {
       p.muddyUntil = G.time; G.audio.play('mudstep', { pos: p.pos, vol: 0.8 });
@@ -288,6 +304,19 @@ export class Game {
           }
           break;
         case 'pecked': if (me) this.hud.toast(t(e.text === 'drop' ? 'e.peckedDrop' : 'e.pecked'), 1.2); break;
+        case 'gateBroken': {
+          const what = t((e.text ?? 'gate.sty') as Key);
+          if (me) this.hud.toast(t('e.gateBroken', { what }), 2.6, t('e.gateBroken2'));
+          else if (e.who) this.hud.toast(t('e.gateBrokenOther', { who, what }), 2);
+          break;
+        }
+        case 'gatePicked': if (me) this.hud.toast(t('e.gatePicked'), 1.6); break;
+        case 'padlockBroke': if (me) this.hud.toast(t('e.padlockBroke'), 1.6); break;
+        case 'gateRattle': if (me) this.hud.toast(t('e.gateRattle'), 2); break;
+        case 'gateFix': this.hud.toast(t('e.gateFix', { what: t((e.text ?? 'gate.sty') as Key) }), 2.2, t('e.gateFix2')); break;
+        case 'gateLocked':
+          if (G.time - (this.birdToast.lock ?? -99) > 25) { this.birdToast.lock = G.time; this.hud.toast(t('e.gateLocked', { what: t((e.text ?? 'gate.sty') as Key) }), 2.4, t('e.gateLocked2')); }
+          break;
         case 'roundEnd': break;
       }
     }
@@ -308,6 +337,7 @@ export class Game {
     for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
     this.wolves.clear();
     this.traps.clear();
+    this.gates.reset();
     this.daynight.setHour(ROUND_START_HOUR);
     G.grills = 0;
     cage.setOpen(false);
@@ -322,6 +352,12 @@ export class Game {
     const tp = (x: number, z: number) => { if (L.heldBy) L.heldBy.release(false); L.body.setTranslation({ x, y: G.terrain.height(x, z) + 1.2, z }, true); L.body.setLinvel({ x: 0, y: 0, z: 0 }, true); };
     switch (a) {
       case 'grill': cage.grillNow(); break;
+      case 'gates:lock': this.gates.all('locked'); break;
+      case 'gates:shut': this.gates.all('shut'); break;
+      case 'gates:open': this.gates.all('free'); break;
+      case 'gate:smash': { const g = this.gates.nearest(L.pos); if (g) { if (g.state === 'free' || g.state === 'broken') g.setState('shut'); g.smash(tmpV.copy(g.def.out).negate(), L); } break; }
+      case 'gate:bob': { const g = this.gates.nearest(L.pos); if (g && f) { if (g.state === 'shut' && f.level < 1) f.setAlert(1); f.gateNow(g); } this.menu.toggleAdmin(); break; }
+      case 'tp:gate': { const g = this.gates.byId('chickens'); if (g) tp(g.latch.x + g.def.out.x * 1.1, g.latch.z + g.def.out.z * 1.1); this.menu.toggleAdmin(); break; }
       case 'free': cage.setOpen(true, 'admin'); break;
       case 'catch': if (!L.cage && !L.out) { if (L.heldBy) L.heldBy.release(false); cage.lock(L); } break;
       case 'mud': L.muddyUntil = G.time + 60; break;
@@ -517,7 +553,8 @@ export class Game {
     this.input.poll();
     const pick = this.lockpick;
     if (pick.isOpen) {
-      if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !this.farm.cage.canPick(this.local, 0.6) || this.menu.blocking) pick.close();
+      const still = this.pickOn ? this.pickOn.state === 'locked' && this.pickOn.atLatch(this.local, 0.6) : this.farm.cage.canPick(this.local, 0.6);
+      if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !still || this.menu.blocking) pick.close();
       else pick.update(dt);
     }
     let alpha: number;
@@ -545,6 +582,7 @@ export class Game {
     this.markers.update(this.gfx.camera, this.gfx.renderer.getPixelRatio());
     if (this.menu.blocking) document.getElementById('clickHint')?.classList.remove('show');
     for (const pr of this.farm.props) pr.synced.apply(alpha);
+    this.gates.render(alpha);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;

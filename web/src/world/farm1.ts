@@ -12,6 +12,7 @@ import type { DayNight } from './daynight';
 import { buildDecor } from './decor';
 import { buildHideouts } from './hideouts';
 import { buildLandmarks } from './landmarks';
+import type { GateDef, GateState } from './gates';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 
@@ -31,6 +32,8 @@ export interface FarmBuild {
   cage: Cage; chores: Chore[]; farmerSpawn: THREE.Vector3;
   zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3 };
   inWater: (x: number, z: number) => boolean;
+  /** Pen gates (built in game.ts: they need the pigs / Bob). */
+  gates: GateDef[];
 }
 
 /**
@@ -94,6 +97,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       farmerSpawn: V3(-4, t.height(-4, -28), -28),
       zones: { garden: [garden], lawn: { x0: -28, x1: -12, z0: -25, z1: -14 }, door: V3(-17.6, t.height(-17.6, -33.4), -33.4), mowerAt: V3(-31, t.height(-31, -16), -16) },
       inWater: (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r - 0.3,
+      gates: [],
     };
     t.noGrass({ x0: -11, x1: -2, z0: -38, z1: -32 });
     const rng = new Rng(2026);
@@ -141,13 +145,20 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
       const b = staticBox(V3(cx, y(cx, cz) + 0.6, cz), V3(len / 2, 0.65, 0.12), yaw);
       if (model === 'kenney/fence_simple') SEE_THROUGH.add(b.collider(0).handle);   // rails: Bob sees through
     };
-    const pen = (r: Rect, gate: 'n' | 's' | 'e' | 'w', gw = 2.4, model?: string) => {
+    /** A fenced pen with a gap on one side; `gateId` = a real hinged gate in the gap (gates.ts). */
+    const pen = (r: Rect, gate: 'n' | 's' | 'e' | 'w', gw = 2.4, model?: string, gateId?: string, o: { lockable?: boolean; start?: GateState } = {}) => {
       const gx = (r.x0 + r.x1) / 2, gz = (r.z0 + r.z1) / 2;
       if (gate === 's') { fence(r.x0, r.z1, gx - gw / 2, r.z1, model); fence(gx + gw / 2, r.z1, r.x1, r.z1, model); } else fence(r.x0, r.z1, r.x1, r.z1, model);
       if (gate === 'n') { fence(r.x0, r.z0, gx - gw / 2, r.z0, model); fence(gx + gw / 2, r.z0, r.x1, r.z0, model); } else fence(r.x0, r.z0, r.x1, r.z0, model);
       if (gate === 'w') { fence(r.x0, r.z0, r.x0, gz - gw / 2, model); fence(r.x0, gz + gw / 2, r.x0, r.z1, model); } else fence(r.x0, r.z0, r.x0, r.z1, model);
       if (gate === 'e') { fence(r.x1, r.z0, r.x1, gz - gw / 2, model); fence(r.x1, gz + gw / 2, r.x1, r.z1, model); } else fence(r.x1, r.z0, r.x1, r.z1, model);
       blocked.push(r);
+      if (!gateId) return;
+      const ns = gate === 'n' || gate === 's', ex = gate === 'w' ? r.x0 : gate === 'e' ? r.x1 : gx, ez = gate === 'n' ? r.z0 : gate === 's' ? r.z1 : gz;
+      const a = ns ? V3(ex - gw / 2, 0, ez) : V3(ex, 0, ez - gw / 2), b = ns ? V3(ex + gw / 2, 0, ez) : V3(ex, 0, ez + gw / 2);
+      a.y = y(a.x, a.z); b.y = y(b.x, b.z);
+      const outN = gate === 'n' ? V3(0, 0, -1) : gate === 's' ? V3(0, 0, 1) : gate === 'w' ? V3(-1, 0, 0) : V3(1, 0, 0);
+      out.gates.push({ id: gateId, a, b, out: outN, rect: r, lockable: o.lockable ?? true, start: o.start ?? 'shut' });
     };
     const prop = (kind: keyof typeof PROPS, x: number, z: number, yaw = rng.range(0, 6.28), lift = 0) =>
       out.props.push(new Prop(scene, PROPS[kind], V3(x, y(x, z) + lift, z), yaw));
@@ -175,11 +186,11 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
 
     blocked.push({ x0: -12, x1: -1, z0: -39, z1: -28 });               // cage + grill + Bob's coffee spot
     // ---------------------------------------------------------------- pens & fences
-    pen({ x0: 24, x1: 37, z0: 2, z1: 14 }, 'w', 2.6);                   // sty
-    pen({ x0: 16, x1: 30, z0: -32, z1: -18 }, 's', 2.4);                // chickens
-    pen({ x0: 22, x1: 52, z0: -76, z1: -50 }, 'w', 3.5, 'kenney/fence_planks'); // pasture
-    pen(garden, 'e', 2.4);                                                // garden
-    pen({ x0: -63, x1: -50, z0: -52, z1: -34 }, 'e', 2.6, 'kenney/fence_planks'); // sheep
+    pen({ x0: 24, x1: 37, z0: 2, z1: 14 }, 'w', 2.6, undefined, 'sty', { lockable: false, start: 'free' });   // sty
+    pen({ x0: 16, x1: 30, z0: -32, z1: -18 }, 's', 2.4, undefined, 'chickens');                              // chickens
+    pen({ x0: 22, x1: 52, z0: -76, z1: -50 }, 'w', 3.5, 'kenney/fence_planks', 'pasture');                   // pasture
+    pen(garden, 'e', 2.4, undefined, 'garden');                                                                // garden
+    pen({ x0: -63, x1: -50, z0: -52, z1: -34 }, 'e', 2.6, 'kenney/fence_planks', 'sheep');                   // sheep
     // outer farm fence (gate gap at the south road)
     const F = FARM, m = 0.5;
     fence(F.x0 + m, F.z1 - m, -3, F.z1 - m, 'kenney/fence_planks'); fence(3, F.z1 - m, F.x1 - m, F.z1 - m, 'kenney/fence_planks');
@@ -245,6 +256,7 @@ export function buildFarm1(scene: THREE.Scene): { terrain: Terrain; build: (t: T
     prop('pie', 8.79, -47.59, 0, 0.84);
     prop('undies', -29.4, -27.4, 0.4);
     prop('gnome', -28.6, -55.4, 2.2);
+    prop('bigPumpkin', -48.6, -65.2); prop('bigPumpkin', -31.4, -65.3);   // prize pumpkins behind the garden gate
     for (const [x, z] of [[18.9, -20.6], [19.25, -20.75], [19.05, -21.0], [28.2, -29.3], [28.5, -29.0]] as const) prop('egg', x, z, rng.range(0, 6));
     for (const [x, z] of [[-15.9, -31.6], [-16.6, -31.9], [-12.2, -32.6]] as const) prop('flowerPot', x, z, 0);
     for (const [x, z] of [[-34.4, -50.6], [-40.2, -50.8], [-29.4, -60.2]] as const) prop('melon', x, z);

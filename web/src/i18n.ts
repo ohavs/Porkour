@@ -237,6 +237,21 @@ const en = {
   'a.turkeyMe': 'Turkeys: charge me', 'a.tpGarden': 'Garden',
   'item.bone': 'Bone', 'p.bone': 'Throw it near the guard dog to keep it busy', 's.trapNear': 'Careful: a bear trap right here!',
   'a.alert': 'Bob alert level', 'a.trapMe': 'Bear trap in front of me', 'a.dogMe': 'Guard dog: sniff me out', 'a.bringBone': 'Bring a bone',
+  // gates (pens)
+  'gate.sty': 'sty gate', 'gate.chickens': 'chicken pen gate', 'gate.pasture': 'pasture gate', 'gate.garden': 'garden gate', 'gate.sheep': 'sheep pen gate',
+  'p.gateOpen': '{rmb} / {lmb} open the {what}',
+  'p.gateLocked': '<b style="color:#ffd166">Padlocked!</b> {rmb} pick the lock · sprint into it to smash it · or whack it with a weapon',
+  'p.gateWhack': '{lmb} whack the padlock ({n} left)',
+  'e.gateBroken': 'CRASH! You smashed the {what}', 'e.gateBroken2': 'Bob will come with his hammer — he\'s busy while he fixes it',
+  'e.gateBrokenOther': '{who} smashed the {what}!',
+  'e.gatePicked': 'Padlock picked — the gate is open', 'e.padlockBroke': 'The padlock broke!',
+  'e.gateRattle': 'Padlocked. Pick it (RMB), whack it with a weapon or ram it',
+  'e.gateFix': 'Bob is fixing the {what}', 'e.gateFix2': 'He\'s busy hammering for a few seconds',
+  'e.gateLocked': 'Bob padlocked the {what}', 'e.gateLocked2': 'He locks his gates when he\'s wary',
+  'bob.gate': 'Bob is shutting a gate', 'bob.repair': 'Bob is fixing a gate',
+  'm.cowsOut': 'Let 2 big animals out of the pasture', 'm.gateBreak': 'Ram down one of Bob\'s gates',
+  'a.gates': 'Gates', 'a.gatesLock': 'Padlock all', 'a.gatesShut': 'Latch all', 'a.gatesOpen': 'Open all', 'a.gateSmash': 'Smash the nearest',
+  'a.gateBob': 'Bob: deal with the nearest', 'a.tpGate': 'Chicken gate',
 } as const;
 
 export type Key = keyof typeof en;
@@ -461,6 +476,21 @@ const es: Record<Key, string> = {
   'a.turkeyMe': 'Pavos: atacadme', 'a.tpGarden': 'Huerto',
   'item.bone': 'Hueso', 'p.bone': 'Tíralo cerca del perro guardián para entretenerlo', 's.trapNear': '¡Cuidado: hay un cepo aquí mismo!',
   'a.alert': 'Nivel de alerta de Bob', 'a.trapMe': 'Cepo delante de mí', 'a.dogMe': 'Perro guardián: olfatéame', 'a.bringBone': 'Traer un hueso',
+  // puertas (corrales)
+  'gate.sty': 'puerta de la pocilga', 'gate.chickens': 'puerta del gallinero', 'gate.pasture': 'puerta del prado', 'gate.garden': 'puerta del huerto', 'gate.sheep': 'puerta del corral de ovejas',
+  'p.gateOpen': '{rmb} / {lmb} abrir la {what}',
+  'p.gateLocked': '<b style="color:#ffd166">¡Con candado!</b> {rmb} forzar la cerradura · embístela corriendo para romperla · o dale con un arma',
+  'p.gateWhack': '{lmb} golpear el candado (quedan {n})',
+  'e.gateBroken': '¡CRAC! Has roto la {what}', 'e.gateBroken2': 'Bob vendrá con su martillo — estará ocupado mientras la arregla',
+  'e.gateBrokenOther': '¡{who} ha roto la {what}!',
+  'e.gatePicked': 'Candado forzado — la puerta está abierta', 'e.padlockBroke': '¡El candado se ha roto!',
+  'e.gateRattle': 'Tiene candado. Fuérzalo (clic derecho), dale con un arma o embístela',
+  'e.gateFix': 'Bob está arreglando la {what}', 'e.gateFix2': 'Está ocupado martilleando unos segundos',
+  'e.gateLocked': 'Bob ha puesto un candado en la {what}', 'e.gateLocked2': 'Cierra sus puertas con candado cuando está en guardia',
+  'bob.gate': 'Bob está cerrando una puerta', 'bob.repair': 'Bob está arreglando una puerta',
+  'm.cowsOut': 'Saca 2 animales grandes del prado', 'm.gateBreak': 'Derriba una de las puertas de Bob',
+  'a.gates': 'Puertas', 'a.gatesLock': 'Candado a todas', 'a.gatesShut': 'Cerrar todas', 'a.gatesOpen': 'Abrir todas', 'a.gateSmash': 'Romper la más cercana',
+  'a.gateBob': 'Bob: ocúpate de la más cercana', 'a.tpGate': 'Puerta del gallinero',
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

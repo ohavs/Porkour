@@ -213,6 +213,8 @@ export class Hud {
     const keys = { space: K(t('key.space')), lmb: K(t('key.lmb')), rmb: K(t('key.rmb')), q: K('Q') };
     // prompt
     let p = '';
+    const gate = G.gates?.latchOf(pig) as { state: string; padHp: number; label: string } | null | undefined;
+    const gateWhat = gate ? `<b>${t(gate.label as Key)}</b>` : '';
     const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
       && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     if (pig.out) p = pig.outReason === 'wolf' ? t('p.dragged', { n: Math.ceil(pig.outUntil - pig.now) })
@@ -226,8 +228,11 @@ export class Hud {
     else if (pig.held) p = t('p.holding', { ...keys, what: `<b>${t(pig.held.label ?? '')}</b>${val(pig.held)}` })
       + ((pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.weapon', keys)}</span>` : '')
       + ((pig.held as { def?: { id?: string } }).def?.id === 'bone' ? `<br><span style="color:#ffd166">${t('p.bone')}</span>` : '')
-      + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '');
+      + (goal ? `<br><span style="color:#ff8ad8">${t('p.toGoal', { where: goal })}</span>` : val(pig.held) ? `<br><span style="opacity:.8">${t('p.toStash')}</span>` : '')
+      + (gate?.state === 'locked' && (pig.held as { def?: { weapon?: number } }).def?.weapon ? `<br><span style="color:#ffd166">${t('p.gateWhack', { ...keys, n: gate.padHp })}</span>`
+        : gate?.state === 'shut' ? `<br>${t('p.gateOpen', { ...keys, what: gateWhat })}` : '');
     else if (G.cage?.canPick(pig)) p = t('p.pickLock', keys);
+    else if (gate) p = gate.state === 'locked' ? t('p.gateLocked', keys) : t('p.gateOpen', { ...keys, what: gateWhat });
     else if (stuck) p = t('p.freeTrap', { ...keys, who: stuck.holding!.label.replace(/[<>&]/g, '') });
     else {
       const tg = pig.findGrabTarget();

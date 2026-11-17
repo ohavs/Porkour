@@ -196,6 +196,8 @@ export class Menu {
       `<div class="sec">${t('a.mods')}</div><div class="grid">${(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) =>
         `<button data-a="mod:${m}" class="${G.mod === m ? 'on' : ''}">${m === 'none' ? t('menu.off') : t(('mod.' + m) as Key)}</button>`).join('')}` +
       `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button></div>` +
+      `<div class="sec">${t('a.gates')}</div><div class="grid">${btn('gates:lock', 'a.gatesLock')}${btn('gates:shut', 'a.gatesShut')}${btn('gates:open', 'a.gatesOpen')}` +
+      `${btn('gate:smash', 'a.gateSmash')}${btn('gate:bob', 'a.gateBob')}${btn('tp:gate', 'a.tpGate')}</div>` +
       `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}<button data-tp="garden">${t('a.tpGarden')}</button></div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +

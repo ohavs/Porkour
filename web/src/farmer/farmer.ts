@@ -17,6 +17,7 @@ import { SCRUFF } from '../pig/pigBody';
 import { sightPoint } from '../world/cover';
 import { MOD, modSight, modHear, marketHours } from '../game/modifiers';
 import { toonMat } from '../render/toon';
+import { GATE, type Gate, type Gates } from '../world/gates';
 
 /** Tuning. */
 export const BOB = {
@@ -43,10 +44,12 @@ export const BOB = {
 export const ALERT = {
   at: [0, 22, 50, 80], drop: 8, decay: 0.7, hold: 7,
   hear: [1, 1.3, 1.45, 1.6], sight: [1, 1.08, 1.15, 1.22], sus: [1, 1.2, 1.35, 1.5], hunt: [1, 0.8, 0.65, 0.5], run: [1, 1, 1.06, 1.16],
-  gain: { alarm: 22, suspect: 4, noise: 2, lost: 6, escaped: 10, caged: 4, cough: 6, splat: 5, down: 22, stagger: 9, prank: 10, loot: 6, trap: 6 },
+  gain: { alarm: 22, suspect: 4, noise: 2, lost: 6, escaped: 10, caged: 4, cough: 6, splat: 5, down: 22, stagger: 9, prank: 10, loot: 6, trap: 6, gateOpen: 5, gateBroken: 14 },
   reach: 2.55, catchR: 1.4, catchAt: 1.15,                                                  // pitchfork (level 2+)
   gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.3), gunPush: 11,   // shotgun (level 3)
   traps: 4, trapEvery: 25,
+  /** Wary (1+): now and then he padlocks a gate that is only latched. */
+  lockEvery: 18,
 };
 export type AlertGain = keyof typeof ALERT.gain;
 
@@ -68,7 +71,7 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate';
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
@@ -165,6 +168,9 @@ export class Farmer {
   private hotSpots: THREE.Vector3[] = []; private trapAt = new THREE.Vector3(); private trapNext = 0;
   /** Market day: he went this round already; where the dog barked at a pig while he was away (he checks it first). */
   private marketDone = false; private awayTip: THREE.Vector3 | null = null; private awayTipPig: Pig | null = null;
+  /** The gate he's going to shut / repair / padlock, when he looks for gates next, when he padlocks the next one. */
+  private gateJob: Gate | null = null; private gateNext = 0; private lockNext = 0;
+  private gateSkip = new WeakMap<Gate, number>(); private gatePt = new THREE.Vector3();
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -277,6 +283,7 @@ export class Farmer {
     this.sus.clear(); this.target = null; this.hunt = null; this.path = []; this.doing = false;
     this.heat = 0; this.floor = 0; this.hotSpots = []; this.gunReady = 0; this.trapNext = 0;
     this.marketDone = false; this.awayTip = null; this.awayTipPig = null;
+    this.gateJob = null; this.lockNext = 0;
     if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
     if (this.level) { this.level = 0; G.events.push({ type: 'alert', why: '0', text: 'down' }); }
     this.parts.snap();
@@ -315,7 +322,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -429,6 +436,7 @@ export class Farmer {
         if (this.now - this.stateT > ALERT.gunShoot) { this.lastSeenT = this.now; this.go(this.target ? 'chase' : 'routine'); }
         break;
       case 'setTrap': want = this.setTrap(dt); break;
+      case 'gate': want = this.gateStep(dt); break;
       case 'market': want = this.toMarket(dt); break;
       case 'fist': {
         const t = this.target;
@@ -529,8 +537,8 @@ export class Farmer {
   private view(): View {
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
-    if (this.state === 'dance' || (this.state === 'setTrap' && this.doing)) return 'busy';
-    if (this.state === 'setTrap') return 'normal';
+    if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate') && this.doing)) return 'busy';
+    if (this.state === 'setTrap' || this.state === 'gate') return 'normal';
     if (this.state === 'routine' || this.state === 'dust' || this.state === 'carry') return 'normal';
     return 'alert';
   }
@@ -632,6 +640,12 @@ export class Farmer {
       this.tidyScan = this.now + 0.5;
       const p = this.spotLoot(v);
       if (p) { this.stopRiding(); this.doing = false; this.tidyProp = p; this.path = []; this.go('tidy'); this.voice('huh'); this.raise('loot'); return; }
+    }
+    // gates: one left open / smashed that he sees = he goes and deals with it; wary = he padlocks latched ones
+    if (this.state === 'routine' && !this.carrying && this.now > this.gateNext) {
+      this.gateNext = this.now + 0.6;
+      const g = this.spotGate(v);
+      if (g) { this.startGate(g); return; }
     }
     // noises
     if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance') {
@@ -940,6 +954,67 @@ export class Farmer {
       this.voice('ha', 0.6);
       this.trapNext = this.now + ALERT.trapEvery;
       this.doing = false; this.backToWork();
+    }
+    return 0;
+  }
+
+  // ================================================================== gates
+  private spotGate(v: { cos: number; range: number }): Gate | null {
+    const gates = G.gates as Gates | null; if (!gates) return null;
+    let best: Gate | null = null, bd = 26;
+    for (const g of gates.list) {
+      if (!g.needsBob || (this.gateSkip.get(g) ?? -1) > this.now) continue;
+      const d = Math.hypot(g.center.x - this.pos.x, g.center.z - this.pos.z);
+      if (d < bd && this.canSee({ pos: this.gatePt.copy(g.center).setY(g.center.y + 0.6) }, v) > 0) { best = g; bd = d; }
+    }
+    if (best || this.level < 1 || this.now < this.lockNext) return best;
+    // wary: padlock the nearest gate that is only latched (he knows his farm: no need to see it)
+    this.lockNext = this.now + ALERT.lockEvery;
+    bd = 50;
+    for (const g of gates.list) {
+      if (g.state !== 'shut' || !g.def.lockable || (this.gateSkip.get(g) ?? -1) > this.now) continue;
+      const d = Math.hypot(g.center.x - this.pos.x, g.center.z - this.pos.z);
+      if (d < bd) { best = g; bd = d; }
+    }
+    return best;
+  }
+  private startGate(g: Gate) {
+    this.stopRiding(); this.doing = false; this.path = [];
+    this.gateJob = g; this.go('gate');
+    if (g.state === 'broken') { this.voice('grr'); this.raise('gateBroken'); }
+    else if (g.state === 'free') { this.voice('huh'); this.raise('gateOpen'); }
+    else this.voice('mutter', 0.6);
+  }
+  /** Admin: deal with the nearest gate now (whatever its state). */
+  gateNow(g: Gate) { if (this.gone) this.wake(); if (this.calm() && !this.carrying) this.startGate(g); }
+  /** Walk to the latch side of the gate, then shut it / hammer it back on its hinges / padlock it. */
+  private gateStep(dt: number) {
+    const g = this.gateJob;
+    this.activity = g?.state === 'broken' ? 'bob.repair' : 'bob.gate';
+    const lockIt = !!g && this.level >= 1 && g.def.lockable;
+    if (!g || this.now - this.stateT > 40 || (!this.doing && !g.needsBob && !(g.state === 'shut' && lockIt))) { this.gateJob = null; this.backToWork(); return 0; }
+    if (!this.doing) {
+      const s = g.side(this.pos);
+      const spot = v2.copy(g.latch).lerp(g.center, 0.35).addScaledVector(g.swingDir, s * 1.3).setY(g.center.y);
+      const d = this.moveTo(spot, BOB.walk * 1.15, dt);
+      if (d < 0.6 || (d < 2.4 && this.stuck >= 2)) {
+        this.stuck = 0; this.doing = true;
+        const broken = g.state === 'broken';
+        this.choreUntil = this.now + (broken ? GATE.repair : g.state === 'shut' ? GATE.lockTime : GATE.closeTime);
+        if (broken) G.events.push({ type: 'gateFix', text: g.label });
+      }
+      return BOB.walk * 1.15;
+    }
+    this.face(g.center, dt, 6);
+    if (g.state === 'broken' && Math.random() < dt * 2.4) G.audio.play('wood', { pos: g.center, vol: 0.55, pitch: 1.35 + Math.random() * 0.3, minGap: 0.22 });
+    if (this.now > this.choreUntil) {
+      const final = lockIt ? 'locked' : 'shut';
+      if (g.state === 'broken') g.repair(final); else g.closeBy(final);
+      if (final === 'locked') G.events.push({ type: 'gateLocked', text: g.label });
+      this.voice(final === 'locked' ? 'ha' : 'mutter', 0.6);
+      this.gateSkip.set(g, this.now + 8);
+      this.gateJob = null; this.doing = false;
+      this.backToWork();
     }
     return 0;
   }
@@ -1454,7 +1529,7 @@ export class Farmer {
       case 'dance': return 'dance';
       case 'aim': return 'aim';
       case 'shoot': return 'shoot';
-      case 'setTrap': return this.doing ? 'fix' : 'idle';
+      case 'setTrap': case 'gate': return this.doing ? 'fix' : 'idle';
       default: return 'idle';
     }
   }
