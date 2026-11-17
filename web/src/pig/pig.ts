@@ -12,6 +12,8 @@ import { PigParts, CENTER, SCRUFF, type Shape } from './pigBody';
 import { Grip } from '../core/grip';
 import type { Tone } from '../core/ragdoll';
 import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
+import { SNACK, SNACK_IDS, type SnackId } from '../world/snacks';
+import type { Prop } from '../world/props';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
 export interface PigInput {
@@ -55,8 +57,12 @@ export const BAL = { fall0: 10, kp: 22, sat: 0.27, kd: 2.6, accel: 0.13, turn: 0
 /** Grip targets in model space (pig's feet = origin, facing +z): hold, wind-up (full charge), release. */
 const GRIP = {
   four: { hold: new THREE.Vector3(0, 0.6, 0.86), wind: new THREE.Vector3(0, 1.05, 0.42), rel: new THREE.Vector3(0, 0.95, 1.2) },
-  two: { hold: new THREE.Vector3(0, 0.95, 0.5), wind: new THREE.Vector3(0, 1.5, -0.1), rel: new THREE.Vector3(0, 1.3, 0.8) },
+  two: { hold: new THREE.Vector3(0, 0.92, 0.4), wind: new THREE.Vector3(0, 1.5, -0.1), rel: new THREE.Vector3(0, 1.3, 0.8) },
 };
+/** Eating: where the food goes (the mouth), per stance. */
+const MOUTH = { four: new THREE.Vector3(0, 0.72, 0.82), two: new THREE.Vector3(0, 1.3, 0.34) };
+/** A snack in the hooves that a click uses (eat it / light a cigarette), not a hit. */
+const snackOf = (h: Holdable | null) => { const p = h as Prop | null; return p?.kind === 'prop' && (p.def.snack || p.def.smokes) && p.left > 0 ? p : null; };
 const QSTAND = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -STAND_ANGLE);
 
 type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
@@ -151,12 +157,19 @@ export class Pig implements Holdable {
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
-  get liftMax() { return this.standing ? PIG.liftMaxStand : PIG.liftMax; }
+  get liftMax() { return (this.standing ? PIG.liftMaxStand : PIG.liftMax) * (this.boosted('spinach') ? SNACK.lift : 1); }
   /** 0..1 jab progress (visual). */
+  /** Snacks (world/snacks.ts): boost end times; eating since; smoking until; last puff. */
+  boostUntil: Record<SnackId, number> = { beans: 0, spinach: 0, energy: 0, dogfood: 0 };
+  eatAt = -10; cigUntil = 0; puffAt = -10;
+  private eatProp: Prop | null = null; private nextPuff = 0; private puffFx = -10; private cigFx = 0;
+  boosted(id: SnackId) { return this.now < this.boostUntil[id]; }
+  get smoking() { return this.now < this.cigUntil; }
+  get eating() { return this.now - this.eatAt < SNACK.eat; }
   get punchT() { const k = (this.now - this.punchAt) / 0.28; return k >= 0 && k <= 1 ? k : 0; }
   /** 0..1 how ready an ability is (HUD). */
   readiness(which: 'fart' | 'sprint') {
-    const [ready, cd] = which === 'fart' ? [this.fartReady, PIG.fartCd] : [this.sprintReady, PIG.sprintCd];
+    const [ready, cd] = which === 'fart' ? [this.fartReady, PIG.fartCd * (this.boosted('beans') ? SNACK.fartCd : 1)] : [this.sprintReady, PIG.sprintCd * (this.boosted('energy') ? SNACK.sprintCd : 1)];
     return clamp(1 - (ready - this.now) / cd, 0, 1);
   }
 
@@ -201,6 +214,7 @@ export class Pig implements Holdable {
       return;
     }
     if (this.pos.y < -25) this.respawn();
+    this.snackStep();
 
     if (this.heldBy) {
       this.mode = 'held';
@@ -232,6 +246,7 @@ export class Pig implements Holdable {
     if (inp.fartP) this.tryFart();
     if (inp.sprintP && this.now >= this.sprintReady && this.mode === 'normal') this.startSprint();
     if (inp.oinkP) this.oink();
+    if (G.lobby && (inp.grabP || inp.attackP) && !this.held) this.yaw = inp.yaw;   // lobby: grab / hit where the pointer is
     this.grabStep(inp);
 
     // --- wallow
@@ -260,6 +275,7 @@ export class Pig implements Holdable {
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
     if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
     if (this.muddy > 0) speed *= 0.95;
+    if (this.boosted('energy')) speed *= SNACK.fast;
     let tx = mx * speed, tz = mz * speed;
     if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
@@ -271,7 +287,7 @@ export class Pig implements Holdable {
 
     // facing: camera direction while moving (strafe), movement direction while sprinting
     const want = this.sprinting ? Math.atan2(this.vel.x, this.vel.z) : inp.yaw;
-    if (moving || this.held || this.chargeStart >= 0) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
+    if (moving || this.held || this.chargeStart >= 0 || G.lobby) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
 
     // jump
     if (this.jumpBuf > 0 && this.coyote > 0) {
@@ -316,7 +332,7 @@ export class Pig implements Holdable {
     const heavy = this.held ? clamp(this.held.mass / 50, 0, 1) : 0;
     // slow, smooth random teeter (fixed frequencies per pig: no phase jumps)
     const t = this.now + this.seed * 37;
-    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8);
+    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1);
     const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp;
     const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp;
     // turning while moving: lean out of the turn
@@ -364,11 +380,11 @@ export class Pig implements Holdable {
     const fwd = wpn ? 0.95 : butt ? 0.75 : 0.7;
     const hx = this.pos.x + f.x * fwd, hz = this.pos.z + f.z * fwd, hy = this.pos.y + (butt ? 0.05 : 0.3);
     const dir = v1.set(f.x, 0.35, f.z).normalize();
-    const k = butt ? PIG.headbutt : h && !wpn ? 0.75 : 1;
+    const k = (butt ? PIG.headbutt : h && !wpn ? 0.75 : 1) * (this.boosted('spinach') ? SNACK.strong : 1);
     let hit = false;
     const farmer = G.farmer;
     if (farmer && Math.hypot(farmer.pos.x - hx, farmer.pos.z - hz) < reach && Math.abs(farmer.pos.y + 1 - hy) < 1.4) {
-      if (wpn) { farmer.whacked?.(dir, wpn); this.weaponHit(); } else farmer.punched?.(dir, k);
+      if (wpn) { farmer.whacked?.(dir, wpn * (this.boosted('spinach') ? SNACK.strong : 1)); this.weaponHit(); } else farmer.punched?.(dir, k);
       hit = true;
     }
     for (const w of G.wolves) if (w.active && Math.hypot(w.pos.x - hx, w.pos.z - hz) < reach * 0.9) { w.knock(v2.copy(dir).multiplyScalar(wpn ? 9 : 6 * k)); hit = true; }
@@ -463,7 +479,8 @@ export class Pig implements Holdable {
 
   private tryFart() {
     if (this.now < this.fartReady || this.mode === 'wallow') return;
-    this.fartReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.fartCd);
+    const beans = this.boosted('beans'), big = beans ? 1.45 : 1;
+    this.fartReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.fartCd * (beans ? SNACK.fartCd : 1));
     if (this.heldBy?.fartedOn) {      // carried: stink in his face, wriggle
       this.escape += this.heldBy.kind === 'farmer' ? 3 : 5;
       const b = v1.copy(this.pos);
@@ -480,17 +497,18 @@ export class Pig implements Holdable {
     // launch: up + toward where you push (or forward)
     const mvLen = Math.hypot(this.input.mx, this.input.mz);
     const dir = mvLen > 0.1 ? v2.set(this.input.mx / mvLen, 0, this.input.mz / mvLen) : v2.copy(f);
-    this.vel.y = Math.max(this.vel.y, this.grounded ? PIG.fartUp : PIG.fartUp * 0.85);
-    this.vel.x += dir.x * PIG.fartFwd; this.vel.z += dir.z * PIG.fartFwd;
+    this.vel.y = Math.max(this.vel.y, (this.grounded ? PIG.fartUp : PIG.fartUp * 0.85) * (beans ? SNACK.fartUp : 1));
+    this.vel.x += dir.x * PIG.fartFwd * big; this.vel.z += dir.z * PIG.fartFwd * big;
     this.ownJump = false;
     if (this.mode === 'ragdoll') this.getUp();
     this.body.setLinvel(this.vel, true); this.setVel.copy(this.vel);
     // the cloud
-    G.fx.puff(butt, { count: 46, color: 0x9ccf4f, spread: 0.45, speed: 3.2, up: -0.8, life: 3.2, size: 1.9, grow: 2.4, drag: 2.0, alpha: 0.8, dir: v3.copy(f).negate().setY(-0.5) });
+    const vis = big * (G.lobby ? 0.55 : 1);   // the lobby camera is close: a smaller cloud
+    G.fx.puff(butt, { count: Math.round(46 * vis), color: 0x9ccf4f, spread: 0.45 * vis, speed: 3.2 * vis, up: -0.8, life: 3.2, size: 1.9 * vis, grow: 2.4, drag: 2.0, alpha: 0.8, dir: v3.copy(f).negate().setY(-0.5) });
     G.fx.puff(butt, { count: 14, color: 0xe2f58a, spread: 0.2, speed: 6, up: -1, life: 0.7, size: 0.9, grow: 3, drag: 4, alpha: 0.95 });
-    G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3, until: this.now + 6 });
-    G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
-    G.shakeFor(this, 0.3);
+    G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3 * big, until: this.now + 6 });
+    G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1, pitch: beans ? 0.75 : 1 });
+    G.shakeFor(this, 0.3 * big);
     G.noise(this.pos, 22);
     // blast pushes everything nearby
     for (const h of G.holdables) {
@@ -498,8 +516,8 @@ export class Pig implements Holdable {
       const hp = h.body.translation();
       const d = v3.set(hp.x - butt.x, hp.y - butt.y, hp.z - butt.z);
       const dist = d.length();
-      if (dist > 3.5 || dist < 0.01) continue;
-      const k = 1 - dist / 3.5;
+      if (dist > 3.5 * big || dist < 0.01) continue;
+      const k = 1 - dist / (3.5 * big);
       d.normalize().y += 0.5;
       const dv = Math.min(10, (k * 260) / Math.max(h.mass, 4));
       if (h.knock) h.knock(d.normalize().multiplyScalar(dv), dist < 1.8 && h.kind === 'pig');
@@ -509,7 +527,7 @@ export class Pig implements Holdable {
 
   private startSprint() {
     this.sprintUntil = this.now + PIG.sprintDur;
-    this.sprintReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.sprintCd);
+    this.sprintReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.sprintCd * (this.boosted('energy') ? SNACK.sprintCd : 1));
     if (this.standing) { this.standing = false; this.setShape('four'); }
     G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 10, color: 0xd8c29a, speed: 2, up: 0.8, life: 0.8, size: 0.8, alpha: 0.6 });
     G.audio.play('grunt', { pos: this.pos, vol: 0.6 });
@@ -527,7 +545,7 @@ export class Pig implements Holdable {
       const dir = v1.set(this.vel.x / sp, 0.45, this.vel.z / sp).normalize();
       if (o.onRam) o.onRam(this, dir);   // a static farm thing (fruit tree, beehive): it reacts, the pig bounces off
       else {
-        const dv = Math.min(12, 520 / Math.max(o.mass, 5));
+        const dv = Math.min(12, 520 / Math.max(o.mass, 5)) * (this.boosted('spinach') ? 1.4 : 1);
         if (o.knock) o.knock(dir.multiplyScalar(dv), true);
         else o.body.applyImpulse(dir.multiplyScalar(dv * o.mass), true);
       }
@@ -661,14 +679,16 @@ export class Pig implements Holdable {
       if (this.held) this.release(false);
       else if (!this.cageLatchNear()) { const t = this.findGrabTarget(); if (t) this.grab(t); }
     }
-    if (inp.attackP && this.mode === 'normal') {
+    if (inp.attackP && this.mode === 'normal' && !this.eating) {
       if (this.held) this.chargeStart = this.now;
       else this.startHit();
     }
     if (inp.attackR && this.held && this.chargeStart >= 0) {
       const quick = this.now - this.chargeStart < PIG.clickTime, c = this.charge();
       this.chargeStart = -1;
-      if (quick) this.startHit();
+      const snack = quick ? snackOf(this.held) : null;
+      if (snack && !(snack.def.smokes && this.smoking)) this.useSnack(snack);
+      else if (quick) this.startHit();
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
       else if (this.held.mass > this.liftMax) this.throwHeld(c);
       else { this.swingT = 0; this.swingC = c; }
@@ -722,6 +742,46 @@ export class Pig implements Holdable {
     return best;
   }
 
+  /** Click with a snack in the hooves: eat the can (boost when it's down) / light up a cigarette from the pack. */
+  private useSnack(p: Prop) {
+    if (p.def.smokes) {
+      p.setLeft(p.left - 1);
+      this.cigUntil = this.now + SNACK.cig; this.nextPuff = this.now + 1.4;
+      G.audio.play('unlock', { pos: this.pos, vol: 0.6, pitch: 2.2 });
+      G.fx.bits(v1.copy(this.pos).setY(this.pos.y + (this.standing ? 0.9 : 0.3)), { count: 6, color: 0xffb13a, speed: 0.6, up: 1.2, life: 0.35, size: 0.06, grow: 0, alpha: 1 });
+      G.events.push({ type: 'lightUp', who: this });
+      return;
+    }
+    this.eatAt = this.now; this.eatProp = p;
+    G.audio.play('munch', { pos: this.pos, vol: 0.9 });
+  }
+  /** Host: eating finishes (the boost), puffs on the cigarette, the coughing fit at the end. */
+  private snackStep() {
+    const e = this.eatProp;
+    if (e && (this.held !== e || this.mode !== 'normal')) { this.eatProp = null; this.eatAt = -10; }
+    else if (e && !this.eating) {
+      this.eatProp = null;
+      const id = e.def.snack;
+      if (id && e.left > 0) {
+        e.setLeft(e.left - 1);
+        this.boostUntil[id] = this.now + SNACK.secs[id];
+        G.audio.play('oink', { pos: this.pos, vol: 0.8, pitch: 0.7 });
+        G.events.push({ type: 'ate', who: this, text: id });
+      }
+    }
+    if (this.smoking) { if (this.now > this.nextPuff) { this.puffAt = this.now; this.nextPuff = this.now + SNACK.puffEvery; } }
+    else if (this.cigUntil > 0) {
+      this.cigUntil = 0;
+      if (Math.random() < SNACK.coughChance) {
+        G.audio.play('cough', { pos: this.pos, vol: 0.9, pitch: 1.5 });
+        G.noise(this.pos, 9);
+        G.events.push({ type: 'pigCough', who: this });
+      }
+    }
+  }
+  /** A new round: no boosts, no cigarette. */
+  clearSnacks() { for (const k of SNACK_IDS) this.boostUntil[k] = 0; this.cigUntil = 0; this.eatAt = -10; this.eatProp = null; }
+
   grab(h: Holdable) {
     this.held = h; h.heldBy = this;
     ignorePair(this.body, h.body, true);
@@ -748,7 +808,7 @@ export class Pig implements Holdable {
     const pitch = clamp(-this.input.pitch, -0.3, 0.7) + 0.32;
     const dir = v1.set(Math.sin(this.input.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(this.input.yaw) * Math.cos(pitch));
     const sp = (PIG.throwMin + (PIG.throwMax - PIG.throwMin) * c) * Math.sqrt(clamp(14 / Math.max(h.mass, 6), 0.2, 1.4)) * (heavy ? 0.35 : 1)
-      * (this.standing ? PIG.throwStand : 1);
+      * (this.standing ? PIG.throwStand : 1) * (this.boosted('spinach') ? SNACK.throwK : 1);
     this.release(true);
     if (this.thrown && this.thrown.h !== h) ignorePair(this.body, this.thrown.h.body, false);
     ignorePair(this.body, h.body, true); this.thrown = { h, until: this.now + 0.35 };
@@ -774,6 +834,9 @@ export class Pig implements Holdable {
     if (this.swingT >= 0) {
       const k = clamp(this.swingT / PIG.swing, 0, 1);
       out.lerpVectors(g.hold, g.wind, this.swingC).lerp(g.rel, k * k * (3 - 2 * k));
+    } else if (this.eatProp && this.eating) {   // bring the food to the mouth, chomp, back down
+      const e = (this.now - this.eatAt) / SNACK.eat, k = clamp(Math.min(e / 0.22, (1 - e) / 0.18), 0, 1);
+      out.lerpVectors(g.hold, MOUTH[this.standing ? 'two' : 'four'], k * k * (3 - 2 * k));
     } else if (this.punchT > 0) out.lerpVectors(g.hold, g.rel, Math.sin(this.punchT * Math.PI) * 1.2);   // bash / whack with it
     else out.lerpVectors(g.hold, g.wind, this.held && this.held.mass > this.liftMax ? 0 : this.charge());
     return this.gripTarget(out, out);
@@ -829,6 +892,7 @@ export class Pig implements Holdable {
     const hp = this.grip.pos, r = this.body.rotation(), bp = this.body.translation();
     const hl = this.held ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w).invert()) : v1.set(0, 0, 0);
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000, this.leanZ);
+    n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -868,6 +932,7 @@ export class Pig implements Holdable {
     if (this.held) this.held.heldBy = this;
     this.parts.netApply(n, 22);
     this.netHand.set(n[37] ?? 0, n[38] ?? 0, n[39] ?? 0); this.netHasHand = !!this.held;
+    if (n[41] !== undefined) { this.eatAt = n[41]; this.cigUntil = n[42]; this.puffAt = n[43]; SNACK_IDS.forEach((k, i) => (this.boostUntil[k] = n[44 + i])); }
   }
 
   /** Player: take over my pig from the latest snapshot (pose, speed, heading, stance). */
@@ -914,15 +979,16 @@ export class Pig implements Holdable {
     const normal = this.mode === 'normal' && this.now >= this.predWallow;
     if (inp.standP && normal) this.setStanding(!this.standing);
     if (inp.sprintP && normal && this.now >= this.sprintReady) {
-      this.sprintUntil = this.predSprintUntil = this.now + PIG.sprintDur; this.sprintReady = this.predSprint = this.now + PIG.sprintCd;
+      this.sprintUntil = this.predSprintUntil = this.now + PIG.sprintDur; this.sprintReady = this.predSprint = this.now + PIG.sprintCd * (this.boosted('energy') ? SNACK.sprintCd : 1);
       this.setStanding(false);
     }
     if (inp.fartP && this.now >= this.fartReady && normal) {
-      this.fartReady = this.predFart = this.now + PIG.fartCd;
+      const beans = this.boosted('beans'), big = beans ? 1.45 : 1;
+      this.fartReady = this.predFart = this.now + PIG.fartCd * (beans ? SNACK.fartCd : 1);
       const mvLen = Math.hypot(inp.mx, inp.mz), f = this.forward;
       const dir = mvLen > 0.1 ? v2.set(inp.mx / mvLen, 0, inp.mz / mvLen) : v2.copy(f);
-      this.vel.y = Math.max(this.vel.y, this.grounded ? PIG.fartUp : PIG.fartUp * 0.85);
-      this.vel.x += dir.x * PIG.fartFwd; this.vel.z += dir.z * PIG.fartFwd;
+      this.vel.y = Math.max(this.vel.y, (this.grounded ? PIG.fartUp : PIG.fartUp * 0.85) * (beans ? SNACK.fartUp : 1));
+      this.vel.x += dir.x * PIG.fartFwd * big; this.vel.z += dir.z * PIG.fartFwd * big;
       this.ownJump = false;
     }
     if (inp.wallowP && normal && this.grounded) { this.predWallow = this.now + PIG.wallowDur; this.setStanding(false); }
@@ -969,14 +1035,38 @@ export class Pig implements Holdable {
         hand = this.handM.set(hp.x, hp.y, hp.z).sub(this.synced.currP).applyQuaternion(this.tq2.set(q.x, q.y, q.z, q.w).invert());
       }
       hand.y += CENTER[this.shape];
+      // the hooves go on the thing itself (where it really is on screen), not on the invisible grip point
+      const hv = (this.held as { obj?: THREE.Object3D; visual?: { root: THREE.Object3D } });
+      const ho = hv.obj ?? hv.visual?.root;
+      if (ho && this.standing) {
+        hand.copy(ho.position).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
+        hand.y += CENTER[this.shape];
+      }
     }
     this.visual.update({
-      limp, rel: this.relQ, hand,
+      limp, rel: this.relQ, hand, handW: this.held ? this.held.radius : 0,
+      act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',
+      actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
+      cig: this.smoking, strong: this.boosted('spinach'),
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT,
       leanF: this.leanX * Math.sin(this.yaw) + this.leanZ * Math.cos(this.yaw), leanS: this.leanX * Math.cos(this.yaw) - this.leanZ * Math.sin(this.yaw),
     });
+    // smoking: a wisp off the ember, and a puff of smoke out of the snout after each drag
+    if (this.smoking) {
+      const tip = this.visual.cigTip(v2);
+      if (tip && this.now > this.cigFx) { this.cigFx = this.now + 0.22; G.fx.puff(tip, { count: 1, color: 0xd9d9d9, spread: 0.01, speed: 0.15, up: 0.5, life: 1.2, size: 0.12, grow: 0.5, drag: 1, alpha: 0.4 }); }
+      if (this.puffAt !== this.puffFx && this.now - this.puffAt > SNACK.puff * 0.6) {
+        this.puffFx = this.puffAt;
+        const sn = this.visual.snoutPos(v2), f = this.forward;
+        G.fx.puff(sn, { count: 9, color: 0xe6e6e6, spread: 0.06, speed: 0.9, up: 0.5, life: 1.6, size: 0.32, grow: 1.6, drag: 1.4, alpha: 0.55, dir: v3.set(f.x, 0.2, f.z) });
+      }
+    }
+    if (this.boosted('energy') && this.grounded && Math.hypot(this.vel.x, this.vel.z) > 3 && Math.random() < dt * 14)
+      G.fx.bits(v1.copy(r.position).setY(r.position.y - 0.2), { count: 1, color: 0xffe14a, spread: 0.25, speed: 0.6, up: 1.2, life: 0.4, size: 0.08, grow: 0, alpha: 1 });
+    if (this.boosted('beans') && Math.random() < dt * 1.5)
+      G.fx.puff(v1.copy(r.position).addScaledVector(this.forward, -0.45), { count: 1, color: 0x9ccf4f, spread: 0.05, speed: 0.2, up: 0.2, life: 1, size: 0.3, grow: 1, alpha: 0.5 });
     // dust while sprinting, mud drips
     if (this.sprinting && this.grounded && Math.random() < dt * 30)
       G.fx.puff(v1.copy(r.position).setY(r.position.y - 0.35), { count: 1, color: G.snowy ? 0xf2f6ff : 0xd6c29b, speed: 0.6, up: 0.5, life: 0.7, size: 0.6, alpha: 0.45 });

@@ -65,6 +65,13 @@ export const IC = {
   bob: svg(`<circle cx="12" cy="13" r="8" fill="#f3b38f" ${O}/><path d="M4 9h16" stroke="#f0cb6c" stroke-width="3.4" stroke-linecap="round"/><circle cx="9" cy="12.5" r="1.2" fill="#3b2412"/><circle cx="15" cy="12.5" r="1.2" fill="#3b2412"/><path d="M8.5 16.5c2 1.2 5 1.2 7 0" stroke="#7a4a2a" stroke-width="2.2" stroke-linecap="round"/>`),
   gate: svg(`<path d="M3 5v16M21 5v16M3 8h18M3 13h18M3 18h18M5 18 19 8" stroke="#c9a06a" stroke-width="2.4" stroke-linecap="round"/><circle cx="18.5" cy="13" r="2" fill="#ff5a3c" ${O}/>`),
   wolf: svg(`<path d="M4 4l4 5h8l4-5v9a8 8 0 0 1-16 0z" fill="#7d8696" ${O}/><circle cx="9" cy="12" r="1.2" fill="#ffd166"/><circle cx="15" cy="12" r="1.2" fill="#ffd166"/><path d="M10 16h4l-2 2z" fill="#3b2412"/>`),
+  /** Snacks: a cigarette with smoke; eat (a can + a bite); the 4 boosts. */
+  cig: svg(`<path d="M7 9c-1.5-1.5 0-3 1.4-3.6C10 4.8 9.5 3 8.6 2M11 9c-1.2-1.2 0-2.6 1.2-3.1" fill="none" stroke="#d6d6d6" stroke-width="1.8" stroke-linecap="round"/><rect x="2" y="13" width="20" height="5" rx="1.5" fill="#faf6ef" ${O}/><rect x="2" y="13" width="5" height="5" rx="1.2" fill="#d98b3a" ${O}/><circle cx="21" cy="15.5" r="2" fill="#ff5a1f"/>`),
+  eat: svg(`<rect x="4" y="7" width="14" height="14" rx="2.5" fill="#c9ced8" ${O}/><rect x="4" y="10" width="14" height="7" fill="#e8792e" ${O}/><path d="M15 3c3 0 5 2 5 5" fill="none" stroke="#ffd166" stroke-width="2.4" stroke-linecap="round"/><path d="M19 4.5 21 3" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
+  boost_beans: svg(`<path d="M5 18a4 4 0 0 1-.4-8A5 5 0 0 1 14 8.6 3.6 3.6 0 0 1 15.5 15" fill="#9ccf4f" ${O}/><ellipse cx="16" cy="17" rx="4.6" ry="3.2" fill="#ff5a2a" ${O}/><ellipse cx="9.5" cy="19" rx="3.4" ry="2.4" fill="#ff7a3a" ${O}/>`),
+  boost_spinach: svg(`<path d="M5 20c0-6 2-9 5-10l-1-4 4-1 2 5c3 1 5 3 5 6 0 3-3 4-6 4z" fill="#ffb3c7" ${O}/><path d="M11 14c1.5-1 3.5-1 5 .5" fill="none" ${O}/><path d="M16 4c3 1 4 3 3 6-3-1-4-3-3-6z" fill="#3f9d3a" ${O}/>`),
+  boost_energy: svg(`<path d="M13.5 1.5 4.5 13.5h6l-2 9 10-13h-6.2z" fill="#ffe14a" ${O}/>`),
+  boost_dogfood: svg(`<path d="M6.6 9.6a2.6 2.6 0 1 1 3.8-3.4l3.4 3.4a2.6 2.6 0 1 1 3.4 3.8 2.6 2.6 0 1 1-3.4 3.8l-3.4-3.4a2.6 2.6 0 1 1-3.8-3.4z" fill="#fff4e6" ${O} transform="rotate(10 12 12)"/>`),
 };
 export type IconId = keyof typeof IC;
 

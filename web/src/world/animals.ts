@@ -359,6 +359,7 @@ export class Critter implements Holdable {
       for (const pig of G.pigs) {
         if (pig.out || pig.cage || pig.heldBy?.kind === 'farmer' || (this.pigSkip.get(pig) ?? 0) > now) continue;
         if (pig === G.localPig && (ADMIN.god || !ADMIN.bobSees)) continue;
+        if (pig.boosted?.('dogfood')) continue;   // smells like its dinner: a friend
         const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
         if (d > (G.cover.at(pig.pos) ? DOG.smellHidden : DOG.smell) || d > bdist) continue;
         if (d > DOG.smellHidden) {

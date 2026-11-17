@@ -27,6 +27,9 @@ export const BOB = {
   escapeNeed: 24, escapeNeedMuddy: 14, shakeEvery: 2.2, shakeLoss: 4,
   slapChance: 0.3, slapWind: 0.35, slap: 0.3, slapReach: 1.75, taunt: 2.2,
   danceChance: 0.18, danceTime: 7,
+  // a pig right next to him: now and then he just breaks into a dance (once per pig per `danceNearCool` s; in a chase
+  // the chance is smaller, and the pig gets a moment to run)
+  danceNear: 4, danceNearChance: 0.25, danceNearChase: 0.12, danceNearCool: 20, danceNearTime: 4.5,
   poiseWindow: 3, stagger: 100, knockdown: 160, ram: 60, punch: 34, staggerTime: 1.5, downTime: 3.4,
   cough: 3, loseSight: 3, search: 4, stamina: 14, pant: 2.6, fistGiveUp: 6,
   // hunting a pig he lost: suspicion drains slowly while it stays out of sight; he checks hiding spots near where
@@ -169,6 +172,8 @@ export class Farmer {
   private shakeT = 0; private shakeUntil = 0;
   private slapDone = false; private slapped: Pig[] = []; forceSlap = false;
   private danceUntil = 0;
+  /** Dancing next to this pig (faces it); back to the chase afterwards. Per-pig "rolled the dice" times. */
+  private danceFace: Pig | null = null; private danceChase = false; private danceRoll = new WeakMap<Pig, number>();
   private shooWolf: Wolf | null = null;
   /** Wolves he already chased off (he doesn't keep shooing the same one). */
   private shooed = new WeakMap<Wolf, number>();
@@ -443,7 +448,13 @@ export class Farmer {
         break;
       case 'dance':
         this.activity = 'bob.dance';
-        if (this.now > this.danceUntil) this.backToWork();
+        if (this.danceFace && !this.danceFace.out) this.face(this.danceFace.pos, dt, 5);
+        if (this.now > this.danceUntil) {
+          const t = this.target;
+          if (this.danceChase && t && !t.out && !t.cage && !t.heldBy) { this.lastSeenT = this.now; this.chaseRun = 0; this.go('chase'); this.path = []; this.voice('hey', 0.7); }
+          else this.backToWork();
+          this.danceFace = null; this.danceChase = false;
+        }
         break;
       case 'shoo': want = this.shoo(dt); break;
       case 'tidy': want = this.tidy(dt); break;
@@ -586,6 +597,7 @@ export class Farmer {
     if (p.held) w = 1;
     if (p.standing) w = Math.max(w, 0.55);
     if (p.sprinting) w = Math.max(w, 0.3);
+    if (p.smoking) w = Math.max(w, 0.5);                       // a pig smoking a cigarette is NOT normal
     if (p.mode === 'ragdoll' && p.vel.length() > 4) w = Math.max(w, 0.5);
     if (this.zones.garden.some((r) => p.pos.x > r.x0 && p.pos.x < r.x1 && p.pos.z > r.z0 && p.pos.z < r.z1)) w = Math.max(w, 0.4);
     if (this.cage.pigs.length && this.cage.contains(p.pos, 2.2)) w = Math.max(w, 0.9);
@@ -656,6 +668,7 @@ export class Farmer {
       // reactions
       if (!this.calm() || this.state === 'shoo' || !seen) continue;
       if (s >= 1) { this.alarmed(p); return; }
+      if (['routine', 'investigate', 'search', 'suspect', 'guard'].includes(this.state) && this.danceNear(p, false)) return;
       // the pig he's looking for: recognised up close even when it acts natural
       if (p === this.hunt && s > 0.25 && this.now - (this.seenSince.get(p) ?? this.now) > 0.35
         && Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < BOB.recognise) { this.alarmed(p); return; }
@@ -900,10 +913,31 @@ export class Farmer {
   }
 
   private dance(secs: number) {
+    this.danceFace = null; this.danceChase = false;
     this.go('dance'); this.danceUntil = this.now + secs;
     G.audio.play('banjo', { pos: this.pos, vol: 0.8 });
     this.voice('ha', 0.6);
   }
+
+  /**
+   * A pig right next to him: roll the dice once per pig (every `danceNearCool` s) — sometimes he just dances at it.
+   * In a chase it's rarer, and he picks the chase up again afterwards (the pig gets a few seconds' head start).
+   */
+  private danceNear(p: Pig, chase: boolean) {
+    if (G.mod === 'grumpy' || this.carrying || this.now < (this.danceRoll.get(p) ?? -99)) return false;
+    if (Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) > (chase ? 3.2 : BOB.danceNear)) return false;
+    this.danceRoll.set(p, this.now + BOB.danceNearCool);
+    if (Math.random() >= (this.forceDanceNear ? 1 : chase ? BOB.danceNearChase : BOB.danceNearChance)) return false;
+    this.forceDanceNear = false;
+    this.stopRiding(); this.doing = false; this.path = [];
+    this.dance(BOB.danceNearTime);
+    this.danceFace = p; this.danceChase = chase;
+    G.events.push({ type: 'bobDance', who: p });
+    return true;
+  }
+  /** Admin: the next pig he meets up close gets a dance for sure. */
+  forceDanceNear = false;
+  danceSoon() { this.forceDanceNear = true; this.danceRoll = new WeakMap(); }
 
   // ================================================================== routine (clock-driven)
   private routine(dt: number) {
@@ -1205,6 +1239,7 @@ export class Farmer {
       G.events.push({ type: 'aim', who: t });
       return 0;
     }
+    if (d < 3.2 && this.now - this.lastSeenT < 0.2 && this.danceNear(t, true)) return 0;
     if (d < (this.level >= 2 ? ALERT.reach : BOB.grabReach) && dy < 1.7 && dy > -0.8) {
       this.face(t.pos, dt, 16);
       // sometimes he doesn't bother grabbing: a big humiliating slap instead

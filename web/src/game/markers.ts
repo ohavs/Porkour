@@ -1,10 +1,6 @@
 import * as THREE from 'three';
 import { G } from './ctx';
 import type { Game } from './game';
-import type { Prop } from '../world/props';
-import type { Gate } from '../world/gates';
-import type { Critter } from '../world/animals';
-import type { Spot } from '../world/pumpkins';
 
 const MAX = 160;
 const VERT = `attribute vec4 aColor; attribute float aSize; uniform float uPx; varying vec4 vColor;
@@ -25,7 +21,7 @@ void main() {
   gl_FragColor = vec4(c, vColor.a);
 }`;
 
-const GOLD = new THREE.Color(0xffd166), PINK = new THREE.Color(0xff6fd0);
+const GOLD = new THREE.Color(0xffd166), tmpC = new THREE.Color();
 const v1 = new THREE.Vector3();
 
 /**
@@ -67,17 +63,17 @@ export class Markers {
     };
     const show = r.phase !== 'end' && g.running && !L.out;
     if (show) {
-      const mission = new Set<Prop | Critter | Gate | Spot>();
-      for (const { obj } of r.missionThings()) {
-        if (mission.has(obj) || obj === L.held || obj.heldBy === L) continue;
-        mission.add(obj);
-        if (obj.kind === 'gate' || obj.kind === 'spot') { const p = (obj as Gate | Spot).markPos; put(p, 0, PINK, 36, 75, p.x); continue; }
-        const isProp = obj.kind === 'prop';
-        const p = isProp ? (obj as Prop).obj.position : ((obj as Critter).visual.root.position);
-        put(p, isProp ? (obj as Prop).half : (obj as Critter).height * 0.5, PINK, 36, 75, p.x);
+      // one arrow per open prank, in the colour of its line in the mission list (Bob's pranks side by side over him)
+      const mission = new Set<unknown>();
+      for (const mk of r.missionMarks()) {
+        const off = (mk as { off?: number }).off ?? 0;
+        tmpC.set(mk.color);
+        if (off) { v1.copy(mk.at); v1.x += (off % 2 ? 1 : -1) * Math.ceil(off / 2) * 0.45; put(v1, mk.top, tmpC, 34, 90, mk.i); }
+        else put(mk.at, mk.top, tmpC, 36, 90, mk.i);
       }
+      const held = new Set(g.pigs.map((p) => p.held));
       for (const pr of g.farm.props) {
-        if (pr.banked || pr.heldBy || pr.value < 25 || mission.has(pr)) continue;
+        if (pr.banked || pr.heldBy || pr.value < 25 || mission.has(pr) || held.has(pr)) continue;
         const big = pr.value >= 60;
         put(pr.obj.position, pr.half, GOLD, big ? 34 : 25, big ? 48 : 28, pr.obj.position.x);
       }

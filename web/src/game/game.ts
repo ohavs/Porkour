@@ -21,6 +21,9 @@ import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
 import { Gates, type Gate } from '../world/gates';
 import { Gadgets, type PoolId } from '../world/gadgets';
+import { scatterSnacks, SNACK_IDS } from '../world/snacks';
+import { LobbyStage, STAGE } from './lobbyStage';
+import { FARM_IDS } from '../world/farms';
 import { gadgetOfMsg } from './shop';
 import { CamRig } from './camera';
 import { Hud } from './hud';
@@ -32,6 +35,7 @@ import { SETTINGS } from './settings';
 import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST } from '../render/quality';
 import { cullDetail } from '../render/batch';
 import { t, type Key } from '../i18n';
+import type { IconId } from './icons';
 import { NetHost, NetClient } from '../net/sync';
 import { online, type Peer } from '../net/online';
 import { parseOutfit } from '../pig/cosmetics';
@@ -70,6 +74,10 @@ export class Game {
   /** Frame-rate limit bookkeeping, small-detail draw distance, "lower the graphics" tip shown. */
   private nextDraw = 0; private detailDist = Infinity; private slowTip = false;
   running = false;
+  /** 'lobby' = the menu stage (fixed camera, pigs play around), 'play' = the round on the farm. */
+  mode: 'lobby' | 'play' = 'play';
+  stage!: LobbyStage;
+  private farmSpawns: THREE.Vector3[] = [];
   round!: Round;
   lockpick!: Lockpick;
   markers!: Markers;
@@ -118,6 +126,10 @@ export class Game {
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
     this.gadgets = new Gadgets(scene, this.farm.props);
+    // snacks: food cans (boosts) and cigarette packs scattered around (same spots on every machine)
+    scatterSnacks(scene, this.farm.props, this.nav, FARM_IDS.indexOf(farmId()) + 1, this.farm.inWater, this.farm.places.stash);
+    this.stage = new LobbyStage(scene, this.farm.props);
+    this.farmSpawns = this.pigs.map((p) => p.spawn.clone());
     G.props = this.farm.props;
     // pen animals amble out when their gate is open
     const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey', 'bull', 'reindeer', 'doe'];
@@ -197,6 +209,15 @@ export class Game {
       inp.grabR = released.has('grab'); inp.oinkP = pressed.has('oink');
       inp.attackP = pressed.has('attack'); inp.attackR = released.has('attack');
     }
+    if (this.mode === 'lobby') {
+      // lobby: W = away from the fixed camera; the pig faces where it walks, the pointer when it holds something /
+      // clicks (aim: throws fly toward the pointer), the camera when it just stands there
+      const L = this.local, at = this.stage.floorAt(this.gfx.camera, this.input.mouseX, this.input.mouseY, tmpV);
+      const aim = Math.atan2(at.x - L.pos.x, at.z - L.pos.z), moving = inp.mx * inp.mx + inp.mz * inp.mz > 0.01;
+      // idle: face the camera (like a lobby character); holding / aiming / clicking: face the pointer
+      inp.yaw = moving && !L.held && L.chargeStart < 0 ? Math.atan2(inp.mx, inp.mz) : L.held || L.chargeStart >= 0 || inp.attack || inp.grab || inp.attackP || inp.grabP ? aim : 0;
+      inp.pitch = 0.15;
+    }
     if (s) Object.assign(inp, s, { mx: inp.mx, mz: inp.mz });
     const lp = this.lockpick;
     if (lp.isOpen) {
@@ -213,7 +234,7 @@ export class Game {
     host?.beginStep();
     const ev0 = G.events.length;
     G.time += FIXED;
-    this.daynight.tick(FIXED);
+    if (this.mode !== 'lobby') this.daynight.tick(FIXED);
     for (const p of this.pigs) p.input = emptyInput();
     if (withInput) this.local.input = this.menu.blocking && G.net === 'host' ? emptyInput() : this.buildInput(first);
     if (host) this.pigs.forEach((p, i) => { if (p !== this.local && !p.absent) { p.input = host.inputFor(i) ?? p.input; p.remote = host.poseFor(i); } });
@@ -260,6 +281,7 @@ export class Game {
       G.noise(p.pos, sp > 5 ? 10 : 6);
     }
     G.clouds = G.clouds.filter((c) => c.until > G.time);
+    if (this.mode === 'lobby' && G.net !== 'client') this.stage.step(this.pigs);
     if (G.net !== 'client') {
       this.round.step(FIXED);
       this.gadgets.step();
@@ -293,6 +315,10 @@ export class Game {
         case 'knockdown': case 'stagger': case 'bobSlipped': case 'bullBob': case 'cheeseBob': case 'catapultBob': case 'bobDunked': case 'bigSnowballBob':
           H.emote(bob, 'stars', 1.4, 2.4); break;
         case 'slapped': H.emote(e.who, 'stars', 1.2, 1.2); break;
+        case 'bobDance': H.emote(bob, 'note', 1.6, 2.4); break;
+        case 'ate': H.emote(e.who, ('boost_' + e.text) as IconId, 1.8, 1.5); break;
+        case 'lightUp': H.emote(e.who, 'cig', 1.4, 1.5); break;
+        case 'pigCough': H.emote(e.who, 'cough', 1.4, 1.5); break;
         case 'wolves': H.toast(t('e.wolves'), 1.8, '', 'wolf'); break;
         case 'banked': H.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.1); break;
         case 'missionDone': H.toast(t((e.text ?? '') as Key, { n: this.round.textN(e.text ?? '') }), 2, '', 'check'); break;
@@ -322,6 +348,29 @@ export class Game {
     G.events.length = 0;
   }
 
+  /** The lobby: everybody on the stage, a fixed camera, the clock stopped on a sunny afternoon. */
+  enterLobby() {
+    this.mode = 'lobby'; G.lobby = true; this.running = true;
+    document.body.classList.add('inLobby');
+    this.input.free = true; this.cam.yaw = Math.PI;
+    this.daynight.setHour(STAGE.hour);
+    this.wolves.clear();
+    this.pigs.forEach((p, i) => {
+      p.spawn.copy(this.stage.spot(i));
+      if (G.net !== 'client' && !p.absent && !p.out) { if (p.heldBy) p.heldBy.release?.(false); p.respawn(); p.yaw = 0; }
+    });
+    this.stage.placeCamera(this.gfx.camera);
+  }
+  /** PLAY (host / solo; players follow the host): a fresh round on the farm. */
+  startPlay() {
+    this.mode = 'play'; G.lobby = false;
+    document.body.classList.remove('inLobby');
+    this.input.free = false;
+    this.pigs.forEach((p, i) => p.spawn.copy(this.farmSpawns[i]));
+    if (G.net !== 'client') this.restartRound();
+    this.local.yaw = Math.PI; this.cam.yaw = Math.PI;
+  }
+
   /** Host / solo: everything back to the start, new mission list. */
   restartRound() {
     if (G.net === 'client') return;
@@ -330,6 +379,7 @@ export class Game {
     for (const p of this.pigs) { if (p.heldBy) p.heldBy.release?.(false); }
     this.farmer?.resetRound(this.farm.farmerSpawn);
     for (const p of this.pigs) if (!p.absent) { if (p.out && !p.absent) p.outUntil = G.time; p.respawn(); }
+    for (const p of this.pigs) p.clearSnacks();
     for (const c of this.farm.critters) c.reset();
     for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
     this.wolves.clear();
@@ -376,6 +426,15 @@ export class Game {
       case 'bobDown': if (f && ADMIN.bob) f.knockDown(); break;
       case 'bobCarry': if (f && ADMIN.bob && !L.out && !L.cage) { if (L.heldBy) L.heldBy.release(false); f.carryMe(L); } break;
       case 'dance': f?.forceDance(); break;
+      case 'danceNear': f?.danceSoon(); break;
+      case 'snack:canBeans': case 'snack:canSpinach': case 'snack:canEnergy': case 'snack:canDog': case 'snack:cigPack': {
+        const id = a.slice(6), fw = L.forward, at = new THREE.Vector3(L.pos.x + fw.x * 1.2, L.pos.y + 0.5, L.pos.z + fw.z * 1.2);
+        const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
+        if (it) { it.setLeft(it.def.servings ?? 1); it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); it.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
+        break;
+      }
+      case 'boosts:all': for (const k of SNACK_IDS) L.boostUntil[k] = G.time + 30; break;
+      case 'smoke:me': L.cigUntil = G.time + 14; break;
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;
       case 'mow': f?.forceMow(); break;
       case 'bed': f?.forceBed(); break;
@@ -653,7 +712,8 @@ export class Game {
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;
     const look = this.running && !this.menu.blocking;
-    this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
+    else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
     this.grass.update(G.time, this.gfx.camera.position, this.pigs.map((p) => p.visual.root.position));
     cullDetail(this.gfx.camera.position, this.detailDist);
     G.fx.update(dt);

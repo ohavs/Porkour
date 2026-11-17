@@ -72,6 +72,8 @@ export const G = {
   localPig: null as any,
   pigs: [] as any[],
   farmer: null as any,
+  /** In the lobby (menus around a little stage): idle pigs turn to face the mouse aim. */
+  lobby: false,
   wolves: [] as any[],
   cage: null as any,
   /** Bob's bear traps (world/traps.ts). */

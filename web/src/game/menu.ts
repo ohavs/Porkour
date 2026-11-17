@@ -8,6 +8,18 @@ import { online } from '../net/online';
 import { inviteLink } from '../net/lobby';
 import { level, xpForLevel, ownedOnly } from './shop';
 import { FARM_IDS, farmId, reloadOnFarm, type FarmId } from '../world/farms';
+import { isFull, setFull, toggleFull, fullIcon, onFull } from './fullscreen';
+import { FLAGS } from './flags';
+
+/** Settings row icons. */
+const ic = (b: string) => `<svg viewBox="0 0 24 24" width="22" height="22">${b}</svg>`;
+const ROW = {
+  lang: ic('<circle cx="12" cy="12" r="9" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" fill="none" stroke="#fff6e6" stroke-width="1.6"/>'),
+  gfx: ic('<rect x="2.5" y="4" width="19" height="12" rx="2" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="#fff6e6" stroke-width="2" stroke-linecap="round"/><path d="m6 13 4-4 3 3 2-2 3 3" fill="none" stroke="#ffd166" stroke-width="1.8" stroke-linejoin="round"/>'),
+  sound: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="#fff6e6" d="M4 9h4l5-4v14l-5-4H4z"/><path fill="none" stroke="#fff6e6" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+  music: ic('<path d="M9 18V5l11-2v13" fill="none" stroke="#ff9ad2" stroke-width="2.4"/><circle cx="6.5" cy="18" r="3" fill="#ff9ad2"/><circle cx="17.5" cy="16" r="3" fill="#ff9ad2"/>'),
+  mouse: ic('<rect x="6" y="3" width="12" height="18" rx="6" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M12 3v6" stroke="#fff6e6" stroke-width="2"/><path d="M2 12h2M20 12h2" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>'),
+};
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -24,12 +36,18 @@ export class Menu {
   onWardrobe?: () => void;
   /** Admin changed my coins / items (title wallet, online outfit message). */
   onShop?: () => void;
+  /** The lobby screen's wallet / party needs a redraw. */
+  onShopChanged?: () => void;
   onLeave?: () => void;
 
   constructor(private game: Game) {
     $('bSound').addEventListener('click', () => this.toggleSound());
     $('bHelp').addEventListener('click', () => game.hud.toggleHelp());
     $('bMenu').addEventListener('click', () => this.open());
+    const bFull = $('bFull');
+    const fullBtn = () => { bFull.querySelector('svg')?.remove(); bFull.insertAdjacentHTML('afterbegin', fullIcon()); };
+    bFull.addEventListener('click', () => toggleFull()); fullBtn();
+    onFull(() => { fullBtn(); if (this.menuOpen) this.renderMenu(); });
     this.soundIcon();
     onLang(() => { if (this.menuOpen) this.renderMenu(); if (ADMIN.open) this.renderAdmin(); });
     if (new URLSearchParams(location.search).has('admin')) setTimeout(() => this.toggleAdmin(), 50);
@@ -82,7 +100,7 @@ export class Menu {
   close(lock = true) {
     this.menuOpen = false;
     this.menu.classList.remove('show');
-    if (lock) this.game.input.lock();
+    if (lock && this.game.mode === 'play') this.game.input.lock();
   }
 
   private renderMenu() {
@@ -90,21 +108,29 @@ export class Menu {
       `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     const slider = (name: string, v: number, max = 1, step = 0.05) => `<input type="range" data-s="${name}" min="0" max="${max}" step="${step}" value="${v}">`;
     const f = (label: Key, ctl: string) => `<div class="field"><span>${t(label)}</span>${ctl}</div>`;
+    /** Simple rows (user: "simplify the settings"): an icon + a short word + one control. Everything else under "More". */
+    const row = (ic: string, label: Key, ctl: string) => `<div class="field srow"><span class="sl">${ic}${t(label)}</span>${ctl}</div>`;
+    const G0 = SETTINGS.preset;
+    const presets: [string, string][] = [['auto', t('g.autoS')], ...PRESET_ORDER.map((p) => [p, t(('g.' + p) as Key)] as [string, string])];
+    if (G0 === 'custom') presets.push(['custom', t('g.custom')]);
+    const langs = `<div class="langPick">${Object.entries(LANGS).map(([k, v]) => `<button data-lang="${k}" class="${k === lang() ? 'on' : ''}">${FLAGS[k] ?? ''}${v}</button>`).join('')}</div>`;
     this.panel.innerHTML = `<h2>${t('menu.settings')}</h2>` +
-      f('menu.language', seg('lang', Object.entries(LANGS), lang())) +
-      this.graphics(seg, slider, f) +
-      f('menu.sfx', slider('sfx', SETTINGS.sfx)) + f('menu.music', slider('music', SETTINGS.music)) + f('menu.ambience', slider('ambience', SETTINGS.ambience)) +
-      f('menu.sens', slider('sens', SETTINGS.sens, 3, 0.1)) +
-      f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) +
-      `<div class="btns"><button class="chip" data-b="resume">${t('menu.resume')}</button><button class="chip" data-b="wardrobe">${t('menu.wardrobe')}</button>` +
-      `<button class="chip" data-b="admin">${t('menu.admin')}</button></div>` +
+      row(ROW.lang, 'menu.language', langs) +
+      row(ROW.gfx, 'menu.quality', seg('preset', presets, G0)) +
+      row(ROW.sound, 'menu.sound', slider('sound', SETTINGS.sfx)) +
+      row(ROW.music, 'menu.musicS', slider('music', SETTINGS.music)) +
+      row(ROW.mouse, 'menu.mouse', slider('sens', SETTINGS.sens, 3, 0.1)) +
+      row(fullIcon(false), 'menu.full', seg('full', [['1', t('menu.on')], ['0', t('menu.off')]], isFull() ? '1' : '0')) +
+      `<div class="btns"><button class="chip small" data-b="advanced">${this.advanced ? '▾' : '▸'} ${t('menu.more')}</button></div>` +
+      (this.advanced ? `<div class="adv">` + f('menu.sfx', slider('sfx', SETTINGS.sfx)) + f('menu.ambience', slider('ambience', SETTINGS.ambience)) +
+        f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) + this.graphics(seg, slider, f) + '</div>' : '') +
+      `<div class="btns"><button class="chip big" data-b="resume">${t('menu.resume')}</button><button class="chip" data-b="wardrobe">${t('menu.wardrobe')}</button>` +
+      `<button class="chip small" data-b="admin">${t('menu.admin')}</button></div>` +
       (online.room ? `<div class="btns"><span class="lw">${t('net.code')} <b>${online.room.code}</b></span><button class="chip" data-b="invite">${t('net.copyInvite')}</button>` +
-        `<button class="chip" data-b="leave">${t(online.isHost ? 'net.endGame' : 'net.leave')}</button></div>` : '') +
-      `<div id="pausedHint">${t(G.net === 'solo' ? 'help.keys' : 'net.notPaused')}</div>`;
+        `<button class="chip" data-b="leave">${t(online.isHost ? 'net.endGame' : 'net.leave')}</button></div>` : '');
     this.panel.querySelectorAll<HTMLElement>('[data-seg]').forEach((s) => s.addEventListener('click', (e) => {
-      const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
+      const v = (e.target as HTMLElement).closest<HTMLElement>('[data-v]')?.dataset.v; if (v === undefined) return;
       const name = s.dataset.seg;
-      if (name === 'lang') setLang(v as Lang);
       if (name === 'preset' && v !== SETTINGS.preset) this.choosePreset(v as PresetChoice);
       if (name?.startsWith('g:')) {
         const k = name.slice(2) as keyof GfxOpts;
@@ -112,10 +138,17 @@ export class Menu {
       }
       if (name === 'showFps') { SETTINGS.fps = v === '1'; saveSettings(); }
       if (name === 'invert') { SETTINGS.invertY = v === '1'; saveSettings(); this.game.applySettings(); }
+      if (name === 'full') { setFull(v === '1').then(() => this.renderMenu()); return; }
       this.renderMenu();
     }));
+    this.panel.querySelector('.langPick')?.addEventListener('click', (e) => {
+      const l = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')?.dataset.lang;
+      if (l && l !== lang()) setLang(l as Lang);
+    });
     this.panel.querySelectorAll<HTMLInputElement>('input[data-s]').forEach((el) => el.addEventListener('input', () => {
-      (SETTINGS as any)[el.dataset.s!] = parseFloat(el.value); saveSettings(); this.game.applySettings();
+      const k = el.dataset.s!, v = parseFloat(el.value);
+      if (k === 'sound') { SETTINGS.sfx = v; SETTINGS.ambience = Math.min(1, v * 0.8); } else (SETTINGS as any)[k] = v;
+      saveSettings(); this.game.applySettings();
     }));
     this.panel.querySelector<HTMLInputElement>('input[data-g=res]')?.addEventListener('change', (e) => {
       this.setGfx('res', parseFloat((e.target as HTMLInputElement).value)); this.renderMenu();
@@ -142,11 +175,10 @@ export class Menu {
     const onOff = (k: keyof GfxOpts) => seg('g:' + k, [['1', t('menu.on')], ['0', t('menu.off')]], G0[k] ? '1' : '0');
     const lv = (k: keyof GfxOpts, labels: [number, Key | string][]) =>
       seg('g:' + k, labels.map(([v, l]) => [String(v), l.includes('.') ? t(l as Key) : l]), String(G0[k]));
-    let html = `<div class="field gfx"><span>${t('menu.quality')}</span>${seg('preset', presets, cur)}</div>` +
-      `<div class="btns"><button class="chip" data-b="advanced">${this.advanced ? '▾' : '▸'} ${t('g.advanced')}</button></div>`;
-    if (this.advanced) {
+    let html = '';
+    {
       const gpu = detectPreset().gpu;
-      html += `<div class="adv"><div class="hint">${t('g.hint')}${gpu ? '<br>' + t('g.gpu', { g: gpu.replace(/[<>&]/g, '') }) : ''}</div>` +
+      html += `<div><div class="hint">${t('g.hint')}${gpu ? '<br>' + t('g.gpu', { g: gpu.replace(/[<>&]/g, '') }) : ''}</div>` +
         f('g.res', `<span class="rv"><b data-val="res">${Math.round(G0.res * 100)}%</b><input type="range" data-g="res" min="0.5" max="1" step="0.05" value="${G0.res}"></span>`) +
         f('g.dynRes', onOff('dynRes')) +
         f('g.shadows', lv('shadows', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high'], [4, 'g.ultra']])) +
@@ -193,7 +225,7 @@ export class Menu {
       tog('bob', 'a.bob') + tog('bobSees', 'a.bobSee') + tog('god', 'a.godMode') + tog('easyEscape', 'a.escape') + tog('noCooldowns', 'a.cooldowns') +
       rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
       `<div class="grid">${btn('grill', 'a.grillNow')}${btn('free', 'a.freeAll')}${btn('catch', 'a.catchMe')}${btn('mud', 'a.mud')}` +
-      `${btn('dance', 'a.bobDance')}${btn('slap', 'a.bobSlap')}${btn('mow', 'a.bobMow')}${btn('bed', 'a.bobSleep')}</div>` +
+      `${btn('dance', 'a.bobDance')}${btn('danceNear', 'a.bobDanceNear')}${btn('slap', 'a.bobSlap')}${btn('mow', 'a.bobMow')}${btn('bed', 'a.bobSleep')}</div>` +
       `<div class="sec">${t('a.stealth')}</div>` + tog('showSight', 'a.showSight') +
       `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : ''}</div>` +
       `<div class="sec">${t('a.alert')}</div><div class="grid">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}">${l} · ${t(('alert.' + l) as Key)}</button>`).join('')}` +
@@ -206,6 +238,7 @@ export class Menu {
       `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}${hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : ''}</div>` +
       `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
       `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +
+      `<div class="sec">${t('a.snacks')}</div><div class="grid">${btn('snack:canBeans', 'a.canBeans')}${btn('snack:canSpinach', 'a.canSpinach')}${btn('snack:canEnergy', 'a.canEnergy')}${btn('snack:canDog', 'a.canDog')}${btn('snack:cigPack', 'a.cigPack')}${btn('smoke:me', 'a.smokeMe')}${btn('boosts:all', 'a.allBoosts')}</div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
       `<div class="sec">${t('a.time')}</div>` +
       rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +

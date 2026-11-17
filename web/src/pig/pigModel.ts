@@ -15,10 +15,20 @@ export const SNOUT_TIP = new THREE.Vector3(0, 0.58, 0.78);
 export const HIPS = [new THREE.Vector3(0.19, HIP_Y, 0.3), new THREE.Vector3(-0.19, HIP_Y, 0.3),
   new THREE.Vector3(0.2, HIP_Y, -0.3), new THREE.Vector3(-0.2, HIP_Y, -0.3)];
 
+/**
+ * Front legs = arms with an elbow and a cloven hoof "hand" (two toes that open / close): upper arm (shoulder → elbow)
+ * and forearm (elbow → hoof tips) lengths, in metres. Each segment's mesh sits in its own group so it can stretch
+ * (rubber-hose arms) without shearing the next joint.
+ */
+export const ARM = { upper: 0.15, fore: 0.165, hand: 0.1 };
+export interface Arm { shoulder: THREE.Group; segU: THREE.Group; elbow: THREE.Group; segL: THREE.Group; hand: THREE.Group; toes: THREE.Group[] }
+
 export interface PigRig {
   upper: THREE.Group;                 // body, head, front legs, ears, tail (rotates about PIVOT)
   head: THREE.Group;                  // head, snout, eyes, ears, hat (turns about NECK, child of upper)
   hindL: THREE.Group; hindR: THREE.Group; frontL: THREE.Group; frontR: THREE.Group;
+  /** The front legs' joints (arms): index 0 = left, 1 = right. */
+  arms: Arm[];
   earL: THREE.Group; earR: THREE.Group; tail: THREE.Group; eyes: THREE.Group[];
   hatAnchor: THREE.Group;
   /** Cosmetic anchors (children of upper): head top, glasses, snout (moustache), chin (beard), neck, back. */
@@ -97,7 +107,28 @@ export function buildPig(base: THREE.Group): PigRig {
     mesh(legG, body, [0, 0, 0], g); mesh(hoofG, hoofM, [0, 0, 0], g);
     return g;
   };
-  const frontL = leg(0.19, 0.3, upper, true), frontR = leg(-0.19, 0.3, upper, true);
+  // front legs = arms: upper arm + elbow + forearm + a cloven hoof hand (two toes = two fat fingers)
+  const upG = new THREE.CapsuleGeometry(0.085, 0.05, 6, 14).translate(0, -0.075, 0);
+  const foreG = new THREE.CapsuleGeometry(0.077, 0.04, 6, 14).translate(0, -0.05, 0);
+  const toeG = new THREE.SphereGeometry(0.05, 14, 10).scale(0.95, 1.05, 1.08).translate(0, -0.012, 0);
+  const cuffG = new THREE.CylinderGeometry(0.079, 0.083, 0.035, 16).translate(0, 0.004, 0);
+  const arms: Arm[] = [];
+  const armLeg = (x: number, z: number) => {
+    const shoulder = new THREE.Group(); shoulder.position.set(...U(x, HIP_Y, z)); upper.add(shoulder);
+    const segU = new THREE.Group(); shoulder.add(segU); mesh(upG, body, [0, 0, 0], segU);
+    const elbow = new THREE.Group(); elbow.position.y = -ARM.upper; shoulder.add(elbow);
+    const segL = new THREE.Group(); elbow.add(segL); mesh(foreG, body, [0, 0, 0], segL);
+    const hand = new THREE.Group(); hand.position.y = -ARM.hand; elbow.add(hand);
+    mesh(cuffG, hoofM, [0, 0, 0], hand);
+    const toes = [-1, 1].map((s) => {
+      const t = new THREE.Group(); t.position.set(s * 0.036, 0, 0); hand.add(t);
+      mesh(toeG, hoofM, [0, 0, 0], t);
+      return t;
+    });
+    arms.push({ shoulder, segU, elbow, segL, hand, toes });
+    return shoulder;
+  };
+  const frontL = armLeg(0.19, 0.3), frontR = armLeg(-0.19, 0.3);
   const hindL = leg(0.2, -0.3, base, false), hindR = leg(-0.2, -0.3, base, false);
   const hatAnchor = new THREE.Group(); hatAnchor.position.set(...H(0.06, 0.88, 0.4)); hatAnchor.rotation.set(0.15, 0, -0.3); head.add(hatAnchor);
   const anchor = (p: [number, number, number], r: [number, number, number] = [0, 0, 0], onHead = true) => {
@@ -114,5 +145,5 @@ export function buildPig(base: THREE.Group): PigRig {
   };
   anchors.head.scale.setScalar(1.5);   // items are modelled at ~2/3 of the head: scale the whole slot
   anchors.neck.scale.setScalar(1.4);
-  return { upper, head, hindL, hindR, frontL, frontR, earL, earR, tail, eyes, hatAnchor, anchors, skin, bodyMat: body, snoutMat: snoutM };
+  return { upper, head, hindL, hindR, frontL, frontR, arms, earL, earR, tail, eyes, hatAnchor, anchors, skin, bodyMat: body, snoutMat: snoutM };
 }
