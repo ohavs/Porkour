@@ -18,6 +18,8 @@ export const BEES = { speed: 5.3, life: 14, sting: 1.0, reach: 1.05, see: 12, ke
 
 const v1 = new THREE.Vector3();
 const N_BEES = 36;
+/** Hives are drawn a bit fat (goofy) — model + collider scale. */
+const HIVE_S = 1.35;
 
 interface Hive { i: number; x: number; z: number; y: number; g: THREE.Group; wobT: number; lastAnger: number }
 interface Swarm {
@@ -38,7 +40,7 @@ export class Bees {
     const LEG = new THREE.BoxGeometry(0.08, 0.3, 0.08);
     spots.forEach(([x, z], i) => {
       const hy = y(x, z);
-      const g = new THREE.Group(); g.position.set(x, hy, z); g.rotation.y = (i * 1.7) % 0.6 - 0.3; scene.add(g);
+      const g = new THREE.Group(); g.position.set(x, hy, z); g.rotation.y = (i * 1.7) % 0.6 - 0.3; g.scale.setScalar(HIVE_S); scene.add(g);
       const mesh = (geo: THREE.BufferGeometry, m: THREE.Material, px: number, py: number, pz: number, ry = 0) => {
         const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.rotation.y = ry; o.castShadow = true; o.receiveShadow = true; g.add(o); return o;
       };
@@ -48,8 +50,8 @@ export class Bees {
       mesh(ROOF, roof, 0, 1.47, 0, Math.PI / 4);
       mesh(DOOR, dark, 0, 0.47, 0.34);
       rigidSkin(g);
-      const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, hy + 0.7, z));
-      const c = world.createCollider(RAPIER.ColliderDesc.cuboid(0.38, 0.7, 0.38).setCollisionGroups(groups(L.STATIC)), body);
+      const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, hy + 0.7 * HIVE_S, z));
+      const c = world.createCollider(RAPIER.ColliderDesc.cuboid(0.38 * HIVE_S, 0.7 * HIVE_S, 0.38 * HIVE_S).setCollisionGroups(groups(L.STATIC)), body);
       const h: Hive = { i, x, z, y: hy, g, wobT: -10, lastAnger: -10 };
       owners.set(c.handle, {
         kind: 'hive',
@@ -88,7 +90,7 @@ export class Bees {
     const s = this.swarms.find((x) => !x.on);
     if (!s) return;
     s.on = true; s.hive = h.i; s.home = false; s.until = G.time + BEES.life; s.nextSting = G.time + 0.8; s.think = 0;
-    s.pos.set(h.x, h.y + 1.1, h.z); s.vel.set(0, 1.5, 0); s.show.copy(s.pos);
+    s.pos.set(h.x, h.y + 1.5, h.z); s.vel.set(0, 1.5, 0); s.show.copy(s.pos);
     s.target = by && this.valid(by) ? by : this.nearest(s.pos);
     G.noise(s.pos, BEES.noise);
     G.events.push({ type: 'beesOut', who: by ?? undefined });
@@ -195,7 +197,11 @@ export class Bees {
   /** Admin: a swarm out of the nearest hive, after me. */
   sic(p: Pig) {
     const h = this.hives.slice().sort((a, b) => Math.hypot(a.x - p.pos.x, a.z - p.pos.z) - Math.hypot(b.x - p.pos.x, b.z - p.pos.z))[0];
-    if (h) { h.lastAnger = -10; this.anger(h, p); }
+    if (!h) return;
+    h.lastAnger = -10; this.anger(h, p);
+    // far from the hives (testing): the swarm starts a few metres behind me
+    const s = this.swarms.find((x) => x.on && x.hive === h.i);
+    if (s && s.pos.distanceTo(p.pos) > 8) { const f = p.forward; s.pos.set(p.pos.x - f.x * 5, p.pos.y + 1.2, p.pos.z - f.z * 5); s.show.copy(s.pos); s.target = p; }
   }
   get angry() { return this.swarms.some((s) => s.on && !s.home); }
 

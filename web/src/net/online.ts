@@ -1,3 +1,4 @@
+import { farmId } from '../world/farms';
 import { ICE_SERVERS, serverUrl } from './config';
 import { profile } from './auth';
 import { ADMIN } from '../game/ctx';
@@ -102,9 +103,9 @@ export class Online {
 
   // ---------------------------------------------------------------- rooms
   list() { this.send({ op: 'list' }); }
-  create(name: string, isPublic: boolean) { this.send({ op: 'create', name, public: isPublic }); }
+  create(name: string, isPublic: boolean) { this.send({ op: 'create', name, public: isPublic, farm: farmId() }); }
   join(code: string) { this.send({ op: 'join', code }); }
-  quick() { this.send({ op: 'quick' }); }
+  quick() { this.send({ op: 'quick', farm: farmId() }); }
   leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); }
   setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string }) { this.send({ op: 'room', ...m }); }
   kick(id: number) { this.send({ op: 'kick', id }); }

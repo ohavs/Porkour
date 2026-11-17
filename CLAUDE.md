@@ -106,7 +106,9 @@ Dead by Daylight, Party Animals.
 | `core/ragdoll.ts`, `core/grip.ts`, `pig/pigBody.ts` | Active ragdoll parts (generic), grip hand + joint, pig part layout (`CENTER` per shape, `SCRUFF`). |
 | `pig/pig.ts` | **Pig** (tune in `PIG`, grip targets in `GRIP`): moves, jump, sprint/ram, fart, wallow, grab/drag/throw, ragdoll. **Standing**: punch (LMB, empty hooves, counts on Bob's poise), lifts 50 kg, throws ×1.35, opens latches ×2, but `wobble` builds (turning, speed, carrying, landing) → falls over; easier to knock down. |
 | `pig/pigModel.ts`, `pigVisual.ts`, `cosmetics.ts` | Procedural pig + anchors (head, eyes, snout, chin, neck, back); animation (sway, punch, windmill arms); wardrobe items: 11 skins, 18 hats (7 from KayKit), 6 hair, 5 beards, 6 glasses, 6 neck, 6 back (4 KayKit capes). |
+| `world/farms.ts`, `world/farmKit.ts` | **Farms = levels (s9)**: `FARM_IDS` farm1 / farm2, `farmId()` = `?farm=` → `SETTINGS.farm` ('random' = new pick each load). A farm is built once per page load: switching = reload (`reloadOnFarm`; title pills, admin → Farm). Online: the room carries the host's farm (`create` / `quick` send `farm`); a player whose page built another farm reloads with `?farm=X&room=CODE`. `farmKit(scene, t, out, bounds, seed)` = shared helpers (`building` / `decor` / `fence` / `pen` / `prop` / `critter` / `outerFence` / `hedgeRing` / `surroundings` / `scatter` / `finish`). `FarmBuild.places` = named spots the logic needs (pond, well, coop / sheep pen / pasture rects, stash, road gate, dog patrol, admin teleports `tp`); `missions` = pranks this farm can roll, `featured` = its own ones (one of the 2 required each round). Decor / cover pieces are reusable too (`decorKit`, `coverKit`, `sunflowers(c, rect)`). |
 | `world/farm1.ts` | **Farm 1** layout + `CHORES` on a clock (day loop, evening flashlight patrol, night = bed). Zones: garden, lawn (mowing), house door, mower spot, pond. |
+| `world/farm2.ts`, `world/orchard.ts`, `world/bees.ts` | **Farm 2 — orchard & beehives (s9)** (Quaternius Medieval Village buildings: Inn = farmhouse, Mill, Stable, Sawmill = cider house, Gazebo = honey stand; `FARM2_MODELS` preloaded only on farm 2). **Orchard** (synced entity): 63 apple trees as instanced tree + fruit meshes; headbutt / punch / whack (`G.hittables`), sprint-ram (`onRam` on the trunk collider's owner) or a hard throw (`onImpact` in the step callback) shakes a tree → wiggle + rustle + noise 12 m, 2–3 apples drop (pool of 30 `apple` props, 4 per tree, fruit mesh hidden when empty), one golden-apple tree. **Cider press** eats apples dropped in its hopper; the 6th → a jug of cider (loot). **Bees** (synced entity): 6 hives; a hit / ram / throw → a swarm (≤3) chases the nearest pig or Bob at 5.3 m/s (> walk, < sprint), stings every 1 s (hop + squeal, drops what you hold; Bob: `stung()` = stagger, drops a pig), loses muddy pigs / pigs in the pond, a fart / stink cloud scatters it, sleeps at night; buzz = Veloren `bees_1.ogg` (GPL-3). Pranks: shake 5 trees, 3 apples on Bob, fill the press (6), lead bees to Bob, steal the prize honey pot / the golden apple. |
 | `world/cover.ts`, `world/hideouts.ts` | **Hiding (2026-11-13)**: `G.cover` = soft cover (bushes / corn / wheat: no collider, pigs walk in; Bob's sight ray through it is blocked, a pig inside is found only ≤1.7 m, or ≤5 m if moving; standing pigs poke their head over wheat / small bushes — `sightPoint`). Fast moves inside rustle (sound + leaves + `G.noise`). `hideouts.ts` places big bush clusters (`Forest` 'bigBush'), the east wheat field, a 2nd corn patch, climbable straw-bale stacks, log piles / crate stacks / sacks / fallen logs / farm stands (Quaternius CC0, `assets/cover`). Rail fences are `SEE_THROUGH` for Bob. |
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
@@ -160,7 +162,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    pranks "let 2 big animals out of the pasture" + "ram down a gate", 2 prize pumpkins in the garden.
    Session 8: ✅ shop (wardrobe prices + level gates, player level from XP, gadgets: cherry bomb, stink bomb, bone,
    lucky horseshoe, skeleton key).
-   Next: more farms (GDD: orchard & beehives, dairy + bull, pumpkin night, winter), more pranks with the birds / gadgets.
+   Session 9: ✅ farms as levels (farm kit + registry + picker, online room farm), ✅ **farm 2: orchard & beehives**
+   (shakeable trees, apples, cider press, angry bee swarms, golden apple, honey, 6 new pranks).
+   Next: farm 3 (GDD: dairy & cheese + a bull), then pumpkin night, winter; more pranks with the birds / gadgets.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -230,6 +234,14 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   cough, 2 browsers online (player's gadget handed out by the host, counted on the player, bang / cloud seen).
   Also fixed: hidden props (stash, gadgets) left an invisible collider on online players' machines.
   Also fixed: an online player in seat 2–4 saw a random outfit on their own pig (`goOnline` now dresses it).
+- 2026-11-17 (session 9, "continue"): **farms as levels + farm 2 (orchard & beehives)** (see `farms.ts` / `farmKit.ts` /
+  `farm2.ts` / `orchard.ts` / `bees.ts`). Farm 1 now builds through the same kit (same layout, same RNG order). Title: farm
+  pills (Bob's family farm / Orchard & beehives / Random — **default is Random**). Admin → "Orchard & bees" (shake the
+  nearest tree, angry bees after me, 6 apples in front of me), "Farm" (reload on the other farm), teleports come from
+  `places.tp`. Server: `quick` creates the room on the asker's farm (deploys with the merge). Checked headless: farm 2
+  layout shots, headbutt / ram / admin shake → apples, press → cider after 6, swarm chases + stings, muddy pig ignored →
+  Bob stung (stagger), apple splat on Bob counts; farm 1 unchanged; 2 browsers online (player on farm 1 reloads into the
+  host's farm-2 room; shaken tree + swarm seen on the player).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -247,8 +259,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   (Bob drops a pig he carries)?
 - Gates: is padlocking too much (Bob locks one every 18 s when wary)? repair time 6 s, 2 weapon hits per padlock, do
   animals walk out too fast / slow?
+- Farm 2 (orchard & beehives): fun? Bees too fast / too slow (5.3 m/s, you outrun them only by sprinting)? Random farm
+  as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Farm 2: Bob only hears a shaken tree (noise), he doesn't notice empty trees / pressed apples; fruit on a tree shows
+  all-or-nothing (hidden only when it's empty); the honey table is the picnic-table piece. Bees don't fly around obstacles.
 - Lock-pick / round progress online still only covered by the session-5 smoke test (lobby → start → snapshots fine).
 - Gates: Bob walking right along a fence next to a gap may open / shut that gate as he passes (harmless). Hens flee a pig
   standing in the doorway (they won't walk out past you — herd them from behind).

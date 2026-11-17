@@ -1,15 +1,16 @@
 import { online, type Peer, type RoomInfo } from './online';
 import { profile, onProfile, googleEnabled, renderGoogleButton, refreshToken, setGuestName, signOut } from './auth';
 import { serverUrl } from './config';
-import { t, lang, onLang } from '../i18n';
+import { t, lang, onLang, type Key } from '../i18n';
 import { G } from '../game/ctx';
 import { SETTINGS, saveSettings } from '../game/settings';
 import type { Game } from '../game/game';
+import { asFarm, farmId, reloadOnFarm } from '../world/farms';
 import { PLAYER_COLORS } from '../game/game';
 
 const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
-type View = 'connecting' | 'error' | 'browse' | 'room' | 'joining';
+type View = 'connecting' | 'error' | 'browse' | 'room' | 'joining' | 'switching';
 
 /**
  * Online lobby (title screen → "Play online"): who you are (Google or guest name), quick play, public room list,
@@ -78,11 +79,15 @@ export class Lobby {
     const g = this.game;
     switch (m.op) {
       case 'rooms': if (this.view === 'browse') this.renderRooms(); break;
-      case 'joined':
+      case 'joined': {
         this.chat = [];
+        // the room plays another farm than the one this page built: reload on it, straight back into the room
+        const rf = asFarm(m.room.farm);
+        if (rf && rf !== farmId()) { this.view = 'switching'; this.render(); setTimeout(() => reloadOnFarm(rf, { room: m.room.code }), 300); break; }
         if (m.room.state === 'playing') this.enterGame();   // late join: straight into the running game
         else { this.view = 'room'; this.render(); }
         break;
+      }
       case 'room':
         if (online.room?.state === 'playing' && !this.inGame && !online.isHost) this.enterGame();
         else if (this.view === 'room') this.render();
@@ -144,6 +149,8 @@ export class Lobby {
       body = `<h2>${t('net.title')}</h2><p class="lw">${t('net.connecting')}</p><p class="lw small">${t('net.wakeup')}</p><div class="btns">${back}</div>`;
     } else if (this.view === 'joining') {
       body = `<h2>${t('net.title')}</h2><p class="lw">${t('net.joining')}</p>`;
+    } else if (this.view === 'switching') {
+      body = `<h2>${t('net.title')}</h2><p class="lw">${t('net.farmSwitch')}</p>`;
     } else if (this.view === 'error') {
       const msg = this.err === 'noserver' ? t('net.noServer') : this.err === 'version' ? t('net.version') : t('net.unreachable');
       body = `<h2>${t('net.title')}</h2><p class="lw">${msg}</p>
@@ -168,7 +175,7 @@ export class Lobby {
         const p = [...online.peers.values()].find((x) => x.slot === i);
         return `<div class="lslot ${p ? '' : 'empty'}"><i class="dot" style="background:${hex(PLAYER_COLORS[i])}"></i>${p ? this.peerHtml(p, host) : `<span class="dim">${t('net.freeSlot')}</span>`}</div>`;
       }).join('');
-      body = `<h2>${esc(r.name)}</h2>
+      body = `<h2>${esc(r.name)}</h2><div class="dim">${t('lobby.farm', { name: t(('farm.' + (asFarm(r.farm) ?? farmId())) as Key) })}</div>
         <div class="lcode">${t('net.code')} <b>${r.code}</b> <button class="chip small" data-a="invite">${t('net.copyInvite')}</button>
           ${host ? `<label class="lchk"><input type="checkbox" id="lPub" ${r.public ? 'checked' : ''}> ${t('net.public')}</label>` : `<span class="dim">${r.public ? t('net.public') : t('net.private')}</span>`}</div>
         <div class="lcols"><div class="lcol">${slots}</div>
@@ -203,7 +210,7 @@ export class Lobby {
   private renderRooms() {
     const box = this.el.querySelector('#lRooms'); if (!box) return;
     const rooms = online.rooms;
-    box.innerHTML = rooms.length ? rooms.map((r: RoomInfo) => `<div class="lroom"><div><b>${esc(r.name)}</b><br><span class="dim small">${esc(r.host)} · ${r.players}/${r.max} · ${r.state === 'playing' ? t('net.playing') : t('net.waiting')}</span></div>
+    box.innerHTML = rooms.length ? rooms.map((r: RoomInfo) => `<div class="lroom"><div><b>${esc(r.name)}</b><br><span class="dim small">${esc(r.host)} · ${r.players}/${r.max} · ${r.state === 'playing' ? t('net.playing') : t('net.waiting')} · ${t(('farm.' + (asFarm(r.farm) ?? 'farm1')) as Key)}</span></div>
       <button class="chip small" data-join="${r.code}">${t('net.joinBtn')}</button></div>`).join('') : `<div class="dim">${t('net.noRooms')}</div>`;
     box.querySelectorAll<HTMLElement>('[data-join]').forEach((b) => b.addEventListener('click', () => { online.join(b.dataset.join!); this.view = 'joining'; this.render(); }));
   }
