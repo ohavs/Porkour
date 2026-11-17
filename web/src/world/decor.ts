@@ -6,7 +6,7 @@ import { fitted, has, sizeOf } from '../core/assets';
 import { V3, type Rng } from '../core/util';
 import { G } from '../game/ctx';
 import type { Terrain, Rect } from './terrain';
-import type { FarmBuild } from './farm1';
+import type { FarmBuild } from './farmKit';
 import type { DayNight } from './daynight';
 import type { PROPS } from './props';
 
@@ -33,6 +33,24 @@ const WOOD = 0x9a6a3c, DARKWOOD = 0x6e4524;
  * a pumpkin patch and a water trough.
  */
 export function buildDecor(c: Ctx) {
+  const d = decorKit(c), { rng } = c;
+  d.lamps([[-14.2, -31.8], [4.2, 9.8], [22.6, 1.0], [20.6, -16.6], [-4.6, -38.2], [2.6, -53.6], [-33.4, -0.8], [-4.2, 18.4], [31, -78.6]]);
+  d.pond(c.POND);
+  d.laundry(-35.6, -27.4, -28.6);
+  d.scarecrow(-48, -99);
+  d.hives([[21.5, -89.5], [24, -89.8], [26.5, -89.4]]);
+  d.picnic(8.5, -47.5, 0.3);
+  d.outhouse(-41, -45, Math.PI / 2);
+  d.mailbox(5.2, 18.2);
+  d.rocker(-15.3, -29.2, -12, -22);
+  // pumpkin patch (grab-able) + water trough
+  for (let i = 0; i < 7; i++) c.prop(i % 3 === 0 ? 'bigPumpkin' : 'pumpkin', -27 + rng.range(-2, 2), -62 + rng.range(-3, 3));
+  d.trough(35, -52.6);
+  d.finish();
+}
+
+/** The dressing pieces, placed anywhere (each farm calls them with its own spots). Call `finish()` at the end. */
+export function decorKit(c: Ctx) {
   const { scene, t, rng, out, daynight, blocked } = c;
   const y = (x: number, z: number) => t.height(x, z);
   const groups: THREE.Object3D[] = [];
@@ -41,8 +59,7 @@ export function buildDecor(c: Ctx) {
   const block = (x: number, z: number, r: number) => blocked.push({ x0: x - r, x1: x + r, z0: z - r, z1: z + r });
 
   // ---------------------------------------------------------------- lantern posts
-  const LAMPS: [number, number][] = [[-14.2, -31.8], [4.2, 9.8], [22.6, 1.0], [20.6, -16.6], [-4.6, -38.2], [2.6, -53.6], [-33.4, -0.8], [-4.2, 18.4], [31, -78.6]];
-  for (const [x, z] of LAMPS) {
+  const lamps = (LAMPS: [number, number][]) => { for (const [x, z] of LAMPS) {
     const H = 2.5;
     if (has('kaykit/post_lantern')) {
       const m = fitted('kaykit/post_lantern', { height: H }); m.position.set(x, y(x, z) - 0.02, z); m.rotation.y = rng.range(0, 6.28); scene.add(m); out.statics.push(m);
@@ -56,11 +73,11 @@ export function buildDecor(c: Ctx) {
     }
     staticCylinder(V3(x, y(x, z) + 1.2, z), 1.2, 0.12);
     block(x, z, 1.2);
-  }
+  } };
 
   // ---------------------------------------------------------------- duck pond (washes the mud off)
-  {
-    const { x, z, r } = c.POND;
+  const pond = (P: { x: number; z: number; r: number }) => {
+    const { x, z, r } = P;
     const g = group(x, z);
     const water = toonMat(0x4fb2e3, { transparent: true, opacity: 0.86 });
     const w = add(new THREE.CircleGeometry(r, 48), water, [0, 0.06, 0], g, [-Math.PI / 2, 0, 0]);
@@ -102,11 +119,10 @@ export function buildDecor(c: Ctx) {
       if (k > 0.12) { k = 0; for (const p of G.pigs) if (!p.out && Math.hypot(p.pos.x - x, p.pos.z - z) < r && Math.hypot(p.vel.x, p.vel.z) > 1.5)
         G.fx.bits(V3(p.pos.x, y(x, z) + 0.15, p.pos.z), { count: 3, color: 0xbfe8ff, spread: 0.3, speed: 1.6, up: 2.2, grav: 9, life: 0.5, size: 0.08, grow: 0, alpha: 0.9 }); }
     });
-  }
+  };
 
   // ---------------------------------------------------------------- Bob's laundry line
-  {
-    const x0 = -35.6, x1 = -27.4, z = -28.6;
+  const laundry = (x0: number, x1: number, z: number) => {
     const g = group((x0 + x1) / 2, z);
     const half = (x1 - x0) / 2;
     for (const s of [-1, 1]) {
@@ -136,12 +152,11 @@ export function buildDecor(c: Ctx) {
     cloth(2.8, -0.28, 0.6, 0.55, 0xf2f2f2, 'shirt');
     block((x0 + x1) / 2, z, 4.6);
     out.updaters.push((_dt, time) => { clothes.forEach((p, i) => { p.rotation.x = Math.sin(time * 1.9 + i * 0.7) * 0.22 + 0.12; p.rotation.z = Math.sin(time * 1.3 + i) * 0.04; }); });
-  }
+  };
 
   // ---------------------------------------------------------------- scarecrow (corn field)
-  {
-    const x = -48, z = -99;
-    const g = group(x, z, 0.4);
+  const scarecrow = (x: number, z: number, yaw = 0.4) => {
+    const g = group(x, z, yaw);
     add(new THREE.CylinderGeometry(0.06, 0.07, 2.4, 8), DARKWOOD, [0, 1.2, 0], g);
     add(new THREE.CylinderGeometry(0.05, 0.05, 1.6, 8), DARKWOOD, [0, 1.75, 0], g, [0, 0, Math.PI / 2]);
     add(new THREE.CylinderGeometry(0.28, 0.34, 0.75, 12), 0xc0392b, [0, 1.55, 0], g);                       // shirt
@@ -163,12 +178,12 @@ export function buildDecor(c: Ctx) {
     out.updaters.push((_dt, time) => { crow.rotation.y = Math.sin(time * 0.7) > 0.6 ? 1.2 : 0; crow.position.y = 1.92 + Math.max(0, Math.sin(time * 3.1)) * 0.03; });
     staticCylinder(V3(x, y(x, z) + 1.2, z), 1.2, 0.15);
     block(x, z, 1.5);
-  }
+  };
 
-  // ---------------------------------------------------------------- beehives + bees (by the orchard)
-  {
+  // ---------------------------------------------------------------- beehives + bees (decor only; farm 2's angry ones are world/bees.ts)
+  const hives = (list: [number, number][]) => {
     const hives: THREE.Vector3[] = [];
-    for (const [x, z] of [[21.5, -89.5], [24, -89.8], [26.5, -89.4]] as const) {
+    for (const [x, z] of list) {
       const g = group(x, z, rng.range(-0.2, 0.2));
       add(new THREE.BoxGeometry(0.7, 0.12, 0.7), 0x8a6a3c, [0, 0.06, 0], g);
       for (let i = 0; i < 3; i++) add(new THREE.BoxGeometry(0.62, 0.24, 0.62), i % 2 ? 0xf6f1e6 : 0xffe9a8, [0, 0.24 + i * 0.25, 0], g);
@@ -184,12 +199,11 @@ export function buildDecor(c: Ctx) {
         G.fx.bits(V3(h.x + (Math.random() - 0.5) * 1.2, h.y + Math.random() * 0.8, h.z + (Math.random() - 0.5) * 1.2),
           { count: 1, color: 0xffd23a, spread: 0.05, speed: 1.2, up: 0.4, grav: 0, life: 1.4, size: 0.06, grow: 0, drag: 0.2, alpha: 1 });
     });
-  }
+  };
 
   // ---------------------------------------------------------------- picnic table (by the well)
-  {
-    const x = 8.5, z = -47.5;
-    const g = group(x, z, 0.3);
+  const picnic = (x: number, z: number, yaw: number) => {
+    const g = group(x, z, yaw);
     add(new THREE.BoxGeometry(1.9, 0.08, 0.85), WOOD, [0, 0.78, 0], g);
     for (const s of [-1, 1]) {
       add(new THREE.BoxGeometry(1.9, 0.06, 0.3), WOOD, [0, 0.45, s * 0.7], g);
@@ -197,35 +211,34 @@ export function buildDecor(c: Ctx) {
     }
     add(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), 0xffffff, [0.3, 0.83, 0], g);              // plate (the pie is a prop)
     add(new THREE.CylinderGeometry(0.05, 0.045, 0.12, 12), 0xd8403a, [-0.4, 0.88, 0.1], g);      // cup
-    staticBox(V3(x, y(x, z) + 0.45, z), V3(0.95, 0.45, 0.85), 0.3);
+    staticBox(V3(x, y(x, z) + 0.45, z), V3(0.95, 0.45, 0.85), yaw);
     block(x, z, 1.8);
-  }
+  };
 
   // ---------------------------------------------------------------- outhouse (with a moon on the door)
-  {
-    const x = -41, z = -45;
-    const g = group(x, z, Math.PI / 2);
+  const outhouse = (x: number, z: number, yaw: number) => {
+    const g = group(x, z, yaw);
     add(new THREE.BoxGeometry(1.2, 2.1, 1.2), 0x8f6034, [0, 1.05, 0], g);
     add(new THREE.BoxGeometry(1.45, 0.1, 1.5), 0x6b4226, [0, 2.2, 0], g, [0.12, 0, 0]);
     add(new THREE.BoxGeometry(0.8, 1.7, 0.04), 0xa8774a, [0, 0.9, 0.61], g);
     const moon = new THREE.Shape(); moon.absarc(0, 0, 0.11, 0.6, Math.PI * 2 - 0.6, false); moon.absarc(0.06, 0, 0.09, Math.PI * 2 - 0.9, 0.9, true);
     add(new THREE.ShapeGeometry(moon), 0x2b1a0c, [0, 1.5, 0.64], g);
-    staticBox(V3(x, y(x, z) + 1.05, z), V3(0.62, 1.05, 0.62), Math.PI / 2);
+    staticBox(V3(x, y(x, z) + 1.05, z), V3(0.62, 1.05, 0.62), yaw);
     block(x, z, 1.6);
-  }
+  };
 
   // ---------------------------------------------------------------- mailbox by the gate
-  {
-    const g = group(5.2, 18.2, -0.2);
+  const mailbox = (x: number, z: number) => {
+    const g = group(x, z, -0.2);
     add(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8), DARKWOOD, [0, 0.55, 0], g);
     add(new THREE.CapsuleGeometry(0.17, 0.32, 6, 12), 0xd8403a, [0, 1.2, 0], g, [Math.PI / 2, 0, 0]);
     add(new THREE.BoxGeometry(0.03, 0.22, 0.12), 0xffd166, [0.18, 1.32, -0.1], g);
-    staticCylinder(V3(5.2, y(5.2, 18.2) + 0.7, 18.2), 0.7, 0.2);
-  }
+    staticCylinder(V3(x, y(x, z) + 0.7, z), 0.7, 0.2);
+  };
 
-  // ---------------------------------------------------------------- Bob's rocking chair (he reads the paper here)
-  {
-    const g = group(-15.3, -29.2, Math.atan2(-12 - -15.3, -22 - -29.2) + Math.PI);
+  // ---------------------------------------------------------------- Bob's rocking chair (he reads the paper here, facing the look point)
+  const rocker = (x: number, z: number, lx: number, lz: number) => {
+    const g = group(x, z, Math.atan2(lx - x, lz - z) + Math.PI);
     for (const s of [-1, 1]) {
       add(new THREE.TorusGeometry(0.7, 0.03, 6, 20, 1.1), DARKWOOD, [s * 0.28, 0.72, 0.05], g, [0, Math.PI / 2, Math.PI + 1.0]);
       add(new THREE.BoxGeometry(0.05, 0.5, 0.05), DARKWOOD, [s * 0.28, 0.32, 0.2], g);
@@ -234,18 +247,17 @@ export function buildDecor(c: Ctx) {
     add(new THREE.BoxGeometry(0.62, 0.06, 0.55), WOOD, [0, 0.47, 0], g);
     add(new THREE.BoxGeometry(0.62, 0.7, 0.06), WOOD, [0, 0.85, 0.3], g, [-0.2, 0, 0]);
     add(new THREE.BoxGeometry(0.5, 0.06, 0.45), 0xd8403a, [0, 0.51, 0], g);   // cushion
-  }
+  };
 
-  // ---------------------------------------------------------------- pumpkin patch (grab-able) + water trough
-  for (let i = 0; i < 7; i++) c.prop(i % 3 === 0 ? 'bigPumpkin' : 'pumpkin', -27 + rng.range(-2, 2), -62 + rng.range(-3, 3));
-  {
-    const x = 35, z = -52.6;
-    const g = group(x, z);
+  // ---------------------------------------------------------------- water trough
+  const trough = (x: number, z: number, yaw = 0) => {
+    const g = group(x, z, yaw);
     add(new THREE.BoxGeometry(2.2, 0.5, 0.7), 0x8a8f99, [0, 0.25, 0], g);
     add(new THREE.BoxGeometry(2.0, 0.04, 0.5), toonMat(0x5fb6e6), [0, 0.46, 0], g);
-    staticBox(V3(x, y(x, z) + 0.25, z), V3(1.1, 0.25, 0.35));
-  }
+    staticBox(V3(x, y(x, z) + 0.25, z), V3(1.1, 0.25, 0.35), yaw);
+  };
   // fewer draw calls: each piece becomes one skinned mesh (moving pivots are its bones)
-  for (const g of groups) rigidSkin(g, keep);
+  const finish = () => { for (const g of groups) rigidSkin(g, keep); };
   void c.decor; void c.F;
+  return { y, group, add, block, keep, lamps, pond, laundry, scarecrow, hives, picnic, outhouse, mailbox, rocker, trough, finish };
 }

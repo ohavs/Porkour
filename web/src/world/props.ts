@@ -6,7 +6,7 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
-import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot } from './funProps';
+import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug } from './funProps';
 
 export type PropShape = 'box' | 'ball' | 'cyl';
 export interface PropDef {
@@ -212,6 +212,13 @@ export const PROPS: Record<string, PropDef> = {
   // shop gadgets (world/gadgets.ts): cherry bomb (Quaternius Platformer) lights when thrown / hit, bangs 2.5 s later;
   // stink bomb (KayKit smokebomb) bursts into a stink cloud when it lands hard
   cherryBomb: { model: 'loot/Bomb', height: 0.3, mass: 1.2, shape: 'ball', sound: 'thud', label: 'item.cherryBomb', bounce: 0.3, friction: 0.9 },
+  // farm 2 (orchard & beehives): apples fall from shaken trees (a pool, world/orchard.ts), the one golden apple, honey,
+  // Bob's prize honey pot, cider from the press
+  apple: { make: () => makeApple(), mass: 0.4, shape: 'ball', sound: 'thud', label: 'item.apple', value: 5, bounce: 0.35, fragile: 13, bits: 0xf2e6b0, smashSound: 'splat|squish' },
+  goldApple: { make: () => makeApple(true), mass: 0.5, shape: 'ball', sound: 'metal', label: 'item.goldApple', value: 120, bounce: 0.35 },
+  honey: { make: makeHoneyJar, mass: 1.5, shape: 'cyl', sound: 'wood', label: 'item.honey', value: 35 },
+  honeyPot: { make: makeHoneyPot, mass: 5, shape: 'ball', sound: 'wood', label: 'item.honeyPot', value: 110 },
+  cider: { make: makeCiderJug, mass: 3, shape: 'ball', sound: 'wood', label: 'item.cider', value: 60 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

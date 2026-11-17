@@ -7,6 +7,7 @@ import { SVG } from './hud';
 import { online } from '../net/online';
 import { inviteLink } from '../net/lobby';
 import { level, xpForLevel, ownedOnly } from './shop';
+import { FARM_IDS, farmId, reloadOnFarm, type FarmId } from '../world/farms';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -184,6 +185,7 @@ export class Menu {
     const rng = (k: string, label: Key, v: number, min: number, max: number, step: number) =>
       `<div class="field"><span>${t(label)} <b data-val="${k}">${v}</b></span><input type="range" data-r="${k}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
     const btn = (k: string, label: Key) => `<button data-a="${k}">${t(label)}</button>`;
+    const hasTp = (k: string) => g.farm.places.tp.some((x) => x[0] === k);
     let crash = '';
     try { const c = JSON.parse(localStorage.getItem('porkour.crash') ?? 'null'); if (c) crash = `<div class="hint" style="color:#ffb38a">${t('a.crash')}<br>${new Date(c.at).toLocaleString()} · ${c.mins} min · heap ${c.heap} MB · geo ${c.geo} · tex ${c.tex} · ${c.fps} fps · ${c.preset} · ${c.net}${c.lost ? ' · GL lost' : ''}</div>`; } catch { /* */ }
     this.admin.innerHTML = `<h2>${t('a.title')}</h2><div class="hint">${t('a.hint')}</div>` + crash +
@@ -193,7 +195,7 @@ export class Menu {
       `<div class="grid">${btn('grill', 'a.grillNow')}${btn('free', 'a.freeAll')}${btn('catch', 'a.catchMe')}${btn('mud', 'a.mud')}` +
       `${btn('dance', 'a.bobDance')}${btn('slap', 'a.bobSlap')}${btn('mow', 'a.bobMow')}${btn('bed', 'a.bobSleep')}</div>` +
       `<div class="sec">${t('a.stealth')}</div>` + tog('showSight', 'a.showSight') +
-      `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${btn('tp:wheat', 'a.tpWheat')}</div>` +
+      `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : ''}</div>` +
       `<div class="sec">${t('a.alert')}</div><div class="grid">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}">${l} · ${t(('alert.' + l) as Key)}</button>`).join('')}` +
       `${btn('trapMe', 'a.trapMe')}${btn('dogMe', 'a.dogMe')}${btn('bringBone', 'a.bringBone')}</div>` +
       `<div class="sec">${t('a.mods')}</div><div class="grid">${(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) =>
@@ -201,7 +203,7 @@ export class Menu {
       `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button></div>` +
       `<div class="sec">${t('a.gates')}</div><div class="grid">${btn('gates:lock', 'a.gatesLock')}${btn('gates:shut', 'a.gatesShut')}${btn('gates:open', 'a.gatesOpen')}` +
       `${btn('gate:smash', 'a.gateSmash')}${btn('gate:bob', 'a.gateBob')}${btn('tp:gate', 'a.tpGate')}</div>` +
-      `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}<button data-tp="garden">${t('a.tpGarden')}</button></div>` +
+      `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}${hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : ''}</div>` +
       `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
       `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +
       `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
@@ -213,7 +215,9 @@ export class Menu {
       `<div class="grid">${btn('roundWin', 'a.roundWin')}${btn('loot100', 'a.loot100')}${btn('roundEnd', 'a.roundEnd')}${btn('roundNew', 'a.roundNew')}</div>` +
       `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>` +
       `<div class="sec">${t('a.pranks')}</div><div class="grid">${btn('pick', 'a.pick')}${btn('bringPot', 'a.bringPot')}${btn('bringEgg', 'a.bringEgg')}${btn('bringGnome', 'a.bringGnome')}</div>` +
-      `<div class="sec">${t('a.teleport')}</div><div class="tp">${(['sty', 'cage', 'house', 'barn', 'pasture', 'maze', 'sunflowers', 'junkyard', 'greenhouse'] as const).map((k) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>`;
+      (g.farm.orchard ? `<div class="sec">${t('a.farm2')}</div><div class="grid">${btn('tree:shake', 'a.treeShake')}${btn('bees:me', 'a.beesMe')}${btn('bringApples', 'a.bringApples')}</div>` : '') +
+      `<div class="sec">${t('a.teleport')}</div><div class="tp">${g.farm.places.tp.filter(([k]) => k !== 'wheat' && k !== 'garden').map(([k]) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>` +
+      (G.net === 'solo' ? `<div class="sec">${t('a.farm')}</div><div class="grid">${FARM_IDS.map((f) => `<button data-farm="${f}" class="${farmId() === f ? 'on' : ''}">${t(('farm.' + f) as Key)}</button>`).join('')}</div>` : '');
     this.admin.querySelectorAll<HTMLElement>('[data-tog]').forEach((s) => s.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       const k = s.dataset.tog as keyof typeof ADMIN;
@@ -235,6 +239,10 @@ export class Menu {
       if (b.dataset.a!.startsWith('mod:')) this.renderAdmin();   // show which modifier is on
     }));
     this.admin.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) => b.addEventListener('click', () => g.adminAction('tp:' + b.dataset.tp)));
+    this.admin.querySelectorAll<HTMLElement>('[data-farm]').forEach((b) => b.addEventListener('click', () => {
+      const f = b.dataset.farm as FarmId;
+      if (f !== farmId()) { SETTINGS.farm = f; saveSettings(); reloadOnFarm(f, { admin: '1' }); }
+    }));
     // shop test switches (my own coins / items: work for online players too)
     this.admin.querySelectorAll<HTMLElement>('[data-shop]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.shop;

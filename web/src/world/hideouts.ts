@@ -5,7 +5,7 @@ import { V3, type Rng } from '../core/util';
 import { toonMat } from '../render/toon';
 import { G } from '../game/ctx';
 import type { Terrain, Rect } from './terrain';
-import type { FarmBuild } from './farm1';
+import type { FarmBuild } from './farmKit';
 import type { Forest } from './nature';
 
 /** Quaternius CC0 models used as hiding spots (tools/fetch_assets.sh → public/assets/cover). */
@@ -28,18 +28,48 @@ const STRAW = toonMat(0xe9c46a), STRAW2 = toonMat(0xdcb458), TWINE = toonMat(0xa
  * hard cover (straw-bale stacks you can climb, log piles, crate stacks, sack piles, a fallen log, farm stands).
  * Soft cover goes into `G.cover` (Bob's eyes), hard cover has colliders (they block his sight ray already).
  */
-export function buildHideouts(c: Ctx) {
+/** The hiding-spot pieces (any farm): big hiding bushes, straw-bale stacks you can climb, hard cover models. */
+export function coverKit(c: Ctx) {
   const { scene, t, rng, out, blocked, forest, decor } = c;
   const y = (x: number, z: number) => t.height(x, z);
   const block = (x: number, z: number, r: number) => blocked.push({ x0: x - r, x1: x + r, z0: z - r, z1: z + r });
-
-  // ---------------------------------------------------------------- big hiding bushes (clusters)
   const bush = (x: number, z: number, s = rng.range(0.95, 1.15)) => {
     forest.add('bigBush', x, y(x, z), z, s);
     G.cover.circle('bush', x, z, 1.45 * s, y(x, z), 1.55 * s);
     t.noGrass({ x0: x - 1.2 * s, x1: x + 1.2 * s, z0: z - 1.2 * s, z1: z + 1.2 * s });
     block(x, z, 2);
   };
+  const baleStack = (x: number, z: number, yaw: number, rows = 3) => {
+    const g = new THREE.Group(); g.position.set(x, y(x, z) - 0.04, z); g.rotation.y = yaw; scene.add(g); out.statics.push(g);
+    for (let r = 0; r < rows; r++) {
+      const n = rows - r;
+      for (let i = 0; i < n; i++) {
+        const bx = (i - (n - 1) / 2) * 1.27, by = 0.29 + r * 0.58;
+        for (const dz of r === 0 ? [-0.32, 0.32] : [0]) {
+          const m = new THREE.Mesh(BALE, (i + r) % 2 ? STRAW : STRAW2); m.position.set(bx, by, dz); m.castShadow = m.receiveShadow = true; g.add(m);
+          for (const s of [-0.32, 0.32]) { const b = new THREE.Mesh(BAND, TWINE); b.position.set(bx + s, by, dz); g.add(b); }
+        }
+      }
+      staticBox(V3(x, y(x, z) + 0.29 + r * 0.58, z), V3(n * 0.635, 0.29, r === 0 ? 0.63 : 0.31), yaw);
+    }
+    t.noGrass({ x0: x - 2.4, x1: x + 2.4, z0: z - 2.4, z1: z + 2.4 });
+    block(x, z, 3);
+  };
+  const hard = (model: string, x: number, z: number, h: number, yaw = rng.range(0, 6.28)) => {
+    if (!has(model)) return;
+    decor(model, x, z, { height: h, yaw, collide: 'box' });
+    t.noGrass({ x0: x - 1.6, x1: x + 1.6, z0: z - 1.6, z1: z + 1.6 });
+    block(x, z, 2.2);
+  };
+  return { bush, baleStack, hard };
+}
+
+export function buildHideouts(c: Ctx) {
+  const { t, rng, blocked, decor } = c;
+  const y = (x: number, z: number) => t.height(x, z);
+  const { bush, baleStack, hard } = coverKit(c);
+
+  // ---------------------------------------------------------------- big hiding bushes (clusters)
   const clusters: [number, number][][] = [
     [[4, -22], [6.6, -24.2], [3.2, -25.4]],                 // meadow between the barn and the house
     [[-50, -13], [-52.6, -11], [-49.4, -9.6]],              // west, by the water tower
@@ -77,22 +107,6 @@ export function buildHideouts(c: Ctx) {
   G.cover.rect('crop', -60.5, -35.5, -104.5, -93.5, y(-48, -99) - 0.3, 2.3);
 
   // ---------------------------------------------------------------- straw-bale stacks (climbable: 3 / 2 / 1)
-  const baleStack = (x: number, z: number, yaw: number, rows = 3) => {
-    const g = new THREE.Group(); g.position.set(x, y(x, z) - 0.04, z); g.rotation.y = yaw; scene.add(g); out.statics.push(g);
-    for (let r = 0; r < rows; r++) {
-      const n = rows - r;
-      for (let i = 0; i < n; i++) {
-        const bx = (i - (n - 1) / 2) * 1.27, by = 0.29 + r * 0.58;
-        for (const dz of r === 0 ? [-0.32, 0.32] : [0]) {
-          const m = new THREE.Mesh(BALE, (i + r) % 2 ? STRAW : STRAW2); m.position.set(bx, by, dz); m.castShadow = m.receiveShadow = true; g.add(m);
-          for (const s of [-0.32, 0.32]) { const b = new THREE.Mesh(BAND, TWINE); b.position.set(bx + s, by, dz); g.add(b); }
-        }
-      }
-      staticBox(V3(x, y(x, z) + 0.29 + r * 0.58, z), V3(n * 0.635, 0.29, r === 0 ? 0.63 : 0.31), yaw);
-    }
-    t.noGrass({ x0: x - 2.4, x1: x + 2.4, z0: z - 2.4, z1: z + 2.4 });
-    block(x, z, 3);
-  };
   baleStack(30.5, -94, 0.2);            // by the hay shed
   baleStack(10.5, -33, -0.4);           // meadow south of the chicken pen
   baleStack(-21.5, -8.5, 1.3, 2);       // between the lawn and the yard
@@ -100,12 +114,6 @@ export function buildHideouts(c: Ctx) {
   baleStack(-8, -60, 0.9, 2);           // west of the well
 
   // ---------------------------------------------------------------- log piles, crate stacks, sacks, fallen log
-  const hard = (model: string, x: number, z: number, h: number, yaw = rng.range(0, 6.28)) => {
-    if (!has(model)) return;
-    decor(model, x, z, { height: h, yaw, collide: 'box' });
-    t.noGrass({ x0: x - 1.6, x1: x + 1.6, z0: z - 1.6, z1: z + 1.6 });
-    block(x, z, 2.2);
-  };
   hard('cover/Logs', -55.5, -60, 1.3, 0.3);
   hard('cover/Logs', 22, -40, 1.2, 1.4);
   hard('cover/Crate_Stack1', -8.5, -80.5, 1.5, 0.2);

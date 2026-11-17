@@ -8,7 +8,8 @@ import { Fx } from '../render/fx';
 import { googly } from '../render/googly';
 import { Round, ROUND } from './round';
 const ROUND_START_HOUR = ROUND.startHour;
-import { buildFarm1, FARM, type FarmBuild } from '../world/farm1';
+import type { FarmBuild } from '../world/farmKit';
+import { FARM_BUILDERS, farmId } from '../world/farms';
 import { Farmer } from '../farmer/farmer';
 import { Nav } from '../farmer/nav';
 import { Pig, emptyInput, type PigInput } from '../pig/pig';
@@ -40,6 +41,8 @@ const FIXED = 1 / 60;
 const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 const tmpV = new THREE.Vector3();
 const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
+/** Events the round counts (each one = +1): only seen inside the fixed step, never again in handleEvents. */
+const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed']);
 
 export class Game {
   pigs: Pig[] = [];
@@ -89,10 +92,11 @@ export class Game {
     googly(scene);
     G.audio = this.audio;
     this.daynight = new DayNight(this.gfx);
-    const { terrain, build } = buildFarm1(scene);
+    const { terrain, build, bounds } = FARM_BUILDERS[farmId()](scene);
     G.terrain = terrain;
     terrain.build(scene);
     this.farm = build(terrain, this.daynight);
+    G.places = this.farm.places;
     this.grass = new Grass(scene, terrain);
     this.farm.pigSpawns.forEach((p, i) => this.pigs.push(new Pig(scene, p, PLAYER_COLORS[i],
       i === 0 ? t('name.you') : t('name.p', { n: i + 1 }), i === 0 ? (SETTINGS.outfit ?? defaultOutfit()) : randomOutfit())));
@@ -101,12 +105,12 @@ export class Game {
     G.pigs = this.pigs;
     G.cage = this.farm.cage;
     const t0 = performance.now();
-    this.nav = new Nav(FARM, terrain);
+    this.nav = new Nav(bounds, terrain);
     console.log(`nav grid ${this.nav.w}x${this.nav.h} in ${(performance.now() - t0) | 0} ms`);
     this.farmer = new Farmer(scene, this.farm.farmerSpawn, this.nav, this.farm.chores, this.farm.cage, this.pigs, this.farm.zones);
     this.farmer.mower.onMow = (x, z, r) => this.grass.mow(x, z, r);
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
-    this.wolves = new WolfPack(scene, this.nav, FARM);
+    this.wolves = new WolfPack(scene, this.nav, bounds);
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
     this.gadgets = new Gadgets(scene, this.farm.props);
@@ -117,7 +121,7 @@ export class Game {
       if (!PEN_KINDS.includes(c.def.kind)) continue;
       c.pen = this.gates.list.find((g) => { const r = g.def.rect; return c.home.x > r.x0 && c.home.x < r.x1 && c.home.z > r.z0 && c.home.z < r.z1; }) ?? null;
     }
-    this.round = new Round(scene, this, new THREE.Vector3(30, terrain.height(30, 7.5), 7.5));
+    this.round = new Round(scene, this, this.farm.places.stash);
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
@@ -215,7 +219,11 @@ export class Game {
     for (const w of this.wolves.wolves) w.preStep(FIXED);
     for (const pr of this.farm.props) pr.synced.beforeStep();
     step((h1, h2, force) => {
-      for (const h of [h1, h2]) { const o = owners.get(h); if (o instanceof Prop) o.impact(force); }
+      const a = owners.get(h1), b = owners.get(h2);
+      if (a instanceof Prop) a.impact(force);
+      if (b instanceof Prop) b.impact(force);
+      // a thrown thing hits a static farm thing that reacts (fruit tree, beehive)
+      if (a?.onImpact && b instanceof Prop) a.onImpact(b, force); else if (b?.onImpact && a instanceof Prop) b.onImpact(a, force);
     });
     for (const p of this.pigs) p.postStep(FIXED);
     this.farmer?.postStep();
@@ -228,7 +236,7 @@ export class Game {
     for (const pr of this.farm.props) {
       pr.synced.capture();
       const y = pr.synced.currP.y;
-      if (y < -20) { pr.body.setTranslation({ x: 0, y: 3, z: 6 }, true); pr.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
+      if (y < -20) { const g = this.farm.places.roadGate; pr.body.setTranslation({ x: g.x, y: g.y + 3, z: g.z - 8 }, true); pr.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
     }
     this.gates.capture();
     // the pond washes the mud off
@@ -250,6 +258,8 @@ export class Game {
     if (G.net !== 'client') {
       this.round.step(FIXED);
       this.gadgets.step();
+      this.farm.orchard?.step();
+      this.farm.bees?.step(FIXED);
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -258,7 +268,9 @@ export class Game {
 
   private handleEvents() {
     for (const e of G.events) {
-      if (G.net !== 'client' && e.type !== 'smashed' && e.type !== 'splatBob') this.round.onEvent(e.type, e.text);   // usually already seen inside the step; repeats are no-ops (counted ones aren't: only there)
+      if (G.net !== 'client' && !COUNTED.has(e.type)) this.round.onEvent(e.type, e.text);   // usually already seen inside the step; repeats are no-ops (counted ones aren't: only there)
+      this.farm.orchard?.onEvent(e.type, e.text, e.why);
+      this.farm.bees?.onEvent(e.type, e.text);
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
       switch (e.type) {
@@ -326,6 +338,9 @@ export class Game {
         case 'gateLocked':
           if (G.time - (this.birdToast.lock ?? -99) > 25) { this.birdToast.lock = G.time; this.hud.toast(t('e.gateLocked', { what: t((e.text ?? 'gate.sty') as Key) }), 2.4, t('e.gateLocked2')); }
           break;
+        case 'stung': if (me && G.time - (this.birdToast.sting ?? -99) > 6) { this.birdToast.sting = G.time; this.hud.toast(t('e.stung'), 2.2, t('e.stung2')); } break;
+        case 'beesOut': if (me || !e.who) this.hud.toast(t('e.beesOut'), 2.2, t('e.beesOut2')); break;
+        case 'bobStung': if (G.time - (this.birdToast.bob ?? -99) > 5) { this.birdToast.bob = G.time; this.hud.toast(t('e.bobStung'), 1.8); } break;
         case 'roundEnd': break;
       }
     }
@@ -347,6 +362,8 @@ export class Game {
     this.wolves.clear();
     this.traps.clear();
     this.gates.reset();
+    this.farm.orchard?.reset();
+    this.farm.bees?.clear();
     this.gadgets.clear();
     this.daynight.setHour(ROUND_START_HOUR);
     G.grills = 0;
@@ -367,7 +384,7 @@ export class Game {
       case 'gates:open': this.gates.all('free'); break;
       case 'gate:smash': { const g = this.gates.nearest(L.pos); if (g) { if (g.state === 'free' || g.state === 'broken') g.setState('shut'); g.smash(tmpV.copy(g.def.out).negate(), L); } break; }
       case 'gate:bob': { const g = this.gates.nearest(L.pos); if (g && f) { if (g.state === 'shut' && f.level < 1) f.setAlert(1); f.gateNow(g); } this.menu.toggleAdmin(); break; }
-      case 'tp:gate': { const g = this.gates.byId('chickens'); if (g) tp(g.latch.x + g.def.out.x * 1.1, g.latch.z + g.def.out.z * 1.1); this.menu.toggleAdmin(); break; }
+      case 'tp:gate': { const g = this.gates.byId('chickens') ?? this.gates.list.find((x) => x.def.lockable); if (g) tp(g.latch.x + g.def.out.x * 1.1, g.latch.z + g.def.out.z * 1.1); this.menu.toggleAdmin(); break; }
       case 'free': cage.setOpen(true, 'admin'); break;
       case 'catch': if (!L.cage && !L.out) { if (L.heldBy) L.heldBy.release(false); cage.lock(L); } break;
       case 'mud': L.muddyUntil = G.time + 60; break;
@@ -400,16 +417,8 @@ export class Game {
         if (b) tp(b.x, b.z);
         break;
       }
-      case 'tp:wheat': tp(46, -22); break;
-      case 'tp:sty': tp(30, 6); break;
       case 'tp:cage': tp(cage.front.x + 1.5, cage.front.z + 1.5); break;
       case 'tp:house': tp(this.farm.zones.door.x + 1, this.farm.zones.door.z + 2); break;
-      case 'tp:barn': tp(0, 8); break;
-      case 'tp:pasture': tp(30, -62); break;
-      case 'tp:maze': tp(47.9, -93.6); break;
-      case 'tp:sunflowers': tp(21, -95.5); break;
-      case 'tp:junkyard': tp(-50, 5); break;
-      case 'tp:greenhouse': tp(-37, -77); break;
       case 'pick': { tp(cage.latch.x + 0.4, cage.latch.z + 0.9); this.menu.toggleAdmin(); setTimeout(() => { if (cage.canPick(L)) this.lockpick.open(this.keyed(cage.pickOpts(L))); else this.hud.toast(t('a.pickNo'), 1.4); }, 300); break; }
       case 'alert:0': case 'alert:1': case 'alert:2': case 'alert:3': f?.setAlert(Number(a.slice(6))); break;
       case 'trapMe': { const fw = L.forward; this.traps.place(new THREE.Vector3(L.pos.x + fw.x * 2, 0, L.pos.z + fw.z * 2)); break; }
@@ -443,7 +452,6 @@ export class Game {
         });
         break;
       }
-      case 'tp:garden': tp(-24, -54); break;
       case 'gadget:cherryBomb': case 'gadget:stinkBomb': case 'gadget:bone': {
         const p = this.gadgets.giveAny(a.slice(7) as PoolId, L.pos, L.yaw);
         if (p) p.body.setTranslation({ x: p.body.translation().x, y: L.pos.y + 0.6, z: p.body.translation().z }, true);
@@ -455,6 +463,19 @@ export class Game {
         const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
         if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
         break;
+      }
+      // farm 2: orchard + beehives
+      case 'tree:shake': { const o = this.farm.orchard; const tr = o?.nearest(L.pos); if (o && tr) o.shake(tr, L.forward, L, 1); break; }
+      case 'bees:me': this.farm.bees?.sic(L); break;
+      case 'bringApples': {
+        const o = this.farm.orchard; if (!o) break;
+        const f = L.forward;
+        o.apples.filter((p) => p.banked).slice(0, 6).forEach((p, i) => p.unbank(new THREE.Vector3(L.pos.x + f.x * 1.4 + (i % 3 - 1) * 0.3, L.pos.y, L.pos.z + f.z * 1.4 + Math.floor(i / 3) * 0.3), 0));
+        break;
+      }
+      default: {
+        const p = a.startsWith('tp:') ? this.farm.places.tp.find((x) => x[0] === a.slice(3)) : null;
+        if (p) tp(p[1], p[2]);
       }
     }
   }
@@ -605,6 +626,8 @@ export class Game {
     if (this.menu.blocking) document.getElementById('clickHint')?.classList.remove('show');
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     this.gates.render(alpha);
+    this.farm.orchard?.render(dt);
+    this.farm.bees?.render(dt);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;

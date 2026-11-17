@@ -5,7 +5,7 @@ import { V3, type Rng } from '../core/util';
 import { toonMat } from '../render/toon';
 import { G } from '../game/ctx';
 import type { Terrain, Rect } from './terrain';
-import type { FarmBuild } from './farm1';
+import type { FarmBuild } from './farmKit';
 import type { PROPS } from './props';
 
 /** Kenney car kit models used by the junkyard (tools/fetch_assets.sh). */
@@ -108,9 +108,9 @@ const PETALS = (() => {
   }
   return new THREE.ShapeGeometry(s);
 })();
-function sunflowers(c: Ctx) {
+/** A sunflower field taller than a standing pig (soft cover). Farm 1's has a melon + a backpack left in it. */
+export function sunflowers(c: Ctx, F = { x0: 14, x1: 28, z0: -107, z1: -97 }, junk = true) {
   const { scene, t, rng, out, blocked } = c;
-  const F = { x0: 14, x1: 28, z0: -107, z1: -97 };
   const y = (x: number, z: number) => t.height(x, z);
   const petal = toonMat(0xffd21f, { side: THREE.DoubleSide, emissive: new THREE.Color(0x6b4a00) });
   for (let x = F.x0 + 0.5; x < F.x1; x += 1.05) for (let z = F.z0 + 0.5; z < F.z1; z += 1.05) {
@@ -125,7 +125,7 @@ function sunflowers(c: Ctx) {
   }
   t.noGrass(F); blocked.push({ x0: F.x0 - 1, x1: F.x1 + 1, z0: F.z0 - 1, z1: F.z1 + 1 });
   G.cover.rect('crop', F.x0, F.x1, F.z0, F.z1, y((F.x0 + F.x1) / 2, (F.z0 + F.z1) / 2) - 0.3, 2.4);
-  c.prop('melon', 21, -101.5); c.prop('backpack', 17.5, -104);     // somebody left things in there
+  if (junk) { c.prop('melon', 21, -101.5); c.prop('backpack', 17.5, -104); }    // somebody left things in there
 }
 
 // ---------------------------------------------------------------- junkyard (old cars, tyre stacks)

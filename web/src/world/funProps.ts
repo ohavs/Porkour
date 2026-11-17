@@ -68,3 +68,53 @@ export function makeFlowerPot(c = 0xff6fa8) {
   for (const s of [-1, 1]) add(g, new THREE.SphereGeometry(0.04, 8, 6), 0x4fb848, s * 0.05, 0.33, 0).scale.set(1.4, 0.4, 0.8);
   return g;
 }
+
+/** An apple (orchard, farm 2): falls when you shake the tree. `gold` = the one golden apple. */
+const APPLE = new THREE.SphereGeometry(0.11, 14, 10).scale(1, 0.92, 1);
+const STALK = new THREE.CylinderGeometry(0.008, 0.01, 0.06, 5);
+const LEAF = new THREE.SphereGeometry(0.035, 8, 5).scale(1.6, 0.25, 0.8);
+export function makeApple(gold = false) {
+  const g = new THREE.Group();
+  add(g, APPLE, gold ? 0xffcf3a : 0xe0302c, 0, 0.1, 0);
+  add(g, STALK, 0x5a3a1e, 0, 0.22, 0, 0, 0, 0.2);
+  add(g, LEAF, gold ? 0xfff2a8 : 0x4fa636, 0.04, 0.22, 0, 0, 0, -0.3);
+  return g;
+}
+
+/** Jar of honey: amber glass, cloth lid tied with string (farm 2's honey stand). */
+export function makeHoneyJar() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.1, 0.1, 0.2, 14), 0xf0a21e, 0, 0.1, 0);
+  add(g, new THREE.CylinderGeometry(0.075, 0.09, 0.03, 14), 0xf6c04a, 0, 0.215, 0);
+  add(g, new THREE.CylinderGeometry(0.115, 0.1, 0.035, 14), 0xe8d6b0, 0, 0.24, 0);                 // cloth
+  add(g, new THREE.TorusGeometry(0.093, 0.008, 5, 16), 0xb0453a, 0, 0.225, 0, Math.PI / 2);         // string
+  add(g, new THREE.BoxGeometry(0.11, 0.07, 0.01), 0xfff4d6, 0, 0.1, 0.1);                          // label
+  return g;
+}
+
+/** Bob's prize honey pot: a fat golden pot with a dipper, honey dripping over the rim. */
+export function makeHoneyPot() {
+  const g = new THREE.Group();
+  add(g, new THREE.SphereGeometry(0.2, 18, 12).scale(1, 0.85, 1), 0xd98a1a, 0, 0.18, 0);
+  add(g, new THREE.CylinderGeometry(0.13, 0.15, 0.08, 16), 0xd98a1a, 0, 0.34, 0);
+  add(g, new THREE.TorusGeometry(0.13, 0.025, 6, 18), 0xb86d10, 0, 0.38, 0, Math.PI / 2);
+  for (let i = 0; i < 5; i++) {   // drips
+    const a = i * 1.3;
+    add(g, new THREE.CapsuleGeometry(0.022, 0.07 + (i % 2) * 0.05, 4, 6), 0xffb52e, Math.cos(a) * 0.14, 0.31 - (i % 2) * 0.03, Math.sin(a) * 0.14);
+  }
+  add(g, new THREE.CylinderGeometry(0.015, 0.015, 0.34, 6), 0x9a6a3c, 0.05, 0.45, 0, 0, 0, -0.3);  // dipper
+  add(g, new THREE.SphereGeometry(0.04, 8, 6).scale(1, 1.4, 1), 0x9a6a3c, 0.0, 0.3, 0);
+  add(g, new THREE.BoxGeometry(0.12, 0.08, 0.01), 0xfff4d6, 0, 0.2, 0.19);
+  return g;
+}
+
+/** A jug of fresh cider (comes out of the press). */
+export function makeCiderJug() {
+  const g = new THREE.Group();
+  add(g, new THREE.SphereGeometry(0.17, 16, 12).scale(1, 1.1, 1), 0xc8853a, 0, 0.18, 0);
+  add(g, new THREE.CylinderGeometry(0.05, 0.08, 0.12, 12), 0xc8853a, 0, 0.38, 0);
+  add(g, new THREE.CylinderGeometry(0.04, 0.04, 0.05, 8), 0x8a5a35, 0, 0.46, 0);                   // cork
+  add(g, new THREE.TorusGeometry(0.06, 0.018, 6, 12, Math.PI * 1.2), 0xc8853a, 0.1, 0.33, 0, 0, 0, -0.9);   // handle
+  add(g, new THREE.BoxGeometry(0.14, 0.1, 0.01), 0xfff4d6, 0, 0.18, 0.17);
+  return g;
+}

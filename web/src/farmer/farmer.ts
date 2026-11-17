@@ -177,7 +177,7 @@ export class Farmer {
   debugAnim: FarmerAnim | null = null;
 
   constructor(scene: THREE.Scene, at: THREE.Vector3, public nav: Nav, public chores: Chore[], public cage: Cage,
-    public pigs: Pig[], public zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3 }) {
+    public pigs: Pig[], public zones: { garden: Rect[]; lawn: Rect; door: THREE.Vector3; mowerAt: THREE.Vector3; roadGate: THREE.Vector3 }) {
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + CENTER + 0.05, at.z)
       .lockRotations().setCanSleep(false).setCcdEnabled(true));
     this.setCollider(false);
@@ -218,7 +218,7 @@ export class Farmer {
   get asleep() { return this.state === 'sleep' || this.state === 'off' || this.state === 'away'; }
   /** In the house asleep or off to the market (not on the farm, but he'll be back). */
   private get gone() { return this.state === 'sleep' || this.state === 'away'; }
-  private get gate() { return v1.set(0, G.terrain.height(0, 16.5), 16.5); }
+  private get gate() { return v1.copy(this.zones.roadGate); }
   get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down'; }
   escapeNeed(p: Pig) { return ADMIN.easyEscape && p === G.localPig ? 1 : p.muddy > 0 ? BOB.escapeNeedMuddy : BOB.escapeNeed; }
 
@@ -337,7 +337,7 @@ export class Farmer {
     if (this.state === 'away') { if (!marketHours()) this.wake(); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
-    if (p.y < -20) { this.body.setTranslation({ x: 0, y: 3, z: -30 }, true); return; }
+    if (p.y < -20) { const d = this.zones.door; this.body.setTranslation({ x: d.x, y: d.y + 3, z: d.z + 3 }, true); return; }
     this.yell = Math.max(0, this.yell - dt * 2);
     if (this.now - this.poiseT > BOB.poiseWindow) this.poise = Math.max(0, this.poise - 60 * dt);
     let want = 0;   // desired speed (set by states via moveTo)
@@ -484,7 +484,7 @@ export class Farmer {
       const ov = o.synced.preVel, rel = v2.copy(ov).sub(this.vel).length();
       // eggs / melons / pots thrown at him: SPLAT (a prank; he's furious but it barely hurts)
       const br = o as unknown as { def?: { fragile?: number; id?: string }; smash?: (how: string) => void; banked?: boolean };
-      if (br.def?.fragile && rel > 2.5 && !br.banked) { br.smash?.('bob'); this.splatted(ov); return; }
+      if (br.def?.fragile && rel > 2.5 && !br.banked) { br.smash?.('bob'); this.splatted(ov, br.def.id); return; }
       if (rel < 6.5 || o.mass < 2) return;
       if ((this.hitBy.get(o) ?? -10) > this.now - 0.6) return;
       this.hitBy.set(o, this.now);
@@ -1171,12 +1171,12 @@ export class Farmer {
   }
 
   /** Something squishy burst on him (egg, melon, flower pot). */
-  private splatted(dir: THREE.Vector3) {
+  private splatted(dir: THREE.Vector3, what = '') {
     if ((this.hitBy.get('splat') ?? -10) > this.now - 0.2) return;
     this.hitBy.set('splat', this.now);
     G.audio.play('splat|squish', { pos: this.pos, vol: 1 });
-    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.6), { count: 14, color: 0xffe27a, speed: 2.5, up: 1, grav: 10, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
-    G.events.push({ type: 'splatBob' });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.6), { count: 14, color: what === 'apple' ? 0xf2e6b0 : 0xffe27a, speed: 2.5, up: 1, grav: 10, life: 0.8, size: 0.12, grow: 0, alpha: 1 });
+    G.events.push({ type: 'splatBob', text: what });
     this.raise('splat');
     this.hit(8, v2.copy(dir));
   }
@@ -1352,6 +1352,23 @@ export class Farmer {
     this.voice('oof', 1);
     G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 2), { count: 8, color: 0xfff1a8, speed: 2.5, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });
     this.stun('stagger', BOB.staggerTime + 0.8);
+    return true;
+  }
+
+  /**
+   * An angry bee swarm stings him (farm 2's hives): he yelps and flails (stagger: drops a pig he carries). Not again
+   * for a moment, so a swarm on him is a run of stings, not a stun-lock.
+   */
+  stung(): boolean {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
+    if ((this.hitBy.get('sting') ?? -10) > this.now - 2.6) return false;
+    this.hitBy.set('sting', this.now);
+    this.voice('oof', 1);
+    G.audio.play('slap', { pos: this.pos, vol: 0.5, pitch: 1.6 });
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.7), { count: 10, color: 0xffd23a, speed: 3, up: 2, life: 0.5, size: 0.1, grow: 0, drag: 3, alpha: 1 });
+    G.events.push({ type: 'bobStung' });
+    this.raise('splat');
+    if (this.state !== 'stagger') this.stun('stagger', BOB.staggerTime + 0.5);
     return true;
   }
 

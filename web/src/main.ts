@@ -17,6 +17,8 @@ import { GLB_MODELS } from './world/animalGlb';
 import { LOOT_MODELS } from './world/props';
 import { COVER_MODELS } from './world/hideouts';
 import { LANDMARK_MODELS } from './world/landmarks';
+import { FARM2_MODELS } from './world/farm2';
+import { farmId } from './world/farms';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -33,6 +35,8 @@ const MODELS = [
   ...['Carrot_4', 'Lettuce_4', 'Tomato_4', 'Beet_4', 'BushBerries_4', 'Watermelon_4'].map((n) => 'crops/' + n),
   ...COVER_MODELS, ...LANDMARK_MODELS,
 ];
+/** + the models only the farm this page plays needs. */
+const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : []);
 
 /** Tiny flag icons (emoji flags don't show on Windows). */
 const FLAGS: Record<string, string> = {
@@ -56,7 +60,7 @@ async function boot() {
   const prog = () => (bar.style.width = `${(pModels * 0.8 + pSounds * 0.2) * 100}%`);
   await Promise.all([
     initPhysics(),
-    preload(MODELS, (f) => { pModels = f; prog(); }),
+    preload([...MODELS, ...farmModels()], (f) => { pModels = f; prog(); }),
     audio.loadAll('./assets/sfx/', (f) => { pSounds = f; prog(); }),
     audio.load('music_level', './assets/music/level_music.ogg'),
     audio.load('music_theme', './assets/music/theme_song.ogg'),
