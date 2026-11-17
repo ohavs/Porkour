@@ -26,6 +26,8 @@ export const CRITTERS: Record<string, CritterDef> = {
   horse: { kind: 'horse', mass: 450, speed: 1.3, flee: 0, radius: 0.5, label: 'item.horse', sound: 'neigh', soundEvery: 35 },
   horse2: { kind: 'horse2', mass: 450, speed: 1.3, flee: 0, radius: 0.5, label: 'item.horse', sound: 'neigh', soundEvery: 35 },
   donkey: { kind: 'donkey', mass: 200, speed: 1.0, flee: 0, radius: 0.42, label: 'item.donkey', sound: 'bray', soundEvery: 40 },
+  reindeer: { kind: 'reindeer', mass: 180, speed: 1.1, flee: 2.5, radius: 0.45, label: 'item.reindeer', sound: 'bray', soundEvery: 50 },
+  doe: { kind: 'doe', mass: 90, speed: 1.1, flee: 3, radius: 0.36, label: 'item.reindeer', sound: 'bray', soundEvery: 60 },
   alpaca: { kind: 'alpaca', mass: 70, speed: 1.0, flee: 2.5, radius: 0.36, label: 'item.alpaca', sound: 'llama', soundEvery: 45 },
   rooster: { kind: 'rooster', mass: 3.5, speed: 1.7, flee: 0, radius: 0.24, label: 'item.rooster', sound: 'cluck', soundEvery: 16, scared: 'squawk', alarm: 'rooster' },
   turkey: { kind: 'turkey', mass: 9, speed: 1.3, flee: 0, radius: 0.36, label: 'item.turkey', sound: 'gobble', soundEvery: 24, scared: 'gobble', alarm: 'turkey' },

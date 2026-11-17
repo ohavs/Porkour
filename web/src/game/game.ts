@@ -120,7 +120,7 @@ export class Game {
     this.gadgets = new Gadgets(scene, this.farm.props);
     G.props = this.farm.props;
     // pen animals amble out when their gate is open
-    const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey', 'bull'];
+    const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey', 'bull', 'reindeer', 'doe'];
     for (const c of this.farm.critters) {
       if (!PEN_KINDS.includes(c.def.kind)) continue;
       c.pen = this.gates.list.find((g) => { const r = g.def.rect; return c.home.x > r.x0 && c.home.x < r.x1 && c.home.z > r.z0 && c.home.z < r.z1; }) ?? null;
@@ -243,6 +243,7 @@ export class Game {
       if (y < -20) { const g = this.farm.places.roadGate; pr.body.setTranslation({ x: g.x, y: g.y + 3, z: g.z - 8 }, true); pr.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
     }
     this.gates.capture();
+    this.farm.winter?.stepAll();
     // the pond washes the mud off
     for (const p of this.pigs) if (p.muddyUntil > G.time && this.farm.inWater(p.pos.x, p.pos.z)) {
       p.muddyUntil = G.time; G.audio.play('mudstep', { pos: p.pos, vol: 0.8 });
@@ -266,6 +267,7 @@ export class Game {
       this.farm.bees?.step(FIXED);
       this.farm.dairy?.stepHost();
       this.farm.pumpkins?.stepHost();
+      this.farm.winter?.stepHost(FIXED);
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -278,6 +280,7 @@ export class Game {
       this.farm.orchard?.onEvent(e.type, e.text, e.why);
       this.farm.bees?.onEvent(e.type, e.text);
       this.farm.pumpkins?.onEvent(e.type, e.text);
+      this.farm.winter?.onEvent(e.type);
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
       switch (e.type) {
@@ -354,13 +357,21 @@ export class Game {
         case 'bullBob': this.hud.toast(t('e.bullBob'), 2.4); break;
         case 'cowTipped': if (G.time - (this.birdToast.cow ?? -99) > 4) { this.birdToast.cow = G.time; this.hud.toast(t('e.cowTipped'), 1.4); } break;
         case 'milkSpilled': if (G.time - (this.birdToast.milk ?? -99) > 4) { this.birdToast.milk = G.time; this.hud.toast(t('e.milkSpilled'), 2, t('e.milkSpilled2')); } break;
-        case 'bobSlipped': this.hud.toast(t('e.bobSlipped'), 2); break;
+        case 'bobSlipped': this.hud.toast(t(e.text === 'ice' ? 'e.bobSlippedIce' : 'e.bobSlipped'), 2); break;
         case 'pigSlipped': if (me) this.hud.toast(t('e.pigSlipped'), 1.4); break;
         case 'cheeseBob': this.hud.toast(t('e.cheeseBob'), 2); break;
         // farm 4: the pumpkin farm at night
         case 'lanternOut': if (me) this.hud.toast(t('e.lanternOut'), 1.3, t('e.lanternOut2')); break;
         case 'pigLaunched': this.hud.toast(me ? t('e.launchedMe') : t('e.launchedOther', { who }), 1.6); break;
         case 'catapultBob': this.hud.toast(t('e.catapultBob'), 2.2); break;
+        // farm 5: winter
+        case 'bobTracks': if (G.time - (this.birdToast.tracks ?? -99) > 12) { this.birdToast.tracks = G.time; this.hud.toast(t('e.bobTracks'), 2.6, t('e.bobTracks2')); } break;
+        case 'snowmanDown': this.hud.toast(t('e.snowmanDown'), 2); break;
+        case 'snowmanUp': this.hud.toast(t('e.snowmanUp'), 1.6); break;
+        case 'pigDunked': if (me) this.hud.toast(t('e.pigDunked'), 1.6); break;
+        case 'bobDunked': this.hud.toast(t('e.bobDunked'), 2.4); break;
+        case 'bigSnowballBob': this.hud.toast(t('e.bigSnowballBob'), 2.4); break;
+        case 'snowCoat': if (me && G.time - (this.birdToast.coat ?? -99) > 30) { this.birdToast.coat = G.time; this.hud.toast(t('e.snowCoat'), 2.4, t('e.snowCoat2')); } break;
         case 'roundEnd': break;
       }
     }
@@ -368,12 +379,15 @@ export class Game {
   }
 
   private birdToast: Record<string, number> = {};
-  /** Farm 3: picking up the red rag → a hint, once per grab. */
-  private ragHeld = false;
+  /** Farm 3: picking up the red rag / farm 5: a rolling snowball → a hint, once per grab (the snowball: once a round). */
+  private ragHeld = '';
   private ragHint() {
-    const h = this.local.held as { def?: { id?: string } } | null, on = h?.def?.id === 'redRag';
-    if (on && !this.ragHeld) this.hud.toast(t('e.redRag'), 2.6, t('e.redRag2'));
-    this.ragHeld = on;
+    const h = this.local.held as { def?: { id?: string } } | null, id = h?.def?.id ?? '';
+    if (id !== this.ragHeld) {
+      if (id === 'redRag') this.hud.toast(t('e.redRag'), 2.6, t('e.redRag2'));
+      if (id === 'snowboulder' && G.time - (this.birdToast.boulder ?? -999) > 120) { this.birdToast.boulder = G.time; this.hud.toast(t('e.boulder'), 2.8, t('e.boulder2')); }
+    }
+    this.ragHeld = id;
   }
 
   /** Host / solo: everything back to the start, new mission list. */
@@ -393,6 +407,7 @@ export class Game {
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
     this.farm.pumpkins?.reset();
+    this.farm.winter?.reset();
     this.gadgets.clear();
     this.daynight.setHour(this.farm.clock?.start ?? ROUND_START_HOUR);
     G.grills = 0;
@@ -525,8 +540,20 @@ export class Game {
         g.body.setLinvel({ x: 0, y: 0, z: 0 }, true); g.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         break;
       }
-      case 'bringRag': case 'bringCheese': case 'bringPumpkin': {
-        const id = a === 'bringRag' ? 'redRag' : a === 'bringPumpkin' ? 'patchPumpkin' : 'cheeseWheel';
+      // farm 5: winter
+      case 'snowman:down': this.farm.winter?.topple(L.forward, L); break;
+      case 'snowman:bob': { const w = this.farm.winter, j = f ? w?.jobOf(f.pos) : null; if (j && f) f.jobNow(j); break; }
+      case 'bigball:me': {
+        const w = this.farm.winter, b = w?.nearestBoulder(L.pos); if (!w || !b) break;
+        const fw = L.forward; w.growBoulder(b, 1.0);
+        b.p.body.setTranslation({ x: L.pos.x + fw.x * 2.8, y: L.pos.y + 1.4, z: L.pos.z + fw.z * 2.8 }, true);
+        b.p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); b.p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        break;
+      }
+      case 'bob:ice': if (f) f.slip('ice'); break;
+      case 'snowcoat': L.muddyUntil = G.time + 60; break;
+      case 'bringRag': case 'bringCheese': case 'bringPumpkin': case 'bringSnowball': {
+        const id = a === 'bringRag' ? 'redRag' : a === 'bringPumpkin' ? 'patchPumpkin' : a === 'bringSnowball' ? 'snowball' : 'cheeseWheel';
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.4, L.pos.y + 0.7, L.pos.z + f.z * 1.4);
         const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
         if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); it.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
@@ -689,6 +716,7 @@ export class Game {
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);
     this.farm.pumpkins?.render(dt);
+    this.farm.winter?.render(dt);
     this.ragHint();
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);

@@ -29,22 +29,25 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // farm 3 (dairy & cheese)
   | 'bullBob' | 'bullOut' | 'cowTip' | 'cheeseBob' | 'prizeCheese' | 'spillMilk' | 'milkSlip'
   // farm 4 (pumpkin farm at night)
-  | 'lanternsOut' | 'catapultBob' | 'pigLaunch' | 'giantPumpkin' | 'pumpkinSmash';
+  | 'lanternsOut' | 'catapultBob' | 'pigLaunch' | 'giantPumpkin' | 'pumpkinSmash'
+  // farm 5 (winter)
+  | 'snowballBob' | 'bigSnowball' | 'snowmanDown' | 'bobIce' | 'iceHole' | 'bigPresent';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
-  'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash'];
+  'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
+  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent'];
 const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
-export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press';
+export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
 /** Counted pranks (progress shown as n / need). */
-const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5 };
+const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5, snowballBob: 4, iceHole: 3 };
 /** Which props / critters a prank is about, and where they go. */
 /** Big pasture animals (they walk out on their own when the pasture gate is open). */
-const BIG = ['cow', 'horse', 'horse2', 'donkey'];
-const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; to?: Where; inCoop?: boolean; inPen?: boolean; inPasture?: boolean; inBullPen?: boolean }>> = {
+const BIG = ['cow', 'horse', 'horse2', 'donkey', 'reindeer', 'doe'];
+const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; to?: Where; inCoop?: boolean; inPen?: boolean; inPasture?: boolean; inBullPen?: boolean; noArrow?: boolean }>> = {
   mugPond: { props: ['mug'], to: 'pond' }, hayPond: { props: ['hay'], to: 'pond' }, gnomePond: { props: ['gnome'], to: 'pond' },
   catBath: { critters: ['cat'], to: 'pond' }, henPond: { critters: ['hen'], to: 'pond' },
   lambStash: { critters: ['sheep'], to: 'stash' }, pieSteal: { props: ['pie'], to: 'stash' }, mazeTrophy: { props: ['trophy'], to: 'stash' },
@@ -58,6 +61,7 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   cheeseBob: { props: ['cheeseWheel'], to: 'bob' }, prizeCheese: { props: ['prizeCheese'], to: 'stash' },
   spillMilk: { props: ['milkChurn'] }, milkSlip: { props: ['milkChurn'] },
   giantPumpkin: { props: ['giantPumpkin'], to: 'stash' }, pumpkinSmash: { props: ['patchPumpkin', 'patchPumpkinY'] },
+  snowballBob: { props: ['snowball'], to: 'bob', noArrow: true }, bigSnowball: { props: ['snowboulder'], to: 'bob' }, bigPresent: { props: ['bigPresent'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
@@ -195,7 +199,7 @@ export class Round {
     if (this.phase === 'end') return;
     if (type === 'smashed' && text === 'flowerPot') this.count('smashPots');
     if (type === 'smashed' && text === 'melon') this.count('melonSmash');
-    if (type === 'splatBob') this.count(text === 'apple' ? 'appleBob' : 'eggBob');
+    if (type === 'splatBob') this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob');
     if (type === 'treeShaken') this.count('shakeTrees');
     if (type === 'pressed') this.count('ciderPress');
     if (type === 'bobStung') this.done('beeBob');
@@ -210,7 +214,11 @@ export class Round {
     if (type === 'milkSpilled') this.count('spillMilk');
     if (type === 'bullBob') this.done('bullBob');
     if (type === 'cheeseBob') this.done('cheeseBob');
-    if (type === 'bobSlipped') this.done('milkSlip');
+    if (type === 'bobSlipped') this.done(text === 'ice' ? 'bobIce' : 'milkSlip');
+    if (type === 'bobDunked') this.done('bobIce');
+    if (type === 'bigSnowballBob') this.done('bigSnowball');
+    if (type === 'snowmanDown') this.done('snowmanDown');
+    if (type === 'iceHole') this.count('iceHole');
     if (type === 'lanternOut') this.count('lanternsOut');
     if (type === 'smashed' && (text === 'patchPumpkin' || text === 'patchPumpkinY')) this.count('pumpkinSmash');
     if (type === 'catapultBob') this.done('catapultBob');
@@ -298,6 +306,7 @@ export class Round {
     if (pr.def === PROPS.trophy) this.done('mazeTrophy');
     if (pr.def === PROPS.prizeCheese) this.done('prizeCheese');
     if (pr.def === PROPS.giantPumpkin) this.done('giantPumpkin');
+    if (pr.def === PROPS.bigPresent) this.done('bigPresent');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
@@ -383,7 +392,7 @@ export class Round {
     const { props, critters, places: P } = this.game.farm;
     for (const m of this.missions) {
       const d = MDEF[m.id]; if (m.done || !d) continue;
-      if (d.props) for (const p of props) if (!p.banked && d.props.includes(p.def.id ?? '') && p.worth === null) out.push({ obj: p, id: m.id });
+      if (d.props && !d.noArrow) for (const p of props) if (!p.banked && d.props.includes(p.def.id ?? '') && p.worth === null) out.push({ obj: p, id: m.id });
       if (d.critters) for (const c of critters) {
         if (!d.critters.includes(c.def.kind)) continue;
         if (d.inCoop && !inRect(P.coop, c.pos)) continue;
@@ -397,6 +406,10 @@ export class Round {
       const pk = this.game.farm.pumpkins;
       if (m.id === 'lanternsOut' && pk) for (const sp of pk.litSpots()) out.push({ obj: sp, id: m.id });
       if ((m.id === 'catapultBob' || m.id === 'pigLaunch') && pk?.cat) out.push({ obj: pk.cat.spot, id: m.id });
+      // farm 5: the snowman while it stands, the ice-fishing hole
+      const w = this.game.farm.winter;
+      if (m.id === 'snowmanDown' && w) for (const sp of w.snowmanSpots()) out.push({ obj: sp, id: m.id });
+      if ((m.id === 'iceHole' || m.id === 'bobIce') && w?.holeSpot) out.push({ obj: w.holeSpot, id: m.id });
     }
     return out;
   }
@@ -409,6 +422,9 @@ export class Round {
       if (d.props && pr.def && d.props.includes(pr.def.id ?? '')) return { where: d.to, id: m.id };
       if (d.critters && cr.kind === 'critter' && d.critters.includes(cr.def.kind)) return { where: d.to, id: m.id };
     }
+    // farm 5: anything you carry can go down Bob's ice-fishing hole
+    const hole = this.missions.find((m) => m.id === 'iceHole' && !m.done);
+    if (hole && pr.kind === 'prop' && this.game.farm.winter?.hole) return { where: 'hole', id: 'iceHole' };
     return null;
   }
   wherePos(w: Where, out: THREE.Vector3) {
@@ -416,6 +432,7 @@ export class Round {
     if (w === 'pond') out.set(pond.x, G.terrain.height(pond.x, pond.z), pond.z);
     else if (w === 'well' && well) out.set(well.x, G.terrain.height(well.x, well.z) + 2.2, well.z);
     else if (w === 'press' && this.game.farm.orchard?.pressAt) out.copy(this.game.farm.orchard.pressAt);
+    else if (w === 'hole' && this.game.farm.winter?.hole) { const h = this.game.farm.winter.hole; out.set(h.x, h.y + 0.3, h.z); }
     else if (w === 'porch') out.copy(this.game.farm.zones.door);
     else if (w === 'bob' && G.farmer) out.copy(G.farmer.pos).setY(G.farmer.pos.y + 1);
     else out.copy(this.stash);

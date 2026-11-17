@@ -145,6 +145,7 @@ export class Hud {
     else if (bob.chasing) { txt = onMe ? t('bob.chaseYou') : t('bob.chasePig'); cls = 'red'; if (st === 'pant') txt = t('bob.pant'); }
     else if (st === 'suspect') { txt = t('bob.suspect'); cls = 'yellow'; }
     else if (st === 'search' && bob.hunt) { txt = bob.hunt === pig ? t('bob.searchYou') : t('bob.searchPig'); cls = 'yellow'; }
+    else if (st === 'investigate' && bob.activity === 'bob.tracks') { txt = t('bob.tracks'); cls = 'yellow'; }
     else if (st === 'investigate' || st === 'search') { txt = t('bob.heard'); cls = 'yellow'; }
     else if (st === 'down') { txt = t('bob.down'); cls = 'green'; }
     else if (st === 'stagger') { txt = t('bob.stagger'); cls = 'green'; }

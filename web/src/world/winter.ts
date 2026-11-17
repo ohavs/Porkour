@@ -42,7 +42,7 @@ export const WINTER = {
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion(), s1 = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const c1 = new THREE.Color();
-const PRINT = new THREE.Color(0x93a8c8), SNOWC = new THREE.Color(0xe8eff9);
+const PRINT = new THREE.Color(0x93a8c8), GROOVE = new THREE.Color(0xc2d0e4), SNOWC = new THREE.Color(0xe8eff9);
 const MAXP = 1100;
 
 interface Rink { x: number; z: number; r: number; y: number }
@@ -53,7 +53,7 @@ function iceTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const x = c.getContext('2d')!;
   const g = x.createRadialGradient(128, 128, 20, 128, 128, 128);
-  g.addColorStop(0, '#d7ecff'); g.addColorStop(0.75, '#c3e1fb'); g.addColorStop(1, '#eef7ff');
+  g.addColorStop(0, '#e6f4ff'); g.addColorStop(0.7, '#d2ebff'); g.addColorStop(1, '#ffffff');
   x.fillStyle = g; x.fillRect(0, 0, 256, 256);
   // skate scratches + a few cracks
   for (let i = 0; i < 70; i++) {
@@ -114,7 +114,7 @@ export class Winter {
     const y = this.y(x, z) + WINTER.iceTop;
     this.rinks.push({ x, z, r, y });
     const ice = new THREE.Mesh(new THREE.CircleGeometry(r + 0.25, 56).rotateX(-Math.PI / 2),
-      toonMat(0xffffff, { map: iceTexture(), polygonOffset: true, polygonOffsetFactor: -1 }));
+      toonMat(0x9ccff5, { map: iceTexture(), polygonOffset: true, polygonOffsetFactor: -1 }));
     ice.position.set(x, y, z); ice.receiveShadow = true; ice.name = 'ice';
     this.scene.add(ice);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, y - 0.05, z));
@@ -253,7 +253,7 @@ export class Winter {
     this.prints[i] = p;
     q1.setFromAxisAngle(UP, yaw);
     m1.compose(v1.set(x, this.y(x, z) + 0.03, z), q1, s1.set(sx, 1, sz));
-    this.printMesh.setMatrixAt(i, m1); this.printMesh.setColorAt(i, PRINT);
+    this.printMesh.setMatrixAt(i, m1); this.printMesh.setColorAt(i, who === -2 ? GROOVE : PRINT);
     this.dirty = true;
     return p;
   }
@@ -408,7 +408,7 @@ export class Winter {
         if (!p) return;
         const a = (G.time - p.t) / WINTER.printLife;
         if (a >= 1) { m1.makeScale(0, 0, 0); this.printMesh.setMatrixAt(i, m1); (this.prints as (Print | undefined)[])[i] = undefined; return; }
-        this.printMesh.setColorAt(i, c1.copy(PRINT).lerp(SNOWC, clamp(a * a * 1.2, 0, 1)));
+        this.printMesh.setColorAt(i, c1.copy(p.who === -2 ? GROOVE : PRINT).lerp(SNOWC, clamp(a * a * 1.2, 0, 1)));
       });
       this.dirty = true;
     }

@@ -240,7 +240,7 @@ export const PROPS: Record<string, PropDef> = {
   giantPumpkin: { make: () => makeGiantPumpkin((m, h) => fitted(m, { height: h })), mass: 140, shape: 'ball', r: 1.0, damp: 1.4, sound: 'thud', label: 'item.giantPumpkin', value: 250, friction: 1, bounce: 0.05 },
   // farm 5 (winter): snowballs (the piles restock them, world/winter.ts), a snowball to roll up big, presents under the
   // tree + Bob's big present, the snowman's parts once he's knocked over, Bob's ice-fishing catch, a sled
-  snowball: { make: makeSnowball, mass: 0.5, shape: 'ball', r: 0.13, sound: 'snowhit', label: 'item.snowball', fragile: 4.5, bits: 0xffffff, smashSound: 'snowhit', bounce: 0.1, friction: 0.9 },
+  snowball: { make: makeSnowball, mass: 0.5, shape: 'ball', r: 0.13, damp: 2.5, sound: 'snowhit', label: 'item.snowball', fragile: 4.5, bits: 0xffffff, smashSound: 'snowhit', bounce: 0.1, friction: 0.9 },
   snowboulder: { make: makeSnowBoulder, mass: 10, shape: 'ball', r: 0.42, damp: 0.45, sound: 'snowhit', label: 'item.snowboulder', friction: 1, bounce: 0.02 },
   present: { make: () => makePresent(0.42, 0.34, 0.42, 0xd8342c, 0xffd166), mass: 3, sound: 'thud', label: 'item.present', value: 40 },
   presentG: { make: () => makePresent(0.52, 0.26, 0.36, 0x2f9a5a, 0xd8342c), mass: 3, sound: 'thud', label: 'item.present', value: 35 },

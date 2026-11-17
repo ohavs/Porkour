@@ -450,6 +450,7 @@ export class Pig implements Holdable {
       G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.2), { count: 14, color: 0xffffff, speed: 2, up: 1.4, life: 1, size: 0.6, alpha: 0.8 });
       G.fx.bits(v1.copy(this.pos), { count: 20, color: 0xf4f8ff, speed: 3, up: 3, grav: 10, life: 0.7, size: 0.1, grow: 0, alpha: 1 });
       G.audio.play('snowstep', { pos: this.pos, vol: 1, pitch: 0.8 });
+      G.events.push({ type: 'snowCoat', who: this });
     } else if (mud > 0.3) {
       this.muddyUntil = this.now + PIG.mudTime;
       G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: 26, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });
