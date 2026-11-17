@@ -6,7 +6,7 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
-import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag } from './funProps';
+import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin } from './funProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -21,6 +21,8 @@ export interface PropDef {
   fragile?: number; bits?: number;
   /** Sound when it smashes (default wood / thud). */
   smashSound?: string;
+  /** Ball radius override (a squat pumpkin: smaller than its widest side) and angular damping (rolls to a stop). */
+  r?: number; damp?: number;
   /** Key in PROPS (filled in below). */
   id?: string;
 }
@@ -52,16 +54,16 @@ export class Prop implements Holdable {
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
-    model.position.y = -size.y / 2;
+    model.position.y = def.r ? -def.r : -size.y / 2;
     this.obj.add(model);
     if (def.make) rigidSkin(this.obj);
     scene.add(this.obj);
     const shape = def.shape ?? 'box';
     const q = new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(at.x, at.y + size.y / 2 + 0.02, at.z)
-      .setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.3));
+      .setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(def.damp ?? 0.3));
     let d: RAPIER.ColliderDesc;
-    if (shape === 'ball') d = RAPIER.ColliderDesc.ball(Math.max(size.x, size.y, size.z) / 2);
+    if (shape === 'ball') d = RAPIER.ColliderDesc.ball(def.r ?? Math.max(size.x, size.y, size.z) / 2);
     else if (shape === 'cyl') d = RAPIER.ColliderDesc.cylinder(size.y / 2, Math.max(size.x, size.z) / 2);
     else if (shape === 'wheel') d = RAPIER.ColliderDesc.roundCylinder(size.x / 2 - 0.03, Math.max(size.y, size.z) / 2 - 0.03, 0.03)
       .setRotation({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 });
@@ -230,6 +232,11 @@ export const PROPS: Record<string, PropDef> = {
   cheeseWheel: { make: () => makeCheeseWheel(), mass: 12, shape: 'wheel', sound: 'thud', label: 'item.cheeseWheel', value: 45, friction: 0.9, bounce: 0.1 },
   prizeCheese: { make: () => makeCheeseWheel(true), mass: 45, shape: 'wheel', sound: 'thud', label: 'item.prizeCheese', value: 220, friction: 0.9, bounce: 0.05 },
   redRag: { make: makeRedRag, mass: 1, shape: 'box', sound: 'thud', label: 'item.redRag', friction: 0.9 },
+  // farm 4 (pumpkin farm at night): smashable patch pumpkins, the giant prize pumpkin (too heavy to carry: roll it)
+  patchPumpkin: { model: 'kaykit/pumpkin_orange_small', height: 0.46, mass: 6, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25, value: 10, fragile: 8, bits: 0xf08a24, smashSound: 'splat|squish' },
+  patchPumpkinY: { model: 'halloween/pumpkin_yellow_small', height: 0.44, mass: 5, shape: 'ball', sound: 'squish|thud', label: 'item.pumpkin', bounce: 0.25, value: 10, fragile: 8, bits: 0xf2c23a, smashSound: 'splat|squish' },
+  candyJar: { model: 'kaykit/jar_A_large', height: 0.42, mass: 2.5, shape: 'cyl', sound: 'wood', label: 'item.candyJar', value: 45 },
+  giantPumpkin: { make: () => makeGiantPumpkin((m, h) => fitted(m, { height: h })), mass: 140, shape: 'ball', r: 1.0, damp: 1.4, sound: 'thud', label: 'item.giantPumpkin', value: 250, friction: 1, bounce: 0.05 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

@@ -256,6 +256,8 @@ export class Hud {
     if (ADMIN.showSight && G.farmer) st.push(G.farmer.sees(pig) ? `<span style="color:#ff7a4a">${t('s.seen')}</span>` : t('s.unseen'));
     if (!pig.out && !pig.cage && !pig.heldBy && G.cover.at(pig.pos))
       st.push(G.cover.at(sightPoint(pig, v1)) ? `<span style="color:#9be36a">${t('s.hidden')}</span>` : `<span style="color:#ffd166">${t('s.peek')}</span>`);
+    // farm 4 at night: standing in a jack-o'-lantern's light = Bob sees you like by day
+    if (G.litAt && G.night > 0.5 && !pig.out && !pig.cage && !pig.heldBy && G.litAt(pig.pos.x, pig.pos.z)) st.push(`<span style="color:#ffb347">${t('s.lit')}</span>`);
     if (pig.cage) st.push(`<span class="${pig.grillAt - pig.now < 20 ? 'flash' : ''}" style="color:#ff7a4a;font-size:24px">${t('s.caged', { n: Math.max(0, Math.ceil(pig.grillAt - pig.now)) })}</span>`);
     if (G.grills) st.push(`<span style="color:#ffb38a">${t('s.grills', { n: G.grills })}</span>`);
     if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') st.push(`<span style="color:#ff7a4a">${t('s.caught')}</span>`);

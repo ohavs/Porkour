@@ -14,6 +14,8 @@ import type { MissionId } from '../game/round';
 import type { Orchard } from './orchard';
 import type { Bees } from './bees';
 import type { Dairy } from './dairy';
+import type { Pumpkins } from './pumpkins';
+import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 
@@ -54,6 +56,16 @@ export interface FarmBuild {
   orchard?: Orchard; bees?: Bees;
   /** Farm 3: the bull's brain, milk churns + spilled milk, cow tipping (one synced entity). */
   dairy?: Dairy;
+  /** Farm 4: jack-o'-lanterns (lit pools, snuffed / relit) + the catapult (one synced entity). */
+  pumpkins?: Pumpkins;
+  /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
+  clock?: { start: number; secsPerHour: number };
+  /** 0..1 darker nights (farm 4). */
+  darkNight?: number;
+  /** Hours the wolves come (default 21:00–4:18). */
+  wolfHours?: [number, number];
+  /** Round modifiers that make no sense here (farm 4 at night: no market day). */
+  noMods?: ModId[];
 }
 
 export interface FarmDef {
@@ -112,7 +124,7 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
     }
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
     const b = staticBox(V3(cx, y(cx, cz) + 0.6, cz), V3(len / 2, 0.65, 0.12), yaw);
-    if (model === 'kenney/fence_simple') SEE_THROUGH.add(b.collider(0).handle);   // rails: Bob sees through
+    if (model === 'kenney/fence_simple' || model === 'halloween/fence') SEE_THROUGH.add(b.collider(0).handle);   // rails / iron bars: Bob sees through
   };
   /** A fenced pen with a gap on one side; `gateId` = a real hinged gate in the gap (gates.ts). */
   const pen = (r: Rect, gate: 'n' | 's' | 'e' | 'w', gw = 2.4, model?: string, gateId?: string, o: { lockable?: boolean; start?: GateState } = {}) => {

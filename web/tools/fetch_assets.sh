@@ -133,6 +133,11 @@ grab kaykit "$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Assets/gltf" 
 # farm 2 (orchard & beehives): Quaternius Medieval Village buildings + willows by the pond (CC0)
 grab village "$Q/medieval_village_pack" 256 Mill Stable Inn Sawmill Gazebo Bell_Tower Cart Bench_1 Cauldron House_1 House_2 Blacksmith Bench_2
 grab nature "$Q/nature_pack" 256 Willow_1 Willow_2 TreeStump
+# farm 4 (pumpkin farm at night): KayKit Halloween Bits — yellow pumpkins, autumn pines, dead trees, the old family plot (CC0)
+grab halloween "$CACHE/kk-halloween/addons/kaykit_halloween_bits/Assets/gltf" 512 \
+  pumpkin_yellow_small tree_dead_large tree_dead_medium tree_dead_small \
+  tree_pine_orange_large tree_pine_orange_medium tree_pine_yellow_large tree_pine_yellow_medium \
+  gravestone grave_A grave_B gravemarker_A gravemarker_B fence arch_gate crypt candle_triple skull_candle bench_decorated
 
 # ---------------------------------------------------------------- repo art
 # (Cube Pets animals were replaced by procedural round animals: src/world/animalModels.ts)

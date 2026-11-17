@@ -25,10 +25,11 @@ export const modHear = () => (G.mod === 'rain' ? MOD.rain.hear : 1);
 /** Is Bob at the market right now (market day, his away hours)? */
 export const marketHours = () => G.mod === 'market' && G.hour >= MOD.market.leave && G.hour < MOD.market.back;
 
-export function rollMod(): ModId {
-  const total = MOD_IDS.reduce((a, m) => a + MOD.weight[m], 0);
+export function rollMod(skip: ModId[] = []): ModId {
+  const ids = MOD_IDS.filter((m) => !skip.includes(m));
+  const total = ids.reduce((a, m) => a + MOD.weight[m], 0);
   let r = Math.random() * total;
-  for (const m of MOD_IDS) { r -= MOD.weight[m]; if (r < 0) return m; }
+  for (const m of ids) { r -= MOD.weight[m]; if (r < 0) return m; }
   return 'none';
 }
 

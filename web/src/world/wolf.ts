@@ -300,6 +300,8 @@ export class WolfPack {
   wolves: Wolf[] = [];
   private nextSpawn = 0;
   private nextId = 1;
+  /** Hours the wolves come (a farm can change it): from → to, across midnight. */
+  hours: [number, number] = [21, 4.3];
   constructor(private scene: THREE.Scene, private nav: Nav, private farm: Rect) {}
 
   /** Online players: a wolf the host told us about. */
@@ -326,7 +328,7 @@ export class WolfPack {
   private cleanup() { this.wolves = this.wolves.filter((w) => w.active); G.wolves = this.wolves; }
 
   update() {
-    const h = G.hour, night = h >= 21 || h < 4.3;
+    const h = G.hour, [h0, h1] = this.hours, night = h0 > h1 ? h >= h0 || h < h1 : h >= h0 && h < h1;
     const active = this.wolves.filter((w) => w.active);
     if (night && G.time > this.nextSpawn && active.length < Math.min(WOLF.max, 1 + G.pigs.length / 2)) {
       this.nextSpawn = G.time + rng.range(20, 45);

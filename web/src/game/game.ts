@@ -42,7 +42,7 @@ const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'gra
 const tmpV = new THREE.Vector3();
 const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
 /** Events the round counts (each one = +1): only seen inside the fixed step, never again in handleEvents. */
-const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled']);
+const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled', 'lanternOut']);
 
 export class Game {
   pigs: Pig[] = [];
@@ -97,6 +97,9 @@ export class Game {
     terrain.build(scene);
     this.farm = build(terrain, this.daynight);
     G.places = this.farm.places;
+    // farm 4 plays at night: its own clock (dusk → dawn over a round)
+    if (this.farm.clock) { G.secsPerHour = this.farm.clock.secsPerHour; this.daynight.setHour(this.farm.clock.start); }
+    this.daynight.darkNight = this.farm.darkNight ?? 0;
     this.grass = new Grass(scene, terrain);
     this.farm.pigSpawns.forEach((p, i) => this.pigs.push(new Pig(scene, p, PLAYER_COLORS[i],
       i === 0 ? t('name.you') : t('name.p', { n: i + 1 }), i === 0 ? (SETTINGS.outfit ?? defaultOutfit()) : randomOutfit())));
@@ -111,6 +114,7 @@ export class Game {
     this.farmer.mower.onMow = (x, z, r) => this.grass.mow(x, z, r);
     if (new URLSearchParams(location.search).get('bob') === '0') { ADMIN.bob = false; this.farmer.setEnabled(false); }
     this.wolves = new WolfPack(scene, this.nav, bounds);
+    if (this.farm.wolfHours) this.wolves.hours = this.farm.wolfHours;
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
     this.gadgets = new Gadgets(scene, this.farm.props);
@@ -261,6 +265,7 @@ export class Game {
       this.farm.orchard?.step();
       this.farm.bees?.step(FIXED);
       this.farm.dairy?.stepHost();
+      this.farm.pumpkins?.stepHost();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -272,6 +277,7 @@ export class Game {
       if (G.net !== 'client' && !COUNTED.has(e.type)) this.round.onEvent(e.type, e.text);   // usually already seen inside the step; repeats are no-ops (counted ones aren't: only there)
       this.farm.orchard?.onEvent(e.type, e.text, e.why);
       this.farm.bees?.onEvent(e.type, e.text);
+      this.farm.pumpkins?.onEvent(e.type, e.text);
       const me = e.who === this.local;
       const who = e.who?.label ?? '';
       switch (e.type) {
@@ -351,6 +357,10 @@ export class Game {
         case 'bobSlipped': this.hud.toast(t('e.bobSlipped'), 2); break;
         case 'pigSlipped': if (me) this.hud.toast(t('e.pigSlipped'), 1.4); break;
         case 'cheeseBob': this.hud.toast(t('e.cheeseBob'), 2); break;
+        // farm 4: the pumpkin farm at night
+        case 'lanternOut': if (me) this.hud.toast(t('e.lanternOut'), 1.3, t('e.lanternOut2')); break;
+        case 'pigLaunched': this.hud.toast(me ? t('e.launchedMe') : t('e.launchedOther', { who }), 1.6); break;
+        case 'catapultBob': this.hud.toast(t('e.catapultBob'), 2.2); break;
         case 'roundEnd': break;
       }
     }
@@ -382,8 +392,9 @@ export class Game {
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
+    this.farm.pumpkins?.reset();
     this.gadgets.clear();
-    this.daynight.setHour(ROUND_START_HOUR);
+    this.daynight.setHour(this.farm.clock?.start ?? ROUND_START_HOUR);
     G.grills = 0;
     cage.setOpen(false);
     this.round.start();
@@ -500,8 +511,22 @@ export class Game {
         c?.knock(new THREE.Vector3(c.pos.x - L.pos.x, 0, c.pos.z - L.pos.z).normalize().multiplyScalar(2));
         break;
       }
-      case 'bringRag': case 'bringCheese': {
-        const id = a === 'bringRag' ? 'redRag' : 'cheeseWheel';
+      // farm 4: the pumpkin farm
+      case 'lantern:out': { const pk = this.farm.pumpkins, l = pk?.nearest(L.pos, true); if (pk && l) pk.snuff(l, 'admin', L); break; }
+      case 'lanterns:out': { const pk = this.farm.pumpkins; if (pk) for (const l of pk.lanterns) pk.snuff(l, 'admin', null); break; }
+      case 'lanterns:on': { const pk = this.farm.pumpkins; if (pk) for (const l of pk.lanterns) pk.relight(l); break; }
+      case 'bob:relight': { const pk = this.farm.pumpkins, l = pk?.nearest(L.pos, false); if (pk && l && f) f.jobNow(pk.jobOf(l, f.pos)); break; }
+      case 'catapult:fire': this.farm.pumpkins?.cat?.fire(L); break;
+      case 'catapult:me': { const c = this.farm.pumpkins?.cat; if (c) { const b = c.basket(); tp(b.x, b.z); } break; }
+      case 'catapult:bob': { const c = this.farm.pumpkins?.cat; if (c && f) c.setYaw(Math.atan2(f.pos.x - c.x, f.pos.z - c.z)); break; }
+      case 'giant:me': {
+        const g = this.farm.props.find((p) => p.def.id === 'giantPumpkin' && !p.banked); if (!g) break;
+        const fw = L.forward; g.body.setTranslation({ x: L.pos.x + fw.x * 2.6, y: L.pos.y + 1.2, z: L.pos.z + fw.z * 2.6 }, true);
+        g.body.setLinvel({ x: 0, y: 0, z: 0 }, true); g.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        break;
+      }
+      case 'bringRag': case 'bringCheese': case 'bringPumpkin': {
+        const id = a === 'bringRag' ? 'redRag' : a === 'bringPumpkin' ? 'patchPumpkin' : 'cheeseWheel';
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.4, L.pos.y + 0.7, L.pos.z + f.z * 1.4);
         const it = this.farm.props.filter((p) => p.def.id === id && !p.banked && !p.heldBy).sort((x, y) => x.synced.currP.distanceTo(L.pos) - y.synced.currP.distanceTo(L.pos))[0];
         if (it) { it.body.setTranslation(at, true); it.body.setLinvel({ x: 0, y: 0, z: 0 }, true); it.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
@@ -663,6 +688,7 @@ export class Game {
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);
+    this.farm.pumpkins?.render(dt);
     this.ragHint();
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);

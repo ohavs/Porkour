@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Gfx } from '../render/gfx';
-import { G, ADMIN, SECS_PER_HOUR, DUSK, DAWN } from '../game/ctx';
+import { G, ADMIN, DUSK, DAWN } from '../game/ctx';
 import { clamp, smoothstep, lerp } from '../core/util';
 import type { Loop } from '../core/audio';
 import { damp } from '../core/util';
@@ -25,7 +25,11 @@ const KEYS: Key[] = [
 const ca = new THREE.Color(), cb = new THREE.Color();
 const mix = (out: THREE.Color, a: number, b: number, t: number) => out.copy(ca.setHex(a)).lerp(cb.setHex(b), t);
 
-export interface Lamp { at: THREE.Vector3; glow: THREE.Mesh; base: number; distance: number; d2: number }
+export interface Lamp {
+  at: THREE.Vector3; glow: THREE.Mesh | null; base: number; distance: number; d2: number;
+  /** 0..1 on / off (farm 4's jack-o'-lanterns go out); unlit lamps don't take a light from the pool. */
+  k: number; color: number;
+}
 
 /**
  * Day / night: moves the sun and moon, blends sky / light / fog / cloud colours through dawn, day, dusk and night,
@@ -46,6 +50,8 @@ export class DayNight {
   private birdT = 0; private cricketT = 0;
   private started = false;
   private fogNear = 110; private fogFar = 330;
+  /** 0..1: how much darker than usual the night is on this farm (farm 4). */
+  darkNight = 0;
   /** Weather of the round's modifier (0..1, eased in / out): rain and fog. */
   weather = { rain: 0, fog: 0 };
   private rainFx: RainFx;
@@ -59,8 +65,15 @@ export class DayNight {
     const glow = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false }));
     glow.position.copy(at); parent.add(glow);
     parent.updateMatrixWorld(true);
-    this.lamps.push({ at: at.clone().applyMatrix4(parent.matrixWorld), glow, base: intensity, distance, d2: 0 });
+    this.lamps.push({ at: at.clone().applyMatrix4(parent.matrixWorld), glow, base: intensity, distance, d2: 0, k: 1, color: 0xffb45a });
     if (this.pool.length < Math.min(this.poolSize, this.lamps.length)) this.setLampLights(this.poolSize);
+  }
+  /** A light with no bulb of its own (a jack-o'-lantern's glowing face is its model): returned so it can be switched (`k`). */
+  addLight(at: THREE.Vector3, intensity: number, distance: number, color: number) {
+    const l: Lamp = { at: at.clone(), glow: null, base: intensity, distance, d2: 0, k: 1, color };
+    this.lamps.push(l);
+    if (this.pool.length < Math.min(this.poolSize, this.lamps.length)) this.setLampLights(this.poolSize);
+    return l;
   }
 
   /** How many lamps really light their surroundings (the nearest ones). Changing it recompiles materials once. */
@@ -77,7 +90,7 @@ export class DayNight {
   /** Advance the clock (fixed step). */
   tick(dt: number) {
     if (ADMIN.freezeTime) return;
-    G.hour += (dt / SECS_PER_HOUR) * ADMIN.daySpeed;
+    G.hour += (dt / G.secsPerHour) * ADMIN.daySpeed;
     if (G.hour >= 24) { G.hour -= 24; G.day++; }
   }
 
@@ -100,6 +113,8 @@ export class DayNight {
     mix(g.sun.color, a.sun, b.sun, t); g.sun.intensity = lerp(a.sunI, b.sunI, t);
     mix(g.hemi.color, a.hemiS, b.hemiS, t); mix(g.hemi.groundColor, a.hemiG, b.hemiG, t); g.hemi.intensity = lerp(a.hemiI, b.hemiI, t);
     mix(g.cloudMat.color, a.cloud, b.cloud, t); mix(g.cloudMat.emissive, a.cloudE, b.cloudE, t);
+    // a darker night (farm 4: the jack-o'-lanterns and Bob's flashlight are the lights that matter)
+    if (this.darkNight) { const k = 1 - this.darkNight * G.night; g.hemi.intensity *= k; g.sun.intensity *= 1 - this.darkNight * 0.6 * G.night; }
     this.applyWeather(dt, camPos);
     // sun arc 6:00 → 19:30 (east → west, low in the south), moon the other way round
     const sunA = ((h - 6) / 13.5) * Math.PI;
@@ -119,8 +134,8 @@ export class DayNight {
     // lamps
     const lampOn = smoothstep(0.25, 0.75, G.night);
     for (const l of this.lamps) {
-      l.d2 = l.at.distanceToSquared(camPos);
-      (l.glow.material as THREE.MeshBasicMaterial).color.setHex(lampOn > 0.3 ? 0xffd27a : 0x8a7a5a);
+      l.d2 = l.k > 0.01 ? l.at.distanceToSquared(camPos) : 1e12 + l.at.distanceToSquared(camPos);   // out = last in line
+      if (l.glow) (l.glow.material as THREE.MeshBasicMaterial).color.setHex(lampOn > 0.3 ? 0xffd27a : 0x8a7a5a);
     }
     const near = this.pool.length < this.lamps.length ? [...this.lamps].sort((a, b) => a.d2 - b.d2) : this.lamps;
     const flick = 0.94 + Math.sin(G.time * 7.3) * 0.03;
@@ -128,8 +143,8 @@ export class DayNight {
       const l = near[i];
       // the last lit lamp hands over smoothly to the next one in line
       const fade = i === this.pool.length - 1 && near[i + 1] ? clamp((Math.sqrt(near[i + 1].d2) - Math.sqrt(l.d2)) / 6, 0, 1) : 1;
-      light.position.copy(l.at); light.distance = l.distance;
-      light.intensity = l.base * lampOn * fade * (flick + Math.sin(G.time * 13 + i * 1.7) * 0.03);
+      light.position.copy(l.at); light.distance = l.distance; light.color.setHex(l.color);
+      light.intensity = l.base * lampOn * fade * l.k * (flick + Math.sin(G.time * 13 + i * 1.7) * 0.03);
     });
     this.sounds(dt, camPos);
     // dawn / dusk events
