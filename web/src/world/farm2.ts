@@ -226,6 +226,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     prop('sword', 49, -96); prop('shovel', -15.6, -95.6, 1.2); prop('pan', 8.8, -73.4);
     // valuables: the farmhouse porch, the picnic table, the barn, the cider house, the tractor
     prop('chest', -9.2, -78.4, 0.2); prop('chalice', -1.6, -77.8); prop('necklace', 0.6, -78.2);
+    prop('safe', 2.6, -77.4, 0);   // heavy loot: two pigs drag it (or one full of spinach)
     prop('phone', 16.7, -66.2, 0.3, 0.84); prop('radio', 17.6, -65.6, 0.3, 0.84);
     prop('gold', -36.8, -5.6, 0.4); prop('crown', 50.4, -97.4, 0.6);
     prop('gasCan', 11, -4); prop('propane', 12.6, -73.4, 0); prop('firstAid', -14, 4); prop('backpack', -12.4, 3);

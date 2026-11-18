@@ -80,6 +80,8 @@ export const G = {
   traps: null as any,
   /** Pen gates (world/gates.ts). */
   gates: null as any,
+  /** Bob's outhouses (world/outhouse.ts). */
+  loos: [] as any[],
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */
   hittables: [] as { hit(x: number, y: number, z: number, reach: number, dir: THREE.Vector3, k: number, by: unknown): boolean }[],
   /** Farm things Bob fixes when he notices them (farm 4's jack-o'-lanterns): `spot(bob)` → a BobJob or null. */

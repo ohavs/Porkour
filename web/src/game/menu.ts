@@ -235,6 +235,7 @@ export class Menu {
       `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button></div>` +
       `<div class="sec">${t('a.gates')}</div><div class="grid">${btn('gates:lock', 'a.gatesLock')}${btn('gates:shut', 'a.gatesShut')}${btn('gates:open', 'a.gatesOpen')}` +
       `${btn('gate:smash', 'a.gateSmash')}${btn('gate:bob', 'a.gateBob')}${btn('tp:gate', 'a.tpGate')}</div>` +
+      `<div class="sec">${t('a.loo')}</div><div class="grid">${btn('loo:go', 'a.looGo')}${btn('loo:in', 'a.looIn')}${btn('loo:bolt', 'a.looBolt')}${btn('loo:tip', 'a.looTip')}${btn('tp:loo', 'a.tpLoo')}${btn('bringSafe', 'a.bringSafe')}${btn('tp:safe', 'a.tpSafe')}</div>` +
       `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}${hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : ''}</div>` +
       `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
       `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +

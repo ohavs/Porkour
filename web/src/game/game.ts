@@ -20,6 +20,7 @@ import { MOD, type ModId } from './modifiers';
 import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
 import { Gates, type Gate } from '../world/gates';
+import type { Outhouse } from '../world/outhouse';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -62,6 +63,8 @@ export class Game {
   wolves!: WolfPack;
   traps!: Traps;
   gates!: Gates;
+  /** Bob's outhouse(s) (toilet breaks). */
+  loos: Outhouse[] = [];
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -125,6 +128,7 @@ export class Game {
     if (this.farm.wolfHours) this.wolves.hours = this.farm.wolfHours;
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
+    this.loos = this.farm.loos ?? []; G.loos = this.loos;
     this.gadgets = new Gadgets(scene, this.farm.props);
     // snacks: food cans (boosts) and cigarette packs scattered around (same spots on every machine)
     scatterSnacks(scene, this.farm.props, this.nav, FARM_IDS.indexOf(farmId()) + 1, this.farm.inWater, this.farm.places.stash);
@@ -290,6 +294,8 @@ export class Game {
       this.farm.dairy?.stepHost();
       this.farm.pumpkins?.stepHost();
       this.farm.winter?.stepHost(FIXED);
+      for (const o of this.loos) o.step(FIXED);
+      for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
     host?.endStep();
@@ -340,6 +346,11 @@ export class Game {
         case 'pigSlipped': case 'pecked': case 'wolfBit': case 'shotHit': if (me) H.emote(this.local, 'stars', 1, 1.2); break;
         // farm 5: winter
         case 'bobTracks': H.emote(bob, 'feet', 2, 2.4); break;
+        // Bob's outhouse
+        case 'bobLoo': H.emote(bob, 'loo', 2.2, 2.4); break;
+        case 'tooHeavy': H.emote(e.who, 'two', 1.8, 1.5); break;
+        case 'looLocked': case 'looStuck': { const o = this.nearLoo(bob?.pos ?? this.local.pos); if (o) H.emote(o.markPos.clone(), 'alarm', 2.2, 0.3); break; }
+        case 'looBolted': if (me) { const o = this.nearLoo(this.local.pos); if (o) H.emote(o.boltAt.clone(), 'lock', 1.2, 0.5); } break;
         case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
         case 'snowCoat': if (me) H.emote(this.local, 'snow', 1.4, 1.3); break;
         case 'roundEnd': break;
@@ -381,10 +392,11 @@ export class Game {
     for (const p of this.pigs) if (!p.absent) { if (p.out && !p.absent) p.outUntil = G.time; p.respawn(); }
     for (const p of this.pigs) p.clearSnacks();
     for (const c of this.farm.critters) c.reset();
-    for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
+    for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
     this.wolves.clear();
     this.traps.clear();
     this.gates.reset();
+    for (const o of this.loos) o.reset();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
@@ -398,6 +410,9 @@ export class Game {
     this.hud.toast(t('e.roundStart'), 2.2);
   }
 
+  /** The outhouse nearest to a spot. */
+  nearLoo(p: THREE.Vector3) { let b: Outhouse | null = null, bd = Infinity; for (const o of this.loos) { const d = o.base.distanceTo(p); if (d < bd) { bd = d; b = o; } } return b; }
+
   /** Admin panel buttons. */
   adminAction(a: string) {
     if (G.net === 'client') { this.hud.toast(t('net.hostOnly'), 1.6); return; }
@@ -405,6 +420,20 @@ export class Game {
     const tp = (x: number, z: number) => { if (L.heldBy) L.heldBy.release(false); L.body.setTranslation({ x, y: G.terrain.height(x, z) + 1.2, z }, true); L.body.setLinvel({ x: 0, y: 0, z: 0 }, true); };
     switch (a) {
       case 'grill': cage.grillNow(); break;
+      // Bob's outhouse
+      case 'loo:go': f?.looNow(false); this.menu.toggleAdmin(); break;
+      case 'loo:in': f?.looNow(true); break;
+      case 'loo:bolt': { const o = this.nearLoo(L.pos); o?.setBolt(!o.bolted, L); break; }
+      case 'loo:tip': { const o = this.nearLoo(L.pos); if (o) { if (!o.upright) o.fix(); else o.knockOver(tmpV.set(o.base.x - L.pos.x, 0, o.base.z - L.pos.z).normalize(), L); } break; }
+      case 'bringSafe': case 'tp:safe': {
+        const sf = this.farm.props.find((p) => p.def.id === 'safe' && !p.banked); if (!sf) break;
+        if (sf.heldBy) sf.heldBy.release?.(false); if (sf.heldBy) sf.heldBy.release?.(false);
+        const fw = L.forward;
+        if (a === 'bringSafe') { sf.unbank(tmpV.set(L.pos.x + fw.x * 1.8, G.terrain.height(L.pos.x + fw.x * 1.8, L.pos.z + fw.z * 1.8), L.pos.z + fw.z * 1.8), L.yaw); }
+        else { const sp = sf.synced.currP; tp(sp.x - 1.6, sp.z); this.menu.toggleAdmin(); }
+        break;
+      }
+      case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
       case 'gates:lock': this.gates.all('locked'); break;
       case 'gates:shut': this.gates.all('shut'); break;
       case 'gates:open': this.gates.all('free'); break;
@@ -703,6 +732,7 @@ export class Game {
     if (this.menu.blocking) document.getElementById('clickHint')?.classList.remove('show');
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     this.gates.render(alpha);
+    for (const o of this.loos) o.render(dt);
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);

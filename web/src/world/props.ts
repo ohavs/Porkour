@@ -7,7 +7,7 @@ import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
 import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
-  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket } from './funProps';
+  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe } from './funProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -28,12 +28,18 @@ export interface PropDef {
   id?: string;
   /** Snacks (world/snacks.ts): a food can's boost, a pack of cigarettes; how many bites / cigarettes it holds. */
   snack?: 'beans' | 'spinach' | 'energy' | 'dogfood'; smokes?: boolean; servings?: number;
+  /** Heavy loot (Bob's safe): a second pig can grab it too (they drag it together); one pig alone barely budges it. */
+  coop?: boolean;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
 export class Prop implements Holdable {
   kind = 'prop' as const;
   heldBy: any = null;
+  /** Heavy loot: the second pig holding it (heldBy = the first one). */
+  helper: any = null;
+  /** Heavy loot scraping along the ground: next scrape sound. */
+  private scrapeT = 0;
   radius: number;
   synced: Synced;
   obj = new THREE.Group();
@@ -148,6 +154,18 @@ export class Prop implements Holdable {
     this.body.setAngvel({ x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 6, z: (Math.random() - 0.5) * 10 }, true);
   }
 
+  /** Heavy loot being dragged: a scrape now and then (loud: Bob hears it). Host, every fixed step. */
+  scrape() {
+    if (!this.def.coop || !this.heldBy || this.banked) return;
+    const v = this.body.linvel(), sp = Math.hypot(v.x, v.z);
+    if (sp < 0.35 || G.time < this.scrapeT) return;
+    this.scrapeT = G.time + 0.45 - Math.min(0.2, sp * 0.08);
+    const p = this.body.translation(), at = new THREE.Vector3(p.x, p.y - this.half, p.z);
+    G.audio.play('metal', { pos: at, vol: Math.min(0.75, 0.3 + sp * 0.25), pitch: 0.45 + Math.random() * 0.15, minGap: 0.1 });
+    G.fx.puff(at, { count: 2, color: 0xd8c29a, speed: 0.6, up: 0.3, life: 0.6, size: 0.4, alpha: 0.5 });
+    G.noise(at, 13);
+  }
+
   /** Called from contact force events: clunk. */
   impact(force: number) {
     if (this.def.fragile && !this.banked && this.synced.preVel.length() > this.def.fragile) { this.smash(); return; }
@@ -260,6 +278,8 @@ export const PROPS: Record<string, PropDef> = {
   snowHead: { make: () => makeSnowmanBall('head'), mass: 5, shape: 'ball', r: 0.33, damp: 0.7, sound: 'snowhit', label: 'item.snowmanHead', friction: 1, bounce: 0.05 },
   fishBucket: { make: makeFishBucket, mass: 4, shape: 'cyl', sound: 'metal', label: 'item.fishBucket', value: 45 },
   sled: { model: 'winter/sled', height: 0.42, mass: 8, sound: 'wood', label: 'item.sled', value: 30, friction: 0.06 },
+  // heavy loot: Bob's safe (two pigs drag it; one pig on spinach can too). Loud when it scrapes along.
+  safe: { make: makeSafe, mass: 150, sound: 'metal', label: 'item.safe', value: 300, friction: 0.75, bounce: 0.02, coop: true },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

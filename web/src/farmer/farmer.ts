@@ -18,6 +18,7 @@ import { sightPoint } from '../world/cover';
 import { MOD, modSight, modHear, marketHours } from '../game/modifiers';
 import { toonMat } from '../render/toon';
 import { GATE, type Gate, type Gates } from '../world/gates';
+import { LOO, looFirst, looEvery, type Outhouse } from '../world/outhouse';
 
 /** Tuning. */
 export const BOB = {
@@ -78,7 +79,7 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo';
 
 /** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
 export interface BobJob {
@@ -194,6 +195,12 @@ export class Farmer {
   private job: BobJob | null = null; private jobNext = 0;
   /** Farm 5: following footprints in the snow (the investigate state's label + when he looks for the next trail). */
   private clueNext = 0; private tracking = false;
+  /**
+   * Toilet breaks (world/outhouse.ts): when the next one is due, the outhouse he's using, when he comes out, a noise /
+   * knock he heard in there (he looks there when he's out), banging on a bolted / fallen-over door, stuck under it.
+   */
+  private looNext = looFirst(); loo: Outhouse | null = null; private looUntil = 0; private looHeard: THREE.Vector3 | null = null;
+  private looBanging = false; private looBangStart = 0; private looBang = 0; private looStuck = false; private looHeave = false;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -238,9 +245,9 @@ export class Farmer {
   get chasing() { return ['chase', 'windup', 'lunge', 'recover', 'fist', 'pant', 'slapWind', 'slap', 'aim', 'shoot'].includes(this.state); }
   /** What he carries around at this alert level (shown in his hand when no chore tool is). */
   get weapon(): '' | 'fork' | 'gun' { return this.level >= 3 ? 'gun' : this.level >= 2 ? 'fork' : ''; }
-  get asleep() { return this.state === 'sleep' || this.state === 'off' || this.state === 'away'; }
-  /** In the house asleep or off to the market (not on the farm, but he'll be back). */
-  private get gone() { return this.state === 'sleep' || this.state === 'away'; }
+  get asleep() { return this.state === 'sleep' || this.state === 'off' || this.state === 'away' || this.state === 'inLoo'; }
+  /** In the house asleep, off to the market or in the outhouse (not on the farm, but he'll be back). */
+  private get gone() { return this.state === 'sleep' || this.state === 'away' || this.state === 'inLoo'; }
   private get gate() { return v1.copy(this.zones.roadGate); }
   get flashlightOn() { return G.night > 0.5 && !this.asleep && this.state !== 'down' && !this.dozing; }
   /** Dozing on a chore (the porch rocker): eyes shut, flashlight off — also at night. */
@@ -250,6 +257,7 @@ export class Farmer {
   private go(s: State) {
     if (this.state === 'tidy' && s !== 'tidy') this.dropProp();
     if (s !== 'investigate') this.tracking = false;
+    if (this.state === 'inLoo' && s !== 'inLoo' && this.loo) { this.loo.vacate(); this.loo = null; }
     this.state = s; this.stateT = this.now;
   }
   /** Day chores, evening flashlight round, bed at night — but on alert (2+) he keeps patrolling all night. */
@@ -311,6 +319,7 @@ export class Farmer {
     this.marketDone = false; this.awayTip = null; this.awayTipPig = null;
     this.gateJob = null; this.lockNext = 0;
     if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
+    this.loo = null; this.looNext = this.now + looFirst(); this.looHeard = null;
     if (this.level) { this.level = 0; G.events.push({ type: 'alert', why: '0', text: 'down' }); }
     this.parts.snap();
     this.go('routine');
@@ -348,7 +357,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -361,6 +370,7 @@ export class Farmer {
     this.coolDown(dt);
     if (this.state === 'sleep') { this.sleepStep(dt); return; }
     if (this.state === 'away') { if (!marketHours()) this.wake(); return; }
+    if (this.state === 'inLoo') { this.looStep(); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     if (p.y < -20) { const d = this.zones.door; this.body.setTranslation({ x: d.x, y: d.y + 3, z: d.z + 3 }, true); return; }
@@ -471,6 +481,7 @@ export class Farmer {
       case 'gate': want = this.gateStep(dt); break;
       case 'job': want = this.jobStep(dt); break;
       case 'market': want = this.toMarket(dt); break;
+      case 'loo': want = this.looWalk(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -545,6 +556,11 @@ export class Farmer {
   }
   private wake(at?: THREE.Vector3) {
     if (!this.gone) return;
+    if (this.state === 'inLoo') {   // out of the outhouse (admin / the dog barked): he goes to look
+      this.exitLoo(false);
+      if (at) { this.searchAt.copy(at); this.go('investigate'); this.voice('huh'); }
+      return;
+    }
     const back = this.state === 'away';
     const d = back ? this.gate.clone() : this.zones.door;
     this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
@@ -583,7 +599,7 @@ export class Farmer {
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
     if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') && this.doing)) return 'busy';
-    if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') return 'normal';
+    if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job' || this.state === 'loo') return 'normal';
     if (this.state === 'routine' || this.state === 'dust' || this.state === 'carry') return 'normal';
     return 'alert';
   }
@@ -974,6 +990,12 @@ export class Farmer {
     this.doing = false; this.path = []; this.lookYaw = 0;
     const n = this.chores.length;
     for (let k = 1; k <= n; k++) { const i = (this.choreIdx + k) % n; if ((this.chores[i].phase ?? 'day') === phase) { this.choreIdx = i; break; } }
+    // nature calls: between two chores, off to the outhouse (a breathing window for the pigs)
+    if (phase !== 'night' && this.now > this.looNext && !this.carrying && !marketHours()) {
+      const o = this.looPick();
+      if (o) { this.loo = o; this.go('loo'); this.voice('mutter', 0.6); G.events.push({ type: 'bobLoo' }); return; }
+      this.looNext = this.now + 20;
+    }
     if (phase === 'day' && G.mod !== 'grumpy' && Math.random() < BOB.danceChance) this.dance(BOB.danceTime);
     else if (Math.random() < 0.4) this.voice('mutter', 0.5);
   }
@@ -1140,6 +1162,129 @@ export class Farmer {
     return 0;
   }
 
+  // ================================================================== toilet breaks (world/outhouse.ts)
+  /** The nearest outhouse he can use. */
+  private looPick(): Outhouse | null {
+    let best: Outhouse | null = null, bd = Infinity;
+    for (const o of G.loos as Outhouse[]) { if (!o.usable) continue; const d = o.base.distanceTo(this.pos); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
+  /** Admin: off to the outhouse now / straight inside. */
+  looNow(inside = false) {
+    if (this.state === 'off' || this.state === 'down') return;
+    if (this.state === 'inLoo') return;
+    if (this.gone) this.wake();
+    const o = this.looPick(); if (!o) return;
+    if (this.carrying) this.release(false);
+    this.stopRiding(); this.doing = false; this.path = []; this.target = null; this.hunt = null;
+    this.loo = o;
+    if (inside) this.enterLoo(o); else { this.go('loo'); G.events.push({ type: 'bobLoo' }); }
+  }
+  /** Walking over (a little faster than usual: he needs to go). */
+  private looWalk(dt: number) {
+    const o = this.loo;
+    if (!o || !o.usable) { this.loo = null; this.looNext = this.now + 25; this.backToWork(); return 0; }
+    this.activity = 'bob.loo';
+    const d = this.moveTo(o.doorstep, BOB.walk * 1.2, dt);
+    if (d < 0.6 || (d < 2.2 && this.stuck >= 2)) { this.stuck = 0; this.enterLoo(o); return 0; }
+    return BOB.walk * 1.2;
+  }
+  private enterLoo(o: Outhouse) {
+    this.stopRiding(); this.dropProp(); this.doing = false; this.path = [];
+    o.enter();
+    this.go('inLoo'); this.loo = o; this.activity = 'bob.inLoo';
+    this.looUntil = this.now + LOO.time * (0.85 + Math.random() * 0.3);
+    this.looNext = this.now + looEvery();
+    this.looHeard = null; this.looBanging = false; this.looStuck = false; this.looHeave = false;
+    this.yaw = Math.atan2(-o.front.x, -o.front.z);
+    this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = false;
+    this.vel.set(0, 0, 0);
+  }
+  /** Inside: he sees nothing. A noise close by / a knock brings him out sooner; a bolted door = he bangs, then bursts out. */
+  private looStep() {
+    const o = this.loo;
+    if (!o) { this.go('routine'); this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; return; }
+    this.activity = 'bob.inLoo';
+    for (const n of G.noises) {
+      if (n.t <= this.noiseT) continue;
+      this.noiseT = n.t;
+      const d = Math.hypot(n.x - o.base.x, n.z - o.base.z);
+      if (d < Math.min(LOO.hear, n.radius) * ALERT.hear[this.level] * modHear() && d > 0.1) {
+        if (!this.looHeard) this.voice('huh', 0.7);
+        this.looHeard = new THREE.Vector3(n.x, n.y, n.z); this.looUntil = Math.min(this.looUntil, this.now + 2);
+      }
+    }
+    if (o.tipping) return;   // falling over: `looTipped` once it lands
+    if (this.looHeave) { if (o.upright) this.exitLoo(true); return; }
+    if (this.now < this.looUntil) return;
+    if (o.bolted || this.looStuck) {
+      if (!this.looBanging) {
+        this.looBanging = true; this.looBangStart = this.now; this.looBang = 0;
+        this.voice('hey'); this.raise('prank');
+        G.events.push({ type: 'looLocked' });
+      }
+      if (this.now > this.looBang) { this.looBang = this.now + LOO.bangEvery * (0.75 + Math.random() * 0.5); o.bang(); if (Math.random() < 0.5) this.voice('grr', 0.8); }
+      if (this.now - this.looBangStart > (this.looStuck ? LOO.stuck : LOO.lockedMax)) {
+        if (this.looStuck) { this.looHeave = true; o.heave(); this.voice('grr'); }
+        else { o.burst(); this.exitLoo(true); }
+      }
+      return;
+    }
+    this.exitLoo(this.looBanging);
+  }
+  /** Out of the door: calm (back to work), curious (he heard something: looks there) or furious (searches around). */
+  private exitLoo(angry: boolean) {
+    const o = this.loo;
+    if (!o) return;
+    const at = o.exitPoint(v1);
+    if (!o.broken) o.leave(); else o.vacate();
+    this.loo = null;
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.05, z: at.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.vel.set(0, 0, 0);
+    this.pos.copy(at); this.yaw = Math.atan2(o.front.x, o.front.z);
+    this.parts.snap();
+    this.doing = false; this.path = []; this.stuck = 0;
+    const heard = this.looHeard; this.looHeard = null;
+    if (angry) {
+      this.voice('grr'); this.raise('prank');
+      this.state = 'routine';   // (not inLoo any more: go() below must not vacate again)
+      this.startSearch(at.clone().addScaledVector(o.front, 2.5), null, 4);
+    } else if (heard) { this.state = 'routine'; this.searchAt.copy(heard); this.go('investigate'); this.voice('huh'); }
+    else { this.voice('mutter', 0.6); this.state = 'routine'; this.backToWork(); }
+  }
+  /** The outhouse went over with him inside: flung out of the door — or, on its door, stuck banging till he heaves it up. */
+  looTipped(o: Outhouse, doorDown: boolean) {
+    if (this.state !== 'inLoo' || this.loo !== o) return;
+    this.raise('prank');
+    if (doorDown) {
+      this.looStuck = true; this.looBanging = true; this.looBangStart = this.now; this.looBang = this.now + 0.6; this.looUntil = this.now;
+      this.voice('hey');
+      G.events.push({ type: 'looStuck' });
+      return;
+    }
+    const dir = v2, at = o.doorOut(v1, dir);
+    o.eject();
+    this.loo = null; this.state = 'routine';
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
+    this.body.setTranslation({ x: at.x, y: Math.max(at.y, G.terrain.height(at.x, at.z) + 0.3) + CENTER, z: at.z }, true);
+    this.pos.set(at.x, at.y, at.z);
+    this.yaw = Math.atan2(-dir.x, -dir.z);
+    this.parts.snap();
+    this.vel.set(dir.x * 5, 0, dir.z * 5);
+    this.stun('down', BOB.downTime);
+    this.body.setLinvel({ x: dir.x * 5.5, y: 4 + Math.max(0, dir.y) * 5, z: dir.z * 5.5 }, true);
+    this.parts.matchVelocity();
+    G.events.push({ type: 'looFlung' });
+  }
+  /** A pig knocked on / rocked the outhouse while he's in there: he hurries out to see who it was. */
+  looKnock(o: Outhouse) {
+    if (this.state !== 'inLoo' || this.loo !== o || this.looBanging) return;
+    if (!this.looHeard) this.voice('huh', 0.8);
+    this.looHeard = o.doorstep.clone().addScaledVector(o.front, 2);
+    this.looUntil = Math.min(this.looUntil, this.now + 2.5);
+  }
+
   // ================================================================== market day
   /** Admin: he may go (again) this round. */
   resetMarket() { this.marketDone = false; }
@@ -1163,6 +1308,7 @@ export class Farmer {
   /** The guard dog barked at a pig: he comes over to look (or wakes up). */
   tipOff(p: Pig, at: THREE.Vector3) {
     if (this.state === 'away') { this.awayTip = at.clone(); this.awayTipPig = p; return; }   // he'll hear about it later
+    if (this.state === 'inLoo') { this.looHeard = at.clone(); this.looUntil = Math.min(this.looUntil, this.now + 1.5); return; }   // he hurries
     if (this.state === 'off' || this.state === 'down' || this.carrying) return;
     if (this.state === 'sleep') { this.wake(at); return; }
     if (!this.calm() || this.state === 'suspect') return;

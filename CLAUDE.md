@@ -102,6 +102,7 @@ Dead by Daylight, Party Animals.
 | `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, `game.enterLobby()` + `LobbyUI`, PLAY → `game.startPlay()`, Esc → menu. |
 | `game/lobbyStage.ts`, `game/lobbyUI.ts` | **Lobby (s13, "Fortnite style, but the pig moves")**: `LobbyStage` = a farmyard diorama at z 760 (far from every farm; sky + clouds ride with the camera), fixed camera, invisible walls on the screen edges (rebuilt on resize; online every machine uses 16:9 walls), throwables (beach ball, apples, eggs, pie, crate, 2 cans, cigarettes: lobby copies with value 0, respawn). `Game.mode` 'lobby' (clock frozen at 16:24, `G.lobby`: idle pigs face the camera, holding / clicking = face the pointer, W = away from the camera, mouse not locked: `Input.free` + `mouseX/Y`) / 'play'. `LobbyUI`: top bar (Play / Wardrobe / Shop = wardrobe's gadget tab / Online, wallet, sound, full screen, settings), party (left), controls as icons, farm card + PLAY. Online: joining a waiting room = `goOnline` right away, the party plays on the stage, party panel = room (code, seats, chat, leave = reload); host's PLAY = start for all. |
 | `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
+| `world/outhouse.ts` | **Bob's outhouse (s14)** — one per farm (decor kit `outhouse()` → `FarmBuild.loos`, `G.loos`, synced entity after the gates). Bob's toilet breaks (`LOO`): first ~70–120 s into the round, then every 150–210 s, taken between two chores (`nextChore`, not at night / market) → state `loo` (walks over) → `inLoo` (hidden like sleep, sees nothing ~18 s; a noise ≤14 m / a knock on the hut = he comes out sooner and looks there). Pigs: RMB at the **bolt** (outside, door side) slides it (LMB = headbutt = a knock) → he bangs (hut jolts, noise) then bursts the door off after 20 s and searches angrily (prank `looLock`). **Rocking** (`rock` 0..1: ram 0.62, headbutt / punch 0.24 × strength, thrown things by momentum) → at 1 it **tips** (kinematic body turns about a bottom edge, snapped to the hut's 4 sides): with Bob inside = prank `looTip` — door up / sideways: he's flung out (knock-down), onto its door: stuck banging 10 s, then heaves it back up. Bob fixes a tipped hut / missing door when he sees it (`G.jobs`, `bob.fixLoo`). Admin → "Outhouse & safe". |
 | `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
 | `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
@@ -185,7 +186,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 13: ✅ **Fortnite-style lobby** (movable pig on a stage, party, online room on the stage), ✅ **pig arms**
    (elbows, hoof hands, IK), ✅ **snacks** (food cans with boosts, cigarettes), ✅ coloured mission arrows (one per
    mission, next step only), ✅ Bob dances next to pigs, ✅ full screen, ✅ simpler settings.
-   Next: user feedback on the lobby / arms; maybe show the outfit on the lobby stage while in the wardrobe.
+   Session 14: ✅ **Bob's outhouse** (toilet breaks = breathing window on every farm; bolt him in, tip it over with him
+   inside; 2 pranks), ✅ **heavy loot: Bob's safe** (two pigs drag it together, or one pig on spinach; bonus prank).
+   Next: user feedback; more breathing windows (phone call?), more heavy loot (TV, grandfather clock).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -290,6 +293,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   snacks (admin → Snacks); the lobby. Also fixed: the camera could spin on the first mouse move after the pointer lock.
   Checked headless: lobby (walls, grab / throw, PLAY → round), 2 browsers online (room on the stage, moves synced,
   host START → both in the round), eating / spinach / smoking shots, Bob near-pig dance.
+- 2026-11-18 (session 14, "continue"): **Bob's outhouse** (see `outhouse.ts`) + **heavy loot: Bob's safe** (procedural
+  `makeSafe`, 150 kg, 300 coins, `PropDef.coop`): a second pig can grab heavy loot another pig holds (`Prop.helper`;
+  release hands it to the other), lift / drag forces add up through the two grips, pigs holding it move only as fast as
+  it slides (+1.1 m/s), alone it won't budge → grip slips + `two` icon pops over the pig ("bring a friend"); spinach
+  (`Pig.dragMax` ×1.6) lets one pig drag it slowly. Scrapes = low metal clank + noise 13 m. Bonus prank `safeSteal`.
+  Missions `looLock` / `looTip` / `safeSteal` are added per farm automatically (`Round.start`: outhouse / safe exist).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)

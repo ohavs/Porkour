@@ -263,3 +263,33 @@ export function makeFishBucket() {
   }
   return g;
 }
+
+/**
+ * Bob's safe (heavy loot: too heavy for one pig — two drag it, or one pig full of spinach): a squat green-grey steel
+ * box on little feet, a big brass dial, a lever handle, rivets and a gold "$".
+ */
+export function makeSafe() {
+  const g = new THREE.Group();
+  const W = 0.82, H = 0.86, D = 0.74;
+  add(g, new THREE.BoxGeometry(W, H, D), 0x4f6b5c, 0, 0.08 + H / 2, 0);                                // body
+  add(g, new THREE.BoxGeometry(W + 0.04, 0.07, D + 0.04), 0x3c5246, 0, 0.08 + H, 0);                    // lid rim
+  add(g, new THREE.BoxGeometry(W - 0.14, H - 0.16, 0.04), 0x5e7d6b, 0, 0.08 + H / 2, D / 2 + 0.02);     // door
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, new THREE.CylinderGeometry(0.06, 0.07, 0.08, 8), 0x2b2b30, sx * (W / 2 - 0.08), 0.04, sz * (D / 2 - 0.08));   // feet
+  add(g, new THREE.CylinderGeometry(0.12, 0.12, 0.05, 20), 0xd9a92e, 0.06, 0.08 + H / 2 + 0.08, D / 2 + 0.06, Math.PI / 2, 0, 0);   // dial
+  add(g, new THREE.CylinderGeometry(0.06, 0.06, 0.06, 12), 0x8a6a1c, 0.06, 0.08 + H / 2 + 0.08, D / 2 + 0.08, Math.PI / 2, 0, 0);
+  add(g, new THREE.BoxGeometry(0.03, 0.05, 0.02), 0x3b2412, 0.06, 0.08 + H / 2 + 0.17, D / 2 + 0.085);   // dial mark
+  add(g, new THREE.BoxGeometry(0.2, 0.04, 0.04), 0xc9ced8, 0.06, 0.08 + H / 2 - 0.16, D / 2 + 0.07, 0, 0, 0.5);   // lever
+  add(g, new THREE.SphereGeometry(0.035, 8, 6), 0xc9ced8, 0.14, 0.08 + H / 2 - 0.12, D / 2 + 0.08);
+  for (const y of [0.24, 0.72]) add(g, new THREE.BoxGeometry(0.05, 0.12, 0.05), 0x2b2b30, -(W / 2 - 0.1), 0.08 + y, D / 2 + 0.05);   // hinges
+  const rivet = new THREE.SphereGeometry(0.022, 6, 5);
+  for (const x of [-1, 1]) for (const y of [0, 1]) add(g, rivet, 0xb7c0b8, x * (W / 2 - 0.1), 0.08 + 0.1 + y * (H - 0.2), D / 2 + 0.045);
+  // a gold dollar sign on top
+  const s = new THREE.Shape();
+  s.moveTo(0.06, 0.07); s.bezierCurveTo(0.02, 0.1, -0.07, 0.09, -0.06, 0.03); s.bezierCurveTo(-0.05, -0.01, 0.06, 0.0, 0.06, -0.04);
+  s.bezierCurveTo(0.07, -0.1, -0.03, -0.1, -0.07, -0.07); s.lineTo(-0.06, -0.05); s.bezierCurveTo(-0.02, -0.08, 0.05, -0.08, 0.04, -0.04);
+  s.bezierCurveTo(0.03, -0.01, -0.08, -0.02, -0.08, 0.03); s.bezierCurveTo(-0.08, 0.11, 0.03, 0.11, 0.07, 0.09); s.lineTo(0.06, 0.07);
+  const dollar = add(g, new THREE.ExtrudeGeometry(s, { depth: 0.015, bevelEnabled: false }), 0xffd166, 0, 0.08 + H + 0.04, 0, -Math.PI / 2, 0, 0);
+  dollar.scale.setScalar(1.8);
+  add(g, new THREE.BoxGeometry(0.018, 0.02, 0.3), 0xffd166, 0, 0.08 + H + 0.05, 0);
+  return g;
+}

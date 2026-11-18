@@ -9,6 +9,7 @@ import type { Terrain, Rect } from './terrain';
 import type { FarmBuild } from './farmKit';
 import type { DayNight } from './daynight';
 import type { PROPS } from './props';
+import { Outhouse } from './outhouse';
 
 interface Ctx {
   scene: THREE.Scene; t: Terrain; rng: Rng; out: FarmBuild; daynight: DayNight; blocked: Rect[];
@@ -215,15 +216,9 @@ export function decorKit(c: Ctx) {
     block(x, z, 1.8);
   };
 
-  // ---------------------------------------------------------------- outhouse (with a moon on the door)
+  // ---------------------------------------------------------------- outhouse (Bob's toilet breaks: world/outhouse.ts)
   const outhouse = (x: number, z: number, yaw: number) => {
-    const g = group(x, z, yaw);
-    add(new THREE.BoxGeometry(1.2, 2.1, 1.2), 0x8f6034, [0, 1.05, 0], g);
-    add(new THREE.BoxGeometry(1.45, 0.1, 1.5), 0x6b4226, [0, 2.2, 0], g, [0.12, 0, 0]);
-    add(new THREE.BoxGeometry(0.8, 1.7, 0.04), 0xa8774a, [0, 0.9, 0.61], g);
-    const moon = new THREE.Shape(); moon.absarc(0, 0, 0.11, 0.6, Math.PI * 2 - 0.6, false); moon.absarc(0.06, 0, 0.09, Math.PI * 2 - 0.9, 0.9, true);
-    add(new THREE.ShapeGeometry(moon), 0x2b1a0c, [0, 1.5, 0.64], g);
-    staticBox(V3(x, y(x, z) + 1.05, z), V3(0.62, 1.05, 0.62), yaw);
+    (out.loos ??= []).push(new Outhouse(scene, x, y(x, z), z, yaw));
     block(x, z, 1.6);
   };
 
