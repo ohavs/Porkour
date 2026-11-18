@@ -51,7 +51,7 @@ export class FpHands {
       const side = i ? 1 : -1, step = Math.sin(this.phase + i * Math.PI);
       // four legs: the front legs point down-forward and trot; standing: T-rex arms up front
       // (four legs: the front hooves show at the bottom edge, stepping when you walk)
-      let rx = 0.5 - S.stand * 0.72, y = -0.29 + S.stand * 0.05, z = SHOULDER[i].z - S.stand * 0.02, x = SHOULDER[i].x, ry = 0, elbow = 0.1 + S.stand * 0.75;
+      let rx = 0.35 - S.stand * 0.57, y = -0.2 - S.stand * 0.04, z = SHOULDER[i].z - S.stand * 0.02, x = SHOULDER[i].x, ry = 0, elbow = 0.1 + S.stand * 0.75;
       rx += step * 0.32 * (1 - S.stand) * clamp(sp / 3, 0, 1); y += Math.max(0, -step) * 0.025 * (1 - S.stand) * clamp(sp / 3, 0, 1);
       // holding: both hooves forward, a little inward
       rx = THREE.MathUtils.lerp(rx, 0.02, S.hold); y = THREE.MathUtils.lerp(y, -0.22, S.hold); z = THREE.MathUtils.lerp(z, -0.4, S.hold);
