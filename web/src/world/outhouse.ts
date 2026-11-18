@@ -17,12 +17,12 @@ import type { BobJob } from '../farmer/farmer';
 export const LOO = {
   /** His breaks: the first one this many s into the round, then every … s (he goes between two chores). */
   first: [70, 120] as [number, number], every: [150, 210] as [number, number],
-  /** Seconds inside; a noise this close (m) or a knock on the door brings him out sooner. */
-  time: 18, hear: 14,
+  /** Seconds inside; a noise this close (m) or a knock on the door brings him out sooner (in … s: time to finish the job). */
+  time: 18, hear: 14, hurry: 5,
   /** Bolted in: he bangs every … s, bursts the door off after … s. Landed on its door: he heaves it up after … s. */
   bangEvery: 1.2, lockedMax: 20, stuck: 10,
   /** Rocking it: a ram adds this, a headbutt / punch this × the hit's strength, a thrown thing by momentum / … ; 1 = over. */
-  ram: 0.62, punch: 0.24, impact: 170, drain: 0.1,
+  ram: 0.62, punch: 0.3, impact: 170, drain: 0.07,
   /** Bob notices it tipped / its door off (m), waits this long first, fixes it in … s. */
   notice: 26, fixAfter: 5, fixTime: 6,
   /** How close a pig must be to the bolt (m). */

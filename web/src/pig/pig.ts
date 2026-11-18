@@ -278,7 +278,10 @@ export class Pig implements Holdable {
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
     if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
-    if (coopOf(this.held)) { const hv = this.held!.body.linvel(); speed = Math.min(speed, Math.hypot(hv.x, hv.z) + 1.1); }   // heavy loot: you go as fast as it slides
+    if (coopOf(this.held)) {   // heavy loot: you go as fast as it slides; alone (spinach) only at a crawl
+      const hv = this.held!.body.linvel(), alone = !(this.held as { helper?: unknown }).helper;
+      speed = Math.min(speed, Math.hypot(hv.x, hv.z) + 1.1, alone ? 1.4 : Infinity);
+    }
     if (this.muddy > 0) speed *= 0.95;
     if (this.boosted('energy')) speed *= SNACK.fast;
     let tx = mx * speed, tz = mz * speed;

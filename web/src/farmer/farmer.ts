@@ -1211,7 +1211,7 @@ export class Farmer {
       const d = Math.hypot(n.x - o.base.x, n.z - o.base.z);
       if (d < Math.min(LOO.hear, n.radius) * ALERT.hear[this.level] * modHear() && d > 0.1) {
         if (!this.looHeard) this.voice('huh', 0.7);
-        this.looHeard = new THREE.Vector3(n.x, n.y, n.z); this.looUntil = Math.min(this.looUntil, this.now + 2);
+        this.looHeard = new THREE.Vector3(n.x, n.y, n.z); this.looUntil = Math.min(this.looUntil, this.now + LOO.hurry);
       }
     }
     if (o.tipping) return;   // falling over: `looTipped` once it lands
@@ -1282,7 +1282,7 @@ export class Farmer {
     if (this.state !== 'inLoo' || this.loo !== o || this.looBanging) return;
     if (!this.looHeard) this.voice('huh', 0.8);
     this.looHeard = o.doorstep.clone().addScaledVector(o.front, 2);
-    this.looUntil = Math.min(this.looUntil, this.now + 2.5);
+    this.looUntil = Math.min(this.looUntil, this.now + LOO.hurry);
   }
 
   // ================================================================== market day
