@@ -2,15 +2,18 @@
  * Keyboard + mouse + gamepad → one Controls snapshot per frame.
  * Button presses are latched until a fixed physics step consumes them (no lost presses at high FPS).
  */
-/** grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold), tilt = R (tip what you hold: pour). */
-export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink' | 'tilt';
+/**
+ * grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold), tilt = R (tip what you hold: pour),
+ * view = V (first ↔ third person; local only, never sent).
+ */
+export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink' | 'tilt' | 'view';
 
 const KEYS: Record<string, Button> = {
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyQ: 'fart', KeyE: 'stand',
-  KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink', KeyR: 'tilt',
+  KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink', KeyR: 'tilt', KeyV: 'view',
 };
-/** Gamepad: RB = tip (pour), R3 = oink, D-pad up / down = reach further / back. */
-const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'tilt', 11: 'oink' };
+/** Gamepad: RB = tip (pour), R3 = oink, D-pad up / down = reach further / back, View (Back) = first ↔ third person. */
+const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'tilt', 11: 'oink', 8: 'view' };
 
 export class Input {
   moveX = 0; moveY = 0;        // -1..1, y = forward

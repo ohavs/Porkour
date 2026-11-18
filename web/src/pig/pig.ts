@@ -27,6 +27,8 @@ export interface PigInput {
   ax: number; ay: number; az: number;
   /** Mouse wheel: how far the arms / neck stretch (0..1). R held: tip what you hold (pour). */
   reach: number; tilt: boolean;
+  /** First person: the body always faces where the camera looks (the hooves / snout work where you look). */
+  face?: boolean;
 }
 export const emptyInput = (): PigInput => ({
   mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false, attack: false,
@@ -407,7 +409,7 @@ export class Pig implements Holdable {
 
     // facing: camera direction while moving (strafe), movement direction while sprinting
     const want = this.sprinting ? Math.atan2(this.vel.x, this.vel.z) : inp.yaw;
-    if (moving || this.held || this.handle || this.chargeStart >= 0 || G.lobby) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
+    if (moving || this.held || this.handle || this.chargeStart >= 0 || G.lobby || inp.face) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
 
     // jump
     if (this.jumpBuf > 0 && this.coyote > 0) {
@@ -1277,6 +1279,8 @@ export class Pig implements Holdable {
   // ------------------------------------------------------------------ render
   private vq = new THREE.Quaternion(); private tq = new THREE.Quaternion(); private tq2 = new THREE.Quaternion();
   private relQ = [0, 1, 2, 3, 4].map(() => new THREE.Quaternion()); private handM = new THREE.Vector3();
+  /** Where the hooves / snout are working now, in the world (what it holds, a machine part's knob, a touch), or null — first person's arms reach there. */
+  handAt: THREE.Vector3 | null = null; private handAtV = new THREE.Vector3();
   render(alpha: number, dt: number) {
     if (this.out) return;
     const r = this.visual.root;
@@ -1310,6 +1314,10 @@ export class Pig implements Holdable {
       hand = this.handM.copy(this.touchP).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
       hand.y += CENTER[this.shape];
     }
+    if (hand && !limp) {
+      this.handAt = this.handAtV.copy(hand); this.handAt.y -= CENTER[this.shape];
+      this.handAt.applyQuaternion(r.quaternion).add(r.position);
+    } else this.handAt = null;
     this.visual.update({
       limp, rel: this.relQ, hand, handW: this.held ? this.held.radius : this.handle ? 0.04 : 0,
       act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',

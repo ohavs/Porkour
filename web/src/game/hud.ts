@@ -22,6 +22,8 @@ export const SVG = {
   soundOn: '<svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff6e6" d="M4 9h4l5-4v14l-5-4H4z"/><path fill="none" stroke="#fff6e6" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
   soundOff: '<svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff6e6" d="M4 9h4l5-4v14l-5-4H4z"/><path stroke="#ff7a5a" stroke-width="2.4" stroke-linecap="round" d="m16 9 6 6m0-6-6 6"/></svg>',
   help: '<svg viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="6" width="20" height="13" rx="3" fill="none" stroke="#fff6e6" stroke-width="2"/><path stroke="#fff6e6" stroke-width="2" stroke-linecap="round" d="M6 10h1M10 10h1M14 10h1M18 10h0M7 15h10"/></svg>',
+  // first ↔ third person: an eye with a little pig-head outline behind it
+  view: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M2 12.5s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z" fill="none" stroke="#fff6e6" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.4" fill="#fff6e6"/><circle cx="12" cy="12.5" r="1.5" fill="#3b2412"/></svg>',
   menu: '<svg viewBox="0 0 24 24" width="24" height="24"><path fill="#fff6e6" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm9 4.6v-2.2l-2.4-.6a7 7 0 0 0-.7-1.7l1.3-2.1-1.6-1.6-2.1 1.3a7 7 0 0 0-1.7-.7L13.1 3h-2.2l-.6 2.4a7 7 0 0 0-1.7.7L6.5 4.8 4.9 6.4l1.3 2.1a7 7 0 0 0-.7 1.7L3 10.9v2.2l2.4.6c.2.6.4 1.2.7 1.7l-1.3 2.1 1.6 1.6 2.1-1.3c.5.3 1.1.5 1.7.7l.6 2.5h2.2l.6-2.4a7 7 0 0 0 1.7-.7l2.1 1.3 1.6-1.6-1.3-2.1c.3-.5.5-1.1.7-1.7z"/></svg>',
 };
 
@@ -113,7 +115,7 @@ export class Hud {
     this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
-      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + `<div class="keys">${t('help.keys')}</div>`;
+      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + row('V', 'help.view') + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
