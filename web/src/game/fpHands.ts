@@ -9,7 +9,7 @@ import type { Pig } from '../pig/pig';
  * arms standing, a jab on a punch, both hooves forward around what it holds, pulled back winding up a throw, a hoof
  * to the mouth eating / smoking. Children of the camera; drawn on top (no clipping into walls).
  */
-const SHOULDER = [new THREE.Vector3(-0.2, -0.3, -0.3), new THREE.Vector3(0.2, -0.3, -0.3)];
+const SHOULDER = [new THREE.Vector3(-0.17, -0.27, -0.42), new THREE.Vector3(0.17, -0.27, -0.42)];
 
 export class FpHands {
   readonly root = new THREE.Group();
@@ -18,17 +18,17 @@ export class FpHands {
   private phase = 0; private s = { stand: 0, hold: 0, wind: 0, mouth: 0 };
 
   constructor(camera: THREE.Camera) {
-    this.skin = toonMat(0xffa9c2); this.hoof = toonMat(0x6b4048);
+    this.skin = toonMat(0xffa9c2); this.hoof = toonMat(0x5a3a3e);
     for (const m of [this.skin, this.hoof]) { m.depthTest = false; m.depthWrite = false; }
-    const upperG = new THREE.CapsuleGeometry(0.055, 0.2, 4, 10), foreG = new THREE.CapsuleGeometry(0.05, 0.17, 4, 10);
-    const hoofG = new THREE.CylinderGeometry(0.055, 0.06, 0.07, 12), toeG = new THREE.SphereGeometry(0.035, 8, 6);
+    const upperG = new THREE.CapsuleGeometry(0.034, 0.13, 4, 10), foreG = new THREE.CapsuleGeometry(0.031, 0.11, 4, 10);
+    const hoofG = new THREE.CylinderGeometry(0.03, 0.036, 0.045, 12), toeG = new THREE.SphereGeometry(0.021, 8, 6);
     for (let i = 0; i < 2; i++) {
       const g = new THREE.Group(); g.position.copy(SHOULDER[i]); this.root.add(g);
-      const up = new THREE.Mesh(upperG, this.skin); up.rotation.x = -Math.PI / 2; up.position.z = -0.12; g.add(up);
-      const fore = new THREE.Group(); fore.position.z = -0.25; g.add(fore);
-      const fm = new THREE.Mesh(foreG, this.skin); fm.rotation.x = -Math.PI / 2; fm.position.z = -0.1; fore.add(fm);
-      const h = new THREE.Mesh(hoofG, this.hoof); h.rotation.x = -Math.PI / 2; h.position.z = -0.22; fore.add(h);
-      const toes = [-1, 1].map((s) => { const t = new THREE.Mesh(toeG, this.hoof); t.position.set(s * 0.025, 0, -0.26); t.scale.set(0.8, 1, 1.3); fore.add(t); return t; });
+      const up = new THREE.Mesh(upperG, this.skin); up.rotation.x = -Math.PI / 2; up.position.z = -0.08; g.add(up);
+      const fore = new THREE.Group(); fore.position.z = -0.16; g.add(fore);
+      const fm = new THREE.Mesh(foreG, this.skin); fm.rotation.x = -Math.PI / 2; fm.position.z = -0.07; fore.add(fm);
+      const h = new THREE.Mesh(hoofG, this.hoof); h.rotation.x = -Math.PI / 2; h.position.z = -0.15; fore.add(h);
+      const toes = [-1, 1].map((s) => { const t = new THREE.Mesh(toeG, this.hoof); t.position.set(s * 0.016, 0, -0.175); t.scale.set(0.8, 1, 1.4); fore.add(t); return t; });
       this.arms.push({ g, fore, toes });
     }
     this.root.traverse((o) => { o.renderOrder = 50; o.frustumCulled = false; });
@@ -50,22 +50,23 @@ export class FpHands {
     this.arms.forEach((a, i) => {
       const side = i ? 1 : -1, step = Math.sin(this.phase + i * Math.PI);
       // four legs: the front legs point down-forward and trot; standing: T-rex arms up front
-      let rx = 0.95 - S.stand * 1.15, y = -0.42 + S.stand * 0.14, z = -0.22 - S.stand * 0.05, x = SHOULDER[i].x, ry = 0, elbow = 0.15 + S.stand * 0.75;
-      rx += step * 0.35 * (1 - S.stand) * clamp(sp / 3, 0, 1);
+      // (four legs: the front hooves show at the bottom edge, stepping when you walk)
+      let rx = 0.5 - S.stand * 0.72, y = -0.29 + S.stand * 0.05, z = SHOULDER[i].z - S.stand * 0.02, x = SHOULDER[i].x, ry = 0, elbow = 0.1 + S.stand * 0.75;
+      rx += step * 0.32 * (1 - S.stand) * clamp(sp / 3, 0, 1); y += Math.max(0, -step) * 0.025 * (1 - S.stand) * clamp(sp / 3, 0, 1);
       // holding: both hooves forward, a little inward
-      rx = THREE.MathUtils.lerp(rx, -0.05, S.hold); y = THREE.MathUtils.lerp(y, -0.24, S.hold); z = THREE.MathUtils.lerp(z, -0.32, S.hold);
-      ry += -side * 0.3 * S.hold; elbow = THREE.MathUtils.lerp(elbow, 0.35, S.hold);
+      rx = THREE.MathUtils.lerp(rx, 0.02, S.hold); y = THREE.MathUtils.lerp(y, -0.22, S.hold); z = THREE.MathUtils.lerp(z, -0.4, S.hold);
+      ry += -side * 0.32 * S.hold; elbow = THREE.MathUtils.lerp(elbow, 0.35, S.hold);
       // winding up a throw: pulled back and up
-      z += S.wind * 0.12; y += S.wind * 0.06; rx -= S.wind * 0.5;
+      z += S.wind * 0.1; y += S.wind * 0.05; rx -= S.wind * 0.5;
       // punch: the right hoof jabs (four legs: a headbutt — both arms brace)
-      if (i === 1 && pig.standing) { z -= punch * 0.28; elbow -= punch * 0.7; rx -= punch * 0.2; }
+      if (i === 1 && pig.standing) { z -= punch * 0.2; elbow -= punch * 0.7; rx -= punch * 0.25; }
       // eating / smoking: the right hoof to the mouth
-      if (i === 1) { x = THREE.MathUtils.lerp(x, 0.06, S.mouth); y = THREE.MathUtils.lerp(y, -0.2, S.mouth); z = THREE.MathUtils.lerp(z, -0.12, S.mouth); rx = THREE.MathUtils.lerp(rx, -0.9, S.mouth); ry = THREE.MathUtils.lerp(ry, -0.5, S.mouth); elbow = THREE.MathUtils.lerp(elbow, 1.6, S.mouth); }
+      if (i === 1) { x = THREE.MathUtils.lerp(x, 0.05, S.mouth); y = THREE.MathUtils.lerp(y, -0.2, S.mouth); z = THREE.MathUtils.lerp(z, -0.24, S.mouth); rx = THREE.MathUtils.lerp(rx, -0.9, S.mouth); ry = THREE.MathUtils.lerp(ry, -0.5, S.mouth); elbow = THREE.MathUtils.lerp(elbow, 1.6, S.mouth); }
       a.g.position.set(x, y + bob, z);
       a.g.rotation.set(-rx, ry, side * 0.08);   // rx = how far the arm points down
       a.fore.rotation.x = elbow;                 // the forearm bends up at the elbow
       const open = pig.held ? 0.5 : 0.15;
-      a.toes.forEach((t, k) => { t.position.x = (k ? 1 : -1) * (0.02 + open * 0.03); });
+      a.toes.forEach((t, k) => { t.position.x = (k ? 1 : -1) * (0.013 + open * 0.02); });
     });
   }
 }

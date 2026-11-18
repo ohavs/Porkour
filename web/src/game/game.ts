@@ -885,7 +885,7 @@ export class Game {
     else if (ADMIN.fp) {
       // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen
       const eye = this.local.visual.rig.head.getWorldPosition(tmpV), f = this.local.forward;
-      eye.addScaledVector(f, 0.22); eye.y += 0.08;
+      eye.addScaledVector(f, 0.12); eye.y += 0.08;
       this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
     } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
     const fp = ADMIN.fp && this.mode === 'play';
