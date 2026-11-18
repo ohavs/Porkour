@@ -6,6 +6,7 @@ import { toonMat } from '../render/toon';
 import { PROPS, type Prop } from '../world/props';
 import type { Critter } from '../world/animals';
 import type { Gate } from '../world/gates';
+import type { Outhouse } from '../world/outhouse';
 import { SETTINGS, saveSettings } from './settings';
 import { gadget, consumeGadget, loadout, level, levelProgress, HORSESHOE_BONUS, type GadgetId } from './shop';
 import { POOL_IDS, type PoolId } from '../world/gadgets';
@@ -32,14 +33,16 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // farm 4 (pumpkin farm at night)
   | 'lanternsOut' | 'catapultBob' | 'pigLaunch' | 'giantPumpkin' | 'pumpkinSmash'
   // farm 5 (winter)
-  | 'snowballBob' | 'bigSnowball' | 'snowmanDown' | 'bobIce' | 'iceHole' | 'bigPresent';
+  | 'snowballBob' | 'bigSnowball' | 'snowmanDown' | 'bobIce' | 'iceHole' | 'bigPresent'
+  // every farm: Bob's outhouse, his safe (heavy: two pigs)
+  | 'looLock' | 'looTip' | 'safeSteal';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
-  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent'];
-const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', ...REQ_POOL];
+  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip'];
+const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
 export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
@@ -62,6 +65,7 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   cheeseBob: { props: ['cheeseWheel'], to: 'bob' }, prizeCheese: { props: ['prizeCheese'], to: 'stash' },
   spillMilk: { props: ['milkChurn'] }, milkSlip: { props: ['milkChurn'] },
   giantPumpkin: { props: ['giantPumpkin'], to: 'stash' }, pumpkinSmash: { props: ['patchPumpkin', 'patchPumpkinY'] },
+  safeSteal: { props: ['safe'], to: 'stash' },
   snowballBob: { props: ['snowball'], to: 'bob', noArrow: true }, bigSnowball: { props: ['snowboulder'], to: 'bob' }, bigPresent: { props: ['bigPresent'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
@@ -183,7 +187,10 @@ export class Round {
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
     this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod(this.game.farm.noMods));
-    const can = this.game.farm.missions, own = this.game.farm.featured ?? [];
+    // + what every farm has: Bob's outhouse (bolt him in / tip it over), his safe (heavy loot)
+    const can: MissionId[] = [...this.game.farm.missions, ...(this.game.loos.length ? ['looLock', 'looTip'] as MissionId[] : []),
+      ...(this.game.farm.props.some((p) => p.def === PROPS.safe) ? ['safeSteal'] as MissionId[] : [])];
+    const own = this.game.farm.featured ?? [];
     // a farm with its own pranks: one of the two required ones is always one of them
     const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
     const req = [...first, ...pick(REQ_POOL.filter((m) => can.includes(m) && !first.includes(m)), 2 - first.length)];
@@ -240,6 +247,8 @@ export class Round {
     if (type === 'smashed' && (text === 'patchPumpkin' || text === 'patchPumpkinY')) this.count('pumpkinSmash');
     if (type === 'catapultBob') this.done('catapultBob');
     if (type === 'pigLaunched') this.done('pigLaunch');
+    if (type === 'looLocked') this.done('looLock');
+    if (type === 'looTipped' && text === 'bob') this.done('looTip');
   }
 
   step(dt: number) {
@@ -324,6 +333,7 @@ export class Round {
     if (pr.def === PROPS.prizeCheese) this.done('prizeCheese');
     if (pr.def === PROPS.giantPumpkin) this.done('giantPumpkin');
     if (pr.def === PROPS.bigPresent) this.done('bigPresent');
+    if (pr.def === PROPS.safe) this.done('safeSteal');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
@@ -446,6 +456,7 @@ export class Round {
         case 'snowmanDown': mark(i, g.farm.winter?.snowmanSpots()[0]?.markPos); return;
         case 'iceHole': if (L.held?.kind === 'prop') { mark(i, this.wherePos('hole', new THREE.Vector3()), 0.6); return; } mark(i, g.farm.winter?.holeSpot?.markPos); return;
         case 'bobIce': atBob(i); return;
+        case 'looLock': case 'looTip': { const o = near(G.loos as Outhouse[], (x) => x.base); mark(i, o?.markPos); return; }
         case 'mudPorch': if (L.muddy > 0) mark(i, this.wherePos('porch', new THREE.Vector3()), 1.4); return;
         case 'wolfScare': { const w = near((G.wolves as { active: boolean; pos: THREE.Vector3 }[]).filter((x) => x.active), (x) => x.pos); if (w) mark(i, w.pos, 1.2); return; }
         case 'whackBob': {

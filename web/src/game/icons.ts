@@ -53,6 +53,10 @@ export const IC = {
   zzz: svg(`<path d="M4 9h6l-6 7h6M13 4h5l-5 6h5M16 14h4l-4 5h4" fill="none" stroke="#cfe8ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`),
   note: svg(`<path d="M9 18V5l11-2v13" fill="none" stroke="#ff9ad2" stroke-width="2.6"/><circle cx="6.5" cy="18" r="3" fill="#ff9ad2" ${O}/><circle cx="17.5" cy="16" r="3" fill="#ff9ad2" ${O}/>`),
   cough: svg(`<path d="M7 18a4 4 0 0 1-.6-8A5 5 0 0 1 16 8.5 3.8 3.8 0 0 1 17.5 18z" fill="#b6e36a" ${O}/>`),
+  /** Bob's outhouse (a door with a moon). */
+  loo: svg(`<path d="M4 9 12 3l8 6" fill="#8a5a35" ${O}/><rect x="5.5" y="8" width="13" height="14" rx="1" fill="#b9814a" ${O}/><rect x="8.5" y="11" width="7" height="11" fill="#d9a46a" ${O}/><path d="M13.6 13.2a1.9 1.9 0 1 0 0 3.4 2.4 2.4 0 0 1 0-3.4z" fill="#3b2412"/>`),
+  /** Too heavy alone: two pigs needed. */
+  two: svg(`<ellipse cx="8" cy="14" rx="6" ry="4.6" fill="#ffb3c7" ${O}/><ellipse cx="17" cy="11.5" rx="5.6" ry="4.3" fill="#ff9ab4" ${O}/><circle cx="20.6" cy="11" r="1.6" fill="#ff7aa0" ${O}/><circle cx="11.8" cy="13.6" r="1.6" fill="#ff7aa0" ${O}/><path d="M5 18.4v2.6M10 18.4v2.6M15 15.6v2.4M19.5 15.6v2.4" ${O}/>`),
   cart: svg(`<path d="M2 4h3l2.5 11h11L21 7H6.5" fill="none" stroke="#fff6e6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19.5" r="1.8" fill="#ffd166" ${O}/><circle cx="17" cy="19.5" r="1.8" fill="#ffd166" ${O}/>`),
   aim: svg(`<circle cx="12" cy="12" r="8" fill="none" stroke="#ff5a3c" stroke-width="2.6"/><circle cx="12" cy="12" r="2.4" fill="#ff5a3c"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5" stroke="#ff5a3c" stroke-width="2.4" stroke-linecap="round"/>`),
   carry: svg(`<circle cx="12" cy="13" r="7" fill="#ffb3c7" ${O}/><path d="M5 7l3 3m11-3-3 3" stroke="#ffd9b8" stroke-width="3" stroke-linecap="round"/><path d="m9 13 1.5 1.5M9 14.5 10.5 13m3.5 0 1.5 1.5M14 14.5l1.5-1.5" stroke="#3b2412" stroke-width="1.3"/>`),

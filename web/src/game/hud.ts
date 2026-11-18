@@ -211,6 +211,7 @@ export class Hud {
     else if (st === 'dance') { txt = t('bob.dance'); cls = 'green'; ic = 'note'; }
     else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; ic = 'zzz'; }
     else if (st === 'away') { txt = t('bob.market'); cls = 'blue'; ic = 'cart'; }
+    else if (st === 'loo' || st === 'inLoo') { txt = t(st === 'loo' ? 'bob.loo' : 'bob.inLoo'); cls = 'blue'; ic = 'loo'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; ic = 'wolf'; }
     else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; ic = 'trap'; }
     else if (bob.doing && bob.chores[bob.choreIdx]?.anim === 'nap') ic = 'zzz';
@@ -219,7 +220,7 @@ export class Hud {
     this.bob.title = txt;
     // marker
     let sym = '', col = '#ffd166', fill = 0;
-    if (st === 'sleep' || st === 'away') { this.mark.style.opacity = '0'; return; }
+    if (st === 'sleep' || st === 'away' || st === 'inLoo') { this.mark.style.opacity = '0'; return; }
     if (bob.chasing || st === 'carry' || st === 'taunt') { sym = '!'; col = '#ff5a3c'; fill = 1; }
     else if (st === 'down' || st === 'stagger') { sym = '✦'; col = '#fff1a8'; fill = 1; }
     else if (st === 'cough') { sym = '~'; col = '#b6e36a'; fill = 1; }
@@ -274,6 +275,8 @@ export class Hud {
     const SPACE = kc(t('key.space')), mashBar = (n: number, need: number) => `<span class="mbar"><i style="width:${Math.round(clamp(n / Math.max(need, 1), 0, 1) * 100)}%"></i></span>`;
     let p = '';
     const gate = G.gates?.latchOf(pig) as { state: string; padHp: number; label: string } | null | undefined;
+    const loo = G.loos.find((o: { boltNear(p: Pig): boolean }) => o.boltNear(pig)) as { bolted: boolean } | undefined;
+    const coop = (h: unknown) => (h as { def?: { coop?: boolean } } | null)?.def?.coop === true;
     const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
       && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
@@ -284,14 +287,15 @@ export class Hud {
     else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
     else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));
+    else if (loo) p = row(P(IC.rmb, loo.bolted ? IC.loo : IC.lock));
     else if (stuck) p = row(P(IC.rmb, IC.trap));
     else {
       const tg = pig.findGrabTarget();
-      if (tg) p = row(P(IC.rmb, IC.grab, val(tg)));
+      if (tg) p = row(P(IC.rmb, IC.grab, val(tg)), coop(tg) && !tg.heldBy ? P(IC.two) : '');
       else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
     const c = pig.charge();

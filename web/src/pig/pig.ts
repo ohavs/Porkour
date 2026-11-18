@@ -62,6 +62,8 @@ const GRIP = {
 /** Eating: where the food goes (the mouth), per stance. */
 const MOUTH = { four: new THREE.Vector3(0, 0.72, 0.82), two: new THREE.Vector3(0, 1.3, 0.34) };
 /** A snack in the hooves that a click uses (eat it / light a cigarette), not a hit. */
+/** Heavy loot two pigs can hold together (Bob's safe). */
+const coopOf = (h: Holdable | null) => (h as { def?: { coop?: boolean } } | null)?.def?.coop === true;
 const snackOf = (h: Holdable | null) => { const p = h as Prop | null; return p?.kind === 'prop' && (p.def.snack || p.def.smokes) && p.left > 0 ? p : null; };
 const QSTAND = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -STAND_ANGLE);
 
@@ -121,7 +123,9 @@ export class Pig implements Holdable {
   parts: PigParts;
   grip: Grip;
   /** Throw swing in progress (time since release, -1 = none) and its charge. */
-  private swingT = -1; private swingC = 0; private strainT = 0;
+  private swingT = -1; private swingC = 0; private strainT = 0; private heavyTold = -10;
+  /** Heavy loot: how far its centre was when it was grabbed (the leash). */
+  private leash = 1; private stuckT = 0;
   /** Just thrown: it may still overlap us for a moment (no collision, doesn't count as a hit). */
   private thrown: { h: Holdable; until: number } | null = null;
   /** Online, host: the player's own simulation of this pig (pose it reports); host control window (knocks, rams…). */
@@ -157,6 +161,8 @@ export class Pig implements Holdable {
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  /** How hard the hooves can drag (heavy loot); spinach helps. */
+  get dragMax() { return PIG.dragMax * (this.boosted('spinach') ? SNACK.lift : 1); }
   get liftMax() { return (this.standing ? PIG.liftMaxStand : PIG.liftMax) * (this.boosted('spinach') ? SNACK.lift : 1); }
   /** 0..1 jab progress (visual). */
   /** Snacks (world/snacks.ts): boost end times; eating since; smoking until; last puff. */
@@ -274,6 +280,14 @@ export class Pig implements Holdable {
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
     if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
+    if (coopOf(this.held)) {
+      // heavy loot on a leash: past the distance you grabbed it at you slow right down (it drags you back), so you
+      // go as fast as it slides (positions, not speeds: an online player sees it where the snapshots put it); alone
+      // (spinach) only at a crawl
+      const hp = this.held!.body.translation(), d = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z);
+      const alone = !(this.held as { helper?: unknown }).helper && this.held!.heldBy === this;
+      speed = Math.min(speed, Math.max(0.25, (this.leash + 0.6 - d) * 2.5), alone ? 1.4 : Infinity);
+    }
     if (this.muddy > 0) speed *= 0.95;
     if (this.boosted('energy')) speed *= SNACK.fast;
     let tx = mx * speed, tz = mz * speed;
@@ -721,7 +735,7 @@ export class Pig implements Holdable {
     G.events.push({ type: 'weaponBroke', who: this, text: h.label });
   }
   /** At the cage latch / a closed gate's latch: RMB opens it there (lock-pick puzzle: game.ts), so the pig doesn't grab. */
-  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this); }
+  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.loos.some((o: { boltNear(p: Pig): boolean }) => o.boltNear(this)); }
   charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - PIG.clickTime) / 0.9, 0, 1); }
 
   findGrabTarget(): Holdable | null {
@@ -729,7 +743,11 @@ export class Pig implements Holdable {
     const f = this.forward;
     const reachY = this.standing ? 1.3 : 0.9;
     for (const h of G.holdables) {
-      if (h === this || h.heldBy || h.mass > PIG.dragMax || (h as any).held === this) continue;
+      if (h === this || (h as any).held === this) continue;
+      const coop = coopOf(h);
+      // heavy loot another pig is dragging: a second pig can take hold too
+      if (h.heldBy && !(coop && h.heldBy.kind === 'pig' && h.heldBy !== this && !(h as { helper?: unknown }).helper)) continue;
+      if (h.mass > PIG.dragMax && !coop) continue;
       const p = h.body.translation();
       const dx = p.x - this.pos.x, dz = p.z - this.pos.z, dy = p.y - this.pos.y;
       const d = Math.hypot(dx, dz) - h.radius;
@@ -783,9 +801,12 @@ export class Pig implements Holdable {
   clearSnacks() { for (const k of SNACK_IDS) this.boostUntil[k] = 0; this.cigUntil = 0; this.eatAt = -10; this.eatProp = null; }
 
   grab(h: Holdable) {
-    this.held = h; h.heldBy = this;
+    const join = !!h.heldBy && coopOf(h);   // the second pig on a heavy thing
+    this.held = h;
+    { const hp = h.body.translation(); this.leash = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z); }
+    if (join) (h as { helper?: unknown }).helper = this; else h.heldBy = this;
     ignorePair(this.body, h.body, true);
-    h.onGrabbed?.(this);
+    if (!join) h.onGrabbed?.(this);
     if (h.kind === 'pig') (h as Pig).grabbedByPig();
     this.swingT = -1; this.strainT = 0;
     this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : undefined);
@@ -795,10 +816,13 @@ export class Pig implements Holdable {
 
   release(thrown: boolean) {
     const h = this.held; if (!h) return;
-    this.held = null; h.heldBy = null; this.chargeStart = -1; this.swingT = -1;
+    this.held = null; this.chargeStart = -1; this.swingT = -1;
+    const hp = h as { helper?: Pig | null };
+    if (hp.helper === this) hp.helper = null;                                    // the second pig lets go
+    else if (h.heldBy === this) { h.heldBy = hp.helper ?? null; if (hp.helper) hp.helper = null; }   // the first one: the other keeps it
     this.grip.detach();
     ignorePair(this.body, h.body, false);
-    h.onReleased?.(this, thrown);
+    if (!h.heldBy) h.onReleased?.(this, thrown);
     if (h.kind === 'pig') (h as Pig).startRagdoll(null, false);
   }
 
@@ -848,13 +872,23 @@ export class Pig implements Holdable {
     const swing = this.swingT >= 0, g = 20;
     this.grip.drive(this.gripGoal(v1), this.body, h.mass, dt, {
       up: (this.liftMax * PIG.gripLift + Grip.MASS) * g * (swing ? 2.5 : 1),
-      side: PIG.dragMax * g * PIG.gripDrag * (swing ? 1.6 : 1),
+      side: this.dragMax * g * PIG.gripDrag * (swing ? 1.6 : 1),
       kp: swing ? 24 : 12, react: this.grounded ? 0.25 : 0.8, g,
     });
     // lost grip: snagged on something / yanked away
-    if (this.grip.strain > 2) this.release(false);
-    else if (this.grip.strain > 1.1) { if ((this.strainT += dt) > 0.4) this.release(false); }
-    else this.strainT = 0;
+    const coop = coopOf(h), alone = coop && !(h as { helper?: unknown }).helper;
+    // heavy loot alone, pulling, and it doesn't budge for a second: you let go
+    if (alone) {
+      const hv = h.body.linvel(), pulling = this.input.mx * this.input.mx + this.input.mz * this.input.mz > 0.09;
+      this.stuckT = pulling && Math.hypot(hv.x, hv.z) < 0.2 ? this.stuckT + dt : 0;
+    } else this.stuckT = 0;
+    const lost = this.grip.strain > (coop ? 2.6 : 2) || (this.grip.strain > (coop ? 1.4 : 1.1) && (this.strainT += dt) > (coop ? 0.7 : 0.4)) || this.stuckT > 1;
+    if (this.grip.strain <= (coop ? 1.4 : 1.1)) this.strainT = 0;
+    if (lost) {
+      this.release(false);
+      // heavy loot alone: it won't budge (a friend, or spinach)
+      if (alone && this.now > this.heavyTold) { this.heavyTold = this.now + 4; G.events.push({ type: 'tooHeavy', who: this }); }
+    }
   }
 
   /** Grabbed by another pig: hang limp from the grip (real ragdoll, free to swing). */
@@ -928,8 +962,14 @@ export class Pig implements Holdable {
     this.punchAt = n[12]; this.chargeStart = n[13]; this.outUntil = n[14] < 0 ? Infinity : n[14]; this.grillAt = n[15];
     if (!pred) { this.wobble = n[16]; this.leanX = n[17]; this.leanZ = n[40] ?? 0; }
     this.escape = n[18]; this.netNeed = n[19];
+    const was = this.held;
     this.held = holdableFrom(n[20]);
-    if (this.held) this.held.heldBy = this;
+    if (was && was !== this.held && (was as { helper?: unknown }).helper === this) (was as { helper?: unknown }).helper = null;
+    if (this.held && this.held !== was) { const hp = this.held.body.translation(); this.leash = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z); }
+    if (this.held) {   // heavy loot: the second pig is its helper (the host's prop state says who holds it first)
+      const h = this.held as Holdable & { helper?: unknown };
+      if (h.heldBy && h.heldBy !== this && h.heldBy.held === h && coopOf(h)) h.helper = this; else h.heldBy = this;
+    }
     this.parts.netApply(n, 22);
     this.netHand.set(n[37] ?? 0, n[38] ?? 0, n[39] ?? 0); this.netHasHand = !!this.held;
     if (n[41] !== undefined) { this.eatAt = n[41]; this.cigUntil = n[42]; this.puffAt = n[43]; SNACK_IDS.forEach((k, i) => (this.boostUntil[k] = n[44 + i])); }
