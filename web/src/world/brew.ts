@@ -6,7 +6,7 @@ import { IC, type IconId } from '../game/icons';
 import type { Rect } from './terrain';
 import type { Kit } from './farmKit';
 import { Chain, buildShed, buildBeam, need, type Station } from './chain';
-import { wheatGeometry, plantMaterial } from './chainProps';
+import { wheatGeometry, plantMaterial, makeSheaf } from './chainProps';
 import { staticBox, staticCylinder } from '../core/physics';
 import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
@@ -43,7 +43,8 @@ export class Brew extends Chain {
   barrelState = 0; fermT = 0; mugs = 0;
   barrel!: Prop;
   private floorC = new THREE.Vector3(); private floorR = 2.3; private beatT0 = 0;
-  private stompN = new Map<Prop, number>(); private airborne = new Map<Pig, number>();
+  /** Threshing: sheaves dropped on the floor become straw piles there (up to 6); stomps thresh the next one. */
+  floorSheaves = 0; private floorProg = 0; private piles: THREE.Object3D[] = []; private airborne = new Map<Pig, number>();
   private poles: { x: number; z: number; y: number; next: number; obj: THREE.Object3D }[] = [];
   private fireC = new THREE.Vector3(); private fireLight!: THREE.PointLight; private flames!: THREE.Group; private brewM!: THREE.Mesh; private floorRing!: THREE.Mesh;
   private tableTop = new THREE.Vector3(); private dance = new Map<Pig, number>(); private songs = new Map<Pig, number[]>();
@@ -204,6 +205,10 @@ export class Brew extends Chain {
     this.floorRing = new THREE.Mesh(new THREE.TorusGeometry(this.floorR, 0.06, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0 }));
     this.floorRing.rotation.x = Math.PI / 2; this.floorRing.position.set(tx, ty + 0.15, tz); scene.add(this.floorRing);
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.5, 14), toonMat(0xc0453a)); drum.position.set(tx + this.floorR + 0.6, ty + 0.25, tz); scene.add(drum);
+    for (let k = 0; k < 6; k++) {   // straw piles on the floor (shown per sheaf dropped there)
+      const pile = makeSheaf(), a = k * 1.05; pile.position.set(tx + Math.cos(a) * (0.5 + (k % 2) * 0.8), ty + 0.15, tz + Math.sin(a) * (0.5 + (k % 2) * 0.8));
+      pile.rotation.set(0, a, Math.PI / 2); pile.visible = false; scene.add(pile); this.piles.push(pile);
+    }
     G.terrain.noGrass({ x0: tx - 3, x1: tx + 3, z0: tz - 3, z1: tz + 3 });
     kit.blocked.push({ x0: tx - 3, x1: tx + 3, z0: tz - 3, z1: tz + 3 });
     // the beer-garden table (dance on it drunk) + benches
@@ -246,7 +251,7 @@ export class Brew extends Chain {
 
   // ------------------------------------------------------------------ host
   private made(kind: string, p: Pig | null, pts = POINTS[kind] ?? 10) { G.events.push({ type: 'made', who: p, text: kind, why: String(pts) }); }
-  private barrelNear(_p: Pig) { const b = this.barrel.synced.currP; return !this.barrel.banked && flat(b, this.fireC) < 3.2; }
+  barrelNear(_p?: Pig) { const b = this.barrel.synced.currP; return !this.barrel.banked && flat(b, this.fireC) < 3.8; }
   private nearPatch(x: number, z: number, r: number) {
     let best: Patch | null = null, bd = r;
     for (const pa of this.patches) { if (pa.cut) continue; const d = Math.hypot(pa.x - x, pa.z - z); if (d < bd) { bd = d; best = pa; } }
@@ -323,20 +328,28 @@ export class Brew extends Chain {
     // the barrel ferments where it is
     this.tap.at.copy(this.barrel.synced.currP); this.tap.markPos.copy(this.barrel.synced.currP).setY(this.barrel.synced.currP.y + 1.3);
     if (this.barrelState === 1 && G.time - this.fermT > BREW.ferment) { this.barrelState = 2; this.mugs = 8; G.audio.play('ding', { pos: this.barrel.synced.currP, vol: 0.9, pitch: 0.8 }); G.events.push({ type: 'beerReady' }); }
-    // the threshing floor: jumps that land on it stomp every sheaf lying there (on the beat = double)
-    const sheaves = this.props.filter((pr) => pr.def.item === 'sheaf' && !pr.banked && !pr.heldBy && flat(pr.synced.currP, this.floorC) < this.floorR);
-    if (sheaves.length && !this.beatT0) this.beatT0 = G.time;
-    if (!sheaves.length) this.beatT0 = 0;
+    // the threshing floor: a sheaf dropped on it becomes a straw pile there; jumps that land on the floor thresh
+    // the piles (on the beat = double)
+    for (const pr of this.props) {
+      if (pr.def.item !== 'sheaf' || pr.banked || pr.heldBy || this.floorSheaves >= 6) continue;
+      const pp = pr.synced.currP;
+      if (flat(pp, this.floorC) < this.floorR && pp.y < this.floorC.y + 1 && pr.body.linvel().y > -1) { this.consume(pr); this.floorSheaves++; G.audio.play('rustle', { pos: pp, vol: 0.6 }); }
+    }
+    if (this.floorSheaves && !this.beatT0) this.beatT0 = G.time;
+    if (!this.floorSheaves) { this.beatT0 = 0; this.floorProg = 0; }
     for (const p of G.pigs as Pig[]) {
       if (p.absent || p.out || p.mode !== 'normal') continue;
       if (!p.grounded) { this.airborne.set(p, Math.min(this.airborne.get(p) ?? 0, p.vel.y)); continue; }
       const fall = this.airborne.get(p); this.airborne.delete(p);
-      if (fall === undefined || fall > -3 || !sheaves.length || flat(p.pos, this.floorC) > this.floorR) continue;
+      if (fall === undefined || fall > -3 || !this.floorSheaves || flat(p.pos, this.floorC) > this.floorR + 0.3) continue;
       const ph = ((G.time - this.beatT0) % BREW.beat), onBeat = ph < BREW.beatWin || ph > BREW.beat - BREW.beatWin;
-      for (const s of sheaves) {
-        const n = (this.stompN.get(s) ?? 0) + (onBeat ? 2 : 1);
-        if (n >= BREW.stompNeed) { this.stompN.delete(s); const sp = s.synced.currP.clone(); this.consume(s); this.spawn('grain', sp.setY(sp.y + 0.4), 0); this.made('grain', p); }
-        else this.stompN.set(s, n);
+      this.floorProg += onBeat ? 2 : 1;
+      if (this.floorProg >= BREW.stompNeed) {
+        this.floorProg = 0; this.floorSheaves--;
+        const a = Math.random() * Math.PI * 2;
+        this.spawn('grain', V3(this.floorC.x + Math.cos(a) * (this.floorR + 0.6), this.floorC.y + 0.8, this.floorC.z + Math.sin(a) * (this.floorR + 0.6)), 0, V3(Math.cos(a) * 1.5, 2, Math.sin(a) * 1.5));
+        G.audio.play('thud', { pos: this.floorC, vol: 0.8 });
+        this.made('grain', p);
       }
       G.audio.play(onBeat ? 'drum' : 'thud', { pos: p.pos, vol: 0.8, pitch: onBeat ? 1.2 : 0.8 });
       G.fx.bits(v1.set(p.pos.x, p.pos.y - 0.3, p.pos.z), { count: onBeat ? 18 : 8, color: 0xf2c94c, speed: 2.5, up: 1.6, life: 0.6, size: 0.07, grow: 0, alpha: 1 });
@@ -362,7 +375,7 @@ export class Brew extends Chain {
     for (const pa of this.patches) pa.cut = false;
     this.grain = 0; this.water = 0; this.malt = 0; this.hops = 0; this.fuel = 0; this.stage = 0; this.boilT = 0;
     this.barrelState = 0; this.fermT = 0; this.mugs = 0; this.tapped = false; this.beatT0 = 0;
-    this.stompN.clear(); this.airborne.clear(); this.dance.clear(); this.songs.clear(); this.burpAt.clear(); this.drunkMugs.clear();
+    this.floorSheaves = 0; this.floorProg = 0; this.airborne.clear(); this.dance.clear(); this.songs.clear(); this.burpAt.clear(); this.drunkMugs.clear();
     for (const pl of this.poles) pl.next = 0;
   }
 
@@ -377,6 +390,7 @@ export class Brew extends Chain {
     (this.brewM.material as THREE.MeshToonMaterial).color.setHex(this.stage === 0 ? (this.malt ? 0xc98a4a : 0x6fb7e8) : this.stage === 1 ? 0xb5793d : 0xd99a3a);
     if (this.stage >= 2 && burning && Math.random() < dt * 8) G.fx.puff(v1.copy(this.fireC).setY(this.fireC.y + 1.3), { count: 1, color: 0xf4f4f4, speed: 0.3, up: 1, life: 1.4, size: 0.4, alpha: 0.5 });
     if (this.barrelState === 1 && Math.random() < dt * 4) G.fx.bits(v2.copy(this.barrel.synced.currP).setY(this.barrel.synced.currP.y + 0.4), { count: 2, color: 0xfffaf0, speed: 0.4, up: 0.8, life: 0.6, size: 0.06, grow: 0, alpha: 1 });
+    this.piles.forEach((pl, i) => { pl.visible = i < this.floorSheaves; });
     // the floor pulses on the beat while there's wheat on it
     const m = this.floorRing.material as THREE.MeshBasicMaterial;
     if (this.beatT0) { const ph = ((G.time - this.beatT0) % BREW.beat) / BREW.beat; m.opacity = Math.max(0, 1 - ph * 3) * 0.9; if (ph < 0.02) G.audio.play('drum', { pos: this.floorC, vol: 0.35, pitch: 0.7, minGap: 0.3 }); }
@@ -385,24 +399,25 @@ export class Brew extends Chain {
 
   netState(n: number[]) {
     let cut = 0; this.patches.forEach((pa, i) => { if (pa.cut) cut |= 1 << i; });
-    n.push(cut, this.grain, this.water, this.malt, this.hops, Math.round(this.fuel), this.stage, this.boilT, this.barrelState, this.fermT, this.mugs, this.beatT0, ...this.poles.map((p) => p.next));
+    n.push(cut, this.grain, this.water, this.malt, this.hops, Math.round(this.fuel), this.stage, this.boilT, this.barrelState, this.fermT, this.mugs, this.beatT0, this.floorSheaves, ...this.poles.map((p) => p.next));
   }
   netApply(n: number[]) {
     if (n.length < 12) return;
     this.patches.forEach((pa, i) => { pa.cut = (n[0] & (1 << i)) !== 0; });
-    [, this.grain, this.water, this.malt, this.hops, this.fuel, this.stage, this.boilT, this.barrelState, this.fermT, this.mugs, this.beatT0] = n;
-    this.poles.forEach((p, i) => { p.next = n[12 + i] ?? 0; });
+    [, this.grain, this.water, this.malt, this.hops, this.fuel, this.stage, this.boilT, this.barrelState, this.fermT, this.mugs, this.beatT0, this.floorSheaves] = n;
+    this.poles.forEach((p, i) => { p.next = n[13 + i] ?? 0; });
     this.tap.at.copy(this.barrel.synced.currP); this.tap.markPos.copy(this.barrel.synced.currP).setY(this.barrel.synced.currP.y + 1.3);
   }
 
   adminButtons(): [string, string][] {
-    return [['brew:sheaves', 'a.brewSheaves'], ['brew:grain', 'a.brewGrain'], ['brew:kettle', 'a.brewKettle'], ['brew:beer', 'a.brewBeer'], ['brew:mug', 'a.brewMug'],
+    return [['brew:sheaves', 'a.brewSheaves'], ['brew:floor', 'a.brewFloor'], ['brew:grain', 'a.brewGrain'], ['brew:kettle', 'a.brewKettle'], ['brew:beer', 'a.brewBeer'], ['brew:mug', 'a.brewMug'],
       ['brew:drunk', 'a.brewDrunk'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
   }
   admin(a: string, me: Pig): boolean {
     const f = me.forward, front = V3(me.pos.x + f.x * 1.3, me.pos.y + 0.5, me.pos.z + f.z * 1.3);
     switch (a) {
       case 'brew:sheaves': for (let i = 0; i < 4; i++) this.spawn('sheaf', front.clone().add(V3((i % 2) * 0.4, 0.3 * i, 0)), 0); return true;
+      case 'brew:floor': this.floorSheaves = 4; return true;
       case 'brew:grain': this.spawn('grain', front, 0); return true;
       case 'brew:kettle': this.water = 2; this.malt = 1; this.fuel = 200; this.stage = 0; return true;
       case 'brew:beer': this.barrelState = 2; this.mugs = 8; return true;
@@ -427,7 +442,7 @@ export class Brew extends Chain {
         if (near('malt')) return near('malt');
         if (held === 'grain' || this.grain > 0) return this.mill.markPos;
         if (near('grain')) return near('grain');
-        if (held === 'sheaf' || this.beatT0) return this.floorC.clone().setY(this.floorC.y + 1.2);
+        if (held === 'sheaf' || this.floorSheaves) return this.floorC.clone().setY(this.floorC.y + 1.2);
         if (near('sheaf')) return near('sheaf');
         return near('scythe') ?? this.fieldC.clone().setY(this.fieldC.y + 2);
       }

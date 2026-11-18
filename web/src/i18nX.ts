@@ -27,7 +27,7 @@ export const EN_X = {
   'a.weedBuds': '6 buds in front of me', 'a.weedBag': 'Bag of weed in front of me', 'a.weedJoint': 'Lit joint in front of me', 'a.weedHigh': 'Make me high',
   'a.weedCookies': 'Cookies in front of me', 'a.tpShed': 'Teleport: shed', 'a.tpField': 'Teleport: field', 'a.tpBeam': 'Teleport: log over the pond',
   'a.brewSheaves': '4 sheaves in front of me', 'a.brewGrain': 'Grain sack in front of me', 'a.brewKettle': 'Fill the kettle (+ fire)',
-  'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
+  'a.brewFloor': '4 sheaves on the threshing floor', 'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
   'a.shed': 'Shed', 'a.field': 'Field', 'a.beam': 'Log over the pond',
   'e.smokeAlarm': 'Smoke alarm!',
 };
@@ -55,7 +55,7 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.weedBuds': '6 cogollos delante de mí', 'a.weedBag': 'Bolsa de hierba delante de mí', 'a.weedJoint': 'Porro encendido delante de mí', 'a.weedHigh': 'Colócame',
   'a.weedCookies': 'Galletas delante de mí', 'a.tpShed': 'Teletransporte: cobertizo', 'a.tpField': 'Teletransporte: campo', 'a.tpBeam': 'Teletransporte: tronco del estanque',
   'a.brewSheaves': '4 gavillas delante de mí', 'a.brewGrain': 'Saco de grano delante de mí', 'a.brewKettle': 'Llenar el caldero (+ fuego)',
-  'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
+  'a.brewFloor': '4 gavillas en la era', 'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
   'a.shed': 'Cobertizo', 'a.field': 'Campo', 'a.beam': 'Tronco del estanque',
   'e.smokeAlarm': '¡Alarma de humo!',
 };
