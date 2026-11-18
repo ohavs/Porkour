@@ -362,7 +362,7 @@ export class Brew extends Chain {
       const on = p.drunk > 0.3 && p.standing && p.mode === 'normal' && flat(p.pos, this.tableTop) < 1.6 && Math.abs(p.pos.y - CENTER.two - this.tableTop.y) < 0.4;
       const t = on ? (this.dance.get(p) ?? 0) + dt : 0;
       this.dance.set(p, t);
-      if (t > 5) { this.dance.set(p, -20); G.audio.play('fanfare', { pos: p.pos, vol: 0.5 }); G.events.push({ type: 'tableDance', who: p }); }
+      if (t > 4) { this.dance.set(p, -20); G.audio.play('fanfare', { pos: p.pos, vol: 0.5 }); G.events.push({ type: 'tableDance', who: p }); }
     }
   }
   /** Drunk singing: 6 oinks within 20 s, close to Bob → he's had enough (a prank). */

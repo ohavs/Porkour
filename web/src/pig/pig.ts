@@ -436,9 +436,9 @@ export class Pig implements Holdable {
     // slow, smooth random teeter (fixed frequencies per pig: no phase jumps)
     const t = this.now + this.seed * 37;
     const bz = this.buzz, dr = this.buzzKind === 2 ? bz : 0;
-    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1) * (1 + bz * 2.2 + dr);
-    const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp + Math.sin(t * 0.27) * 3.2 * dr;
-    const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp + Math.cos(t * 0.23) * 3.2 * dr;
+    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1) * (1 + bz * 2.2 + dr * 0.5);
+    const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp + Math.sin(t * 0.27) * 2 * dr;
+    const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp + Math.cos(t * 0.23) * 2 * dr;
     // turning while moving: lean out of the turn
     const turn = clamp(dYaw / Math.max(dt, 1e-3), -8, 8) * sp * B.turn;
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);     // pig's right (world)

@@ -340,7 +340,7 @@ export const PROPS: Record<string, PropDef> = {
   hops: { make: makeHops, mass: 0.3, sound: 'squish', label: 'item.hops', item: 'hops' },
   bucket: { model: 'brew/Bucket', height: 0.4, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.bucket', item: 'can', servings: 3 },
   beerMug: { make: () => makeMug(true), mass: 0.6, shape: 'cyl', sound: 'metal', label: 'item.beerMug', item: 'beer', servings: 3 },
-  beerBarrel: { make: makeBeerBarrel, mass: 45, shape: 'wheel', sound: 'wood', label: 'item.beerBarrel', item: 'barrel', friction: 0.8, damp: 0.8 },
+  beerBarrel: { make: makeBeerBarrel, mass: 45, shape: 'wheel', sound: 'wood', label: 'item.beerBarrel', item: 'barrel', friction: 1, damp: 3.5 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

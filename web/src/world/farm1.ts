@@ -209,7 +209,8 @@ export function buildFarm1(scene: THREE.Scene, mode?: FarmMode): FarmDef {
     for (let i = 0; i < 5; i++) critter('sheep', rng.range(-60, -52), rng.range(-50, -36), 5);
     critter('alpaca', -56, -40, 4);
     critter('dog', -16, -30, 5);
-    for (const [x, z] of [[-25.5, -56], [-26.5, -60], [-25, -63]] as const) critter('turkey', x, z, 4.5);   // guard Bob's garden
+    // turkeys guard Bob's garden (chain modes: the yard by the house — the field / shed / pump are busy work spots)
+    for (const [x, z] of (mode ? [[-6, -22], [-9, -20], [-4, -19]] : [[-25.5, -56], [-26.5, -60], [-25, -63]]) as [number, number][]) critter('turkey', x, z, 4.5);
     critter('cat', -4, 6, 6); critter('cat', -20, -36, 4);
     critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6); critter('bunny', 12, -76, 5);
     for (let i = 0; i < 3; i++) critter('duck', POND.x + rng.range(-3, 3), POND.z + rng.range(-3, 3), 3.5);
