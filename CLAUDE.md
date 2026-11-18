@@ -295,9 +295,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   host START → both in the round), eating / spinach / smoking shots, Bob near-pig dance.
 - 2026-11-18 (session 14, "continue"): **Bob's outhouse** (see `outhouse.ts`) + **heavy loot: Bob's safe** (procedural
   `makeSafe`, 150 kg, 300 coins, `PropDef.coop`): a second pig can grab heavy loot another pig holds (`Prop.helper`;
-  release hands it to the other), lift / drag forces add up through the two grips, pigs holding it move only as fast as
-  it slides (+1.1 m/s), alone it won't budge → grip slips + `two` icon pops over the pig ("bring a friend"); spinach
-  (`Pig.dragMax` ×1.6) lets one pig drag it slowly. Scrapes = low metal clank + noise 13 m. Bonus prank `safeSteal`.
+  release hands it to the other), lift / drag forces add up through the two grips, pigs holding it are on a leash
+  (`Pig.leash` = the distance at the grab; past it +0.6 m they slow to a crawl — positions, not speeds, so it works
+  for a predicted online player too), alone it won't budge → after 1 s of pulling the pig lets go + `two` icon
+  ("bring a friend"); spinach (`Pig.dragMax` ×1.6) lets one pig drag it at ≤1.4 m/s (two pigs ≈2 m/s). Scrapes = low metal clank + noise 13 m. Bonus prank `safeSteal`.
   Missions `looLock` / `looTip` / `safeSteal` are added per farm automatically (`Round.start`: outhouse / safe exist).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 

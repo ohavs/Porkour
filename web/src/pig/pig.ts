@@ -124,6 +124,8 @@ export class Pig implements Holdable {
   grip: Grip;
   /** Throw swing in progress (time since release, -1 = none) and its charge. */
   private swingT = -1; private swingC = 0; private strainT = 0; private heavyTold = -10;
+  /** Heavy loot: how far its centre was when it was grabbed (the leash). */
+  private leash = 1; private stuckT = 0;
   /** Just thrown: it may still overlap us for a moment (no collision, doesn't count as a hit). */
   private thrown: { h: Holdable; until: number } | null = null;
   /** Online, host: the player's own simulation of this pig (pose it reports); host control window (knocks, rams…). */
@@ -278,9 +280,13 @@ export class Pig implements Holdable {
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
     if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
-    if (coopOf(this.held)) {   // heavy loot: you go as fast as it slides; alone (spinach) only at a crawl
-      const hv = this.held!.body.linvel(), alone = !(this.held as { helper?: unknown }).helper;
-      speed = Math.min(speed, Math.hypot(hv.x, hv.z) + 1.1, alone ? 1.4 : Infinity);
+    if (coopOf(this.held)) {
+      // heavy loot on a leash: past the distance you grabbed it at you slow right down (it drags you back), so you
+      // go as fast as it slides (positions, not speeds: an online player sees it where the snapshots put it); alone
+      // (spinach) only at a crawl
+      const hp = this.held!.body.translation(), d = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z);
+      const alone = !(this.held as { helper?: unknown }).helper && this.held!.heldBy === this;
+      speed = Math.min(speed, Math.max(0.25, (this.leash + 0.6 - d) * 2.5), alone ? 1.4 : Infinity);
     }
     if (this.muddy > 0) speed *= 0.95;
     if (this.boosted('energy')) speed *= SNACK.fast;
@@ -797,6 +803,7 @@ export class Pig implements Holdable {
   grab(h: Holdable) {
     const join = !!h.heldBy && coopOf(h);   // the second pig on a heavy thing
     this.held = h;
+    { const hp = h.body.translation(); this.leash = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z); }
     if (join) (h as { helper?: unknown }).helper = this; else h.heldBy = this;
     ignorePair(this.body, h.body, true);
     if (!join) h.onGrabbed?.(this);
@@ -870,7 +877,12 @@ export class Pig implements Holdable {
     });
     // lost grip: snagged on something / yanked away
     const coop = coopOf(h), alone = coop && !(h as { helper?: unknown }).helper;
-    const lost = this.grip.strain > (coop ? 2.6 : 2) || (this.grip.strain > 1.1 && (this.strainT += dt) > (coop ? 0.7 : 0.4));
+    // heavy loot alone, pulling, and it doesn't budge for a second: you let go
+    if (alone) {
+      const hv = h.body.linvel(), pulling = this.input.mx * this.input.mx + this.input.mz * this.input.mz > 0.09;
+      this.stuckT = pulling && Math.hypot(hv.x, hv.z) < 0.2 ? this.stuckT + dt : 0;
+    } else this.stuckT = 0;
+    const lost = this.grip.strain > (coop ? 2.6 : 2) || (this.grip.strain > 1.1 && (this.strainT += dt) > (coop ? 0.7 : 0.4)) || this.stuckT > 1;
     if (this.grip.strain <= 1.1) this.strainT = 0;
     if (lost) {
       this.release(false);
@@ -953,6 +965,7 @@ export class Pig implements Holdable {
     const was = this.held;
     this.held = holdableFrom(n[20]);
     if (was && was !== this.held && (was as { helper?: unknown }).helper === this) (was as { helper?: unknown }).helper = null;
+    if (this.held && this.held !== was) { const hp = this.held.body.translation(); this.leash = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z); }
     if (this.held) {   // heavy loot: the second pig is its helper (the host's prop state says who holds it first)
       const h = this.held as Holdable & { helper?: unknown };
       if (h.heldBy && h.heldBy !== this && h.heldBy.held === h && coopOf(h)) h.helper = this; else h.heldBy = this;
