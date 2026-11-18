@@ -178,6 +178,8 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
     pumpkins.fixedLit.push({ x: -3.6, z: -81.5, r: 3.4 }, { x: 4, z: 9, r: 3.2 }, { x: -4, z: 14.5, r: 3.2 }, { x: 16.5, z: -10.5, r: 3.2 }, { x: 35, z: -5, r: 3 });
     d.pond(POND);
     d.outhouse(40, -40, -Math.PI / 2);
+    d.phone(-6.0, -80.6, 0, -8.8, -77.6);
+    d.payphone(-5.0, 8.4, Math.PI / 2);
     d.trough(34, 6, Math.PI / 2);
     d.scarecrow(-42, -30, 0.6); d.scarecrow(-24, -54, -0.4);
     d.finish();
@@ -294,6 +296,8 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
     // valuables: the porch, the picnic table, the barn, the crypt, the maze
     prop('chest', -7.8, -82.4, 0.2); prop('chalice', 1.6, -82.4); prop('necklace', 3.6, -82.6);
     prop('safe', 6.0, -81.8, 0);   // heavy loot: two pigs drag it (or one full of spinach)
+    prop('tv', 5.2, -76.6, 2.9);
+    prop('clock', -2.8, -82.8, 0);
     prop('phone', 19.7, -66.2, 0.3, 0.84); prop('radio', 20.6, -65.6, 0.3, 0.84);
     prop('gold', 46, -95.2, 0.4); prop('crown', 33.5, -101, 0.6);
     prop('gasCan', 10, -2); prop('propane', 16.6, -76.6, 0); prop('firstAid', 24, -18); prop('backpack', 25, -16.6);

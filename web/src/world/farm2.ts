@@ -184,6 +184,8 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     d.laundry(-30, -22, -72);
     d.picnic(17, -66, 0.3);
     d.outhouse(-34, -26, Math.PI / 2);
+    d.phone(6.4, -75.6, 0, 9.0, -72.6);
+    d.payphone(-4.6, 9.0, Math.PI / 2);
     d.mailbox(5.2, 14.2);
     d.rocker(-10.2, -76.6, -8, -68);
     d.scarecrow(-24, -92, 0.2);
@@ -227,6 +229,8 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     // valuables: the farmhouse porch, the picnic table, the barn, the cider house, the tractor
     prop('chest', -9.2, -78.4, 0.2); prop('chalice', -1.6, -77.8); prop('necklace', 0.6, -78.2);
     prop('safe', 2.6, -77.4, 0);   // heavy loot: two pigs drag it (or one full of spinach)
+    prop('tv', -7.6, -72.2, -2.6);
+    prop('clock', -0.6, -78.4, 0);
     prop('phone', 16.7, -66.2, 0.3, 0.84); prop('radio', 17.6, -65.6, 0.3, 0.84);
     prop('gold', -36.8, -5.6, 0.4); prop('crown', 50.4, -97.4, 0.6);
     prop('gasCan', 11, -4); prop('propane', 12.6, -73.4, 0); prop('firstAid', -14, 4); prop('backpack', -12.4, 3);

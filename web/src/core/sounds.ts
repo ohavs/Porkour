@@ -31,6 +31,11 @@ export const SOUND_SETS: Record<string, string[]> = {
   bull: ['bull4', 'bull5', 'bull7'], charge: ['charge'], cowhurt: ['cowhurt'], milk: ['milk'], splash: ['splash'],
   // farm 5: winter (wind, snow footsteps, snowball hits, cracking ice)
   wind: ['wind'], gust: ['gust'], snowstep: n('snowstep', 4), snowhit: n('snowhit', 2), icecrack: ['icecrack'], icestep: n('icestep', 3),
+  // Bob's phone: the bell, Bob rambling into it, the caller / a pig's oink through the line, a dead line, coin, receiver slam
+  ring: ['ring'], phonetalk: n('phonetalk', 3), phonevoice: ['phonevoice1', 'phonevoice3', 'phonevoice5'], phoneoink: ['phoneoink'],
+  static: ['static'], coin: ['coin'], clunk: ['clunk'],
+  // heavy loot: the grandfather clock (ticks, strikes the hours), the old TV's screen
+  tick: ['tick'], bong: ['bong'], glass: n('glass', 2),
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */

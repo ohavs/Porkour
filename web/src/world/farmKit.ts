@@ -17,6 +17,7 @@ import type { Dairy } from './dairy';
 import type { Pumpkins } from './pumpkins';
 import type { Winter } from './winter';
 import type { Outhouse } from './outhouse';
+import type { Phones } from './phone';
 import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
@@ -64,6 +65,8 @@ export interface FarmBuild {
   winter?: Winter;
   /** Bob's outhouse(s) (toilet breaks: bolt him in, tip it over; synced entities, built by the decor kit). */
   loos?: Outhouse[];
+  /** Bob's phone by the porch + the payphone by the road gate (one synced entity, built by the decor kit). */
+  phones?: Phones;
   /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
   clock?: { start: number; secsPerHour: number };
   /** 0..1 darker nights (farm 4). */

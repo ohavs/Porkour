@@ -168,6 +168,8 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
     d.mailbox(5.2, 14.2);
     d.lamps([[-3.6, -82], [4, 9], [-4, 14.5], [16.5, -10.5], [35, -5], [-21, -36], [4.4, -48], [-14, -80], [30, -36]]);
     d.outhouse(40, -18, -Math.PI / 2);
+    d.phone(-5.8, -83.6, 0, -8.6, -80.6);
+    d.payphone(-5.0, 8.4, Math.PI / 2);
     d.trough(34, 6, Math.PI / 2);
     d.trough(PADDOCK.x0 + 2, -42, 0);
     d.scarecrow(22, -96, 0.6);
@@ -225,6 +227,8 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
     // valuables: the porch, the woodshed, the barn
     prop('chest', -7.8, -85.6, 0.2); prop('chalice', 1.6, -85.4); prop('necklace', 3.4, -85.6);
     prop('safe', 5.8, -85.0, 0);   // heavy loot: two pigs drag it (or one full of spinach)
+    prop('tv', 4.6, -80.8, 2.9);
+    prop('clock', -2.8, -85.8, 0);
     prop('ham', -4.2, -84.2, 0, 0.9); prop('mug', 17, -73.8); prop('candyJar', -5, -84.2, 0.3, 0.9);
     prop('gold', -22.6, -90.2, 0.4); prop('crown', 53, -102, 0.6);
     prop('gasCan', 10, -2); prop('propane', 18.6, -76.6, 0); prop('firstAid', 24, -18); prop('backpack', 25, -16.6);

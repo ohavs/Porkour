@@ -7,7 +7,7 @@ import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
 import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
-  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe } from './funProps';
+  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe, makeTV, makeClock } from './funProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -30,6 +30,8 @@ export interface PropDef {
   snack?: 'beans' | 'spinach' | 'energy' | 'dogfood'; smokes?: boolean; servings?: number;
   /** Heavy loot (Bob's safe): a second pig can grab it too (they drag it together); one pig alone barely budges it. */
   coop?: boolean;
+  /** Bob's TV: its screen cracks when it hits something faster than this (m/s) or gets punched — then it's worth `cracked`. */
+  screen?: number; cracked?: number;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -48,6 +50,8 @@ export class Prop implements Holdable {
   banked = false;
   /** Smashed to bits (breakables): hidden like banked, but not loot. */
   smashed = false;
+  /** Its screen cracked (Bob's TV): still loot, worth next to nothing. */
+  broken = false;
   private home: { p: THREE.Vector3; q: THREE.Quaternion };
   get value() { return this.worth ?? this.def.value ?? 0; }
   /** Value override for this round (a spilled milk churn is just an empty can). */
@@ -126,7 +130,7 @@ export class Prop implements Holdable {
   }
   /** New round: back where it started. */
   reset() {
-    this.uses = 0; this.smashed = false; this.worth = null; this.setLeft(this.def.servings ?? 0);
+    this.uses = 0; this.smashed = false; this.worth = null; this.setLeft(this.def.servings ?? 0); this.setBroken(false);
     if (this.pooled) { this.bank(); this.putHome(); return; }
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
     this.body.setTranslation(this.home.p, true); this.body.setRotation(this.home.q, true);
@@ -137,11 +141,12 @@ export class Prop implements Holdable {
   mass: number;
   label?: string;
 
-  netState(n: number[]) { n.push(carrierCode(this.heldBy), this.banked ? 1 : 0, this.left); }
+  netState(n: number[]) { n.push(carrierCode(this.heldBy), this.banked ? 1 : 0, this.left); if (this.def.screen) n.push(this.broken ? 1 : 0); }
   netApply(n: number[]) {
     if (!n.length) return;
     this.heldBy = carrierFrom(n[0]);
     if (n[2] !== undefined && n[2] !== this.left) this.setLeft(n[2]);
+    if (n[3] !== undefined && (n[3] === 1) !== this.broken) this.setBroken(n[3] === 1);
     const b = n[1] === 1;
     if (b !== this.banked) { this.banked = b; this.obj.visible = !b; this.body.setEnabled(!b); const i = G.holdables.indexOf(this); if (b && i >= 0) G.holdables.splice(i, 1); else if (!b && i < 0) G.holdables.push(this); }
   }
@@ -149,6 +154,7 @@ export class Prop implements Holdable {
   knock(dv: THREE.Vector3) {
     this.lastKnock = G.time;
     if (this.def.fragile && !this.heldBy) { this.smash(); return; }
+    if (this.def.screen) this.crack();
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dv.x, y: lv.y + dv.y, z: lv.z + dv.z }, true);
     this.body.setAngvel({ x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 6, z: (Math.random() - 0.5) * 10 }, true);
@@ -169,6 +175,7 @@ export class Prop implements Holdable {
   /** Called from contact force events: clunk. */
   impact(force: number) {
     if (this.def.fragile && !this.banked && this.synced.preVel.length() > this.def.fragile) { this.smash(); return; }
+    if (this.def.screen && !this.banked && this.synced.preVel.length() > this.def.screen) this.crack();
     if (G.time - this.lastHit < 0.12) return;
     this.lastHit = G.time;
     const vol = Math.min(1, force / (this.mass * 600));
@@ -179,7 +186,26 @@ export class Prop implements Holdable {
   }
 }
 
-export interface Prop { smash(how?: string): void }
+export interface Prop { smash(how?: string): void; crack(): void; setBroken(on: boolean): void }
+/** Bob's TV: the screen cracks (host) — glass tinkle, sparks, a puff of smoke; it's worth `cracked` coins from now on. */
+Prop.prototype.crack = function (this: Prop) {
+  if (this.broken || this.banked || G.net === 'client') return;
+  this.setBroken(true);
+  this.worth = this.def.cracked ?? 0;
+  const p = this.body.translation(), at = new THREE.Vector3(p.x, p.y + 0.1, p.z);
+  G.audio.play('glass', { pos: at, vol: 1 });
+  G.fx.bits(at, { count: 16, color: 0xdff3ff, spread: 0.2, speed: 3, up: 2.5, grav: 12, life: 0.7, size: 0.06, grow: 0, alpha: 1 });
+  G.fx.bits(at, { count: 8, color: 0xffe08a, spread: 0.1, speed: 2.5, up: 2, grav: 8, life: 0.35, size: 0.05, grow: 0, alpha: 1 });
+  G.fx.puff(at, { count: 6, color: 0x8a8f99, speed: 0.6, up: 0.8, life: 1.4, size: 0.5, alpha: 0.5 });
+  G.noise(at, 14);
+  G.events.push({ type: 'tvBroken' });
+};
+Prop.prototype.setBroken = function (this: Prop, on: boolean) {
+  this.broken = on;
+  const c = this.obj.getObjectByName('crackG'); if (c) c.visible = on;
+  const s = this.obj.getObjectByName('screen') as THREE.Mesh | undefined;
+  if (s) { const m = s.material as THREE.MeshToonMaterial; m.color.setHex(on ? 0x2b3338 : 0x9fd3ea); m.emissive.setHex(on ? 0x000000 : 0x3f7f9a); }
+};
 /** Breakables: shards + splat, gone for the round (host; the event counts for the pranks). */
 Prop.prototype.smash = function (this: Prop, how = '') {
   if (this.banked) return;
@@ -280,6 +306,10 @@ export const PROPS: Record<string, PropDef> = {
   sled: { model: 'winter/sled', height: 0.42, mass: 8, sound: 'wood', label: 'item.sled', value: 30, friction: 0.06 },
   // heavy loot: Bob's safe (two pigs drag it; one pig on spinach can too). Loud when it scrapes along.
   safe: { make: makeSafe, mass: 150, sound: 'metal', label: 'item.safe', value: 300, friction: 0.75, bounce: 0.02, coop: true },
+  // more heavy loot: Bob's old TV (the screen cracks if it's dropped / thrown / punched: 220 → 30) and the grandfather
+  // clock (tall: it topples when dragged hard; BONG on every full hour wherever it is — world/heavyLoot.ts)
+  tv: { make: makeTV, mass: 85, sound: 'wood', label: 'item.tv', value: 220, friction: 0.7, bounce: 0.05, coop: true, screen: 5.2, cracked: 30 },
+  clock: { make: makeClock, mass: 110, sound: 'wood', label: 'item.clock', value: 260, friction: 0.65, bounce: 0.03, coop: true },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

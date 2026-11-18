@@ -103,6 +103,7 @@ Dead by Daylight, Party Animals.
 | `game/lobbyStage.ts`, `game/lobbyUI.ts` | **Lobby (s13, "Fortnite style, but the pig moves")**: `LobbyStage` = a farmyard diorama at z 760 (far from every farm; sky + clouds ride with the camera), fixed camera, invisible walls on the screen edges (rebuilt on resize; online every machine uses 16:9 walls), throwables (beach ball, apples, eggs, pie, crate, 2 cans, cigarettes: lobby copies with value 0, respawn). `Game.mode` 'lobby' (clock frozen at 16:24, `G.lobby`: idle pigs face the camera, holding / clicking = face the pointer, W = away from the camera, mouse not locked: `Input.free` + `mouseX/Y`) / 'play'. `LobbyUI`: top bar (Play / Wardrobe / Shop = wardrobe's gadget tab / Online, wallet, sound, full screen, settings), party (left), controls as icons, farm card + PLAY. Online: joining a waiting room = `goOnline` right away, the party plays on the stage, party panel = room (code, seats, chat, leave = reload); host's PLAY = start for all. |
 | `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
 | `world/outhouse.ts` | **Bob's outhouse (s14)** — one per farm (decor kit `outhouse()` → `FarmBuild.loos`, `G.loos`, synced entity after the gates). Bob's toilet breaks (`LOO`): first ~70–120 s into the round, then every 150–210 s, taken between two chores (`nextChore`, not at night / market) → state `loo` (walks over) → `inLoo` (hidden like sleep, sees nothing ~18 s; a noise ≤14 m / a knock on the hut = he comes out within 5 s and looks there). Pigs: RMB at the **bolt** (outside, door side) slides it (LMB = headbutt = a knock) → he bangs (hut jolts, noise) then bursts the door off after 20 s and searches angrily (prank `looLock`). **Rocking** (`rock` 0..1: ram 0.62, headbutt / punch 0.3 × strength, thrown things by momentum) → at 1 it **tips** (kinematic body turns about a bottom edge, snapped to the hut's 4 sides): with Bob inside = prank `looTip` — door up / sideways: he's flung out (knock-down), onto its door: stuck banging 10 s, then heaves it back up. Bob fixes a tipped hut / missing door when he sees it (`G.jobs`, `bob.fixLoo`). Admin → "Outhouse & safe". |
+| `world/phone.ts`, `world/heavyLoot.ts` | **Bob's phone (s15)** = breathing window #2, one synced entity per farm (decor kit `phone(x, z, yaw, jx, jz)` + `payphone(x, z, yaw)` → `FarmBuild.phones`, `G.phones`). Old crank wall phone on a post by the porch: real calls (`PHONE.first` 110–160 s, then every 170–230 s, when `Farmer.phoneFree()`) ring (2 bursts / 3 s, ≤30 s) → Bob state `phone` (hurries over) → `onPhone` (16–24 s facing the box, view `phone` = narrow 12 m, glances over his shoulder every 6–10 s, hears only noises ≤9 m, `onPhoneHand` puts the receiver at his ear; coiled cord). Its wire runs to a **jack** on a stake: RMB there (`G.uses`) pulls the plug → mid-call = line dead (static) → he rattles the hook 2.4 s, then searches from the jack (prank `hangUp`); he plugs it back when he sees it (`G.jobs`). **Payphone** by the road gate: RMB = coin → after 1.6 s Bob's phone rings (prank call) → he answers "Hello?" for 7 s; the caller (≤3 m from the payphone) presses F = oink down the line (`phoneoink`) → furious (prank `prankCall`); 2 prank calls within 150 s = `wise`: the next prank ring sends him to the payphone. Payphone cooldown 40 s. **Heavy loot (s15)**: Bob's old TV (`tv`, 85 kg, 220 → 30 once the screen cracks: `PropDef.screen` 5.2 m/s or a punch, `Prop.crack()` / `broken`, synced) + the grandfather clock (`clock`, 110 kg, tall: topples when dragged hard (clang + noise); `HeavyLoot`: hands show `G.hour`, pendulum, ticking loop, BONG on every full hour (3 on 6 / 12) = noise 22 m wherever it is). Missions `hangUp` (bonus), `prankCall`, `tvSteal`, `clockSteal` (bonus) added per farm in `Round.start`. Admin → "Phone, TV & clock". |
 | `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
 | `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
@@ -188,7 +189,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    mission, next step only), ✅ Bob dances next to pigs, ✅ full screen, ✅ simpler settings.
    Session 14: ✅ **Bob's outhouse** (toilet breaks = breathing window on every farm; bolt him in, tip it over with him
    inside; 2 pranks), ✅ **heavy loot: Bob's safe** (two pigs drag it together, or one pig on spinach; bonus prank).
-   Next: user feedback; more breathing windows (phone call?), more heavy loot (TV, grandfather clock).
+   Session 15: ✅ **Bob's phone** (calls = breathing window; unplug the jack mid-call; prank-call him from the payphone
+   and oink), ✅ **more heavy loot**: old TV (screen cracks if dropped / hit) + grandfather clock (bongs every hour).
+   Next: user feedback; more breathing windows (coffee break / nap by day?), Bob voice lines (recordings needed).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -305,9 +308,26 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   headbutts tips it with him inside; safe alone / two pigs (≈2 m/s) / spinach (≤1.4 m/s); 2 browsers online (outhouse
   state + hidden Bob on the player, host pig + player pig drag the safe together ≈1.7 m/s, the player sees it held).
   Test hook fix: a scripted press now lasts one frame on an online player too.
+- 2026-11-18 (session 15, "continue"): **Bob's phone** + **TV / grandfather clock** (see `phone.ts` / `heavyLoot.ts`).
+  `G.uses` = RMB spots that aren't grabs (jack, payphone; HUD prompt icon from `icon(p)`). `BobJob.then` = what Bob does
+  after a job (cut off: walk to the jack, plug it back in, then search there). Sounds (real recordings): `ring` (AntumMT
+  doorbell_03, electric bell), `phonetalk` / `phonevoice` (CDDA CC-Sounds old man rambling / radio chatter, the latter
+  telephone-filtered by `phone()` in fetch_sounds.sh), `phoneoink` (filtered oink), `static`, `coin`, `clunk`, `tick`
+  (AntumMT clock), `bong` (VoxeLibre bell stroke), `glass`. Checked headless: real call → Bob hurries over, talks facing
+  the box (receiver at his ear), jack pulled → static → hook rattle → he plugs it back (3 s) → searches; prank call:
+  coin → ring → "Hello?" → oink → furious, 2nd one → `wise` → he walks to the payphone; TV dropped from 2 m → cracks
+  (220 → 30, white cracks, dark screen); clock strike = noise 22 m; phones / TV / clock placed on all 5 farms;
+  a spinach pig drags the clock ≈1.3 m/s (it topples) / the TV ≈1.2 m/s (no crack); 2 browsers online (player sees
+  Bob on the phone, the player's RMB unplugs the jack on the host; the player's coin → prank ring → oink prompt → the
+  player's F makes Bob furious; a cracked TV shows cracked on the player).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- Bob's phone: does a call give a good breathing window (~every 3–4 min, 16–24 s, he glances back now and then)?
+  Unplugging the jack mid-call fun? Prank call from the payphone + oink (F) fun? Is "after 2 prank calls he comes to the
+  payphone" fair?
+- New heavy loot: the TV (screen cracks if dropped / hit → worth 30) and the grandfather clock (BONG every game hour =
+  Bob hears it): fun or annoying? Too heavy / too light?
 - Bob's outhouse: fun? Breaks often enough (~every 3 min, ~18 s inside)? Bolting him in / tipping it over (a ram + a
   few headbutts, or 2 rams) too easy / hard? Does the knock-and-run (he comes out within 5 s) feel fair?
 - Bob's safe (heavy loot, 300 coins): dragging it with a friend fun? Alone with spinach (slow crawl) OK?
@@ -342,6 +362,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Phone: a pig can stand at the jack while Bob is on the phone without him noticing if it's out of his narrow cone (by
+  design); the payphone has no booth to hide in; Bob always knows where a prank call came from after the 2nd one.
+  The tall clock topples as soon as it's dragged (then it's dragged lying down, silent: it ticks / swings only upright).
 - Outhouse: a tipped hut isn't in Bob's nav grid (baked upright; he may bump into it); Bob fixes it only when he passes
   by and sees it. Online: two pigs dragging side by side can bump (the player's predicted pig shoves the host's) →
   they pull at an angle, slower — stand on different sides of the safe. In one online test run the helper pig let go

@@ -82,6 +82,10 @@ export const G = {
   gates: null as any,
   /** Bob's outhouses (world/outhouse.ts). */
   loos: [] as any[],
+  /** Bob's phone + the payphone (world/phone.ts), when the farm has them. */
+  phones: null as any,
+  /** Spots where RMB does something instead of a grab (the phone jack, the payphone): `icon` = the HUD prompt's icon. */
+  uses: [] as { near(p: any): boolean; icon(p: any): string }[],
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */
   hittables: [] as { hit(x: number, y: number, z: number, reach: number, dir: THREE.Vector3, k: number, by: unknown): boolean }[],
   /** Farm things Bob fixes when he notices them (farm 4's jack-o'-lanterns): `spot(bob)` → a BobJob or null. */

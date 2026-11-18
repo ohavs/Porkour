@@ -21,6 +21,8 @@ import { WolfPack } from '../world/wolf';
 import { Traps } from '../world/traps';
 import { Gates, type Gate } from '../world/gates';
 import type { Outhouse } from '../world/outhouse';
+import type { Phones } from '../world/phone';
+import { HeavyLoot } from '../world/heavyLoot';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -65,6 +67,10 @@ export class Game {
   gates!: Gates;
   /** Bob's outhouse(s) (toilet breaks). */
   loos: Outhouse[] = [];
+  /** Bob's phone + the payphone (world/phone.ts). */
+  phones: Phones | null = null;
+  /** The grandfather clock's hands / ticking / hourly bongs (world/heavyLoot.ts). */
+  heavy!: HeavyLoot;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -129,12 +135,14 @@ export class Game {
     this.traps = new Traps(scene);
     this.gates = new Gates(scene, this.farm.gates);
     this.loos = this.farm.loos ?? []; G.loos = this.loos;
+    this.phones = this.farm.phones ?? null; G.phones = this.phones;
     this.gadgets = new Gadgets(scene, this.farm.props);
     // snacks: food cans (boosts) and cigarette packs scattered around (same spots on every machine)
     scatterSnacks(scene, this.farm.props, this.nav, FARM_IDS.indexOf(farmId()) + 1, this.farm.inWater, this.farm.places.stash);
     this.stage = new LobbyStage(scene, this.farm.props);
     this.farmSpawns = this.pigs.map((p) => p.spawn.clone());
     G.props = this.farm.props;
+    this.heavy = new HeavyLoot(this.farm.props);
     // pen animals amble out when their gate is open
     const PEN_KINDS = ['hen', 'chick', 'rooster', 'sheep', 'alpaca', 'cow', 'horse', 'horse2', 'donkey', 'bull', 'reindeer', 'doe'];
     for (const c of this.farm.critters) {
@@ -295,6 +303,7 @@ export class Game {
       this.farm.pumpkins?.stepHost();
       this.farm.winter?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); }
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
     }
@@ -351,6 +360,14 @@ export class Game {
         case 'tooHeavy': H.emote(e.who, 'two', 1.8, 1.5); break;
         case 'looLocked': case 'looStuck': { const o = this.nearLoo(bob?.pos ?? this.local.pos); if (o) H.emote(o.markPos.clone(), 'alarm', 2.2, 0.3); break; }
         case 'looBolted': if (me) { const o = this.nearLoo(this.local.pos); if (o) H.emote(o.boltAt.clone(), 'lock', 1.2, 0.5); } break;
+        // Bob's phone
+        case 'phoneRing': { const at = this.phones?.phoneMark; if (at) H.emote(at.clone(), 'phone', 1.6, 0); break; }
+        case 'bobPhone': H.emote(bob, 'phone', 1.6, 2.4); break;
+        case 'hangUp': case 'prankCall': case 'bobWise': H.emote(bob, 'alarm', 1.6, 2.4); break;
+        case 'unplugged': if (me) { const at = this.phones?.jackMark; if (at) H.emote(at.clone(), 'plug', 1.2, 0); } break;
+        case 'dialed': if (me) { const at = this.phones?.payMark; if (at) H.emote(at.clone(), 'phone', 1.4, 0); } break;
+        case 'clockBong': { const at = this.heavy.clockPos(Number(e.why ?? 0)); if (at) H.emote(at.clone(), 'clock', 1, 2.6); break; }
+        case 'prankOink': if (me) H.emote(this.local, 'pig', 1.2, 1.3); break;
         case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
         case 'snowCoat': if (me) H.emote(this.local, 'snow', 1.4, 1.3); break;
         case 'roundEnd': break;
@@ -397,6 +414,8 @@ export class Game {
     this.traps.clear();
     this.gates.reset();
     for (const o of this.loos) o.reset();
+    this.phones?.reset();
+    this.heavy.reset();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
@@ -433,6 +452,20 @@ export class Game {
         else { const sp = sf.synced.currP; tp(sp.x - 1.6, sp.z); this.menu.toggleAdmin(); }
         break;
       }
+      // Bob's phone
+      case 'phone:ring': this.phones?.callNow(false); f?.phoneNow(); this.menu.toggleAdmin(); break;
+      case 'phone:prank': this.phones?.callNow(true, L); f?.phoneNow(); this.menu.toggleAdmin(); break;
+      case 'phone:plug': this.phones?.setPlug(!this.phones.plugged, L); break;
+      case 'tp:phone': { const w = this.phones?.wall; if (w) tp(w.jack.x + (w.jack.x - w.base.x) * 0.3, w.jack.z + (w.jack.z - w.base.z) * 0.3); this.menu.toggleAdmin(); break; }
+      case 'tp:pay': { const p = this.phones?.pay; if (p) tp(p.at.x + p.front.x * 0.8, p.at.z + p.front.z * 0.8); this.menu.toggleAdmin(); break; }
+      case 'bring:tv': case 'bring:clock': {
+        const pr = this.farm.props.find((p) => p.def.id === a.slice(6)); if (!pr) break;
+        if (pr.heldBy) pr.heldBy.release?.(false); if (pr.heldBy) pr.heldBy.release?.(false);
+        const fw = L.forward, x = L.pos.x + fw.x * 1.8, z = L.pos.z + fw.z * 1.8;
+        pr.unbank(tmpV.set(x, G.terrain.height(x, z), z), L.yaw);
+        break;
+      }
+      case 'clock:strike': this.heavy.strike(3); break;
       case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
       case 'gates:lock': this.gates.all('locked'); break;
       case 'gates:shut': this.gates.all('shut'); break;
@@ -734,6 +767,8 @@ export class Game {
     for (const pr of this.farm.props) pr.synced.apply(alpha);
     this.gates.render(alpha);
     for (const o of this.loos) o.render(dt);
+    this.phones?.render(dt);
+    this.heavy.render();
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);
