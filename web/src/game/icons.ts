@@ -56,6 +56,14 @@ export const IC = {
   /** Bob's outhouse (a door with a moon). */
   loo: svg(`<path d="M4 9 12 3l8 6" fill="#8a5a35" ${O}/><rect x="5.5" y="8" width="13" height="14" rx="1" fill="#b9814a" ${O}/><rect x="8.5" y="11" width="7" height="11" fill="#d9a46a" ${O}/><path d="M13.6 13.2a1.9 1.9 0 1 0 0 3.4 2.4 2.4 0 0 1 0-3.4z" fill="#3b2412"/>`),
   /** Too heavy alone: two pigs needed. */
+  /** An old telephone receiver. */
+  phone: svg(`<path d="M5.5 4.5c1.6-1.3 3.4-1 4.2.4l1.3 2.4c.6 1.1.2 2.2-.8 2.8l-1.1.6c.9 2.3 2.5 4 4.9 5l.7-1c.7-.9 1.9-1.2 2.9-.5l2.2 1.5c1.3.9 1.4 2.8.1 4.2-1.5 1.6-4 2-6.9.4C8.6 17.9 5.2 13.7 4 9.3c-.6-2.1 0-3.8 1.5-4.8z" fill="#3b2f2a" ${O}/><path d="M15 3.5a6 6 0 0 1 5.5 5.5M15 7a2.6 2.6 0 0 1 2 2" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
+  /** A plug pulled out of its socket. */
+  plug: svg(`<rect x="2.5" y="6" width="7" height="12" rx="2" fill="#c9ced8" ${O}/><path d="M5 10h2M5 14h2" ${O}/><rect x="13" y="8" width="6.5" height="8" rx="1.6" fill="#3b2f2a" ${O}/><path d="M13 10.3h-2.4M13 13.7h-2.4" stroke="#ffd166" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 12c2 0 2.5 2 2.5 4v4" fill="none" stroke="#3b2f2a" stroke-width="2.2" stroke-linecap="round"/>`),
+  /** An old TV with rabbit ears. */
+  tv: svg(`<path d="M9 7 6 2.5M15 7l3-4.5" stroke="#3b2412" stroke-width="1.8" stroke-linecap="round"/><rect x="2.5" y="7" width="19" height="13.5" rx="2.4" fill="#9a6a3c" ${O}/><rect x="5" y="9.3" width="11" height="9" rx="2" fill="#8fd3ff" ${O}/><circle cx="18.7" cy="11.5" r="1.2" fill="#ffd166"/><circle cx="18.7" cy="15.5" r="1.2" fill="#ffd166"/>`),
+  /** A grandfather clock. */
+  clock: svg(`<path d="M8 4.5 12 2l4 2.5V22H8z" fill="#7a4a26" ${O}/><circle cx="12" cy="8" r="3" fill="#fff6e6" ${O}/><path d="M12 6.4V8l1.2.8" fill="none" stroke="#3b2412" stroke-width="1.2" stroke-linecap="round"/><rect x="10" y="12.5" width="4" height="7" rx="1" fill="#ffd166" opacity=".35" ${O}/><path d="M12 12.8v4" stroke="#ffd166" stroke-width="1.4"/><circle cx="12" cy="17.6" r="1.3" fill="#ffd166" ${O}/>`),
   two: svg(`<ellipse cx="8" cy="14" rx="6" ry="4.6" fill="#ffb3c7" ${O}/><ellipse cx="17" cy="11.5" rx="5.6" ry="4.3" fill="#ff9ab4" ${O}/><circle cx="20.6" cy="11" r="1.6" fill="#ff7aa0" ${O}/><circle cx="11.8" cy="13.6" r="1.6" fill="#ff7aa0" ${O}/><path d="M5 18.4v2.6M10 18.4v2.6M15 15.6v2.4M19.5 15.6v2.4" ${O}/>`),
   cart: svg(`<path d="M2 4h3l2.5 11h11L21 7H6.5" fill="none" stroke="#fff6e6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19.5" r="1.8" fill="#ffd166" ${O}/><circle cx="17" cy="19.5" r="1.8" fill="#ffd166" ${O}/>`),
   aim: svg(`<circle cx="12" cy="12" r="8" fill="none" stroke="#ff5a3c" stroke-width="2.6"/><circle cx="12" cy="12" r="2.4" fill="#ff5a3c"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5" stroke="#ff5a3c" stroke-width="2.4" stroke-linecap="round"/>`),

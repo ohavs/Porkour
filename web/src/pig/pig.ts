@@ -735,7 +735,7 @@ export class Pig implements Holdable {
     G.events.push({ type: 'weaponBroke', who: this, text: h.label });
   }
   /** At the cage latch / a closed gate's latch: RMB opens it there (lock-pick puzzle: game.ts), so the pig doesn't grab. */
-  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.loos.some((o: { boltNear(p: Pig): boolean }) => o.boltNear(this)); }
+  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.loos.some((o: { boltNear(p: Pig): boolean }) => o.boltNear(this)) || G.uses.some((u) => u.near(this)); }
   charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - PIG.clickTime) / 0.9, 0, 1); }
 
   findGrabTarget(): Holdable | null {

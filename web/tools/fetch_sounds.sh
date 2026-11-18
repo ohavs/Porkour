@@ -7,6 +7,8 @@
 #   Veloren    github.com/veloren/veloren       crickets / birdcalls by DaforLynx, CC BY 4.0
 #   Animalia   github.com/ElCeejo/animalia      turkey, MIT
 #   Minetest Game github.com/minetest/minetest_game  tnt sounds (firecracker gadget), CC0 (TumeniNodes, from freesound)
+#   CDDA CC-Sounds github.com/Fris0uman/CDDA-Soundpacks  per-file credits.md (CC0 / CC BY 3.0 / 4.0, freesound authors)
+#   AntumMT sounds  github.com/AntumMT/mod-sounds     sources.md (CC0 / CC BY 3.0, freesound / OGA authors)
 # Drop-in replacements: put <name>.ogg (or .mp3/.wav, converted by this script from web/sfx_user/) — see SOUNDS in src/core/sounds.ts.
 # Usage: cd web && bash tools/fetch_sounds.sh        (idempotent; output is committed)
 set -euo pipefail
@@ -37,9 +39,17 @@ snd() {
     -c:a libvorbis -q:a 3 "$OUT/$name.ogg"
 }
 
+# phone <src> <name> [peak] [note] — the same, heard through an old telephone receiver (band-passed, a little crunchy)
+phone() {
+  local tmp="$CACHE/_tel_$2.wav"
+  [ -f "$OUT/$2.ogg" ] || ffmpeg -loglevel error -y -i "$1" -ac 1 -af "highpass=f=450,lowpass=f=2600,acompressor=threshold=-20dB:ratio=6,aecho=0.6:0.3:12:0.25" "$tmp"
+  snd "$tmp" "$2" "${3:--2}" 0 "${4:-} (telephone-filtered)"
+}
+
 # ---------------------------------------------------------------- sources
 pack https://github.com/VoxeLibre/VoxeLibre VoxeLibre '/mods/ENTITIES/mobs_mc/sounds/' '/mods/ENTITIES/mobs_mc/LICENSE-media.md' \
-  '/mods/CORE/mcl_sounds/sounds/' '/mods/CORE/mcl_sounds/README.txt' '/mods/ITEMS/mcl_fishing/sounds/' '/mods/ITEMS/mcl_fishing/README.txt'
+  '/mods/CORE/mcl_sounds/sounds/' '/mods/CORE/mcl_sounds/README.txt' '/mods/ITEMS/mcl_fishing/sounds/' '/mods/ITEMS/mcl_fishing/README.txt' \
+  '/mods/ITEMS/mcl_bells/sounds/' '/mods/ITEMS/mcl_bells/README.md'
 A=binaries/data/mods/public/audio
 pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fauna/animal/chicken_*" "/$A/actor/fauna/animal/cattle_*" \
   "/$A/actor/singlesteps/fs_grass*" "/$A/actor/singlesteps/fs_gravel[1-4]*" "/$A/attack/impact/fleshimp_*" \
@@ -54,6 +64,11 @@ pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night
   '/data/core/sounds/throw-*' '/data/core/sounds/wolf-*' '/data/core/sounds/thunderstick.ogg' '/data/core/sounds/gunshot.wav' '/data/core/sounds/pincers.ogg' '/data/core/sounds/tusker-charge.ogg' '/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg'
 pack https://github.com/ElCeejo/animalia animalia '/sounds/turkey/' '/sounds/cow/' '/LICENSE'
 pack https://github.com/minetest/minetest_game minetest_game '/mods/tnt/sounds/' '/mods/tnt/README.md' '/mods/tnt/license.txt'
+CC=sound/CC-Sounds
+pack https://github.com/Fris0uman/CDDA-Soundpacks cdda "/$CC/speech/ferals/old_man*" "/$CC/speech/ferals/male_mumbling*" "/$CC/speech/ferals/credits.md" \
+  "/$CC/radio/" "/$CC/smash_success/glass/" "/$CC/open_door/gun_safe/"
+pack https://github.com/AntumMT/mod-sounds antum '/sounds/sounds_doorbell_03.ogg' '/sounds/sounds_clock_tick.ogg' '/sounds/sounds_coin.ogg' \
+  '/sounds/sounds_door_knock_02.ogg' '/sources.md'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
@@ -152,6 +167,22 @@ for i in 1 2 3 4; do snd "$OA/actor/singlesteps/fs_snow_1$i.ogg" snowstep$i -4 0
 snd "$OA/actor/singlesteps/fs_snow_17.ogg" snowhit1 -2 0 "$OAc"; snd "$OA/actor/singlesteps/fs_snow_18.ogg" snowhit2 -2 0 "$OAc"
 snd "$VS/default_ice_dug.ogg" icecrack -2 0 "Angel_Perez_Grandi (freesound 49190) via VoxeLibre mcl_sounds, CC BY 3.0"
 for i in 1 2 3; do snd "$VS/default_ice_footstep.$i.ogg" icestep$i -5 0 "InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0"; done
+# Bob's phone (breathing window): an old electric bell ring, Bob rambling into the receiver, the caller's voice and a
+# pig's oink through the line, a dead line's static, the payphone's coin, the receiver slammed down
+CD=$CACHE/cdda/$CC; AM=$CACHE/antum/sounds
+snd "$AM/sounds_doorbell_03.ogg" ring -2 0 "jorickhoofd (freesound 177875) via AntumMT sounds, CC BY 3.0"
+snd "$CD/speech/ferals/old_man_hesitant_ranbling.ogg" phonetalk1 -3 0 "sickfin (freesound 711358) via CDDA CC-Sounds, CC0"
+for i in 1 2; do snd "$CD/speech/ferals/male_mumbling_$i.ogg" phonetalk$((i + 1)) -3 0 "SilentStrikeZ (freesound 389642) via CDDA CC-Sounds, CC0"; done
+for i in 1 3 5; do phone "$CD/radio/inaudible_chatter_$i.ogg" phonevoice$i -4 "kwahmah_02 (freesound 255851) via CDDA CC-Sounds, CC BY 3.0"; done
+phone "$VL/mobs_pig.ogg" phoneoink -2 "$VLm"
+snd "$CD/radio/static.ogg" static -8 0 "digifishmusic (freesound 74936) via CDDA CC-Sounds, CC BY 4.0"
+snd "$AM/sounds_coin.ogg" coin -4 0 "greenvwbeetle (freesound 423332) via AntumMT sounds, CC0"
+snd "$AM/sounds_door_knock_02.ogg" clunk -3 0.5 "Patrick Hunt (freesound 256513) via AntumMT sounds, CC0"
+# heavy loot: the grandfather clock ticks and strikes the hours, the old TV's screen smashes
+snd "$AM/sounds_clock_tick.ogg" tick -10 0 "AntumDeluge (opengameart 16323) via AntumMT sounds, CC0"
+snd "$CACHE/VoxeLibre/mods/ITEMS/mcl_bells/sounds/mcl_bells_bell_stroke.ogg" bong -3 4.5 "edsward / sorcerykid (freesound 341866) via VoxeLibre mcl_bells, CC0"
+snd "$CD/smash_success/glass/smash_success_glass_1.ogg" glass1 -2 0 "chewiesmissus (freesound 244238) via CDDA CC-Sounds, CC0"
+snd "$CD/smash_success/glass/smash_success_glass_reinforced_1.ogg" glass2 -2 0 "logant547 (freesound 677734) via CDDA CC-Sounds, CC0"
 
 # ---------------------------------------------------------------- the user's own audio (Unity Assets/Audio)
 AU="$REPO/Assets/Audio"
@@ -187,5 +218,7 @@ fi
   echo "- Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/"
   echo "- Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo"
   echo "- Minetest Game: https://github.com/minetest/minetest_game (mods/tnt/README.md) — CC0 audio"
+  echo "- CDDA CC-Sounds: https://github.com/Fris0uman/CDDA-Soundpacks (sound/CC-Sounds/*/credits.md, freesound authors)"
+  echo "- AntumMT sounds: https://github.com/AntumMT/mod-sounds (sources.md)"
 } > "$CREDITS"
 echo "sfx: $(ls "$OUT"/*.ogg | wc -l) files, $(du -sh "$OUT" | cut -f1)"

@@ -169,6 +169,8 @@ export function buildFarm1(scene: THREE.Scene): FarmDef {
     // valuables (M5 loot): Bob's porch, the picnic table, the BBQ, the barn, the garage, the garden
     prop('chest', -14.2, -30.4, 2.4); prop('chalice', -15.6, -30.0); prop('necklace', -12.8, -31.6);
     prop('safe', -20.6, -31.2, 0.25);   // heavy loot: two pigs drag it (or one full of spinach)
+    prop('tv', -13.2, -26.8, -2.3);     // Bob's porch TV (faces his rocker) — the screen cracks if it's dropped / hit
+    prop('clock', -23.2, -31.6, 0.25);  // the grandfather clock (BONG every full hour, wherever it is)
     prop('phone', 8.1, -47.4, 0.3, 0.84); prop('radio', 9.35, -47.8, 0.3, 0.84);
     prop('crown', -39.9, -45.3, 0.6);
     prop('gold', -10.8, -49.5, 0.3);

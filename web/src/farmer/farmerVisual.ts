@@ -7,7 +7,7 @@ import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
 export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
   | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
-  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot';
+  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
@@ -23,7 +23,7 @@ export interface FarmerPose {
 const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
 const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a);
 /** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
-const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust']);
+const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
@@ -152,6 +152,13 @@ export class FarmerVisual {
           G.audio.play('metal', { pos: h, vol: 0.3, pitch: 1.5, rand: 0.15, minGap: 0.2 });
           if (Math.random() < 0.4) G.fx.bits(h, { count: 3, color: 0xffe08a, speed: 2, up: 1.5, grav: 8, life: 0.3, size: 0.05, grow: 0, alpha: 1 });
         }
+        break;
+      }
+      case 'phone': {   // the receiver at his right ear, the other hand on his hip / waving as he talks
+        const k = Math.sin(t * 1.3);
+        T.rsx = -1.25; T.rsz = -0.75; T.rex = -2.35;
+        T.lsz = 0.55 + Math.max(0, k) * 0.35; T.lsx = 0.15 - Math.max(0, k) * 0.6; T.lex = -1.5 + Math.max(0, k) * 0.7;
+        T.headY = 0.12; T.lean = 0.02; T.roll = 0.06; T.hipY = Math.sin(t * 2.2) * 0.01;
         break;
       }
       case 'lean':

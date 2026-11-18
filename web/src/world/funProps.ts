@@ -293,3 +293,77 @@ export function makeSafe() {
   add(g, new THREE.BoxGeometry(0.018, 0.02, 0.3), 0xffd166, 0, 0.08 + H + 0.05, 0);
   return g;
 }
+
+/**
+ * Bob's old TV (heavy loot: two pigs, or one on spinach): a wooden cabinet set on stubby legs, a bulging grey-blue
+ * screen, two brass knobs, a speaker grille and rabbit-ear antennas. Drop it / throw it / punch it and the screen
+ * cracks (`crack`, hidden until then): it's worth next to nothing after that.
+ */
+export function makeTV() {
+  const g = new THREE.Group();
+  const W = 0.9, H = 0.68, D = 0.62, L = 0.12;
+  add(g, new THREE.BoxGeometry(W, H, D), 0x8a5a32, 0, L + H / 2, 0);                                     // cabinet
+  add(g, new THREE.BoxGeometry(W + 0.03, 0.04, D + 0.03), 0x6e4524, 0, L + H, 0);                          // top rim
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(g, new THREE.CylinderGeometry(0.03, 0.022, L, 8), 0x3b2412, sx * (W / 2 - 0.08), L / 2, sz * (D / 2 - 0.08));
+  add(g, new THREE.BoxGeometry(0.6, 0.5, 0.03), 0x3a3a40, -0.1, L + H / 2, D / 2 + 0.005);                // screen bezel
+  const sm = toonMat(0x9fd3ea); sm.emissive.setHex(0x3f7f9a);   // it's on: a soft blue glow
+  const scr = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14, Math.PI / 2 - 0.62, 1.24, Math.PI / 2 - 0.5, 1.0), sm);
+  scr.name = 'screen'; scr.position.set(-0.1, L + H / 2, D / 2 - 0.3); scr.scale.set(1, 1, 1); scr.castShadow = true; g.add(scr);
+  add(g, new THREE.SphereGeometry(0.09, 10, 8), 0xdff3ff, -0.24, L + H / 2 + 0.1, D / 2 + 0.105).scale.set(1, 0.6, 0.2);   // glare
+  // the crack (hidden until it breaks): a few dark zig-zags over the glass
+  const crack = new THREE.Group(); crack.name = 'crackG'; crack.position.set(-0.1, L + H / 2, D / 2 + 0.125); g.add(crack);
+  const cm = toonMat(0xf4f8ff); cm.emissive.setHex(0x9aa8b0);
+  for (const [x, y, a, l] of [[0, 0, 0.3, 0.3], [0.08, 0.06, -0.9, 0.2], [-0.06, -0.05, 2.2, 0.24], [0.02, -0.09, -2.0, 0.18], [-0.1, 0.07, 1.1, 0.16]]) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(l * 1.3, 0.028, 0.012), cm); c.name = 'crack';
+    c.position.set(x + Math.cos(a) * l / 2, y + Math.sin(a) * l / 2, 0); c.rotation.z = a; crack.add(c);
+  }
+  crack.visible = false;
+  for (const y of [0.1, -0.06]) {
+    add(g, new THREE.CylinderGeometry(0.045, 0.045, 0.04, 14), 0xd9a92e, 0.31, L + H / 2 + y, D / 2 + 0.02, Math.PI / 2, 0, 0);
+    add(g, new THREE.BoxGeometry(0.012, 0.05, 0.012), 0x3b2412, 0.31, L + H / 2 + y + 0.015, D / 2 + 0.045);
+  }
+  for (let i = 0; i < 4; i++) add(g, new THREE.BoxGeometry(0.16, 0.012, 0.01), 0x3b2412, 0.31, L + 0.12 + i * 0.035, D / 2 + 0.005);   // speaker grille
+  // rabbit ears
+  add(g, new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x2b2b30, 0.05, L + H + 0.02, -0.05);
+  for (const s of [-1, 1]) {
+    const ear = add(g, new THREE.CylinderGeometry(0.008, 0.008, 0.62, 5), 0xc9ced8, 0.05 + s * 0.15, L + H + 0.3, -0.05, 0, 0, -s * 0.5);
+    void ear;
+    add(g, new THREE.SphereGeometry(0.018, 6, 5), 0xc9ced8, 0.05 + s * 0.3, L + H + 0.56, -0.05);
+  }
+  return g;
+}
+
+/**
+ * The grandfather clock (heavy loot: tall — it topples when you drag it too hard): a dark wooden case with a hood,
+ * a round face whose hands show the game's time, a brass pendulum swinging behind the trunk's glass, a crown on top.
+ * It goes BONG on every full hour, wherever it is (pigs dragging it get heard).
+ */
+export function makeClock() {
+  const g = new THREE.Group();
+  const C = 0x6b3d1f, DK = 0x4a2812;
+  add(g, new THREE.BoxGeometry(0.6, 0.32, 0.42), DK, 0, 0.16, 0);                                       // plinth
+  add(g, new THREE.BoxGeometry(0.48, 1.1, 0.34), C, 0, 0.32 + 0.55, 0);                                 // trunk
+  add(g, new THREE.BoxGeometry(0.3, 0.8, 0.02), 0x9fc8d8, 0, 0.32 + 0.55, 0.175);   // glass
+  add(g, new THREE.BoxGeometry(0.58, 0.56, 0.42), C, 0, 1.42 + 0.28, 0);                                // hood
+  add(g, new THREE.BoxGeometry(0.62, 0.06, 0.46), DK, 0, 1.42, 0);
+  add(g, new THREE.BoxGeometry(0.64, 0.06, 0.48), DK, 0, 1.98, 0);
+  // crown: a little broken pediment with a brass finial
+  for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.3, 0.06, 0.44), C, s * 0.15, 2.06, 0, 0, 0, -s * 0.35);
+  add(g, new THREE.SphereGeometry(0.05, 10, 8), 0xd9a92e, 0, 2.2, 0);
+  // face: white disc, brass ring, 12 ticks
+  const fz = 0.215, fy = 1.7;
+  add(g, new THREE.CylinderGeometry(0.22, 0.22, 0.02, 28), 0xd9a92e, 0, fy, fz - 0.005, Math.PI / 2, 0, 0);
+  add(g, new THREE.CylinderGeometry(0.195, 0.195, 0.02, 28), 0xfff6e6, 0, fy, fz + 0.002, Math.PI / 2, 0, 0);
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; add(g, new THREE.BoxGeometry(0.014, i % 3 ? 0.03 : 0.05, 0.01), 0x3b2412, Math.sin(a) * 0.165, fy + Math.cos(a) * 0.165, fz + 0.014, 0, 0, -a); }
+  // hands (pivots turned by world/heavyLoot.ts)
+  for (const [name, len, w] of [['hourHand', 0.1, 0.022], ['minHand', 0.15, 0.014]] as [string, number, number][]) {
+    const pv = new THREE.Group(); pv.name = name; pv.position.set(0, fy, fz + (name === 'minHand' ? 0.026 : 0.02)); g.add(pv);
+    add(pv, new THREE.BoxGeometry(w, len, 0.008), 0x2a1a0c, 0, len / 2 - 0.015, 0);
+  }
+  add(g, new THREE.SphereGeometry(0.018, 8, 6), 0xd9a92e, 0, fy, fz + 0.03);
+  // pendulum behind the glass
+  const pend = new THREE.Group(); pend.name = 'pendulum'; pend.position.set(0, 1.32, 0.12); g.add(pend);
+  add(pend, new THREE.BoxGeometry(0.02, 0.62, 0.01), 0xd9a92e, 0, -0.31, 0);
+  add(pend, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 20), 0xd9a92e, 0, -0.64, 0, Math.PI / 2, 0, 0);
+  return g;
+}

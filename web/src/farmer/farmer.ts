@@ -19,6 +19,7 @@ import { MOD, modSight, modHear, marketHours } from '../game/modifiers';
 import { toonMat } from '../render/toon';
 import { GATE, type Gate, type Gates } from '../world/gates';
 import { LOO, looFirst, looEvery, type Outhouse } from '../world/outhouse';
+import { PHONE, type Phones } from '../world/phone';
 
 /** Tuning. */
 export const BOB = {
@@ -68,6 +69,8 @@ const VIEW = {
   flashlight: { cos: Math.cos(0.42), range: 16 },
   /** At night: a pig standing in a lit spot (farm 4's jack-o'-lanterns) is seen like by day. */
   lit: { cos: Math.cos(1.1), range: 24 },
+  /** On the phone: facing the box on its post (glancing over his shoulder now and then). */
+  phone: { cos: Math.cos(0.6), range: 12 },
 };
 type View = keyof typeof VIEW;
 
@@ -79,7 +82,7 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone';
 
 /** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
 export interface BobJob {
@@ -89,6 +92,8 @@ export interface BobJob {
   /** Still needs him (someone may have fixed / moved it meanwhile). */
   still(): boolean;
   done(): void;
+  /** What he does right after (default: back to work). */
+  then?: () => void;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
@@ -201,6 +206,11 @@ export class Farmer {
    */
   private looNext = looFirst(); loo: Outhouse | null = null; private looUntil = 0; private looHeard: THREE.Vector3 | null = null;
   private looBanging = false; private looBangStart = 0; private looBang = 0; private looStuck = false; private looHeave = false;
+  /**
+   * The phone (world/phone.ts): the call he already reacted to, when the call / his "Hello?" ends, when the line went
+   * dead, his next bit of chatter, glances over his shoulder.
+   */
+  private phoneCall = -1; private phoneUntil = 0; private phoneDeadT = 0; private phoneChat = 0; private phoneGlance = 0; private glanceT = -10; private glanceDir = 1;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -258,6 +268,7 @@ export class Farmer {
     if (this.state === 'tidy' && s !== 'tidy') this.dropProp();
     if (s !== 'investigate') this.tracking = false;
     if (this.state === 'inLoo' && s !== 'inLoo' && this.loo) { this.loo.vacate(); this.loo = null; }
+    if (this.state === 'onPhone' && s !== 'onPhone') { (G.phones as Phones | null)?.hangUp(); this.lookYaw = 0; }
     this.state = s; this.stateT = this.now;
   }
   /** Day chores, evening flashlight round, bed at night — but on alert (2+) he keeps patrolling all night. */
@@ -320,6 +331,7 @@ export class Farmer {
     this.gateJob = null; this.lockNext = 0;
     if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
     this.loo = null; this.looNext = this.now + looFirst(); this.looHeard = null;
+    this.phoneCall = -1;
     if (this.level) { this.level = 0; G.events.push({ type: 'alert', why: '0', text: 'down' }); }
     this.parts.snap();
     this.go('routine');
@@ -357,7 +369,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo', 'phone', 'onPhone'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -390,6 +402,7 @@ export class Farmer {
     }
     if (this.state !== 'down' && this.state !== 'stagger' && this.state !== 'cough') this.checkClouds();
     if (!this.stunUntil) this.perceive(dt);
+    if (!this.stunUntil) this.checkPhone();
 
     switch (this.state) {
       case 'routine': want = this.routine(dt); break;
@@ -482,6 +495,8 @@ export class Farmer {
       case 'job': want = this.jobStep(dt); break;
       case 'market': want = this.toMarket(dt); break;
       case 'loo': want = this.looWalk(dt); break;
+      case 'phone': want = this.phoneWalk(dt); break;
+      case 'onPhone': want = this.phoneStep(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -599,7 +614,8 @@ export class Farmer {
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
     if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') && this.doing)) return 'busy';
-    if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job' || this.state === 'loo') return 'normal';
+    if (this.state === 'onPhone') return 'phone';
+    if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job' || this.state === 'loo' || this.state === 'phone') return 'normal';
     if (this.state === 'routine' || this.state === 'dust' || this.state === 'carry') return 'normal';
     return 'alert';
   }
@@ -740,13 +756,14 @@ export class Farmer {
       }
     }
     // noises
-    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance') {
+    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance' || this.state === 'onPhone') {
       for (const n of G.noises) {
         if (n.t <= this.noiseT) continue;
         this.noiseT = n.t;
         const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
         const asleep = this.view() === 'nap';
-        if (d > n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1) * ALERT.hear[this.level] * modHear()) continue;
+        const r = this.state === 'onPhone' ? Math.min(n.radius, PHONE.hear) : n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1);   // chatting: only what's close
+        if (d > r * ALERT.hear[this.level] * modHear()) continue;
         this.stopRiding();
         this.searchAt.set(n.x, n.y, n.z);
         this.voice(asleep ? 'yawn' : 'huh');
@@ -1157,10 +1174,108 @@ export class Farmer {
       if (j.still()) j.done();
       this.voice('mutter', 0.5);
       this.job = null; this.doing = false;
-      this.backToWork();
+      if (j.then) j.then(); else this.backToWork();
     }
     return 0;
   }
+
+  // ================================================================== the phone (world/phone.ts)
+  /** He can come to the phone now (doing something that can wait). */
+  phoneFree() {
+    if (this.carrying || this.stunUntil) return false;
+    return this.state === 'routine' || this.state === 'dance' || this.state === 'dust' || this.state === 'investigate' || this.state === 'tidy'
+      || (this.state === 'search' && !this.hunt);
+  }
+  /** It's ringing: off he hurries ("Coming!") — or, fed up with prank calls, straight to the payphone. */
+  private checkPhone() {
+    const ph = G.phones as Phones | null;
+    if (!ph?.ringing || this.state === 'phone' || this.state === 'onPhone' || this.phoneCall === ph.callNo || !this.phoneFree()) return;
+    this.phoneCall = ph.callNo;
+    this.stopRiding(); this.doing = false; this.path = []; this.stuck = 0;
+    if (ph.ring === 2 && ph.wise && ph.pay) {
+      this.searchAt.copy(ph.pay.base); this.go('investigate'); this.voice('grr'); this.raise('noise');
+      G.events.push({ type: 'bobWise' });
+      return;
+    }
+    this.go('phone'); this.voice('hey', 0.6);
+  }
+  /** Hurrying over (it stops ringing before he gets there = he grumbles and goes back to work). */
+  private phoneWalk(dt: number) {
+    const ph = G.phones as Phones | null;
+    this.activity = 'bob.phone';
+    if (!ph?.ringing || !ph.standAt) { this.voice('mutter', 0.7); this.backToWork(); return 0; }
+    const sp = BOB.walk * 1.5;
+    const d = this.moveTo(ph.standAt, sp, dt);
+    if (d < 0.45 || (d < 1.8 && this.stuck >= 2)) {
+      this.stuck = 0;
+      const kind = ph.pickUp();
+      this.go('onPhone'); this.activity = 'bob.onPhone';
+      this.phoneUntil = this.now + (kind === 2 ? PHONE.hello : PHONE.talk[0] + Math.random() * (PHONE.talk[1] - PHONE.talk[0]));
+      this.phoneDeadT = 0; this.phoneChat = this.now + 0.5; this.phoneGlance = this.now + 4 + Math.random() * 3; this.glanceT = -10;
+      G.events.push({ type: 'bobPhone' });
+      if (kind === 2) this.voice('huh');
+      return 0;
+    }
+    return sp;
+  }
+  /** On the phone: chatting away facing the box — cut off (unplugged), or a prank call ("Hello? … HELLO?"). */
+  private phoneStep(dt: number) {
+    const ph = G.phones as Phones | null;
+    if (!ph?.off || !ph.standAt) { this.backToWork(); return 0; }
+    this.activity = 'bob.onPhone';
+    this.yaw = dampAngle(this.yaw, ph.faceYaw, 6, dt);
+    if (Math.hypot(ph.standAt.x - this.pos.x, ph.standAt.z - this.pos.z) > 0.5) this.moveTo(ph.standAt, BOB.walk * 0.5, dt);
+    // the line went dead: "Hello? HELLO?!", rattles the hook, then off along the wire to find who did that
+    if (ph.dead) {
+      if (!this.phoneDeadT) { this.phoneDeadT = this.now; this.voice('huh'); this.lookYaw = 0; }
+      if (this.now > this.phoneChat) { this.phoneChat = this.now + 0.8; this.voice('hey', 0.8); G.audio.play('clunk', { pos: v1.copy(this.pos).setY(this.pos.y + 1.5), vol: 0.5, pitch: 1.4, minGap: 0.2 }); }
+      if (this.now - this.phoneDeadT > PHONE.rattle) {
+        ph.hangUp(true); this.voice('grr'); this.yell = 1; this.raise('prank');
+        G.events.push({ type: 'hangUp' });
+        // along the wire to the jack: plug it back in, then look around for whoever did that
+        const j = ph.jobOf(), at = ph.wall!.jack.clone();
+        j.then = () => this.startSearch(at, null, 3);
+        this.job = j; this.go('job'); this.path = []; this.doing = false;
+      }
+      return 0;
+    }
+    // a prank call: "Hello?" … an oink down the line = furious (and after a couple he knows where they come from)
+    if (ph.ring === 2) {
+      if (ph.oinked) {
+        ph.hangUp(true); this.yell = 1; this.voice('grr'); this.raise('prank');
+        const wise = ph.pranked();
+        G.events.push({ type: 'prankCall' });
+        if (wise && ph.pay) { this.searchAt.copy(ph.pay.base); this.go('investigate'); this.path = []; }
+        else this.backToWork();
+        return 0;
+      }
+      if (this.now > this.phoneChat) { this.phoneChat = this.now + 1.7 + Math.random(); this.voice('huh', 0.8); }
+      this.lookYaw = Math.sin((this.now - this.stateT) * 0.9) * 0.4;
+      if (this.now > this.phoneUntil) { ph.hangUp(true); this.voice('mutter'); this.backToWork(); }
+      return 0;
+    }
+    // a real call: rambling on, a laugh now and then, a glance over his shoulder every few seconds
+    if (this.now > this.phoneChat) {
+      this.phoneChat = this.now + 0.9 + Math.random() * 1.5;
+      ph.chat(v1.copy(this.pos).setY(this.pos.y + 1.7));
+      if (Math.random() < 0.08) this.voice('ha', 0.6);
+    }
+    if (this.now > this.phoneGlance) { this.phoneGlance = this.now + 6 + Math.random() * 4; this.glanceT = this.now; this.glanceDir = Math.random() < 0.5 ? -1 : 1; }
+    const g = this.now - this.glanceT;
+    this.lookYaw = g < 2.2 ? this.glanceDir * 1.8 * Math.sin((Math.PI * g) / 2.2) : Math.sin(this.now * 0.5) * 0.2;
+    if (this.now > this.phoneUntil) { ph.hangUp(); this.voice(Math.random() < 0.4 ? 'ha' : 'mutter', 0.7); this.backToWork(); }
+    return 0;
+  }
+  /** The receiver at his ear (render): his right hand, the earpiece toward his head. */
+  onPhoneHand(out: THREE.Vector3, q: THREE.Quaternion) {
+    if (this.state !== 'onPhone' || this.asleep) return false;
+    this.visual.hand(out);
+    this.visual.headPos(v2);
+    q.setFromUnitVectors(UP, v2.sub(out).negate().normalize());
+    return true;
+  }
+  /** Admin: off to the phone (it rings now). */
+  phoneNow() { if (this.gone) this.wake(); this.phoneCall = -1; }
 
   // ================================================================== toilet breaks (world/outhouse.ts)
   /** The nearest outhouse he can use. */
@@ -1907,6 +2022,7 @@ export class Farmer {
       case 'aim': return 'aim';
       case 'shoot': return 'shoot';
       case 'setTrap': case 'gate': case 'job': return this.doing ? 'fix' : 'idle';
+      case 'onPhone': return 'phone';
       default: return 'idle';
     }
   }

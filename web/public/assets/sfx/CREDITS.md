@@ -29,6 +29,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | body1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | body2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | body3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| bong.ogg | edsward / sorcerykid (freesound 341866) via VoxeLibre mcl_bells, CC0 |
 | boot1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | boot2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | boot3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
@@ -43,6 +44,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | cluck1.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck2.ogg | VoxeLibre mobs_mc, CC0 |
 | cluck3.ogg | VoxeLibre mobs_mc, CC0 |
+| clunk.ogg | Patrick Hunt (freesound 256513) via AntumMT sounds, CC0 |
+| coin.ogg | greenvwbeetle (freesound 423332) via AntumMT sounds, CC0 |
 | coins.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | cowhurt.ogg | Animalia by ElCeejo, MIT |
 | crackle.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
@@ -54,6 +57,8 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | fart_deep.ogg | User's own audio (Assets/Audio) |
 | fart_short.ogg | User's own audio (Assets/Audio) |
 | fuse.ogg | TumeniNodes / theneedle.tv (freesound 316682) via Minetest Game, CC0 |
+| glass1.ogg | chewiesmissus (freesound 244238) via CDDA CC-Sounds, CC0 |
+| glass2.ogg | logant547 (freesound 677734) via CDDA CC-Sounds, CC0 |
 | gobble1.ogg | Animalia by ElCeejo, MIT |
 | gobble2.ogg | Animalia by ElCeejo, MIT |
 | growl1.ogg | VoxeLibre mobs_mc, CC0 |
@@ -87,11 +92,19 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | oink1.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | oink2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | oink3.ogg | VoxeLibre mobs_mc, CC0 |
+| phoneoink.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT (telephone-filtered) |
+| phonetalk1.ogg | sickfin (freesound 711358) via CDDA CC-Sounds, CC0 |
+| phonetalk2.ogg | SilentStrikeZ (freesound 389642) via CDDA CC-Sounds, CC0 |
+| phonetalk3.ogg | SilentStrikeZ (freesound 389642) via CDDA CC-Sounds, CC0 |
+| phonevoice1.ogg | kwahmah_02 (freesound 255851) via CDDA CC-Sounds, CC BY 3.0 (telephone-filtered) |
+| phonevoice3.ogg | kwahmah_02 (freesound 255851) via CDDA CC-Sounds, CC BY 3.0 (telephone-filtered) |
+| phonevoice5.ogg | kwahmah_02 (freesound 255851) via CDDA CC-Sounds, CC BY 3.0 (telephone-filtered) |
 | pigcry1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | pigcry2.ogg | VoxeLibre mobs_mc, CC0 |
 | punch1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | punch2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rain.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| ring.ogg | jorickhoofd (freesound 177875) via AntumMT sounds, CC BY 3.0 |
 | rooster.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
@@ -116,6 +129,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | squeal2.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | squeal3.ogg | VoxeLibre mobs_mc, CC0 |
 | squish.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| static.ogg | digifishmusic (freesound 74936) via CDDA CC-Sounds, CC BY 4.0 |
 | step1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | step2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | step3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
@@ -126,6 +140,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | thud3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | thunder1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | thunder2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| tick.ogg | AntumDeluge (opengameart 16323) via AntumMT sounds, CC0 |
 | unlock.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
@@ -146,3 +161,5 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 - Veloren: https://veloren.net — DaforLynx, https://creativecommons.org/licenses/by/4.0/
 - Animalia: https://github.com/ElCeejo/animalia — MIT, © 2022 ElCeejo
 - Minetest Game: https://github.com/minetest/minetest_game (mods/tnt/README.md) — CC0 audio
+- CDDA CC-Sounds: https://github.com/Fris0uman/CDDA-Soundpacks (sound/CC-Sounds/*/credits.md, freesound authors)
+- AntumMT sounds: https://github.com/AntumMT/mod-sounds (sources.md)

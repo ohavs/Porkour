@@ -10,6 +10,7 @@ import type { FarmBuild } from './farmKit';
 import type { DayNight } from './daynight';
 import type { PROPS } from './props';
 import { Outhouse } from './outhouse';
+import { Phones } from './phone';
 
 interface Ctx {
   scene: THREE.Scene; t: Terrain; rng: Rng; out: FarmBuild; daynight: DayNight; blocked: Rect[];
@@ -42,6 +43,8 @@ export function buildDecor(c: Ctx) {
   d.hives([[21.5, -89.5], [24, -89.8], [26.5, -89.4]]);
   d.picnic(8.5, -47.5, 0.3);
   d.outhouse(-41, -45, Math.PI / 2);
+  d.phone(-12.4, -34.2, 0, -9.6, -31.0);
+  d.payphone(-4.6, 13.2, Math.PI / 2);
   d.mailbox(5.2, 18.2);
   d.rocker(-15.3, -29.2, -12, -22);
   // pumpkin patch (grab-able) + water trough
@@ -222,6 +225,16 @@ export function decorKit(c: Ctx) {
     block(x, z, 1.6);
   };
 
+  // ---------------------------------------------------------------- Bob's phone on a post by the porch (+ its jack) and the payphone by the road (world/phone.ts)
+  const phone = (x: number, z: number, yaw: number, jx: number, jz: number) => {
+    (out.phones ??= new Phones(scene)).setWall(x, y(x, z), z, yaw, jx, y(jx, jz), jz);
+    block(x, z, 0.5);
+  };
+  const payphone = (x: number, z: number, yaw: number) => {
+    (out.phones ??= new Phones(scene)).setPay(x, y(x, z), z, yaw);
+    block(x, z, 0.7);
+  };
+
   // ---------------------------------------------------------------- mailbox by the gate
   const mailbox = (x: number, z: number) => {
     const g = group(x, z, -0.2);
@@ -254,5 +267,5 @@ export function decorKit(c: Ctx) {
   // fewer draw calls: each piece becomes one skinned mesh (moving pivots are its bones)
   const finish = () => { for (const g of groups) rigidSkin(g, keep); };
   void c.decor; void c.F;
-  return { y, group, add, block, keep, lamps, pond, laundry, scarecrow, hives, picnic, outhouse, mailbox, rocker, trough, finish };
+  return { y, group, add, block, keep, lamps, pond, laundry, scarecrow, hives, picnic, outhouse, phone, payphone, mailbox, rocker, trough, finish };
 }
