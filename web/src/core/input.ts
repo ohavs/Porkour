@@ -2,14 +2,15 @@
  * Keyboard + mouse + gamepad → one Controls snapshot per frame.
  * Button presses are latched until a fixed physics step consumes them (no lost presses at high FPS).
  */
-/** grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold). */
-export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink';
+/** grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold), tilt = R (tip what you hold: pour). */
+export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink' | 'tilt';
 
 const KEYS: Record<string, Button> = {
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyQ: 'fart', KeyE: 'stand',
-  KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink',
+  KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink', KeyR: 'tilt',
 };
-const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'oink' };
+/** Gamepad: RB = tip (pour), R3 = oink, D-pad up / down = reach further / back. */
+const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'tilt', 11: 'oink' };
 
 export class Input {
   moveX = 0; moveY = 0;        // -1..1, y = forward
@@ -26,6 +27,8 @@ export class Input {
   private lockedAt = 0;
   sensitivity = 0.0024;
   invertY = false;
+  /** Mouse wheel: how far the arms / neck reach out (0 = normal … 1 = stretched). */
+  reach = 0;
   onKey?: (code: string) => void;
   /** Every button press as it happens (UI that needs exact timing, e.g. the lock-pick). */
   onPress?: (b: Button) => void;
@@ -47,6 +50,8 @@ export class Input {
     // the first moves right after the lock can carry the whole jump of the cursor: ignore them (the camera spun)
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === this.el; this.lockedAt = performance.now(); this.mdx = this.mdy = 0; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    // wheel forward = reach further, back = back to normal (Burglin' Gnomes style)
+    addEventListener('wheel', (e) => { if (!this.locked && !this.free) return; this.reach = Math.min(1, Math.max(0, this.reach - Math.sign(e.deltaY) * 0.2)); }, { passive: true });
   }
   lock() { if (this.locked) return; try { (this.el.requestPointerLock?.() as any)?.catch?.(() => {}); } catch { /* needs a user gesture */ } }
   private down(b: Button) { if (!this.held.has(b)) { this.held.add(b); this.pressed.add(b); this.onPress?.(b); } }
@@ -72,6 +77,8 @@ export class Input {
         if (!on && this.padPrev[i]) this.up(b);
         this.padPrev[i] = on;
       });
+      const up = pad.buttons[12]?.pressed, dn = pad.buttons[13]?.pressed;
+      if (up || dn) this.reach = Math.min(1, Math.max(0, this.reach + (up ? 1 : -1) * 0.03));
     }
     const len = Math.hypot(x, y);
     if (len > 1) { x /= len; y /= len; }

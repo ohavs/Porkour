@@ -8,6 +8,23 @@ export interface Profile {
   /** Google ID token (JWT, ~1 h) — sent once to the server, which verifies it. */
   token?: string;
   exp?: number;
+  /** SHA-256 of the Google account's e-mail (never the e-mail itself): the owner account is recognised by it. */
+  emailHash?: string;
+}
+
+/**
+ * The game's owner account (user, 2026-11-18: "all the money and levels, and give money to anyone"): only the
+ * SHA-256 of its e-mail is in the code (the repo is public). The server checks the same hash on the verified token.
+ */
+const OWNER_HASH = '6b8626b254d97cb0dc01f56029abc7abdef3970048c91128372a16eb24910923';
+export const isOwner = () => profile.google && profile.emailHash === OWNER_HASH;
+/** The admin mode: the owner, and whoever the owner gave it to (kept in this browser); local test builds too. */
+export const canAdmin = () => isOwner() || adminGranted() || ['localhost', '127.0.0.1'].includes(location.hostname);
+export function adminGranted() { try { return localStorage.getItem('porkour.admin') === '1'; } catch { return false; } }
+export function setAdminGrant(on: boolean) { try { if (on) localStorage.setItem('porkour.admin', '1'); else localStorage.removeItem('porkour.admin'); } catch { /* */ } }
+async function sha256(s: string) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
 const KEY = 'porkour.profile';
@@ -58,7 +75,9 @@ function loadGsi(): Promise<any> {
           profile.google = true; profile.token = r.credential; profile.exp = p.exp;
           profile.name = String(p.given_name || p.name || profile.name).slice(0, 16);
           profile.picture = String(p.picture || '');
-          changed();
+          const email = typeof p.email === 'string' ? p.email.toLowerCase() : '';
+          if (email && crypto.subtle) sha256(email).then((h) => { profile.emailHash = h; changed(); }).catch(() => changed());
+          else changed();
         },
         auto_select: true, cancel_on_tap_outside: false, use_fedcm_for_prompt: true, itp_support: true,
       });
@@ -99,6 +118,6 @@ export async function refreshToken(timeoutMs = 4000): Promise<boolean> {
 
 export function signOut() {
   (window as any).google?.accounts?.id?.disableAutoSelect?.();
-  profile.google = false; profile.token = undefined; profile.exp = undefined; profile.picture = '';
+  profile.google = false; profile.token = undefined; profile.exp = undefined; profile.picture = ''; profile.emailHash = undefined;
   changed();
 }

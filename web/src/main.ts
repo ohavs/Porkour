@@ -5,7 +5,8 @@ import { Audio } from './core/audio';
 import { Gfx } from './render/gfx';
 import { Game, PLAYER_COLORS } from './game/game';
 import { Wardrobe, walletHtml } from './game/wardrobe';
-import { initShop, outfitMsg } from './game/shop';
+import { initShop, outfitMsg, ownerPerks } from './game/shop';
+import { isOwner, onProfile } from './net/auth';
 import { PigVisual } from './pig/pigVisual';
 import * as THREE from 'three';
 import { loadSettings, saveSettings, SETTINGS } from './game/settings';
@@ -49,6 +50,7 @@ const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'fa
 
 loadSettings();
 initShop();
+if (isOwner()) ownerPerks();   // the owner's account: all the coins, the top level
 initLang();
 applyDom();
 const params = new URLSearchParams(location.search);
@@ -128,6 +130,8 @@ async function boot() {
     playMode: () => (!lobby.inRoom ? 'play' : online.isHost ? 'start' : 'wait'),
   });
   (window as any).__lobbyUI = ui;
+  import('./game/saves').then((m) => ((window as any).__saves = m));
+  onProfile(() => { if (isOwner() && ownerPerks()) ui.render(); });
   wardrobe.onShop = () => { ui.render(); sendOutfit(); };
   game.menu.onShopChanged = () => ui.render();
   onLang(() => ui.render());
@@ -164,6 +168,7 @@ async function boot() {
     else if (wardrobe.isOpen) wardrobe.close();
     else if (ADMIN.open) { game.menu.toggleAdmin(); input.lock(); }
     else if (game.menu.menuOpen) game.menu.close();
+    else if (ui.savesOpen) { ui.closeSaves(); return; }
     else if (lobby.isOpen) { lobby.escape(); return; }
     else if (game.hud.showHelp) { game.hud.toggleHelp(); return; }
     else if (game.running) { game.menu.open(); return; }

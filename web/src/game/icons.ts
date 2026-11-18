@@ -129,6 +129,23 @@ export const IC = {
   cloud: svg(`<path d="M6 19a4 4 0 0 1-.5-8A6 6 0 0 1 17 9a4.5 4.5 0 0 1 1 10z" fill="#ffffff" ${O}/>`),
   /** Seeds in a hoof. */
   seed: svg(`<ellipse cx="8" cy="12" rx="2.4" ry="3.4" fill="#c9a24a" ${O} transform="rotate(-20 8 12)"/><ellipse cx="15" cy="9" rx="2.4" ry="3.4" fill="#c9a24a" ${O} transform="rotate(25 15 9)"/><ellipse cx="14" cy="17" rx="2.4" ry="3.4" fill="#c9a24a" ${O}/>`),
+  /** Tip it over: pour (a tipped jug, a stream). */
+  pour: svg(`<path d="M3 8l9-4 3 6-9 4z" fill="#6fb7e8" ${O}/><path d="M15 10l2.5 1.2" fill="none" ${O}/><path d="M18 12c.5 2.5-.3 4.5 0 7M20.5 13c.4 2 0 3.5.2 5.5" fill="none" stroke="#4fb3ff" stroke-width="2" stroke-linecap="round"/><path d="M14 21h9" stroke="#ffd166" stroke-width="2.4" stroke-linecap="round"/>`),
+  /** Reach further: the mouse wheel (rolled forward) + a stretched arm. */
+  reach: svg(`<rect x="2" y="5" width="9" height="15" rx="4.5" fill="#fff6e6" ${O}/><rect x="5.4" y="7.5" width="2.2" height="4.5" rx="1.1" fill="#ffd166" ${O}/><path d="M13 13h6" stroke="#ffb3c7" stroke-width="3.4" stroke-linecap="round"/><path d="M18 9.5l4 3.5-4 3.5" fill="none" stroke="#ffd166" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`),
+  /** Lick it (a tongue). */
+  tongue: svg(`<path d="M5 8h14" stroke="#ffb3c7" stroke-width="3" stroke-linecap="round"/><path d="M8 8v6a4 4 0 0 0 8 0V8z" fill="#ff6f8f" ${O}/><path d="M12 9v5" stroke="#d94a6a" stroke-width="1.4" stroke-linecap="round"/>`),
+  /** A filter tip (a little rolled card). */
+  filter: svg(`<rect x="6" y="8" width="12" height="8" rx="4" fill="#e8c48a" ${O}/><path d="M9 9c1 2 1 4 0 6M12 9c1 2 1 4 0 6M15 9c1 2 1 4 0 6" fill="none" stroke="#b58a4a" stroke-width="1.2"/>`),
+  coin: svg(`<circle cx="12" cy="12" r="8" fill="#ffd166" ${O}/><circle cx="12" cy="12" r="5" fill="none" stroke="#c99a2a" stroke-width="1.4"/><path d="M12 9v6" stroke="#c99a2a" stroke-width="1.8" stroke-linecap="round"/>`),
+  /** Circle the mouse (crank / stir). */
+  circle: svg(`<path d="M18.5 8A8 8 0 1 0 20 13" fill="none" stroke="#fff6e6" stroke-width="2.6" stroke-linecap="round"/><path d="M15.5 7.5l3.3.6.4-3.4" fill="none" stroke="#ffd166" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.2" fill="#ffd166" ${O}/>`),
+  /** A spoon stirring a pot. */
+  stir: svg(`<path d="M4 12h16l-1.5 7a2 2 0 0 1-2 1.6H7.5a2 2 0 0 1-2-1.6z" fill="#9aa3ad" ${O}/><path d="M7 12c2-1.6 8-1.6 10 0" fill="#e9d36a" ${O}/><path d="M14 13 19 3" stroke="#b5793d" stroke-width="2.6" stroke-linecap="round"/>`),
+  /** A lever / handle being pulled. */
+  lever: svg(`<rect x="4" y="16" width="16" height="5" rx="1.5" fill="#9aa3ad" ${O}/><path d="M12 17 17 5" stroke="#5c5f66" stroke-width="2.8" stroke-linecap="round"/><circle cx="17" cy="5" r="2.6" fill="#ff5a3c" ${O}/><path d="M7 8a6 6 0 0 1 4-4" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
+  /** A door (open it). */
+  door: svg(`<rect x="5" y="3" width="12" height="18" rx="1" fill="#b5793d" ${O}/><circle cx="14.5" cy="12.5" r="1.3" fill="#ffd166" ${O}/><path d="M17 3l3 2v15l-3 1" fill="#8a5a2a" ${O}/>`),
 };
 export type IconId = keyof typeof IC;
 

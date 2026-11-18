@@ -6,6 +6,7 @@ import { G, ADMIN } from './ctx';
 import { t, onLang, type Key } from '../i18n';
 import { sightPoint } from '../world/cover';
 import { IC, kc, type IconId } from './icons';
+import { HANDS } from '../world/hands';
 import { SNACK_IDS } from '../world/snacks';
 
 const v1 = new THREE.Vector3();
@@ -32,6 +33,8 @@ const CSS = `
 .pp.dim { opacity:.6; }
 .ic { display:block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 .pp .ic { width:30px; height:30px; }
+#ret { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:#fff6e6; box-shadow:0 0 0 1.5px #3b2412; opacity:0; pointer-events:none; z-index:5; transition:opacity .15s; }
+#pick { position:fixed; left:0; top:0; width:30px; height:30px; margin:-15px 0 0 -15px; border:3px solid #ffd166; border-radius:50%; box-shadow:0 0 0 1.5px #3b2412, inset 0 0 0 1.5px #3b2412; opacity:0; pointer-events:none; z-index:5; transition:opacity .1s; }
 kbd.kc { font-family: Title; font-size:16px; color:#3b2412; background:#fff6e6; border-radius:6px; padding:1px 7px 2px; box-shadow: 0 2px 0 #c9b49a; line-height:1.25; }
 .mbar { width:120px; height:10px; border-radius:6px; background: rgba(0,0,0,.4); overflow:hidden; }
 .mbar i { display:block; height:100%; background: linear-gradient(90deg, var(--pink), var(--gold)); }
@@ -110,7 +113,7 @@ export class Hud {
     this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
-      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + `<div class="keys">${t('help.keys')}</div>`;
+      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
@@ -266,6 +269,30 @@ export class Hud {
     });
   }
 
+  private retEl: HTMLElement | null = null; private pickEl: HTMLElement | null = null;
+  /**
+   * The crosshair (world/hands.ts: what you hold goes there, RMB takes what it's on): a dot in the middle of the screen
+   * and a ring on the thing / machine part it picks. mode 0 = hidden, 1 = third person, 2 = first person.
+   */
+  reticle(pig: Pig, cam: THREE.Camera, mode: number) {
+    if (!this.retEl) {
+      this.retEl = document.createElement('div'); this.retEl.id = 'ret'; document.body.appendChild(this.retEl);
+      this.pickEl = document.createElement('div'); this.pickEl.id = 'pick'; document.body.appendChild(this.pickEl);
+    }
+    const busy = !!pig.held || !!pig.handle;
+    const tg = mode && !pig.out && !pig.cage ? HANDS.target(pig) : null;
+    this.retEl.style.opacity = mode ? (busy || tg ? '0.95' : '0.4') : '0';
+    let on = false;
+    if (tg) {
+      HANDS.targetPos(tg, v1).project(cam);
+      if (v1.z < 1) {
+        on = true;
+        this.pickEl!.style.transform = `translate(${((v1.x + 1) / 2) * innerWidth}px, ${((1 - v1.y) / 2) * innerHeight}px) scale(${0.9 + Math.sin(performance.now() / 160) * 0.08})`;
+      }
+    }
+    this.pickEl!.style.opacity = on ? '1' : '0';
+  }
+
   /** `goal`: where a prank wants the thing you hold (shown instead of the stash hint). */
   update(pig: Pig, fps: number, goal = '') {
     this.ring('sprint', pig.readiness('sprint'), pig.sprinting);
@@ -279,14 +306,12 @@ export class Hud {
     const SPACE = kc(t('key.space')), mashBar = (n: number, need: number) => `<span class="mbar"><i style="width:${Math.round(clamp(n / Math.max(need, 1), 0, 1) * 100)}%"></i></span>`;
     let p = '';
     const gate = G.gates?.latchOf(pig) as { state: string; padHp: number; label: string } | null | undefined;
-    const loo = G.loos.find((o: { boltNear(p: Pig): boolean }) => o.boltNear(pig)) as { bolted: boolean } | undefined;
     const use = G.uses.find((u) => u.near(pig));
     const coop = (h: unknown) => (h as { def?: { coop?: boolean } } | null)?.def?.coop === true;
-    const stuck = !pig.out && !pig.cage && !pig.heldBy && !pig.held ? G.traps?.list.find((tr: { holding: Pig | null; pos: THREE.Vector3 }) => tr.holding
-      && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
     const snack = pig.held as { def?: { snack?: string; smokes?: boolean }; left?: number } | null;
     const chainIc = pig.held && G.chain ? G.chain.itemIcon(pig) : '';
+    const dest = pig.held ? HANDS.destIcon(pig) : '';   // it has a place it goes (the hopper, the mat, the oven…): show it
     const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
     const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
     if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
@@ -295,16 +320,18 @@ export class Hud {
     else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
     else if (G.phones?.oinkNow(pig)) p = row(P(kc('F'), IC.pig, IC.phone));
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    else if (pig.handle) p = row(P(IC.rmb, IC.drop), P(IC.mouse, pig.handle.kind === 'crank' ? IC.circle : IC[pig.handle.icon]));
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));
-    else if (loo) p = row(P(IC.rmb, loo.bolted ? IC.loo : IC.lock));
     else if (use) p = row(P(IC.rmb, IC[use.icon(pig) as IconId] ?? ''));
-    else if (stuck) p = row(P(IC.rmb, IC.trap));
     else {
-      const tg = pig.findGrabTarget();
-      if (tg) p = row(P(IC.rmb, IC.grab, val(tg)), coop(tg) && !tg.heldBy ? P(IC.two) : '');
+      const pk = HANDS.target(pig), tg = pk?.h;
+      if (pk?.handle) p = row(P(IC.rmb, IC[pk.handle.icon]));
+      else if (pk?.disp) p = row(P(IC.rmb, IC[pk.disp.icon]));
+      else if (tg) p = row(P(IC.rmb, IC.grab, val(tg)), coop(tg) && !tg.heldBy ? P(IC.two) : '');
+      else if (HANDS.far) p = row(P(IC.reach));   // it's under the crosshair, but too far: roll the wheel / step closer
       else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
     if (!p && G.chain && !pig.out && !pig.cage && !pig.heldBy) { const nd = G.chain.needsAt(pig); if (nd) p = `<div class="pr"><span class="pp needs">${nd}</span></div>`; }
@@ -322,6 +349,9 @@ export class Hud {
     if (pig.mode === 'wallow') st.push(B(IC.dead));
     for (const k of SNACK_IDS) if (pig.boosted(k)) st.push(B(IC[`boost_${k}`], String(Math.ceil(pig.boostUntil[k] - pig.now))));
     if (pig.smoking) st.push(B(IC.cig, String(Math.ceil(pig.cigUntil - pig.now))));
+    // the mouse wheel stretched my arms / neck: how far
+    const rk = pig.input.reach ?? 0;
+    if (rk > 0.02 && !pig.out) st.push(`<span class="sb">${IC.reach}<span class="mbar"><i style="width:${Math.round(rk * 100)}%"></i></span></span>`);
     // chain modes: how high / drunk (a little meter in the badge); jailed / frozen by the admin
     const bz = pig.buzz;
     if (bz > 0.02) st.push(`<span class="sb buzz">${pig.buzzKind === 2 ? IC.beer : IC.leaf}<span class="mbar"><i style="width:${Math.round(bz * 100)}%"></i></span></span>`);
@@ -343,5 +373,7 @@ export class Hud {
   }
 }
 
+/** Something you hold that pours when you tip it (R) and still has something in it. */
+function pours(h: unknown) { const p = h as { def?: { pour?: unknown }; pourNow?: () => unknown; left?: number }; return !!(p.def?.pour || p.pourNow?.()) && (p.left ?? 0) > 0.001; }
 /** Loot value tag for prompts (M5). */
 function val(h: unknown) { const v = (h as { value?: number }).value ?? 0; return v > 0 ? ` <span class="val"><i class="coin"></i>${v}</span>` : ''; }

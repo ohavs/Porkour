@@ -6,10 +6,11 @@ import { Synced } from '../core/synced';
 import { G, type Holdable } from '../game/ctx';
 import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
+import { HANDS } from './hands';
 import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
   makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe, makeTV, makeClock } from './funProps';
 import { makeBud, makeWeedBag, makeJoint, makeLighter, makeWateringCan, makeSeedBag, makeSickle, makeButter, makeSack, makeTray, makeWheelbarrow,
-  makeHops, makeSheaf, makeMug, makeBeerBarrel } from './chainProps';
+  makeHops, makeSheaf, makeBeerBarrel, makePaper, makeFilter, makeCookPot, makeMixBowl, makeEmptyTray, makeMugFill, makeCoin, makePlug, makeHandset } from './chainProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -38,6 +39,11 @@ export interface PropDef {
   item?: string;
   /** Munchies: a high pig eats it with a click (counts for the munchies challenge). */
   food?: boolean;
+  /**
+   * Pours when tipped over (world/hands.ts: hold R): what comes out, how fast (`left` per second), from where (local),
+   * the stream's colour / bit size / sound. `left` = how much is in it (servings: the starting amount).
+   */
+  pour?: { stuff: string; rate: number; spout: [number, number, number]; color: number; size?: number; sound?: string };
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -73,10 +79,27 @@ export class Prop implements Holdable {
   /** Snacks: bites / cigarettes left (an eaten can loses its lid). */
   left = 0;
   private lid: THREE.Object3D | null = null;
-  setLeft(n: number) { this.left = n; if (this.lid) this.lid.visible = n > 0; }
+  setLeft(n: number) { this.left = n; if (this.lid) this.lid.visible = n > 0; this.onLeft?.(n); }
+  /** A container shows how full it is (chain props: the mug's beer, the bag's weed). */
+  onLeft?: (n: number) => void;
+  /** Sitting in a socket (world/hands.ts): kinematic there until someone takes it out. */
+  dockedIn: any = null;
+  /** Just snapped somewhere: bins don't catch it again for a moment. */
+  snapCd = 0;
+  /** The socket it was just taken out of (it isn't pulled back in until it's been carried away). */
+  outOf: any = null;
+  /** Tipped over an opening (pouring): it passes through static things for now (world/hands.ts). */
+  ghosted = false;
+  /** What it pours now when it has contents that change (a pot of butter, a bowl of dough); else def.pour. */
+  pourNow?: () => { stuff: string; color: number } | null;
+  /** Its size (the model's box). */
+  size = new THREE.Vector3();
+  /** Can't be taken right now (a paper being rolled, a tray behind a shut oven door). */
+  noGrab?: () => boolean;
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
+    this.size.copy(size);
     model.position.y = def.r ? -def.r : -size.y / 2;
     this.obj.add(model);
     if (def.make) rigidSkin(this.obj);
@@ -111,6 +134,7 @@ export class Prop implements Holdable {
   /** Into the stash (host): hidden, no physics, not grabbable. */
   bank() {
     if (this.banked) return;
+    if (this.dockedIn) HANDS.undock(this, null);
     this.banked = true;
     this.body.setEnabled(false);
     this.obj.visible = false;
@@ -127,6 +151,7 @@ export class Prop implements Holdable {
   /** Out of the stash / pool again, at a spot (gadget handed out). */
   unbank(at: THREE.Vector3, yaw = 0) {
     this.banked = false; this.smashed = false; this.uses = 0;
+    if (G.net !== 'client' && this.body.isKinematic()) this.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     this.body.setEnabled(true); this.obj.visible = true;
     if (!G.holdables.includes(this)) G.holdables.push(this);
     this.body.setTranslation({ x: at.x, y: at.y + this.half + 0.05, z: at.z }, true);
@@ -136,6 +161,8 @@ export class Prop implements Holdable {
   }
   /** New round: back where it started. */
   reset() {
+    if (this.dockedIn) HANDS.undock(this, null, false);
+    if (G.net !== 'client' && this.body.isKinematic()) this.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     this.uses = 0; this.smashed = false; this.worth = null; this.setLeft(this.def.servings ?? 0); this.setBroken(false);
     if (this.pooled) { this.bank(); this.putHome(); return; }
     if (this.banked) { this.banked = false; this.body.setEnabled(true); this.obj.visible = true; if (!G.holdables.includes(this)) G.holdables.push(this); }
@@ -316,31 +343,54 @@ export const PROPS: Record<string, PropDef> = {
   // clock (tall: it topples when dragged hard; BONG on every full hour wherever it is — world/heavyLoot.ts)
   tv: { make: makeTV, mass: 85, sound: 'wood', label: 'item.tv', value: 220, friction: 0.7, bounce: 0.05, coop: true, screen: 5.2, cracked: 30 },
   clock: { make: makeClock, mass: 110, sound: 'wood', label: 'item.clock', value: 260, friction: 0.65, bounce: 0.03, coop: true },
-  // chain modes (farm 6: cannabis — world/weed.ts): harvested buds, a bag of ground weed (3 pinches), rolled joints (puffs),
-  // the lighter, watering cans (6 pours), seeds, the sickle, butter → magic butter, flour (3 scoops), baking trays, the wheelbarrow
+  // chain modes (farm 6: cannabis — world/weed.ts; everything is done with the hooves, world/hands.ts): harvested buds,
+  // a bag of ground weed (pours: 4 pinches), a rolling paper + a filter tip (they snap together on the rolling mat),
+  // rolled joints (puffs), the lighter, watering cans (pour on the plants; refill at the pump / the pond), seeds (pour
+  // on an empty mound), the sickle, butter, the cooking pot (pours the magic butter), flour (pours), the mixing bowl
+  // (pours the dough), baking trays, the wheelbarrow
   bud: { make: makeBud, mass: 0.3, shape: 'ball', r: 0.1, damp: 2, sound: 'squish', label: 'item.bud', item: 'bud', friction: 0.9 },
-  weedBag: { make: makeWeedBag, mass: 0.4, sound: 'squish', label: 'item.weedBag', item: 'weed', servings: 3 },
+  weedBag: { make: makeWeedBag, mass: 0.4, sound: 'squish', label: 'item.weedBag', item: 'weed', servings: 4,
+    pour: { stuff: 'weed', rate: 0.6, spout: [0, 0.09, 0], color: 0x6fae3e, size: 0.03, sound: 'rustle' } },
+  paper: { make: makePaper, mass: 0.1, sound: 'thud', label: 'item.paper', item: 'paper', friction: 0.95 },
+  filter: { make: makeFilter, mass: 0.06, sound: 'thud', label: 'item.filter', item: 'filter', friction: 0.9 },
   joint: { make: makeJoint, mass: 0.05, sound: 'thud', label: 'item.joint', item: 'joint', servings: 5, friction: 0.9 },
   lighter: { make: makeLighter, mass: 0.1, sound: 'metal', label: 'item.lighter', item: 'lighter' },
-  wateringCan: { make: makeWateringCan, mass: 3, sound: 'metal', label: 'item.wateringCan', item: 'can', servings: 6 },
-  seedBag: { make: makeSeedBag, mass: 1, sound: 'thud', label: 'item.seedBag', item: 'seed', servings: 4 },
+  wateringCan: { make: makeWateringCan, mass: 3, sound: 'metal', label: 'item.wateringCan', item: 'can', servings: 6,
+    pour: { stuff: 'water', rate: 1.6, spout: [0, 0.2, 0.3], color: 0x7fd0ff, size: 0.05 } },
+  seedBag: { make: makeSeedBag, mass: 1, sound: 'thud', label: 'item.seedBag', item: 'seed', servings: 4,
+    pour: { stuff: 'seed', rate: 1.2, spout: [0, 0.17, 0], color: 0xc9a24a, size: 0.03, sound: 'rustle' } },
   sickle: { make: makeSickle, mass: 1.2, sound: 'metal', label: 'item.sickle', item: 'sickle' },
   butter: { make: () => makeButter(false), mass: 0.3, sound: 'squish', label: 'item.butter', item: 'butter', food: true },
   magicButter: { make: () => makeButter(true), mass: 0.8, shape: 'cyl', sound: 'wood', label: 'item.magicButter', item: 'magic' },
-  flour: { make: () => makeSack(0xf8f4ea, 0x3f9ad8, 0.32, 0.36), mass: 5, shape: 'cyl', sound: 'thud', label: 'item.flour', item: 'flour', servings: 3 },
+  cookPot: { make: makeCookPot, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.cookPot', item: 'pot', friction: 0.8,
+    pour: { stuff: 'magic', rate: 0.7, spout: [0, 0.1, 0.17], color: 0x9fbf4a, size: 0.06, sound: 'pour' } },
+  mixBowl: { make: makeMixBowl, mass: 1.5, shape: 'cyl', sound: 'wood', label: 'item.mixBowl', item: 'bowl', friction: 0.8,
+    pour: { stuff: 'dough', rate: 0.6, spout: [0, 0.1, 0.2], color: 0xf2dcae, size: 0.07, sound: 'squish' } },
+  flour: { make: () => makeSack(0xf8f4ea, 0x3f9ad8, 0.32, 0.36), mass: 5, shape: 'cyl', sound: 'thud', label: 'item.flour', item: 'flour', servings: 3,
+    pour: { stuff: 'flour', rate: 0.8, spout: [0, 0.27, 0], color: 0xf8f4ea, size: 0.045, sound: 'rustle' } },
+  tray: { make: makeEmptyTray, mass: 1, sound: 'metal', label: 'item.tray', item: 'tray' },
   trayRaw: { make: () => makeTray('raw'), mass: 1.2, sound: 'metal', label: 'item.trayRaw', item: 'trayRaw' },
   cookies: { make: () => makeTray('baked'), mass: 1.2, sound: 'metal', label: 'item.cookies', item: 'cookies', servings: 6, food: true },
   cookiesBurnt: { make: () => makeTray('burnt'), mass: 1.2, sound: 'metal', label: 'item.cookiesBurnt', item: 'burnt' },
   wheelbarrow: { make: makeWheelbarrow, mass: 60, sound: 'metal', label: 'item.wheelbarrow', item: 'barrow', friction: 0.25, bounce: 0.02 },
-  // farm 7 (beer — world/brew.ts): the scythe, wheat sheaves, grain → malt sacks, hops, the water bucket, the barrel, mugs of beer
+  // farm 7 (beer — world/brew.ts): the scythe, wheat sheaves, grain sacks (pour into the mill) → malt sacks (pour into
+  // the kettle), hops, the water bucket, the barrel, mugs (fill them at the tap, drink, refill)
   scythe: { model: 'brew/Scythe', height: 1.3, mass: 2.5, sound: 'metal', label: 'item.scythe', item: 'scythe' },
   sheaf: { make: makeSheaf, mass: 1.5, sound: 'thud', label: 'item.sheaf', item: 'sheaf', friction: 0.9 },
-  grain: { make: () => makeSack(0xe8d6b0, 0xc9a24a), mass: 8, shape: 'cyl', sound: 'thud', label: 'item.grain', item: 'grain', friction: 0.9 },
-  malt: { make: () => makeSack(0xb5793d, 0xffd166), mass: 7, shape: 'cyl', sound: 'thud', label: 'item.malt', item: 'malt', friction: 0.9 },
+  grain: { make: () => makeSack(0xe8d6b0, 0xc9a24a), mass: 8, shape: 'cyl', sound: 'thud', label: 'item.grain', item: 'grain', friction: 0.9, servings: 3,
+    pour: { stuff: 'grain', rate: 1.2, spout: [0, 0.3, 0], color: 0xe8d6b0, size: 0.035, sound: 'rustle' } },
+  malt: { make: () => makeSack(0xb5793d, 0xffd166), mass: 7, shape: 'cyl', sound: 'thud', label: 'item.malt', item: 'malt', friction: 0.9, servings: 3,
+    pour: { stuff: 'malt', rate: 1.2, spout: [0, 0.3, 0], color: 0xb5793d, size: 0.035, sound: 'rustle' } },
   hops: { make: makeHops, mass: 0.3, sound: 'squish', label: 'item.hops', item: 'hops' },
-  bucket: { model: 'brew/Bucket', height: 0.4, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.bucket', item: 'can', servings: 3 },
-  beerMug: { make: () => makeMug(true), mass: 0.6, shape: 'cyl', sound: 'metal', label: 'item.beerMug', item: 'beer', servings: 3 },
+  bucket: { model: 'brew/Bucket', height: 0.4, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.bucket', item: 'can', servings: 3,
+    pour: { stuff: 'water', rate: 1.6, spout: [0, 0.2, 0.15], color: 0x7fd0ff, size: 0.05 } },
+  beerMug: { make: makeMugFill, mass: 0.6, shape: 'cyl', sound: 'metal', label: 'item.beerMug', item: 'beer', servings: 0,
+    pour: { stuff: 'beer', rate: 1.5, spout: [0, 0.09, 0.075], color: 0xffb42a, size: 0.04 } },
   beerBarrel: { make: makeBeerBarrel, mass: 45, shape: 'wheel', sound: 'wood', label: 'item.beerBarrel', item: 'barrel', friction: 1, damp: 3.5 },
+  // the payphone's coins, the phone's plug (on its cord), the payphone handset (on its cord) — world/phone.ts
+  coin: { make: makeCoin, mass: 0.05, sound: 'metal', label: 'item.coin', item: 'coin', friction: 0.9 },
+  plug: { make: makePlug, mass: 0.1, sound: 'thud', label: 'item.plug', item: 'plug' },
+  handset: { make: makeHandset, mass: 0.4, sound: 'thud', label: 'item.handset', item: 'handset' },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

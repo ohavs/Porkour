@@ -30,6 +30,15 @@ export const EN_X = {
   'a.brewFloor': '4 sheaves on the threshing floor', 'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
   'a.shed': 'Shed', 'a.field': 'Field', 'a.beam': 'Log over the pond',
   'e.smokeAlarm': 'Smoke alarm!',
+  // hands (session 18): tip / pour, reach, new items, admin
+  'help.tilt': 'Tip what you hold (pour)', 'help.reach': 'Reach further / back', 'key.wheel': 'Wheel',
+  'item.paper': 'Rolling paper', 'item.filter': 'Filter tip', 'item.cookPot': 'Pot', 'item.mixBowl': 'Mixing bowl', 'item.tray': 'Baking tray',
+  'item.coin': 'Coin', 'item.plug': 'Phone plug', 'item.handset': 'Handset',
+  'a.grant': 'Give this player the admin mode', 'a.ungrant': 'Take the admin mode back',
+  'save.title': 'Saves', 'save.empty': 'Empty', 'save.new': 'New game', 'save.load': 'Load', 'save.inUse': 'Playing this save', 'save.restart': 'Start over in this slot (click twice)', 'save.delete': 'Delete (click twice)', 'r.next': 'Next stage',
+  'menu.toLobby': 'Back to the lobby', 'lobby.story': 'Story', 'lobby.modes': 'Modes', 'lobby.stage': 'Stage {n}', 'lobby.locked': 'Win the stage before to unlock',
+  'net.switching': 'Switching farms…', 'at.owner': 'Owner', 'a.users': 'Players online', 'a.refresh': 'Refresh', 'a.giveCoins': 'Give coins', 'a.giveLevel': '+1 level', 'a.ownerHint': 'Your account: all coins and the top level.',
+  'a.weedMat': 'Paper + filter + weed on the mat', 'a.weedPot': 'Butter + weed in the pot', 'a.brewWort': 'Wort ready in the kettle',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -58,4 +67,12 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.brewFloor': '4 gavillas en la era', 'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
   'a.shed': 'Cobertizo', 'a.field': 'Campo', 'a.beam': 'Tronco del estanque',
   'e.smokeAlarm': '¡Alarma de humo!',
+  'help.tilt': 'Inclinar lo que llevas (verter)', 'help.reach': 'Estirarse más / volver', 'key.wheel': 'Rueda',
+  'item.paper': 'Papel de liar', 'item.filter': 'Filtro', 'item.cookPot': 'Olla', 'item.mixBowl': 'Bol de mezclar', 'item.tray': 'Bandeja de horno',
+  'item.coin': 'Moneda', 'item.plug': 'Clavija del teléfono', 'item.handset': 'Auricular',
+  'a.grant': 'Darle el modo admin a este jugador', 'a.ungrant': 'Quitarle el modo admin',
+  'save.title': 'Partidas', 'save.empty': 'Vacía', 'save.new': 'Nueva partida', 'save.load': 'Cargar', 'save.inUse': 'Jugando esta partida', 'save.restart': 'Empezar de nuevo aquí (dos clics)', 'save.delete': 'Borrar (dos clics)', 'r.next': 'Siguiente nivel',
+  'menu.toLobby': 'Volver a la sala', 'lobby.story': 'Historia', 'lobby.modes': 'Modos', 'lobby.stage': 'Nivel {n}', 'lobby.locked': 'Gana el nivel anterior para desbloquearlo',
+  'net.switching': 'Cambiando de granja…', 'at.owner': 'Dueño', 'a.users': 'Jugadores conectados', 'a.refresh': 'Actualizar', 'a.giveCoins': 'Dar monedas', 'a.giveLevel': '+1 nivel', 'a.ownerHint': 'Tu cuenta: todas las monedas y el nivel máximo.',
+  'a.weedMat': 'Papel + filtro + hierba en la esterilla', 'a.weedPot': 'Mantequilla + hierba en la olla', 'a.brewWort': 'Mosto listo en el caldero',
 };

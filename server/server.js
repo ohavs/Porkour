@@ -19,6 +19,13 @@ const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || BUILT_IN_GOOGLE_CLIENT
 const ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const MAX_PLAYERS = 4;
 const VERSION = 1;
+// The owner account(s) (all coins / levels, can give coins to anyone): only the SHA-256 of the e-mail is kept here
+// (this repo is public). More owners: OWNER_EMAIL_SHA256 (comma list of hex hashes of lower-case e-mails).
+const OWNER_HASHES = new Set(['6b8626b254d97cb0dc01f56029abc7abdef3970048c91128372a16eb24910923',
+  ...(process.env.OWNER_EMAIL_SHA256 || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)]);
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+/** A host switching farms reloads its page: the room waits this long (ms) for it to come back. */
+const SWITCH_GRACE = 45000;
 
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 /** code → room */
@@ -38,7 +45,7 @@ function send(ws, obj) { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(o
 const peerInfo = (ws) => ({ id: ws.pid, uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, slot: ws.slot, outfit: ws.outfit });
 function roomInfo(r) {
   const host = r.peers.get(r.hostId);
-  return { code: r.code, name: r.name, public: r.public, state: r.state, players: r.peers.size, max: r.max, host: host?.user.name ?? '?', farm: r.farm };
+  return { code: r.code, name: r.name, public: r.public, state: r.state, players: r.peers.size, max: r.max, host: host?.user.name ?? '?', farm: r.farm, save: r.save ?? '' };
 }
 function broadcast(r, obj, except) { for (const p of r.peers.values()) if (p !== except) send(p, obj); }
 function publicRooms() {
@@ -53,8 +60,9 @@ async function identify(m) {
       const { payload } = await jwtVerify(String(m.token), googleKeys, {
         issuer: ['https://accounts.google.com', 'accounts.google.com'], audience: GOOGLE_CLIENT_ID,
       });
+      const email = typeof payload.email === 'string' && payload.email_verified !== false ? payload.email.toLowerCase() : '';
       return {
-        uid: 'g:' + payload.sub, google: true,
+        uid: 'g:' + payload.sub, google: true, owner: !!email && OWNER_HASHES.has(sha256(email)),
         name: clean(m.name, 16) || clean(payload.given_name || payload.name, 16) || 'Pig',
         picture: typeof payload.picture === 'string' && payload.picture.startsWith('https://') ? payload.picture : '',
       };
@@ -66,25 +74,43 @@ async function identify(m) {
 }
 
 function join(ws, r) {
+  // the same browser tab again (its page reloaded — onto the room's farm, say — and the old connection can linger on
+  // the server for a while): that old one goes, the tab gets its seat back (no "clone" of the player in the room)
+  if (ws.tab) for (const p of [...r.peers.values()]) if (p !== ws && p.tab === ws.tab && p.pid !== r.hostId) { leave(p, 'replaced'); try { p.terminate(); } catch { /* gone */ } }
+  // the host is away switching farms: its tab gets seat 0 back and becomes the host again; seat 0 waits for it
+  const returning = !r.hostId && r.hostTab && ws.tab === r.hostTab;
   const used = new Set([...r.peers.values()].map((p) => p.slot));
-  let slot = 0; while (used.has(slot)) slot++;
+  let slot = returning ? 0 : !r.hostId && r.hostTab ? 1 : 0; while (used.has(slot)) slot++;
   let pid = 1; while (r.peers.has(pid)) pid++;
   ws.pid = pid; ws.slot = slot; ws.room = r;
   r.peers.set(pid, ws);
-  if (!r.hostId) r.hostId = pid;
+  if (returning || (!r.hostId && !r.hostTab)) { r.hostId = pid; r.hostTab = ws.tab; r.switchUntil = 0; }
   send(ws, { op: 'joined', room: roomInfo(r), you: pid, host: r.hostId, peers: [...r.peers.values()].map(peerInfo) });
   broadcast(r, { op: 'peer_join', peer: peerInfo(ws) }, ws);
+  if (returning) broadcast(r, { op: 'host', id: pid }, ws);
   broadcast(r, { op: 'room', room: roomInfo(r) }, ws);
+}
+function closeRoom(r, reason) {
+  for (const p of r.peers.values()) { p.room = null; send(p, { op: 'closed', reason }); }
+  rooms.delete(r.code);
 }
 
 function leave(ws, reason = 'left') {
   const r = ws.room; if (!r) return;
   ws.room = null;
   r.peers.delete(ws.pid);
+  // the host is switching farms (its page reloads): the room waits for it
+  if (r.switchUntil > Date.now() && (ws.pid === r.hostId || !r.hostId)) {
+    if (ws.pid === r.hostId) {
+      r.hostId = 0;
+      setTimeout(() => { if (!r.hostId && rooms.get(r.code) === r) closeRoom(r, 'host_left'); }, r.switchUntil - Date.now());
+    }
+    broadcast(r, { op: 'peer_leave', id: ws.pid, reason });
+    return;
+  }
   if (ws.pid === r.hostId || r.peers.size === 0) {
     // the game lives in the host's browser: no host, no game
-    for (const p of r.peers.values()) { p.room = null; send(p, { op: 'closed', reason: 'host_left' }); }
-    rooms.delete(r.code);
+    closeRoom(r, 'host_left');
     return;
   }
   broadcast(r, { op: 'peer_leave', id: ws.pid, reason });
@@ -109,8 +135,9 @@ async function control(ws, m) {
     if (m.v !== VERSION) return send(ws, { op: 'error', code: 'version' });
     ws.user = { pending: true };
     ws.outfit = typeof m.outfit === 'string' ? m.outfit.slice(0, 600) : '';
+    ws.tab = clean(m.tab, 40);
     ws.user = await identify(m);
-    send(ws, { op: 'welcome', you: { uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google }, authError: ws.user.error, googleEnabled: !!GOOGLE_CLIENT_ID });
+    send(ws, { op: 'welcome', you: { uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, owner: !!ws.user.owner }, authError: ws.user.error, googleEnabled: !!GOOGLE_CLIENT_ID });
     return;
   }
   if (!ws.user || ws.user.pending) return send(ws, { op: 'error', code: 'hello' });
@@ -133,11 +160,14 @@ async function control(ws, m) {
       return open ? join(ws, open) : createRoom(ws, { public: true, farm: m.farm });
     }
     case 'leave': return leave(ws);
-    case 'room': {   // host changes the room (state lobby / playing, name, public)
+    case 'room': {   // host changes the room (state lobby / playing, name, public, farm, story save label)
       if (!r || r.hostId !== ws.pid) return;
       if (m.state === 'lobby' || m.state === 'playing') r.state = m.state;
+      // another farm: every page (the host's too) reloads onto it; the room waits for the host to come back
+      if (typeof m.farm === 'string' && /^farm\d{1,2}$/.test(m.farm) && m.farm !== r.farm) { r.farm = m.farm; r.state = 'lobby'; r.hostTab = ws.tab; r.switchUntil = Date.now() + SWITCH_GRACE; }
       if (typeof m.public === 'boolean') r.public = m.public;
       if (m.name) r.name = clean(m.name, 28) || r.name;
+      if (typeof m.save === 'string') r.save = clean(m.save, 40);   // the host's story save ("💾 2 · ★★☆☆☆"), shown to the players
       return broadcast(r, { op: 'room', room: roomInfo(r) });
     }
     case 'kick': {
@@ -159,6 +189,27 @@ async function control(ws, m) {
     case 'chat': {
       const text = clean(m.text, 160); if (!r || !text) return;
       return broadcast(r, { op: 'chat', from: ws.pid, name: ws.user.name, text });
+    }
+    // the owner: who's online, and coins / levels for anyone of them
+    case 'users': {
+      if (!ws.user.owner) return;
+      const users = [...wss.clients].filter((c) => c.user && !c.user.pending).map((c) => ({ id: c.cid, name: c.user.name, google: c.user.google, room: c.room?.code ?? '', me: c === ws }));
+      return send(ws, { op: 'users', users });
+    }
+    case 'gift': {
+      if (!ws.user.owner) return;
+      const to = [...wss.clients].find((c) => c.cid === Number(m.to) && c.user && !c.user.pending);
+      if (!to) return send(ws, { op: 'error', code: 'nouser' });
+      const coins = Math.max(0, Math.min(1e7, Math.round(Number(m.coins) || 0))), levels = Math.max(0, Math.min(50, Math.round(Number(m.levels) || 0)));
+      send(to, { op: 'gift', coins, levels, from: ws.user.name });
+      return send(ws, { op: 'gifted', to: to.cid, name: to.user.name, coins, levels });
+    }
+    case 'grant': {   // the owner lets someone use the admin mode (or takes it back): their browser keeps it
+      if (!ws.user.owner) return;
+      const to = [...wss.clients].find((c) => c.cid === Number(m.to) && c.user && !c.user.pending);
+      if (!to) return send(ws, { op: 'error', code: 'nouser' });
+      send(to, { op: 'grant', admin: !!m.admin, from: ws.user.name });
+      return send(ws, { op: 'granted', to: to.cid, name: to.user.name, admin: !!m.admin });
     }
     // WebRTC signalling for the direct (peer-to-peer) connection: forwarded to one peer of the room
     case 'signal': {

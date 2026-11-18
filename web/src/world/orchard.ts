@@ -6,6 +6,7 @@ import { toonMat } from '../render/toon';
 import { rigidSkin } from '../render/batch';
 import { fruitTreeGeo } from './nature';
 import { Prop, PROPS } from './props';
+import { crank, type Handle } from './hands';
 import type { Pig } from '../pig/pig';
 
 /**
@@ -13,7 +14,8 @@ import type { Pig } from '../pig/pig';
  * the trunk, ram it at full sprint, or throw something hard at it — and apples rain down (rustle + noise Bob hears).
  * Each tree has a few apples a round (the fruit on the tree disappears when it's empty); the apples are a pool of
  * props (cheap loot, throwable: they splat on Bob). One tree in the middle grows THE golden apple.
- * The cider press next to the cider house eats apples dropped in its hopper; the 6th one makes a jug of cider.
+ * The cider press next to the cider house: apples dropped in its tub wait there; grab the turning bar and walk it
+ * round (circle the mouse — a heavy screw: slow) to press them, one apple per half turn; the 6th makes a jug of cider.
  */
 export const ORCHARD = { fruit: 4, perShake: 2, pool: 30, noise: 12, ramMin: 7, throwMin: 5, press: 6, hopperR: 0.75 };
 
@@ -36,8 +38,10 @@ export class Orchard {
   apples: Prop[] = [];
   gold: Prop | null = null;
   cider: Prop | null = null;
-  /** Apples squeezed in the press this round. */
-  pressed = 0;
+  /** Apples squeezed in the press this round; apples waiting in the tub. */
+  pressed = 0; loaded = 0; private pressProg = 0;
+  /** The press's turning bar (world/hands.ts crank). */
+  pressBar: Handle | null = null;
   private press: { x: number; z: number; y: number; screw: THREE.Object3D; spinT: number } | null = null;
   private dropped: Prop[] = [];
   private fruitKey = '';
@@ -98,7 +102,8 @@ export class Orchard {
     mesh(new THREE.BoxGeometry(1.9, 0.2, 0.22), dark, 0, 2.3, 0);
     const screw = new THREE.Group(); screw.position.set(0, 1.55, 0); g.add(screw);
     mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 8), iron, 0, 0, 0, screw);
-    mesh(new THREE.BoxGeometry(1.3, 0.07, 0.07), wood, 0, 0.55, 0, screw);             // the turning bar
+    mesh(new THREE.BoxGeometry(1.3, 0.07, 0.07), wood, 0, -0.2, 0, screw);             // the turning bar (pig height)
+    for (const s of [-1, 1]) mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.22, 8), wood, s * 0.62, -0.1, 0, screw);   // its handles
     mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16), wood, 0, -0.62, 0, screw);    // pressing plate
     mesh(new THREE.BoxGeometry(0.3, 0.08, 0.5), wood, 0.85, 0.25, 0.55).rotation.x = 0.25;   // spout
     rigidSkin(g);   // the screw group is a pivot: it becomes a bone and keeps turning
@@ -112,6 +117,15 @@ export class Orchard {
     }
     for (const s of [-1, 1]) world.createCollider(RAPIER.ColliderDesc.cuboid(0.08, 1.15, 0.08).setTranslation(s * 0.82, 1.15, 0).setCollisionGroups(groups(L.STATIC)), body);
     this.press = { x, z, y, screw, spinT: 0 };
+    this.pressBar = crank({ c: new THREE.Vector3(x, y + 1.38, z), axis: new THREE.Vector3(0, 1, 0), r: 0.62, icon: 'gear', max: 3.2,
+      ready: () => true,
+      turn: (d) => {
+        G.audio.play('creak', { pos: v1.set(x, y + 1.4, z), vol: 0.45, pitch: 0.8, minGap: 0.5 });
+        if (this.loaded <= 0) return;
+        this.pressProg += Math.abs(d) / Math.PI;   // an apple per half turn
+        if (this.pressProg < 1) return;
+        this.pressProg = 0; this.loaded--; this.squeeze();
+      } });
     // the jug of cider it makes
     this.cider = new Prop(this.scene, PROPS.cider, V3(0, -40, -5), 0);
     this.cider.pooled = true; this.cider.bank(); props.push(this.cider);
@@ -175,18 +189,23 @@ export class Orchard {
     const pr = this.press;
     if (!pr) return;
     for (const a of this.apples) {
-      if (a.banked || a.heldBy) continue;
+      if (a.banked || a.heldBy || this.loaded >= ORCHARD.press) continue;
       const p = a.synced.currP;
       if (Math.hypot(p.x - pr.x, p.z - pr.z) > ORCHARD.hopperR || p.y > pr.y + 1.05 || p.y < pr.y + 0.3) continue;
       a.bank();
-      this.pressed++;
-      G.events.push({ type: 'pressed', why: String(this.pressed) });
-      G.audio.play('squish', { pos: p, vol: 0.9 });
-      G.audio.play('creak', { pos: p, vol: 0.5, pitch: 1.2 });
-      G.fx.bits(v1.set(pr.x, pr.y + 0.8, pr.z), { count: 12, color: 0xf2c25a, speed: 2, up: 2.5, grav: 9, life: 0.6, size: 0.1, grow: 0, alpha: 1 });
-      G.noise(p, 7);
-      if (this.pressed === ORCHARD.press && this.cider?.banked) this.cider.unbank(v1.set(pr.x + 1.4, pr.y, pr.z + 0.6), 0);
+      this.loaded++;
+      G.audio.play('thud', { pos: p, vol: 0.6, pitch: 1.3 });
     }
+  }
+  /** One apple squeezed (the bar went half round). */
+  private squeeze() {
+    const pr = this.press!;
+    this.pressed++;
+    G.events.push({ type: 'pressed', why: String(this.pressed) });
+    G.audio.play('squish', { pos: v1.set(pr.x, pr.y + 0.8, pr.z), vol: 0.9 });
+    G.fx.bits(v1, { count: 12, color: 0xf2c25a, speed: 2, up: 2.5, grav: 9, life: 0.6, size: 0.1, grow: 0, alpha: 1 });
+    G.noise(v1, 7);
+    if (this.pressed === ORCHARD.press && this.cider?.banked) this.cider.unbank(v1.set(pr.x + 1.4, pr.y, pr.z + 0.6), 0);
   }
 
   /** Every frame (all browsers): trees wiggle after a shake, the press screw turns. */
@@ -197,7 +216,7 @@ export class Orchard {
       this.place(t, Math.sin(e * 16) * 0.09 * Math.exp(-e * 3.2));
     }
     const pr = this.press;
-    if (pr && pr.spinT > 0) { pr.spinT -= dt; pr.screw.rotation.y += dt * 5; pr.screw.position.y = 1.55 - Math.sin(Math.min(1, pr.spinT) * Math.PI) * 0.12; }
+    if (pr) { pr.spinT = Math.max(0, pr.spinT - dt); pr.screw.rotation.y = this.pressBar?.v ?? 0; pr.screw.position.y = 1.55 - Math.sin(Math.min(1, pr.spinT) * Math.PI) * 0.12; }
     // fruit left on each tree (players get it as a string)
     const key = this.fruitKey;
     if (G.net === 'client' && key) for (let i = 0; i < this.trees.length; i++) {
@@ -219,14 +238,18 @@ export class Orchard {
   /** New round: full trees, apples back in the pool, an empty press. */
   reset() {
     for (const t of this.trees) { t.fruit = t.gold ? 1 : ORCHARD.fruit; t.shook = false; t.wigT = -10; this.place(t, 0); }
-    this.pressed = 0; this.dropped = [];
+    this.pressed = 0; this.loaded = 0; this.pressProg = 0; this.dropped = [];
+    if (this.pressBar) this.pressBar.v = 0;
   }
 
   /** Admin: the nearest tree to a point. */
   nearest(p: THREE.Vector3) { return this.trees.slice().sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0]; }
 
   // network: fruit per tree as one digit each + apples pressed
-  netState(n: number[], s: string[]) { n.push(this.pressed); s.push(this.trees.map((t) => Math.max(0, Math.min(9, t.fruit))).join('')); }
-  netApply(n: number[], s: string[]) { if (n.length) this.pressed = n[0]; if (s[0] !== undefined) this.fruitKey = s[0]; }
+  netState(n: number[], s: string[]) { n.push(this.pressed, this.loaded, Math.round((this.pressBar?.v ?? 0) * 100) / 100); s.push(this.trees.map((t) => Math.max(0, Math.min(9, t.fruit))).join('')); }
+  netApply(n: number[], s: string[]) {
+    if (n.length) { this.pressed = n[0]; this.loaded = n[1] ?? 0; if (this.pressBar && n[2] !== undefined) this.pressBar.v = n[2]; }
+    if (s[0] !== undefined) this.fruitKey = s[0];
+  }
 }
 

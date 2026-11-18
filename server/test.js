@@ -49,6 +49,7 @@ try {
   const bin2 = await b.next('bin'); assert.deepEqual([...bin2.data], [1, 7]);
   a.send({ op: 'chat', text: 'hi' }); assert.equal((await b.next('chat')).text, 'hi');
   a.send({ op: 'room', state: 'playing' }); assert.equal((await b.next('room')).room.state, 'playing');
+  a.send({ op: 'room', save: '💾 2 · ★★☆☆☆<b>' }); assert.equal((await b.next('room')).room.save, '💾 2 · ★★☆☆☆b');   // the host's story save, shown to the players
   b.send({ op: 'join', code: 'ZZZZ' }); assert.equal((await b.next('error')).code, 'notfound');
   // host leaves → room closes
   a.ws.close();
@@ -57,6 +58,35 @@ try {
   // quick play creates a room when none is open
   b.send({ op: 'quick' }); assert.equal((await b.next('joined')).you, 1);
   b.ws.close();
+  // a tab that reloads (same tab id) replaces its lingering old connection: no clone, same seat
+  const h = client(), p1 = client();
+  await Promise.all([h.open, p1.open]);
+  h.send({ op: 'hello', v: 1, name: 'Host', tab: 'tabH' }); p1.send({ op: 'hello', v: 1, name: 'Pl', tab: 'tabP' });
+  await h.next('welcome'); await p1.next('welcome');
+  h.send({ op: 'create', name: 'R', public: false, farm: 'farm1' });
+  const jh = await h.next('joined');
+  p1.send({ op: 'join', code: jh.room.code }); assert.equal((await p1.next('joined')).peers.length, 2);
+  const p2 = client(); await p2.open;   // the same tab after a reload (p1 still open = the ghost)
+  p2.send({ op: 'hello', v: 1, name: 'Pl', tab: 'tabP' }); await p2.next('welcome');
+  p2.send({ op: 'join', code: jh.room.code });
+  const j2 = await p2.next('joined');
+  assert.equal(j2.peers.length, 2, 'the ghost is gone'); assert.equal(j2.peers.find((x) => x.id === j2.you).slot, 1, 'same seat');
+  // the host switches farms: its page reloads, the room waits, it comes back as host in seat 0
+  h.send({ op: 'room', farm: 'farm3' });
+  assert.equal((await p2.next('room')).room.farm, 'farm3');
+  h.ws.close();
+  await new Promise((r) => setTimeout(r, 200));
+  const h2 = client(); await h2.open;
+  h2.send({ op: 'hello', v: 1, name: 'Host', tab: 'tabH' }); await h2.next('welcome');
+  h2.send({ op: 'join', code: jh.room.code });
+  const jh2 = await h2.next('joined');
+  assert.equal(jh2.host, jh2.you, 'host again'); assert.equal(jh2.peers.find((x) => x.id === jh2.you).slot, 0);
+  assert.equal((await p2.next('host')).id, jh2.you);
+  // only the owner may give coins
+  p2.send({ op: 'users' }); p2.send({ op: 'gift', to: 1, coins: 100 });
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(h2.ws.readyState, 1);
+  h2.ws.close(); p2.ws.close(); p1.ws.close();
   console.log('server test: OK');
 } catch (e) {
   console.error('server test FAILED', e); process.exitCode = 1;

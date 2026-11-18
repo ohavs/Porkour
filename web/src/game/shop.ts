@@ -131,3 +131,18 @@ export function initShop() {
   }
   if (SETTINGS.outfit) SETTINGS.outfit = ownedOnly(SETTINGS.outfit);
 }
+
+/** The owner account: all the coins and the top level (re-applied whenever it signs in / the game starts). */
+export function ownerPerks() {
+  const xp = xpForLevel(99);
+  if (SETTINGS.coins >= 9_999_999 && SETTINGS.xp >= xp) return false;
+  SETTINGS.coins = Math.max(SETTINGS.coins, 9_999_999); SETTINGS.xp = Math.max(SETTINGS.xp, xp);
+  saveSettings();
+  return true;
+}
+/** A gift (from the owner): coins + levels on top of what I have. */
+export function receiveGift(coins: number, levels: number) {
+  SETTINGS.coins += Math.max(0, coins);
+  if (levels > 0) SETTINGS.xp = Math.max(SETTINGS.xp, xpForLevel(Math.min(99, level() + levels)));
+  saveSettings();
+}

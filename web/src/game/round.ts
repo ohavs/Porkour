@@ -11,9 +11,13 @@ import { SETTINGS, saveSettings } from './settings';
 import { gadget, consumeGadget, loadout, level, levelProgress, HORSESHOE_BONUS, type GadgetId } from './shop';
 import { POOL_IDS, type PoolId } from '../world/gadgets';
 import type { Game } from './game';
+import { farmId, stageOf, STAGE, STORY, reloadOnFarm } from '../world/farms';
+import { recordStage, saveLabel } from './saves';
+import { online } from '../net/online';
+import { profile } from '../net/auth';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 import type { Spot } from '../world/pumpkins';
-import { IC, type IconId } from './icons';
+import { IC, kc, type IconId } from './icons';
 
 /**
  * M5 round loop (Burglin' Gnomes / Untitled Goose Game to-do list): steal loot into the stash in the sty (each item
@@ -105,6 +109,8 @@ const CSS = `
 #missions .mh .tm.low { color:#ff6a4a; }
 #missions .bar { height: 8px; border-radius: 5px; background: rgba(255,246,230,.15); margin: 5px 0 7px; overflow:hidden; }
 #missions .bar > div { height:100%; width:0%; background: linear-gradient(90deg, var(--gold), #fff3b0); transition: width .4s; }
+#missions .how { display:flex; flex-wrap:wrap; align-items:center; gap: 2px; margin-top: 3px; padding: 2px 6px; border-radius: 9px; background: rgba(255,246,230,.12); width: fit-content; }
+#missions .how .ic { width: 20px; height: 20px; } #missions .how kbd.kc { font-size: 12px; padding: 0 5px; }
 #missions .m { display:flex; gap: 7px; align-items: baseline; margin: 2px 0; opacity: .95; }
 #missions .m i { font-style: normal; width: 16px; flex: none; color: var(--gold); align-self: center; display:flex; }
 #missions .m s { text-decoration: none; margin-left: auto; color: var(--gold); font-size: 13px; opacity: .8; }
@@ -300,8 +306,9 @@ export class Round {
     const { props, critters, places: P } = this.game.farm;
     // players: solo = just you (the other pigs in the sty are idle extras); online = every connected pig
     const pigs = G.net === 'solo' ? [this.game.local] : this.game.pigs.filter((p) => !p.absent);
+    const st = stageOf(farmId());   // story stages get harder
     this.quota = this.game.farm.chain ? ROUND.madeBase + ROUND.madePer * Math.max(0, pigs.length - 1)
-      : ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
+      : Math.round((ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0)) * (st ? STAGE.quota[st - 1] : 1) / 10) * 10;
     // chain modes: everyone buzzed at once / everyone finished a mug
     if (this.wants('everyoneHigh')) this.check('everyoneHigh', pigs.every((p) => !p.out && p.high > 0.4));
     if (this.wants('drinkUp')) { const dm = (this.game.farm.chain as { drunkMugs?: Map<unknown, number> } | undefined)?.drunkMugs; this.check('drinkUp', !!dm && pigs.every((p) => (dm.get(p) ?? 0) > 0)); }
@@ -345,7 +352,8 @@ export class Round {
     if (G.grills >= 3) return this.end(false, 'grill');
     if (this.timeLeft <= 0) return this.end(reqDone, 'time');
     if (!this.lastMin && this.timeLeft < 60) { this.lastMin = true; G.events.push({ type: 'lastMinute' }); }
-    G.farmer?.setFloor(this.timeLeft < 120 ? 2 : this.mod === 'grumpy' ? MOD.grumpy.floor : 0);   // the last 2 minutes: at least "on alert"
+    const sf = STAGE.floor[stageOf(farmId()) - 1] ?? 0;
+    G.farmer?.setFloor(this.timeLeft < 120 ? 2 : Math.max(sf, this.mod === 'grumpy' ? MOD.grumpy.floor : 0));   // the last 2 minutes: at least "on alert"
   }
 
   private atWell(p: THREE.Vector3) { const w = this.game.farm.places.well; return !!w && Math.hypot(p.x - w.x, p.z - w.z) < 1.6 && p.y > G.terrain.height(w.x, w.z) + 0.9; }
@@ -452,6 +460,14 @@ export class Round {
 
   /** The {n} of a mission text key ('m.smashPots' → 4, 'm.quota' → the quota). */
   textN(key: string) { const id = key.replace('m.', '') as MissionId; return id === 'quota' ? this.quota : NEED[id] ?? 0; }
+  /** How to do a mission's next step, as icons (user: "I didn't get what to do"): the chain's step, mud → porch… */
+  private mHow(x: Mission) {
+    if (x.done || x.id === 'quota') return '';
+    const L = this.game.local, ch = this.game.farm.chain;
+    if (ch) { const h = ch.stepIcons(x.id, L); if (h) return h; }
+    if (x.id === 'mudPorch') return L.muddy > 0 ? IC.house : kc('C') + IC.mud;
+    return '';
+  }
   /** Mission line: text + progress for counted pranks. */
   private mText(x: Mission) {
     if (x.id === 'quota') return t(this.game.farm.chain ? 'm.quotaMade' : 'm.quota', { n: this.quota });
@@ -511,7 +527,12 @@ export class Round {
         case 'hangUp': { const ph = g.phones; mark(i, ph?.off && ph.ring === 1 ? ph.jackMark : ph?.phoneMark); return; }
         case 'prankCall': mark(i, g.phones?.payMark); return;
         case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
-        case 'mudPorch': if (L.muddy > 0) mark(i, this.wherePos('porch', new THREE.Vector3()), 1.4); return;
+        case 'mudPorch': {   // muddy: the porch; not yet: the nearest mud to wallow in first
+          if (L.muddy > 0) { mark(i, this.wherePos('porch', new THREE.Vector3()), 1.4); return; }
+          const mz = near(G.terrain.mudZones, (z) => new THREE.Vector3(z.x, 0, z.z));
+          if (mz) mark(i, new THREE.Vector3(mz.x, G.terrain.height(mz.x, mz.z) + 0.6, mz.z));
+          return;
+        }
         case 'wolfScare': { const w = near((G.wolves as { active: boolean; pos: THREE.Vector3 }[]).filter((x) => x.active), (x) => x.pos); if (w) mark(i, w.pos, 1.2); return; }
         case 'whackBob': {
           const wpn = (h: unknown) => !!(h as Prop)?.def?.weapon;
@@ -582,14 +603,15 @@ export class Round {
 
   private renderPanel() {
     const left = Math.ceil(this.timeLeft), mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
-    const key = [left, this.banked, this.quota, this.phase, this.mod, this.missions.map((m) => m.id + m.done + m.n).join()].join('|');
+    const hows = this.missions.map((m) => this.mHow(m));
+    const key = [left, this.banked, this.quota, this.phase, this.mod, this.missions.map((m) => m.id + m.done + m.n).join(), hows.join('#')].join('|');
     if (key === this.panelKey) return;
     this.panelKey = key;
     if (!this.missions.length) { this.panel.style.display = 'none'; return; }
     this.panel.style.display = this.phase === 'end' ? 'none' : '';
     const rows = this.missions.map((x, i) => {
       const txt = this.mText(x);
-      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? "✔" : arrowSvg(missionColor(i), 16)}</i><span>${txt}</span>${x.req || x.done ? '' : '<s>★</s>'}</div>`;
+      return `<div class="m${x.done ? ' done' : ''}"><i>${x.done ? "✔" : arrowSvg(missionColor(i), 16)}</i><span>${txt}${hows[i] ? `<span class="how">${hows[i]}</span>` : ''}</span>${x.req || x.done ? '' : '<s>★</s>'}</div>`;
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
     this.panel.innerHTML = `<div class="mh"><span class="tm${left < 60 ? ' low' : ''}">⏱ ${mm}:${ss}</span><span><i class="coin"></i>${this.banked} / ${this.quota}</span></div>` +
@@ -636,10 +658,21 @@ export class Round {
     if (this.resNo === this.no) return;
     this.resNo = this.no;
     const earned = this.myCoins(), lv0 = level();
-    if (this.paid !== this.no) { this.paid = this.no; SETTINGS.coins += earned; SETTINGS.xp += earned; saveSettings(); this.lvUp = level() > lv0 ? level() : 0; }
+    if (this.paid !== this.no) {
+      this.paid = this.no; SETTINGS.coins += earned; SETTINGS.xp += earned;
+      saveSettings(); this.lvUp = level() > lv0 ? level() : 0;
+      // story: the host's save (solo: mine) keeps the stage won (the next one unlocks), its stars and who played
+      const st = stageOf(farmId());
+      if (st && G.net !== 'client') {
+        const names = online.room ? [...online.peers.values()].sort((a, b) => a.slot - b.slot).map((p) => p.name) : [profile.name];
+        recordStage(st, this.won, this.stars(), names);
+      }
+    }
     const lv = level(), shoe = this.myGadget() === 'horseshoe' && earned > 0;
     const stars = this.stars();
     const can = G.net !== 'client';
+    // story stage won → straight on to the next one (in a room: everyone reloads into it, back in the room)
+    const sn = stageOf(farmId()), next = this.won && sn && sn < STORY.length ? STORY[sn] : null;
     const li = this.missions.map((x) => {
       const txt = this.mText(x);
       return `<li class="${x.done ? 'ok' : 'no'}"><i>${x.done ? '✔' : '✘'}</i>${txt}${x.req ? '' : ` <em>${t('m.bonus')}</em>`}</li>`;
@@ -651,10 +684,15 @@ export class Round {
       (shoe ? `<div class="tot shoe">${t('r.horseshoe')}</div>` : '') +
       `<div class="tot">${t('r.total', { n: SETTINGS.coins })}</div>` +
       `<div class="lvl${this.lvUp ? ' up' : ''}"><b>${this.lvUp ? t('r.levelUp', { n: lv }) : t('shop.level', { n: lv })}</b><div class="xp"><div style="width:${Math.round(levelProgress() * 100)}%"></div></div></div>` +
-      `<div class="btns">${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
+      `<div class="btns">${can && next ? `<button class="chip big" data-r="next">${t('r.next')} ▶</button>` : ''}${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
     this.res.style.display = 'flex';
     document.exitPointerLock?.();
     this.res.querySelector('[data-r=again]')?.addEventListener('click', () => this.game.restartRound());
+    this.res.querySelector('[data-r=next]')?.addEventListener('click', () => {
+      if (!next) return;
+      if (G.net === 'host') online.setRoom({ farm: next, save: saveLabel() });
+      else { SETTINGS.farm = next; saveSettings(); reloadOnFarm(next); }
+    });
     this.res.querySelector('[data-r=menu]')?.addEventListener('click', () => { location.href = G.net === 'solo' ? location.pathname : location.pathname + '?lobby=1'; });
   }
 }

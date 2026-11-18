@@ -241,3 +241,84 @@ export function makeVision(i: number) {
   g.traverse((o) => { o.castShadow = false; });
   return g;
 }
+
+// ------------------------------------------------------------------ hands-on crafting (world/hands.ts)
+/** A rolling paper (flat; the green strip = the weed poured on it, scaled by how much). */
+export function makePaper() {
+  const g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(0.24, 0.012, 0.12), 0xfffaf0, 0, 0.006, 0);
+  const w = add(g, new THREE.BoxGeometry(0.2, 0.02, 0.05), 0x6fae3e, 0.01, 0.014, 0, 0, 0, 0, 'weed'); w.scale.set(1, 0.01, 1); w.visible = false;
+  const roll = add(g, new THREE.CylinderGeometry(0.012, 0.012, 0.24, 10), 0xfffaf0, 0, 0.012, 0.06, 0, 0, Math.PI / 2, 'curl'); roll.visible = false;
+  return g;
+}
+/** A filter tip (crutch): a little rolled card, along x. */
+export function makeFilter() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.014, 0.014, 0.04, 10), 0xe8c48a, 0, 0.014, 0, 0, 0, Math.PI / 2);
+  add(g, new THREE.TorusGeometry(0.009, 0.003, 4, 10), 0xb58a4a, 0.021, 0.014, 0, 0, Math.PI / 2, 0);
+  return g;
+}
+/** A cooking pot (the stove): contents disc ('fill') shows butter → green magic butter. */
+export function makeCookPot() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.17, 0.15, 0.2, 18, 1, true), 0x9aa3ad, 0, 0.1, 0).material = M(0x9aa3ad);
+  add(g, new THREE.CylinderGeometry(0.15, 0.15, 0.015, 18), 0x6e757e, 0, 0.008, 0);
+  for (const s of [-1, 1]) add(g, new THREE.TorusGeometry(0.035, 0.012, 5, 10, Math.PI), 0x3a3d44, s * 0.18, 0.17, 0, 0, 0, s * Math.PI / 2);
+  add(g, new THREE.CylinderGeometry(0.155, 0.155, 0.02, 18), 0xe9d36a, 0, 0.06, 0, 0, 0, 0, 'fill').visible = false;
+  return g;
+}
+/** The mixing bowl: contents ('fill') = flour / magic butter / dough. */
+export function makeMixBowl() {
+  const g = new THREE.Group();
+  const b = add(g, new THREE.SphereGeometry(0.2, 18, 9, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0xd8e8ee, 0, 0.2, 0);
+  (b.material as THREE.Material).side = THREE.DoubleSide;
+  add(g, new THREE.TorusGeometry(0.2, 0.012, 5, 22), 0xb8ccd6, 0, 0.2, 0, Math.PI / 2);
+  add(g, new THREE.CylinderGeometry(0.16, 0.16, 0.02, 18), 0xf2dcae, 0, 0.1, 0, 0, 0, 0, 'fill').visible = false;
+  return g;
+}
+/** A wooden spoon / a brewer's paddle (shown in a pot while it can be stirred). */
+export function makeSpoon(len = 0.38, paddle = false) {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.012, 0.014, len, 8), 0xb5793d, 0, len / 2, 0);
+  if (paddle) add(g, new THREE.BoxGeometry(0.1, 0.18, 0.02), 0xb5793d, 0, 0.06, 0);
+  else add(g, new THREE.SphereGeometry(0.035, 10, 6), 0xb5793d, 0, 0.02, 0).scale.set(1, 0.5, 1.4);
+  return g;
+}
+/** An empty baking tray. */
+export function makeEmptyTray() {
+  const g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(0.46, 0.025, 0.34), 0x9aa3ad, 0, 0.012, 0);
+  add(g, new THREE.BoxGeometry(0.48, 0.035, 0.02), 0x8a929c, 0, 0.03, 0.17); add(g, new THREE.BoxGeometry(0.48, 0.035, 0.02), 0x8a929c, 0, 0.03, -0.17);
+  return g;
+}
+/** An empty beer mug (fills: the 'beer' + 'foam' parts scale with what's in it). */
+export function makeMugFill() {
+  const g = new THREE.Group();
+  const glass = add(g, new THREE.CylinderGeometry(0.075, 0.07, 0.17, 14, 1, true), 0xd8e8ee, 0, 0.085, 0);
+  (glass.material as THREE.Material).side = THREE.DoubleSide;
+  add(g, new THREE.CylinderGeometry(0.07, 0.07, 0.012, 14), 0xd8e8ee, 0, 0.006, 0);
+  add(g, new THREE.CylinderGeometry(0.066, 0.064, 0.15, 14), 0xffb42a, 0, 0.012, 0, 0, 0, 0, 'beer');
+  add(g, new THREE.SphereGeometry(0.074, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xfffaf0, 0, 0.16, 0, 0, 0, 0, 'foam');
+  add(g, new THREE.TorusGeometry(0.05, 0.015, 6, 12), 0xd8e8ee, 0.085, 0.09, 0, 0, 0, Math.PI / 2);
+  return g;
+}
+/** A coin (payphone). */
+export function makeCoin() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.04, 0.04, 0.008, 16), 0xffd166, 0, 0.004, 0, Math.PI / 2, 0, 0);
+  return g;
+}
+/** A phone plug on its cord end. */
+export function makePlug() {
+  const g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(0.06, 0.08, 0.04), 0xf4efe4, 0, 0.04, 0);
+  for (const x of [-0.012, 0.012]) add(g, new THREE.BoxGeometry(0.006, 0.03, 0.006), 0xc9a24a, x, -0.012, 0);
+  return g;
+}
+/** A telephone handset (payphone): earpiece + mouthpiece on a handle. */
+export function makeHandset() {
+  const g = new THREE.Group();
+  add(g, new THREE.BoxGeometry(0.05, 0.05, 0.22), 0x2b2b30, 0, 0.025, 0);
+  for (const z of [-0.1, 0.1]) add(g, new THREE.CylinderGeometry(0.04, 0.035, 0.05, 12), 0x2b2b30, 0, 0.035, z);
+  return g;
+}

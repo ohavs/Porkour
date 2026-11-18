@@ -61,6 +61,8 @@ export class PigVisual {
   private cig = makeCigarette();
   private ember: THREE.Mesh;
   private bulge = 1;
+  /** Four legs, reaching far (the mouse wheel): the neck stretches (rubber neck) — how far, and the neck piece. */
+  private neckX = 0; private headRest = new THREE.Vector3(); private neck: THREE.Mesh;
 
   constructor(public color: number, outfit?: Outfit) {
     this.root.add(this.sway); this.sway.add(this.roll); this.roll.add(this.base);
@@ -70,6 +72,9 @@ export class PigVisual {
     this.setOutfit(outfit ?? defaultOutfit());
     this.cig.visible = false; this.cig.scale.setScalar(1.5);
     this.ember = this.cig.getObjectByName('ember') as THREE.Mesh;
+    this.headRest.copy(this.rig.head.position);
+    this.neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1, 14, 1, true), this.rig.bodyMat);
+    this.neck.visible = false; this.neck.castShadow = true; this.rig.upper.add(this.neck);
   }
   /** World position of the cigarette's ember (null when not smoking). */
   cigTip(out: THREE.Vector3) { return this.cig.visible && this.cig.parent ? this.ember.getWorldPosition(out) : null; }
@@ -86,13 +91,13 @@ export class PigVisual {
 
   /**
    * Two-bone IK (upper space): shoulder → elbow → hoof tips reach T, the elbow bends toward `pole`. Out of reach the
-   * arm stretches like a rubber hose (cartoon) up to 1.9×.
+   * arm stretches like a rubber hose (cartoon) up to 3.6× (the mouse wheel's long reach).
    */
   private solveArm(a: Arm, T: THREE.Vector3, pole: THREE.Vector3, rate: number, dt: number) {
     const S = a.shoulder.position, L1 = ARM.upper, L2 = ARM.fore;
     const dir = _v.copy(T).sub(S);
     let d = dir.length(); dir.divideScalar(Math.max(d, 1e-4));
-    const st = clamp(d / ((L1 + L2) * 0.97), 1, 1.9), l1 = L1 * st, l2 = L2 * st;
+    const st = clamp(d / ((L1 + L2) * 0.97), 1, 3.6), l1 = L1 * st, l2 = L2 * st;
     d = clamp(d, Math.abs(l1 - l2) + 0.02, (l1 + l2) * 0.97);
     const ang = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1));
     _pp.copy(pole).addScaledVector(dir, -pole.dot(dir));
@@ -194,7 +199,7 @@ export class PigVisual {
     _mi.copy(R.upper.matrix).invert();
     if (p.hand && !flail && sT < 0.5) {
       _p.copy(p.hand).applyMatrix4(_mi);      // hand in the upper body's space
-      _d.copy(_p).sub(R.head.position).normalize();
+      _d.copy(_p).sub(this.headRest).normalize();
       _qi.setFromUnitVectors(SNOUT_DIR, _d);
       const ang = 2 * Math.acos(Math.min(1, Math.abs(_qi.w)));
       if (ang > 1.1) _qi.slerp(_q.identity(), 1 - 1.1 / ang);
@@ -205,6 +210,21 @@ export class PigVisual {
     if (act === 'eat') _q.multiply(_qi.setFromEuler(_e.set(0.25 * sT + Math.sin(p.t * 19) * 0.16, 0, Math.sin(p.t * 7) * 0.08)));
     if (act === 'puff') _q.multiply(_qi.setFromEuler(_e.set(-Math.sin(ak * Math.PI) * 0.3, 0, 0)));
     R.head.quaternion.slerp(_q, 1 - Math.exp(-16 * dt));
+    // four legs, holding / working far out in front (the mouse wheel): the neck stretches toward it
+    let nx = 0;
+    if (p.hand && !flail && sT < 0.5) {
+      _p.copy(p.hand).applyMatrix4(_mi);
+      nx = clamp(_p.distanceTo(this.headRest) - 0.52, 0, 0.7);
+    }
+    this.neckX = damp(this.neckX, nx, 14, dt);
+    if (this.neckX > 0.01) {
+      _d.copy(SNOUT_DIR).applyQuaternion(R.head.quaternion);
+      R.head.position.copy(this.headRest).addScaledVector(_d, this.neckX);
+      this.neck.visible = true;
+      this.neck.position.copy(this.headRest).addScaledVector(_d, this.neckX * 0.5);
+      this.neck.quaternion.setFromUnitVectors(_v.set(0, 1, 0), _d);
+      this.neck.scale.set(1, this.neckX + 0.12, 1);
+    } else if (this.neck.visible) { this.neck.visible = false; R.head.position.copy(this.headRest); }
 
     // arms (standing): where each hoof goes, in the pig's model space (feet = origin, facing +z, +x = its left)
     if (ik) {

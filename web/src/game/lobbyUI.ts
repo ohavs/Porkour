@@ -5,7 +5,14 @@ import { level } from './shop';
 import { IC, kc } from './icons';
 import { ICONS, SVG } from './hud';
 import { fullIcon, toggleFull, onFull } from './fullscreen';
-import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from '../world/farms';
+import { farmId, FARM_IDS, reloadOnFarm, STORY, MODES, stageOf, type FarmId } from '../world/farms';
+import { canAdmin } from '../net/auth';
+import { saves, slot, storyWon, newGame, loadGame, deleteSave, saveLabel, SLOTS } from './saves';
+/** A story stage is open once the one before is won in the save in use (the owner / admins: all). */
+const unlocked = (f: FarmId) => canAdmin() || stageOf(f) <= storyWon() + 1;
+import { online } from '../net/online';
+/** "Random" in a room: one of the regular farms (not the chain modes). */
+const RANDOM_FARMS = FARM_IDS.filter((f) => f !== 'farm6' && f !== 'farm7');
 import { profile } from '../net/auth';
 import { PLAYER_COLORS } from './game';
 
@@ -38,6 +45,8 @@ export class LobbyUI {
   el = document.getElementById('lobbyUI')!;
   private party = document.getElementById('lParty')!;
   private farmPick = false;
+  /** In a room as its host, still in the lobby: I choose the room's farm. */
+  private roomHost() { return online.isHost && online.room?.state === 'lobby'; }
 
   constructor(private h: LobbyHooks) {
     this.el.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => b.addEventListener('click', (e) => {
@@ -52,16 +61,85 @@ export class LobbyUI {
     document.getElementById('lFarm')!.addEventListener('click', (e) => {
       e.stopPropagation();
       const f = (e.target as HTMLElement).closest<HTMLElement>('[data-f]')?.dataset.f as FarmId | 'random' | undefined;
-      if (this.h.party() !== null) return;   // in a room: the room plays the host's farm
+      // in a room: the host picks the room's farm (every page reloads onto it, the room waits); players can't
+      if (this.h.party() !== null) {
+        if (!this.roomHost()) return;
+        if (!f) { this.farmPick = !this.farmPick; this.render(); return; }
+        const pick = f === 'random' ? RANDOM_FARMS[Math.floor(Math.random() * RANDOM_FARMS.length)] : f;
+        this.farmPick = false;
+        if (pick !== farmId()) online.setRoom({ farm: pick }); else this.render();
+        return;
+      }
       if (!f) { this.farmPick = !this.farmPick; this.render(); return; }
+      if (f !== 'random' && !unlocked(f)) return;   // locked stage
       SETTINGS.farm = f; saveSettings();
       if (f === 'random') { const q = new URLSearchParams(location.search); q.delete('farm'); location.href = location.pathname + (q.size ? '?' + q : ''); }
       else if (f !== farmId()) reloadOnFarm(f);
       else { this.farmPick = false; this.render(); }
     });
+    // story saves (💾 above the farm card): solo / the room's host load one or start a new game; players see the host's
+    this.saveBtn.id = 'lSave'; this.saveBtn.className = 'saveChip';
+    document.getElementById('lPlayBox')!.prepend(this.saveBtn);
+    this.saveBtn.addEventListener('click', (e) => { e.stopPropagation(); if (this.h.party() === null || this.roomHost()) this.openSaves(); });
+    this.savesEl.id = 'saves'; this.savesEl.className = 'overlay txt';
+    document.body.appendChild(this.savesEl);
+    this.savesEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = (e.target as HTMLElement).closest<HTMLElement>('[data-s]');
+      if (!b) { if (e.target === this.savesEl) this.closeSaves(); return; }
+      const [act, n] = [b.dataset.s!, Number(b.dataset.i)];
+      if (act === 'close') return this.closeSaves();
+      // overwriting / deleting a save: click twice
+      if ((act === 'new' && saves()[n]) || act === 'del') { if (this.confirm !== act + n) { this.confirm = act + n; this.renderSaves(); return; } }
+      this.confirm = '';
+      if (act === 'del') { deleteSave(n); this.renderSaves(); this.render(); return; }
+      if (act === 'new') newGame(n); else loadGame(n);
+      this.goOn();
+    });
     onFull(() => this.icons());
-    onLang(() => this.render());
+    onLang(() => { this.render(); if (this.savesOpen) this.renderSaves(); });
     this.render();
+  }
+  private saveBtn = document.createElement('button');
+  private savesEl = document.createElement('div');
+  private confirm = '';
+  private sentSave: string | null = null;
+  get savesOpen() { return this.savesEl.classList.contains('show'); }
+  openSaves() { this.confirm = ''; this.renderSaves(); this.savesEl.classList.add('show'); }
+  closeSaves() { this.savesEl.classList.remove('show'); }
+  /** After loading / starting a save: on to its next story stage (in a room: the whole room goes there). */
+  private goOn() {
+    this.closeSaves();
+    const next = STORY[Math.min(STORY.length, storyWon() + 1) - 1];
+    if (this.h.party() !== null) {
+      if (!this.roomHost()) return;
+      this.sentSave = saveLabel();
+      online.setRoom(next !== farmId() ? { save: this.sentSave, farm: next } : { save: this.sentSave });
+      this.render();
+      return;
+    }
+    SETTINGS.farm = next; saveSettings();
+    if (next !== farmId()) reloadOnFarm(next); else this.render();
+  }
+  /** The saves card: 5 slots, each = its stages (won ones lit), who played, when; load / new / delete. */
+  private renderSaves() {
+    const cur = slot(), list = saves();
+    const date = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    const rows = Array.from({ length: SLOTS }, (_, i) => {
+      const s = list[i];
+      if (!s) return `<div class="sslot empty"><em>${i + 1}</em><div class="sinfo"><span class="dim">${t('save.empty')}</span></div>` +
+        `<div class="sbtns"><button class="chip" data-s="new" data-i="${i}">＋ ${t('save.new')}</button></div></div>`;
+      const pips = STORY.map((f, k) => `<i class="${k < s.stage ? 'won' : k === s.stage ? 'next' : ''}" title="${t('lobby.stage', { n: k + 1 })}">${FARM_ICON[f]}${k < s.stage ? '<u>★</u>' : ''}</i>`).join('');
+      const stars = s.stars.reduce((a, b) => a + (b ?? 0), 0);
+      const who = s.names.map((n, k) => `<span><i class="dot" style="background:${hex(PLAYER_COLORS[k % PLAYER_COLORS.length])}"></i>${esc(n)}</span>`).join('');
+      const ask = (a: string) => this.confirm === a + i;
+      return `<div class="sslot${i === cur ? ' on' : ''}"><em>${i + 1}</em><div class="sinfo"><div class="spips">${pips}</div>` +
+        `<div class="smeta">${who}<span class="dim">${stars ? `⭐${stars} · ` : ''}${date(s.at)}</span></div></div><div class="sbtns">` +
+        (i === cur ? `<span class="inuse" title="${t('save.inUse')}">✔</span>` : `<button class="chip go" data-s="load" data-i="${i}">▶ ${t('save.load')}</button>`) +
+        `<button class="chip sm${ask('new') ? ' warn' : ''}" data-s="new" data-i="${i}" title="${t('save.restart')}">${ask('new') ? '?' : '↺'}</button>` +
+        `<button class="chip sm${ask('del') ? ' warn' : ''}" data-s="del" data-i="${i}" title="${t('save.delete')}">${ask('del') ? '?' : '🗑'}</button></div></div>`;
+    }).join('');
+    this.savesEl.innerHTML = `<div class="panel savesCard"><div class="shead"><h2>💾 ${t('save.title')}</h2><button class="x" data-s="close">✕</button></div>${rows}</div>`;
   }
 
   show() { this.el.classList.add('show'); this.render(); }
@@ -79,11 +157,28 @@ export class LobbyUI {
     this.icons();
     document.getElementById('tWallet')!.innerHTML = walletHtml();
     // farm card (click: pick another farm)
-    const cur = SETTINGS.farm === 'random' ? 'random' : farmId(), inRoom = this.h.party() !== null;
-    if (inRoom) this.farmPick = false;
-    document.getElementById('lFarm')!.classList.toggle('locked', inRoom);
-    document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${t('title.farm')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
-      (this.farmPick ? `<div class="fpick">${[...FARM_IDS, 'random' as const].map((k) => `<button data-f="${k}" class="${k === cur ? 'on' : ''}">${FARM_ICON[k]}${t(('farm.' + k) as Key)}</button>`).join('')}</div>` : '');
+    const cur = SETTINGS.farm === 'random' ? 'random' : farmId(), inRoom = this.h.party() !== null, locked = inRoom && !this.roomHost();
+    if (locked) this.farmPick = false;
+    document.getElementById('lFarm')!.classList.toggle('locked', locked);
+    // story stages (numbered, locked until the one before is won) + the separate modes
+    const st = stageOf(farmId());
+    const pickBtn = (k: FarmId) => { const ok = unlocked(k), n = stageOf(k);
+      return `<button data-f="${k}" class="${k === cur ? 'on' : ''}${ok ? '' : ' lock'}" title="${ok ? '' : t('lobby.locked')}">${n ? `<em>${n}</em>` : ''}${FARM_ICON[k]}<span>${t(('farm.' + k) as Key)}</span>${ok ? (n && n <= storyWon() ? '<u>★</u>' : '') : '<u>🔒</u>'}</button>`; };
+    document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${st ? t('lobby.stage', { n: st }) : t('lobby.modes')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
+      (this.farmPick ? `<div class="fpick"><div class="fgrp">📖 ${t('lobby.story')}</div>${STORY.map(pickBtn).join('')}` +
+        `<button data-f="random" class="${cur === 'random' ? 'on' : ''}">${FARM_ICON.random}<span>${t('farm.random')}</span></button>` +
+        `<div class="fgrp">🎮 ${t('lobby.modes')}</div>${MODES.map(pickBtn).join('')}</div>` : '');
+    // the save chip: mine (solo / host: click = the saves card) or the host's (players: just shown)
+    const roomSave = online.room?.save ?? '';
+    if (inRoom && !this.roomHost()) { this.saveBtn.innerHTML = roomSave ? `<span>${esc(roomSave)}</span>` : ''; this.saveBtn.classList.add('ro'); this.saveBtn.style.display = roomSave ? '' : 'none'; }
+    else {
+      const lab = saveLabel();
+      this.saveBtn.classList.remove('ro'); this.saveBtn.style.display = '';
+      this.saveBtn.innerHTML = lab ? `<span>${esc(lab)}</span><i>▸</i>` : `<span>💾 ${t('save.title')}</span><i>▸</i>`;
+      this.saveBtn.title = t('save.title');
+      // the room shows the host's save to everyone
+      if (this.roomHost() && roomSave !== lab && this.sentSave !== lab) { this.sentSave = lab; online.setRoom({ save: lab }); }
+    }
     // the big button
     const mode = this.h.playMode(), btn = document.getElementById('lPlay')!;
     btn.textContent = t(mode === 'start' ? 'lobby.start' : mode === 'wait' ? 'lobby.wait' : 'lobby.play');

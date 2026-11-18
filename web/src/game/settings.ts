@@ -1,4 +1,5 @@
 import type { Outfit } from '../pig/cosmetics';
+import type { Save } from './saves';
 import { PRESETS, presetOf, type GfxOpts, type PresetChoice } from '../render/quality';
 
 /** Player settings, saved in localStorage. */
@@ -14,6 +15,10 @@ export const SETTINGS = {
   owned: [] as string[], gadgets: {} as Record<string, number>, loadout: '', shopInit: false,
   /** Farm to play: 'farm1' | 'farm2' | 'random' (world/farms.ts). */
   farm: 'random',
+  /** Story mode (before the saves: the highest stage won; moved into save 1). */
+  story: 0,
+  /** Story saves (game/saves.ts): 5 slots, the one in use. */
+  saves: [] as (Save | null)[], slot: -1,
   /** Online server override (empty = the built-in one). */
   server: '',
 };
