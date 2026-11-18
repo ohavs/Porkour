@@ -195,6 +195,6 @@ export class LobbyUI {
     // controls as icons (no sentences)
     const P = (...xs: string[]) => `<span class="pp">${xs.join('')}</span>`;
     document.getElementById('lKeys')!.innerHTML = P(kc('W'), kc('A'), kc('S'), kc('D'), IC.walk) + P(IC.rmb, IC.grab) + P(IC.lmb, IC.fist) + P(IC.lmb, IC.hold, IC.throw) +
-      P(kc('Q'), ICONS.fart) + P(kc(t('key.space')), '<b class="kj">↑</b>') + P(kc('E'), ICONS.stand);
+      P(kc('Q'), ICONS.fart) + P(kc(t('key.space')), '<b class="kj">↑</b>') + P(kc('E'), ICONS.stand) + P(kc('V'), IC.eye);
   }
 }

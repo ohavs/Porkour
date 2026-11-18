@@ -171,20 +171,26 @@ export function makeTray(kind: 'raw' | 'baked' | 'burnt') {
   return g;
 }
 export function makeWheelbarrow() {
-  const g = new THREE.Group();
-  // tub (open box), wheel at the front, two handles at the back
-  add(g, new THREE.BoxGeometry(0.72, 0.05, 1.0), 0x3f8f5a, 0, 0.36, 0);
-  add(g, new THREE.BoxGeometry(0.06, 0.3, 1.0), 0x3f8f5a, -0.36, 0.5, 0, 0, 0, -0.18); add(g, new THREE.BoxGeometry(0.06, 0.3, 1.0), 0x3f8f5a, 0.36, 0.5, 0, 0, 0, 0.18);
-  add(g, new THREE.BoxGeometry(0.78, 0.3, 0.06), 0x3f8f5a, 0, 0.5, 0.5, -0.25, 0, 0); add(g, new THREE.BoxGeometry(0.72, 0.28, 0.06), 0x3f8f5a, 0, 0.5, -0.5, 0.2, 0, 0);
-  add(g, new THREE.CylinderGeometry(0.2, 0.2, 0.09, 14), 0x2b2b30, 0, 0.2, 0.62, 0, 0, Math.PI / 2);
-  add(g, new THREE.CylinderGeometry(0.08, 0.08, 0.1, 10), 0xc9ced8, 0, 0.2, 0.62, 0, 0, Math.PI / 2);
+  const g = new THREE.Group(), tub = 0x3f8f5a;
+  // tub: floor, sides leaning out, a short back, a long sloped nose at the front (tipped, the load slides out over
+  // it); the same pieces are its colliders (world/barrow.ts)
+  add(g, new THREE.BoxGeometry(0.72, 0.05, 1.0), tub, 0, 0.36, 0);
+  add(g, new THREE.BoxGeometry(0.06, 0.3, 1.0), tub, -0.37, 0.5, 0, 0, 0, -0.18); add(g, new THREE.BoxGeometry(0.06, 0.3, 1.0), tub, 0.37, 0.5, 0, 0, 0, 0.18);
+  add(g, new THREE.BoxGeometry(0.72, 0.28, 0.06), tub, 0, 0.5, -0.5, 0.2, 0, 0);
+  add(g, new THREE.BoxGeometry(0.76, 0.05, 0.34), tub, 0, 0.49, 0.61, -0.87, 0, 0);
+  // the wheel (a group: it spins as it rolls) on its fork
+  const wheel = new THREE.Group(); wheel.name = 'wheel'; wheel.position.set(0, 0.2, 0.66); g.add(wheel);
+  add(wheel, new THREE.CylinderGeometry(0.2, 0.2, 0.09, 16), 0x2b2b30, 0, 0, 0, 0, 0, Math.PI / 2);
+  add(wheel, new THREE.CylinderGeometry(0.12, 0.12, 0.1, 12), 0xc9ced8, 0, 0, 0, 0, 0, Math.PI / 2);
+  for (const r of [0, Math.PI / 2]) add(wheel, new THREE.BoxGeometry(0.104, 0.22, 0.035), 0x8a8f99, 0, 0, 0, r, 0, 0);
+  for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(0.03, 0.03, 0.42), 0x5c5f66, s * 0.07, 0.28, 0.48, 0.42, 0, 0);
   for (const s of [-1, 1]) {
     add(g, new THREE.BoxGeometry(0.05, 0.05, 1.5), 0x8a5a2a, s * 0.3, 0.33, -0.1, 0.12, 0, 0);
-    add(g, new THREE.BoxGeometry(0.04, 0.3, 0.04), 0x5c5f66, s * 0.3, 0.17, -0.35);
+    add(g, new THREE.BoxGeometry(0.04, 0.32, 0.04), 0x5c5f66, s * 0.3, 0.16, -0.35);
+    add(g, new THREE.CylinderGeometry(0.035, 0.035, 0.16, 8), 0x2b2b30, s * 0.3, 0.43, -0.78, Math.PI / 2 + 0.12, 0, 0);   // rubber grips
   }
-  // cargo pile (scaled by how much is in it; hidden when empty)
-  const pile = new THREE.Group(); pile.name = 'cargo'; pile.position.set(0, 0.4, 0); g.add(pile);
-  for (let k = 0; k < 9; k++) add(pile, BUD, k % 2 ? 0x8fcf5a : 0x6fae3e, Math.sin(k * 2.4) * 0.2, 0.06 + (k % 3) * 0.05, Math.cos(k * 2.4) * 0.3, k, k).scale.setScalar(1.6);
+  // a bar across the handle ends (four legs: the snout bites it)
+  add(g, new THREE.CylinderGeometry(0.03, 0.03, 0.6, 8), 0x8a5a2a, 0, 0.44, -0.84, 0, 0, Math.PI / 2);
   return g;
 }
 export function makeHops() {

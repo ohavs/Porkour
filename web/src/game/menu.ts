@@ -75,6 +75,10 @@ export class Menu {
     $('bSound').addEventListener('click', () => this.toggleSound());
     $('bHelp').addEventListener('click', () => game.hud.toggleHelp());
     $('bMenu').addEventListener('click', () => this.open());
+    // first ↔ third person (V)
+    const bView = $('bView');
+    bView.insertAdjacentHTML('afterbegin', SVG.view);
+    bView.addEventListener('click', () => { if (game.mode === 'play') game.toggleView(); });
     const bFull = $('bFull');
     const fullBtn = () => { bFull.querySelector('svg')?.remove(); bFull.insertAdjacentHTML('afterbegin', fullIcon()); };
     bFull.addEventListener('click', () => toggleFull()); fullBtn();
@@ -250,7 +254,7 @@ export class Menu {
   /** Owner tab: who's online (from the server). */
   private users: { id: number; name: string; google: boolean; room: string; me: boolean }[] = [];
   private usersHooked = false;
-  private renderAdmin() {
+  renderAdmin() {
     const g = this.game, f = g.farm;
     // (user: "a menu in the game's style, less text"): icon tiles with a word or two; the full sentence is the tooltip
     const tip = (label: Key) => t(label).replace(/"/g, '&quot;');
@@ -343,6 +347,7 @@ export class Menu {
       const k = b.dataset.tg as keyof typeof ADMIN;
       (ADMIN as any)[k] = !ADMIN[k];
       if (k === 'bob') g.farmer?.setEnabled(ADMIN.bob);
+      if (k === 'fp') g.viewIcon();
       this.renderAdmin();
     }));
     this.admin.querySelector<HTMLElement>('[data-close]')?.addEventListener('click', () => this.toggleAdmin());

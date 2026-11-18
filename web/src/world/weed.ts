@@ -8,7 +8,8 @@ import type { Kit } from './farmKit';
 import { Chain, buildShed, buildBeam, need, fillable, Pump } from './chain';
 import { plantGeometry, plantMaterial, makeSpoon } from './chainProps';
 import { HANDS, crank, lever, slider, type Socket, type Handle } from './hands';
-import { staticBox, staticCylinder } from '../core/physics';
+import { staticBox, staticCylinder, RAPIER } from '../core/physics';
+import { Wheelbarrow } from './barrow';
 import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
 import { V3, clamp } from '../core/util';
@@ -20,7 +21,8 @@ import { V3, clamp } from '../core/util';
  * (world/hands.ts: aim with the mouse, R tips what you hold, things snap where they go):
  *   field: tip the watering can over a plant (refill: park it under the pump and pump the handle, or dip it in the
  *     pond), tip the seed bag over an empty mound, harvest ripe plants with the sickle (click) or by hitting them
- *   → buds → the wheelbarrow (drop them in / push it over them; tip it and they spill; parked at the grinder it unloads)
+ *   → buds → the wheelbarrow (a real one, world/barrow.ts: toss them in, push it by the handles, stand + R = tip it)
+ *   → dump them on the grate beside the grinder: a belt carries them up into the hopper
  *   → the grinder: drop buds in the hopper, take the crank and turn it (circle the mouse; too fast = it jams, loud)
  *     → ground weed fills the bag under the chute
  *   → the rolling table: take a paper from the booklet, put it on the mat (it clicks in), a filter from the box onto
@@ -62,7 +64,12 @@ const ownMat = (o: THREE.Object3D | undefined) => { const m = o as THREE.Mesh | 
 export class Weed extends Chain {
   kind = 1 as const;
   plants: Plant[] = [];
-  barrow!: Prop; cargo = 0;
+  /** The wheelbarrow (world/barrow.ts: a real wheel, a hollow tray); `cargo` = buds lying in it now (host counts, synced). */
+  barrow!: Prop; cart!: Wheelbarrow; cargo = 0;
+  /** Buds riding the intake belt up into the hopper (host). */
+  private belt: { pr: Prop; t: number; from: THREE.Vector3 }[] = [];
+  private beltA = new THREE.Vector3(); private beltB = new THREE.Vector3(); private intake = new THREE.Vector3();
+  private slats: THREE.Object3D[] = []; private beltRun = 0; private beltOff = 0;
   pump: Pump;
   // grinder
   buds = 0; private grindProg = 0; private crankSpd = 0; private jamUntil = 0; private overT = 0;
@@ -108,6 +115,7 @@ export class Weed extends Chain {
     buildBeam(kit, scene, o.beam[0], o.beam[1], 2.4, this.beams);
     const P = (kind: string, x: number, z: number, lift = 0, yaw = 0) => kit.prop(kind as never, x, z, yaw, lift);
     this.barrow = P('wheelbarrow', o.barrow[0], o.barrow[1]);
+    this.cart = new Wheelbarrow(this.barrow);
     P('wateringCan', px + 1.4, pz - 0.6); P('wateringCan', o.field.x1 - 1.2, o.field.z1 + 1.6);
     P('sickle', px - 1, pz + 0.6); P('sickle', this.L(-1.2, 0, 1.6).x, this.L(-1.2, 0, 1.6).z);
     fillable(this.props, 'can', 'water', 6);
@@ -298,6 +306,26 @@ export class Weed extends Chain {
     HANDS.socket({ icon: 'gear', p: this.hopper.clone(), q: qs, on: null, r: 0.5, dock: false, bin: true, ghost: false,
       accepts: (it) => it.def.item === 'bud' && this.buds < 24,
       onSnap: (it) => { this.consume(it); this.buds++; G.audio.play('squish', { pos: this.hopper, vol: 0.5, pitch: 1.3 }); } });
+    // ---- the intake (user: "physical, really take things where they go"): a grain pit with a grate flush with the
+    // floor beside the grinder — roll the wheelbarrow onto it and dump (hold its handles, R lifts them: it tips
+    // forward) or just drop buds on it; a cleated belt carries them up and over into the hopper
+    const iC = this.intake.copy(L(0.75, 0.22, -2.62));
+    const pit = new THREE.Group(); pit.position.copy(L(0.75, 0, -2.62)); pit.rotation.y = yaw; scene.add(pit);
+    const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), toonMat(0x141210)); hole.rotation.x = -Math.PI / 2; hole.position.y = 0.012; pit.add(hole);
+    for (let k = 0; k < 10; k++) box(pit, 0.035, 0.02, 1.3, steel, -0.585 + k * 0.13, 0.022, 0);   // the grate
+    for (const z of [-0.66, 0.66]) box(pit, 1.36, 0.03, 0.04, dk, 0, 0.02, z);
+    for (const x of [-0.66, 0.66]) box(pit, 0.04, 0.03, 1.36, dk, x, 0.02, 0);
+    const A = this.beltA.copy(L(1.1, 0.14, -2.62)), B = this.beltB.copy(L(1.92, 1.66, -2.7)), len = A.distanceTo(B);
+    const belt = new THREE.Group(); belt.position.copy(A).add(B).multiplyScalar(0.5); scene.add(belt); belt.lookAt(B);
+    box(belt, 0.32, 0.04, len + 0.1, dk, 0, 0, 0);
+    for (const x of [-0.19, 0.19]) box(belt, 0.04, 0.1, len + 0.1, steel, x, 0.03, 0);
+    for (const z of [-len / 2, len / 2]) { const rl = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.36, 10), steel); rl.rotation.z = Math.PI / 2; rl.position.set(0, 0, z); belt.add(rl); }
+    for (let k = 0; k < 7; k++) { const sl = box(belt, 0.28, 0.05, 0.03, wood, 0, 0.045, 0); this.slats.push(sl); }
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.84, 8), dk); post.position.copy(L(1.48, 0.42, -2.66)); scene.add(post);
+    this.beltRun = len;
+    HANDS.socket({ icon: 'gear', p: iC.clone(), q: qs, on: null, r: 0.48, dock: false, ghost: false,   // (a bud in the hooves clicks in; dropped ones: the grate, beltStep)
+      accepts: (it) => it.def.item === 'bud' && this.buds + this.belt.length < 24 && !this.belt.some((b) => b.pr === it),
+      onSnap: (it) => this.onBelt(it) });
     this.bagSock = HANDS.socket({ icon: 'gear', p: mach.localToWorld(V3(0.42, 0.09, 0.88)), q: qs, on: null, r: 0.3, dock: true,
       accepts: (it) => it.def.item === 'weed' && it.left < WEED.bagMax });
     this.grindCrank = crank({ c: mach.localToWorld(V3(-0.32, 0.55, 0.58)), axis: this.fwd.clone(), r: 0.28, icon: 'gear', max: 10,
@@ -538,7 +566,8 @@ export class Weed extends Chain {
       if (G.mod === 'rain') pl.w = Math.min(0.9, pl.w);
       if (pl.g > 0 && pl.g < 1 && pl.w > 0.05 && pl.w <= WEED.drown) pl.g = Math.min(1, pl.g + WEED.grow * dt * (pl.w > 0.35 ? 1 : 0.5));
     }
-    this.barrowStep();
+    this.cart.step(dt);
+    this.beltStep(dt);
     // the grinder's crank slows down when nobody turns it
     this.crankSpd *= 0.97;
     // lighters: a flame at an unlit joint's tip lights it; at the bong's packed bowl lights the bowl
@@ -599,28 +628,46 @@ export class Weed extends Chain {
       if (this.bakeT > WEED.alarm && G.time > this.alarmAt) { this.alarmAt = G.time + 8; this.smokeAlarm(this.ovenMark, null); }
     }
   }
-  /** The wheelbarrow: buds dropped in become its load; tipped = it spills; parked by the grinder = it unloads into the hopper. */
-  private barrowStep() {
-    const b = this.barrow, bp = b.body.translation(), bq = b.body.rotation();
-    if (b.banked) return;
-    const q = new THREE.Quaternion(bq.x, bq.y, bq.z, bq.w), inv = q.clone().invert(), up = v1.set(0, 1, 0).applyQuaternion(q);
-    if (this.cargo < 12) for (const pr of this.props) {
-      if (pr.def.item !== 'bud' || pr.banked || pr.heldBy) continue;
-      const pp = pr.body.translation(), l = v2.set(pp.x - bp.x, pp.y - bp.y, pp.z - bp.z).applyQuaternion(inv);
-      const scoop = !!b.heldBy && Math.hypot(pp.x - bp.x, pp.z - bp.z) < 1.05 && pp.y < bp.y + 0.6;   // pushed over buds on the ground: it scoops them up
-      if (scoop || (Math.abs(l.x) < 0.36 && Math.abs(l.z) < 0.48 && l.y > -0.1 && l.y < 0.9)) { this.consume(pr); this.cargo++; G.audio.play('squish', { pos: pr.synced.currP, vol: 0.4, pitch: 1.3 }); }
-    }
-    if (this.cargo > 0 && up.y < 0.35) {
-      for (let i = 0; i < this.cargo; i++) this.spawn('bud', V3(bp.x + (Math.random() - 0.5) * 0.8, bp.y + 0.3, bp.z + (Math.random() - 0.5) * 0.8), 0, V3((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3));
-      this.cargo = 0; G.audio.play('rustle', { pos: b.synced.currP, vol: 1 }); G.events.push({ type: 'barrowSpill' });
-    }
-    if (this.cargo > 0 && Math.hypot(bp.x - this.hopper.x, bp.z - this.hopper.z) < 2.6 && this.buds < 24) {
-      const n = Math.min(this.cargo, 24 - this.buds); this.buds += n; this.cargo -= n;
-      G.audio.play('squish', { pos: this.hopper, vol: 0.8 }); G.fx.bits(this.hopper, { count: 16, color: 0x8fcf5a, speed: 2, up: 2, life: 0.6, size: 0.1, grow: 0, alpha: 1 });
-    }
+  /** Host: a bud landed on the intake grate: it drops into the pit and rides the belt up (kinematic, nobody can take it), then drops into the hopper. */
+  private onBelt(it: Prop) {
+    it.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    it.snapCd = G.time + 99; it.noGrab = () => true;
+    this.belt.push({ pr: it, t: 0, from: it.synced.currP.clone() });
+    G.audio.play('rustle', { pos: this.intake, vol: 0.4, pitch: 1.4, minGap: 0.2 });
   }
+  /** Host: the belt; the buds lying in the wheelbarrow (for the arrows / mission icons). */
+  private beltStep(dt: number) {
+    for (let i = this.belt.length - 1; i >= 0; i--) {
+      const b = this.belt[i], pr = b.pr;
+      if (pr.banked) { this.offBelt(pr); this.belt.splice(i, 1); continue; }
+      b.t += dt / 2.6;
+      const k = b.t;
+      if (k < 0.18) v1.lerpVectors(b.from, this.beltA, (k / 0.18) * (k / 0.18) * (3 - 2 * k / 0.18)).y += Math.sin((k / 0.18) * Math.PI) * 0.15;
+      else v1.lerpVectors(this.beltA, this.beltB, Math.min(1, (k - 0.18) / 0.82)).y += 0.08;
+      pr.body.setNextKinematicTranslation(v1);
+      if (k >= 1) {   // over the top: it tumbles into the hopper (its bin catches it)
+        this.offBelt(pr); pr.body.setLinvel({ x: 0, y: -0.5, z: 0 }, true);
+        this.belt.splice(i, 1);
+      }
+    }
+    if (this.belt.length) G.audio.play('tick', { pos: this.beltA, vol: 0.18, pitch: 0.7, minGap: 0.22 });
+    // anything that lands on the grate (a dumped load spreads out) drops through it and goes up the belt
+    let n = 0;
+    for (const pr of this.props) {
+      if (pr.def.item !== 'bud' || pr.banked || pr.heldBy || G.time < pr.snapCd) continue;
+      const p = pr.synced.currP;
+      if (this.cart.holds(p)) { n++; continue; }
+      const dx = p.x - this.intake.x, dz = p.z - this.intake.z;
+      if (Math.abs(dx * this.right.x + dz * this.right.z) < 0.68 && Math.abs(dx * this.fwd.x + dz * this.fwd.z) < 0.68 && p.y < this.intake.y + 0.05
+        && this.buds + this.belt.length < 24) this.onBelt(pr);
+    }
+    this.cargo = n;
+  }
+  private offBelt(pr: Prop) { pr.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true); pr.snapCd = 0; pr.noGrab = undefined; }
   protected resetMode() {
     this.plants.forEach((pl, i) => { pl.g = i % 4 === 3 ? 0 : 0.15 + (i % 3) * 0.1; pl.w = 0.3; pl.seed = 0; });
+    for (const b of this.belt) this.offBelt(b.pr);
+    this.belt = [];
     this.cargo = 0; this.buds = 0; this.grindProg = 0; this.crankSpd = 0; this.jamUntil = 0; this.fill = 0;
     this.bongWater = 0; this.bongPacked = 0; this.bowlLit = 0; this.chamber = 0; this.inhaler = null;
     this.potButter = this.potWeed = this.potCook = this.potBurn = 0; this.bowlMagic = this.bowlFlour = this.bowlMix = 0;
@@ -651,8 +698,11 @@ export class Weed extends Chain {
       pl.star.visible = pl.g >= 1;
       if (pl.star.visible) pl.star.material.rotation = Math.sin(G.time * 2) * 0.3;
     }
-    const cargo = this.barrow.obj.getObjectByName('cargo');
-    if (cargo) { cargo.visible = this.cargo > 0; cargo.scale.setScalar(0.5 + 0.5 * Math.min(1, this.cargo / 12)); }
+    this.cart.render();
+    // the belt's cleats run up while it carries something (every browser: buds ride it as synced props)
+    const run = this.beltRun, on = this.belt.length > 0 || this.props.some((p) => p.def.item === 'bud' && !p.banked && p.synced.currP.distanceTo(this.beltA) + p.synced.currP.distanceTo(this.beltB) < run + 0.25);
+    if (on) this.beltOff = (this.beltOff + dt * 0.6) % (run / this.slats.length);
+    this.slats.forEach((sl, k) => { sl.position.z = -run / 2 + ((k * run) / this.slats.length + this.beltOff) % run; });
     this.wheel.rotation.z = this.grindCrank.v;
     // the paper on the mat: weed strip (how much), the rolled edge moving across
     const pa = this.paperIn ? this.paperSock.occupant ?? this.props.find((x) => x.def.item === 'paper' && !x.banked && x.synced.currP.distanceTo(this.paperSock.p) < 0.05) : null;
@@ -736,7 +786,7 @@ export class Weed extends Chain {
 
   // ------------------------------------------------------------------ admin + arrows
   adminButtons(): [string, string][] {
-    return [['weed:ripe', 'a.weedRipe'], ['weed:water', 'a.weedWater'], ['weed:buds', 'a.weedBuds'], ['weed:bag', 'a.weedBag'], ['weed:mat', 'a.weedMat'], ['weed:joint', 'a.weedJoint'],
+    return [['weed:ripe', 'a.weedRipe'], ['weed:water', 'a.weedWater'], ['weed:buds', 'a.weedBuds'], ['weed:barrow', 'a.weedBarrow'], ['weed:bag', 'a.weedBag'], ['weed:mat', 'a.weedMat'], ['weed:joint', 'a.weedJoint'],
       ['weed:pot', 'a.weedPot'], ['weed:high', 'a.weedHigh'], ['weed:cookies', 'a.weedCookies'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
   }
   admin(a: string, me: Pig): boolean {
@@ -746,6 +796,14 @@ export class Weed extends Chain {
       case 'weed:water': for (const pl of this.plants) pl.w = 0.8; return true;
       case 'weed:buds': for (let i = 0; i < 6; i++) this.spawn('bud', front.clone().add(V3((i % 3 - 1) * 0.3, 0.2 * i, 0)), 0); return true;
       case 'weed:bag': this.spawn('weedBag', front, me.yaw, undefined, WEED.bagMax); return true;
+      case 'weed:barrow': {   // the wheelbarrow in front of me (handles toward me), 6 buds in it
+        const at = V3(me.pos.x + f.x * 1.5, me.pos.y - 0.4, me.pos.z + f.z * 1.5), b = this.barrow;
+        b.body.setTranslation({ x: at.x, y: at.y + b.half + 0.1, z: at.z }, true);
+        b.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, me.yaw), true);
+        b.body.setLinvel({ x: 0, y: 0, z: 0 }, true); b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        for (let i = 0; i < 6; i++) this.spawn('bud', V3(at.x + f.x * ((i % 3) - 1) * 0.2 + f.z * 0.12 * (i < 3 ? 1 : -1), at.y + 0.9 + i * 0.12, at.z + f.z * ((i % 3) - 1) * 0.2 - f.x * 0.12 * (i < 3 ? 1 : -1)), 0);
+        return true;
+      }
       case 'weed:mat': {   // a paper + a filter on the mat, filled: ready to roll
         if (!this.paperSock.occupant) { const pa = this.spawn('paper', this.matC, this.shedYaw()); if (pa) HANDS.dock(this.paperSock, pa); }
         if (!this.filterSock.occupant) { const fi = this.spawn('filter', this.matC, this.shedYaw()); if (fi) HANDS.dock(this.filterSock, fi); }
@@ -763,8 +821,9 @@ export class Weed extends Chain {
   stepIcons(id: string, me: Pig): string {
     const I = (...k: (IconId | string)[]) => k.map((x) => (x in IC ? IC[x as IconId] : `<kbd class="kc">${x}</kbd>`)).join('');
     const held = this.item(me.held), has = (item: string, full = false) => this.props.some((p) => !p.banked && p.def.item === item && (!full || p.left > 0.05));
+    // (buds: into the wheelbarrow, push it to the intake by the grinder, R = lift the handles and dump them in)
     const toWeed = () => has('weed', true) ? I('rmb', 'leaf') : this.buds > 0 ? I('rmb', 'gear', 'circle') : held === 'bud' ? I('aim', 'gear')
-      : has('bud') ? I('rmb', 'leaf', 'aim', 'gear') : this.plants.some((x) => x.g >= 1) ? I('sickle', 'lmb') : I('R', 'can', 'pour');
+      : this.cargo > 0 ? (held === 'barrow' ? (me.standing ? I('aim', 'gear', 'R', 'pour') : I('E', 'aim', 'gear', 'R', 'pour')) : I('rmb', 'cart', 'aim', 'gear')) : has('bud') ? I('rmb', 'leaf', 'aim', 'cart') : this.plants.some((x) => x.g >= 1) ? I('sickle', 'lmb') : I('R', 'can', 'pour');
     switch (id) {
       case 'rollJoint': {
         if (held === 'joint') { const i = this.joints.indexOf(me.held as Prop); return !this.sealed[i] ? I('lmb', 'tongue') : this.lit[i] < G.time ? I('lighter', 'lmb', 'aim', 'joint') : I('lmb', 'joint'); }
@@ -803,8 +862,9 @@ export class Weed extends Chain {
       if (held === 'weed' && heldFull) return null;
       if (has('weed', true)) return near('weed', true);
       if (this.buds > 0) return grinder();
-      if (held === 'bud') return grinder();
-      if (this.cargo > 0) return this.barrow.synced.currP.clone().setY(this.barrow.synced.currP.y + 1);
+      const intake = this.intake.clone().setY(this.intake.y + 0.6);
+      if (held === 'bud') return intake;
+      if (this.cargo > 0) return held === 'barrow' ? intake : this.barrow.synced.currP.clone().setY(this.barrow.synced.currP.y + 1);
       if (has('bud')) return near('bud');
       return ripe() ?? V3(this.fieldC.x, this.fieldC.y + 2, this.fieldC.z);
     };

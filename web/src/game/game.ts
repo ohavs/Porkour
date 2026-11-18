@@ -177,6 +177,7 @@ export class Game {
     this.fpHands = new FpHands(this.gfx.camera);
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
+      if (b === 'view') { if (this.mode === 'play' && !this.lockpick.isOpen) this.toggleView(); return; }
       if (this.lockpick.isOpen) {
         if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
@@ -196,7 +197,11 @@ export class Game {
       if (code === 'KeyM') this.menu.toggleSound();
       if (code === 'KeyP') this.menu.cyclePreset();
     };
-    if (new URLSearchParams(location.search).has('fp')) ADMIN.fp = true;   // admin test: first person from the URL
+    // first person: the default in the chain modes (cannabis / beer: work with the hooves where you look), else third
+    // person; V / the eye button / the gamepad's View button switch freely (?fp=1 / ?fp=0 force it, tests)
+    const fpQ = new URLSearchParams(location.search).get('fp');
+    ADMIN.fp = fpQ !== null ? fpQ !== '0' : !!this.farm.chain;
+    this.viewIcon();
     const h = new URLSearchParams(location.search).get('hour');
     if (h) this.daynight.setHour(parseFloat(h));
     this.applySettings();
@@ -227,6 +232,7 @@ export class Game {
     const mx = s?.mx ?? this.input.moveX, my = s?.mz ?? this.input.moveY;
     inp.mx = f.x * my + r.x * mx; inp.mz = f.z * my + r.z * mx;
     inp.yaw = this.cam.yaw; inp.pitch = this.cam.pitch;
+    inp.face = this.fpNow();   // first person: the body turns with the camera (the hooves work where I look)
     const h = this.input.held;
     inp.jump = h.has('jump'); inp.sprint = h.has('sprint'); inp.fart = h.has('fart'); inp.stand = h.has('stand');
     inp.wallow = h.has('wallow'); inp.grab = h.has('grab');
@@ -259,6 +265,20 @@ export class Game {
     if (s) for (const k of ['ax', 'ay', 'az', 'reach', 'tilt'] as const) if (s[k] !== undefined) (inp as unknown as Record<string, unknown>)[k] = s[k];
     return inp;
   }
+  /** First person right now (knocked over, carried or out of the round: the camera steps back to third person). */
+  fpNow() {
+    const L = this.local;
+    return ADMIN.fp && this.mode === 'play' && !L.out && L.mode !== 'ragdoll' && L.mode !== 'held';
+  }
+  /** V / the eye button / the gamepad's View: first ↔ third person. */
+  toggleView() {
+    ADMIN.fp = !ADMIN.fp;
+    this.viewIcon();
+    this.hud.emote(this.local, ADMIN.fp ? 'eye' : 'pig', 0.9, 1.9);
+    if (ADMIN.open) this.menu.renderAdmin();
+  }
+  /** The HUD's view button shows what V switches to. */
+  viewIcon() { document.getElementById('bView')?.classList.toggle('on', ADMIN.fp); }
   /**
    * The crosshair (world/hands.ts: what I hold goes there, what I grab is picked there): from the camera through the
    * middle of the screen to the first thing it meets (not my own pig / what I hold); the lobby: the mouse pointer.
@@ -272,7 +292,11 @@ export class Game {
       cam.getWorldDirection(this.aimD);
       const held = L.held?.body;
       const hit = raycast(cam.position, this.aimD, 40, L_.STATIC | L_.PROP | L_.PIG | L_.FARMER | L_.CRITTER, L.body, (c) => c.parent() !== held);
-      this.aimP.copy(cam.position).addScaledVector(this.aimD, hit ? hit.dist : this.cam.dist + 3);
+      let dist = hit ? hit.dist : this.cam.dist + 3;
+      // first person, something in the hooves / a machine part: looking past it (far away, the sky), it stays at a
+      // comfortable distance in front of the eyes (the wheel pushes it further); near a surface it goes onto it
+      if (inp.face && (L.held || L.handle)) { const hold = 0.8 + 0.6 * this.input.reach; if (!hit || hit.dist > hold + 0.5) dist = hold; }
+      this.aimP.copy(cam.position).addScaledVector(this.aimD, dist);
     }
     const off = tmpV.copy(this.aimP).sub(L.pos);
     if (off.length() > 2.5) off.setLength(2.5);
@@ -903,13 +927,13 @@ export class Game {
     // working with the hooves (a light thing / a machine part): the camera looks a little past the pig, at the work
     const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
-    else if (ADMIN.fp) {
+    else if (this.fpNow()) {
       // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen
       const eye = this.local.visual.rig.head.getWorldPosition(tmpV), f = this.local.forward;
       eye.addScaledVector(f, 0.12); eye.y += 0.08;
       this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
     } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing, work);
-    const fp = ADMIN.fp && this.mode === 'play';
+    const fp = this.fpNow();
     this.local.visual.root.visible = !fp && !this.local.out;
     this.fpHands.update(dt, this.local, fp);
     // high / drunk: the screen (post effect) and the camera (drunk: it rolls; high: it breathes)
@@ -930,7 +954,7 @@ export class Game {
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
     const goal = this.round.targetFor(this.local.held);
     this.hud.update(this.local, SETTINGS.fps ? this.fps : 0, goal ? t(('where.' + goal.where) as Key) : '');
-    this.hud.reticle(this.local, this.gfx.camera, this.mode === 'play' && !ADMIN.fp ? 1 : ADMIN.fp ? 2 : 0);
+    this.hud.reticle(this.local, this.gfx.camera, this.mode !== 'play' ? 0 : fp ? 2 : 1);
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     // caged: a lock pulses over the latch (that's where you pick it) instead of a sentence
     if (this.local.cage && !this.farm.cage.canPick(this.local)) this.hud.emote(this.farm.cage.latch, 'lock', 1.1, 0.5);

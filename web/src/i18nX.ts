@@ -5,7 +5,7 @@
 export const EN_X = {
   // admin panel (tabs + powers + punishments)
   'at.me': 'Me', 'at.players': 'Players', 'at.bob': 'Bob', 'at.world': 'World', 'at.farm': 'Farm', 'at.items': 'Items',
-  'a.fp': 'First person (only the hooves)', 'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
+  'a.fp': 'First person (V)', 'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
   'a.respawn': 'Back to the sty', 'a.jail': 'Jail', 'a.unjail': 'Free', 'a.freezeP': 'Freeze', 'a.unfreeze': 'Thaw',
   'a.launch': 'Launch', 'a.bring': 'Bring here', 'a.goto': 'Go to', 'a.jailSecs': 'Jail time (s)', 'a.freeJail': 'Free everyone',
   'a.jailOthers': 'Jail everyone else', 'a.knockP': 'Knock over', 'a.ghostP': 'Ghost',
@@ -24,7 +24,7 @@ export const EN_X = {
   'item.scythe': 'Scythe', 'item.sheaf': 'Sheaf of wheat', 'item.grain': 'Sack of grain', 'item.malt': 'Sack of malt', 'item.hops': 'Hops',
   'item.beerMug': 'Mug of beer', 'item.beerBarrel': 'Beer barrel',
   'a.chill': 'Chill Bob (sees, hears, runs less)', 'a.chain': 'This mode', 'a.weedRipe': 'All plants ripe', 'a.weedWater': 'Water all plants',
-  'a.weedBuds': '6 buds in front of me', 'a.weedBag': 'Bag of weed in front of me', 'a.weedJoint': 'Lit joint in front of me', 'a.weedHigh': 'Make me high',
+  'a.weedBuds': '6 buds in front of me', 'a.weedBarrow': 'Wheelbarrow with buds in front of me', 'a.weedBag': 'Bag of weed in front of me', 'a.weedJoint': 'Lit joint in front of me', 'a.weedHigh': 'Make me high',
   'a.weedCookies': 'Cookies in front of me', 'a.tpShed': 'Teleport: shed', 'a.tpField': 'Teleport: field', 'a.tpBeam': 'Teleport: log over the pond',
   'a.brewSheaves': '4 sheaves in front of me', 'a.brewGrain': 'Grain sack in front of me', 'a.brewKettle': 'Fill the kettle (+ fire)',
   'a.brewFloor': '4 sheaves on the threshing floor', 'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
@@ -32,6 +32,7 @@ export const EN_X = {
   'e.smokeAlarm': 'Smoke alarm!',
   // hands (session 18): tip / pour, reach, new items, admin
   'help.tilt': 'Tip what you hold (pour)', 'help.reach': 'Reach further / back', 'key.wheel': 'Wheel',
+  'help.view': 'First / third person', 'btn.view': 'First / third person (V)',
   'item.paper': 'Rolling paper', 'item.filter': 'Filter tip', 'item.cookPot': 'Pot', 'item.mixBowl': 'Mixing bowl', 'item.tray': 'Baking tray',
   'item.coin': 'Coin', 'item.plug': 'Phone plug', 'item.handset': 'Handset',
   'a.grant': 'Give this player the admin mode', 'a.ungrant': 'Take the admin mode back',
@@ -43,7 +44,7 @@ export const EN_X = {
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
   'at.me': 'Yo', 'at.players': 'Jugadores', 'at.bob': 'Bob', 'at.world': 'Mundo', 'at.farm': 'Granja', 'at.items': 'Objetos',
-  'a.fp': 'Primera persona (solo las pezuñas)', 'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
+  'a.fp': 'Primera persona (V)', 'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
   'a.respawn': 'Volver a la pocilga', 'a.jail': 'Cárcel', 'a.unjail': 'Liberar', 'a.freezeP': 'Congelar', 'a.unfreeze': 'Descongelar',
   'a.launch': 'Lanzar', 'a.bring': 'Traer aquí', 'a.goto': 'Ir hasta', 'a.jailSecs': 'Tiempo de cárcel (s)', 'a.freeJail': 'Liberar a todos',
   'a.jailOthers': 'Encarcelar a los demás', 'a.knockP': 'Tumbar', 'a.ghostP': 'Fantasma',
@@ -61,13 +62,14 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'item.scythe': 'Guadaña', 'item.sheaf': 'Gavilla de trigo', 'item.grain': 'Saco de grano', 'item.malt': 'Saco de malta', 'item.hops': 'Lúpulo',
   'item.beerMug': 'Jarra de cerveza', 'item.beerBarrel': 'Barril de cerveza',
   'a.chill': 'Bob relajado (ve, oye y corre menos)', 'a.chain': 'Este modo', 'a.weedRipe': 'Todas las plantas maduras', 'a.weedWater': 'Regar todas las plantas',
-  'a.weedBuds': '6 cogollos delante de mí', 'a.weedBag': 'Bolsa de hierba delante de mí', 'a.weedJoint': 'Porro encendido delante de mí', 'a.weedHigh': 'Colócame',
+  'a.weedBuds': '6 cogollos delante de mí', 'a.weedBarrow': 'Carretilla con cogollos delante de mí', 'a.weedBag': 'Bolsa de hierba delante de mí', 'a.weedJoint': 'Porro encendido delante de mí', 'a.weedHigh': 'Colócame',
   'a.weedCookies': 'Galletas delante de mí', 'a.tpShed': 'Teletransporte: cobertizo', 'a.tpField': 'Teletransporte: campo', 'a.tpBeam': 'Teletransporte: tronco del estanque',
   'a.brewSheaves': '4 gavillas delante de mí', 'a.brewGrain': 'Saco de grano delante de mí', 'a.brewKettle': 'Llenar el caldero (+ fuego)',
   'a.brewFloor': '4 gavillas en la era', 'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
   'a.shed': 'Cobertizo', 'a.field': 'Campo', 'a.beam': 'Tronco del estanque',
   'e.smokeAlarm': '¡Alarma de humo!',
   'help.tilt': 'Inclinar lo que llevas (verter)', 'help.reach': 'Estirarse más / volver', 'key.wheel': 'Rueda',
+  'help.view': 'Primera / tercera persona', 'btn.view': 'Primera / tercera persona (V)',
   'item.paper': 'Papel de liar', 'item.filter': 'Filtro', 'item.cookPot': 'Olla', 'item.mixBowl': 'Bol de mezclar', 'item.tray': 'Bandeja de horno',
   'item.coin': 'Moneda', 'item.plug': 'Clavija del teléfono', 'item.handset': 'Auricular',
   'a.grant': 'Darle el modo admin a este jugador', 'a.ungrant': 'Quitarle el modo admin',

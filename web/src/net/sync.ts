@@ -99,7 +99,7 @@ export class NetHost {
     inp.mx = r.i8() / 127; inp.mz = r.i8() / 127; inp.yaw = r.f32(); inp.pitch = r.f32();
     const held = r.u8r(); HELD.forEach((k, i) => (inp[k] = !!(held & (1 << i))));
     rm.presses |= r.u16();
-    inp.ax = r.i8() / AIM; inp.ay = r.i8() / AIM; inp.az = r.i8() / AIM; inp.reach = r.u8r() / 255;
+    inp.ax = r.i8() / AIM; inp.ay = r.i8() / AIM; inp.az = r.i8() / AIM; { const rb = r.u8r(); inp.reach = (rb & 127) / 127; inp.face = (rb & 128) !== 0; }   // (the reach byte's top bit = first person)
     if (r.left >= 28) {   // their own pig's pose (they move it themselves)
       const pose = rm.pose ?? (rm.pose = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, at: 0 });
       pose.x = r.f32(); pose.y = r.f32(); pose.z = r.f32(); pose.vx = r.f32(); pose.vy = r.f32(); pose.vz = r.f32(); pose.yaw = r.f32();
@@ -307,7 +307,7 @@ export class NetClient {
     let held = 0; HELD.forEach((k, i) => { if (inp[k]) held |= 1 << i; });
     const mx = Math.round(inp.mx * 127), mz = Math.round(inp.mz * 127);
     const a = (v: number) => (Number.isFinite(v) ? Math.max(-127, Math.min(127, Math.round(v * AIM))) : 0);
-    const ax = a(inp.ax), ay = a(inp.ay), az = a(inp.az), rc = Math.round((inp.reach ?? 0) * 255);
+    const ax = a(inp.ax), ay = a(inp.ay), az = a(inp.az), rc = Math.round(Math.min(1, Math.max(0, inp.reach ?? 0)) * 127) | (inp.face ? 128 : 0);
     const sig = `${mx},${mz},${held},${inp.yaw.toFixed(2)},${ax},${ay},${az},${rc}`;
     const now = performance.now();
     if (!this.pending && !pose && sig === this.lastSig && now - this.lastSend < 100) return;
