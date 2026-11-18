@@ -98,6 +98,8 @@ export interface BobJob {
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
+/** Bob's spoken lines (the rest are grunts / groans). */
+const LINES = new Set(['hey', 'grr', 'ha', 'hello', 'insult', 'win', 'bye', 'oops']);
 const HALF = 0.55, RAD = 0.38, CENTER = HALF + RAD;   // capsule; body centre height above the feet
 
 /** Body parts (real bodies, limp when knocked down): head, armL, armR, legL, legR. Model space, Bob faces +z. */
@@ -451,7 +453,7 @@ export class Farmer {
       case 'slap':
         if (!this.slapDone && this.now - this.stateT > 0.08) { this.slapDone = true; this.slapHit(); }
         if (this.now - this.stateT > BOB.slap) {
-          if (this.slapped.length) { this.go('taunt'); this.voice('ha'); } else { this.go('recover'); this.voice('grr', 0.8); }
+          if (this.slapped.length) { this.go('taunt'); this.voice('ha', 0.8); } else { this.go('recover'); this.voice('grr', 0.8); }
         }
         break;
       case 'taunt':
@@ -1213,7 +1215,7 @@ export class Farmer {
       this.phoneUntil = this.now + (kind === 2 ? PHONE.hello : PHONE.talk[0] + Math.random() * (PHONE.talk[1] - PHONE.talk[0]));
       this.phoneDeadT = 0; this.phoneChat = this.now + 0.5; this.phoneGlance = this.now + 4 + Math.random() * 3; this.glanceT = -10;
       G.events.push({ type: 'bobPhone' });
-      if (kind === 2) this.voice('huh');
+      if (kind === 2) this.voice('hello');
       return 0;
     }
     return sp;
@@ -1227,7 +1229,7 @@ export class Farmer {
     if (Math.hypot(ph.standAt.x - this.pos.x, ph.standAt.z - this.pos.z) > 0.5) this.moveTo(ph.standAt, BOB.walk * 0.5, dt);
     // the line went dead: "Hello? HELLO?!", rattles the hook, then off along the wire to find who did that
     if (ph.dead) {
-      if (!this.phoneDeadT) { this.phoneDeadT = this.now; this.voice('huh'); this.lookYaw = 0; }
+      if (!this.phoneDeadT) { this.phoneDeadT = this.now; this.voice('hello'); this.lookYaw = 0; }
       if (this.now > this.phoneChat) { this.phoneChat = this.now + 0.8; this.voice('hey', 0.8); G.audio.play('clunk', { pos: v1.copy(this.pos).setY(this.pos.y + 1.5), vol: 0.5, pitch: 1.4, minGap: 0.2 }); }
       if (this.now - this.phoneDeadT > PHONE.rattle) {
         ph.hangUp(true); this.voice('grr'); this.yell = 1; this.raise('prank');
@@ -1249,7 +1251,7 @@ export class Farmer {
         else this.backToWork();
         return 0;
       }
-      if (this.now > this.phoneChat) { this.phoneChat = this.now + 1.7 + Math.random(); this.voice('huh', 0.8); }
+      if (this.now > this.phoneChat) { this.phoneChat = this.now + 2.4 + Math.random(); this.voice('hello', 0.8); }
       this.lookYaw = Math.sin((this.now - this.stateT) * 0.9) * 0.4;
       if (this.now > this.phoneUntil) { ph.hangUp(true); this.voice('mutter'); this.backToWork(); }
       return 0;
@@ -1550,6 +1552,7 @@ export class Farmer {
       G.shakeFor(p, 0.5);
       G.events.push({ type: 'slapped', who: p, text: 'insult.' + Math.floor(Math.random() * 6) });
     }
+    if (this.slapped.length) this.voice('insult');
     G.noise(this.pos, 12);
   }
 
@@ -1590,7 +1593,7 @@ export class Farmer {
     this.grip.attach(p.body, p.pos, SCRUFF);   // he grabs it by the scruff: it dangles, kicks, swings
     G.audio.play('body', { pos: this.pos, vol: 1 });
     G.audio.play('squeal', { pos: p.pos, vol: 1 });
-    this.voice('ha');
+    this.voice('win');
     G.shakeFor(p, 0.35);
     G.events.push({ type: 'caught', who: p });
     this.chaseRun = 0; this.shakeT = 0;
@@ -1610,7 +1613,7 @@ export class Farmer {
     G.events.push({ type: 'escaped', who: p });
     if (this.state === 'carry') {
       this.raise('escaped');
-      this.voice('grr'); this.sus.set(p, 1); this.target = p; this.lastSeenT = this.now; this.lastSeen.copy(p.pos);
+      this.voice('oops'); this.sus.set(p, 1); this.target = p; this.lastSeenT = this.now; this.lastSeen.copy(p.pos);
       this.go('recover');
     }
   }
@@ -1638,7 +1641,7 @@ export class Farmer {
       p.heldBy = null;
       this.cage.lock(p);
       this.sus.set(p, 0); this.target = null;
-      this.voice('ha'); this.go('dust'); this.raise('caged');
+      this.voice('bye'); this.go('dust'); this.raise('caged');
       G.events.push({ type: 'caged', who: p });
       return 0;
     }
@@ -1842,8 +1845,7 @@ export class Farmer {
     this.stun('cough', BOB.cough);
     G.events.push({ type: 'bobCough' });
     this.raise('cough');
-    G.audio.play('cough', { pos: this.pos, vol: 0.9, rand: 0.1 });
-    if (!G.audio.has('cough')) this.voice('oof', 0.7);
+    G.audio.play('bob_cough', { pos: v1.copy(this.pos).setY(this.pos.y + 1.6), vol: 1, rand: 0.1 });
   }
 
   private checkClouds() {
@@ -1896,12 +1898,20 @@ export class Farmer {
   private voice(kind: string, vol = 1) {
     const at = v1.copy(this.pos).setY(this.pos.y + 1.7);
     const map: Record<string, string> = {
-      huh: 'bob_huh', hey: 'bob_hey|bob_oof', grr: 'bob_oof', oof: 'bob_oof', ha: 'bob_laugh', yawn: 'yawn', snore: 'snore', mutter: '',
+      huh: 'bob_huh', hey: 'bob_hey', grr: 'bob_grr', oof: 'bob_oof', ha: 'bob_laugh', yawn: 'yawn', snore: 'snore', mutter: '',
+      hello: 'bob_hello', insult: 'bob_insult', win: 'bob_win', bye: 'bob_bye', oops: 'bob_oops',
     };
-    const s = map[kind];
-    if (s) G.audio.play(s, { pos: at, vol, minGap: 0.35, pitch: kind === 'hey' ? 1.05 : 1 });
-    if (kind === 'hey' || kind === 'grr') this.yell = 1;
+    let s = map[kind];
+    // spoken lines (1–3 s) never overlap and don't repeat too often: in between, an angry line is just a grunt
+    if (LINES.has(kind)) {
+      if (this.now < this.lineUntil) { s = kind === 'hey' || kind === 'grr' ? 'bob_oof' : ''; vol *= 0.7; }
+      else this.lineUntil = this.now + (kind === 'hey' || kind === 'grr' ? 4.5 : 3);
+    }
+    if (s) G.audio.play(s, { pos: at, vol, minGap: 0.35, rand: 0.04 });
+    if (kind === 'hey' || kind === 'grr' || kind === 'insult') this.yell = 1;
   }
+  /** When his next spoken line may start (voice). */
+  private lineUntil = 0;
 
   // ================================================================== online
   /** Host → players: Bob's brain state as the visuals / HUD need it. */

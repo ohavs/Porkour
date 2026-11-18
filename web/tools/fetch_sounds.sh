@@ -9,6 +9,7 @@
 #   Minetest Game github.com/minetest/minetest_game  tnt sounds (firecracker gadget), CC0 (TumeniNodes, from freesound)
 #   CDDA CC-Sounds github.com/Fris0uman/CDDA-Soundpacks  per-file credits.md (CC0 / CC BY 3.0 / 4.0, freesound authors)
 #   AntumMT sounds  github.com/AntumMT/mod-sounds     sources.md (CC0 / CC BY 3.0, freesound / OGA authors)
+#   Hedgewars  github.com/hedgewars/hw          sounds GNU FDL 1.2 — Bob's voice = the "HillBilly" voice pack v2 (sloan2189)
 # Drop-in replacements: put <name>.ogg (or .mp3/.wav, converted by this script from web/sfx_user/) — see SOUNDS in src/core/sounds.ts.
 # Usage: cd web && bash tools/fetch_sounds.sh        (idempotent; output is committed)
 set -euo pipefail
@@ -69,6 +70,7 @@ pack https://github.com/Fris0uman/CDDA-Soundpacks cdda "/$CC/speech/ferals/old_m
   "/$CC/radio/" "/$CC/smash_success/glass/" "/$CC/open_door/gun_safe/"
 pack https://github.com/AntumMT/mod-sounds antum '/sounds/sounds_doorbell_03.ogg' '/sounds/sounds_clock_tick.ogg' '/sounds/sounds_coin.ogg' \
   '/sounds/sounds_door_knock_02.ogg' '/sources.md'
+pack https://github.com/hedgewars/hw hedgewars '/share/hedgewars/Data/Sounds/voices/HillBilly/'
 pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
@@ -103,10 +105,12 @@ for i in 1 2 3; do snd "$OA/attack/impact/arrow_dirt_0$i.ogg" thud$i -3 0 "$OAc"
 for i in 1 2 3 4 5 6; do snd "$OA/attack/impact/shield_wood_0$i.ogg" wood$i -3 0 "$OAc"; done
 for i in 1 2 3 4; do snd "$OA/attack/impact/shield_metal_0$i.ogg" metal$i -4 0 "$OAc"; done
 snd "$WS/squishy-miss.wav" squish -3 0 "$WSg"
-# ---------------------------------------------------------------- Bob (gruff old man)
-for i in 1 2 3 4; do snd "$WS/human-old-hit-$i.ogg" bob_oof$i -1 0 "$WSg"; done
-for i in 1 2 3; do snd "$WS/human-old-die-$i.ogg" bob_down$i -1 0 "$WSg"; done
-snd "$WS/dwarf-laugh.wav" bob_laugh -2 0 "$WSg"
+# ---------------------------------------------------------------- Bob: a hillbilly farmer (Hedgewars HillBilly voice pack v2, GNU FDL 1.2)
+HB=$CACHE/hedgewars/share/hedgewars/Data/Sounds/voices/HillBilly; HBn="Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2"
+v() { snd "$HB/$1.ogg" "bobv_$(echo "$1" | tr 'A-Z-' 'a-z_')" "${2:--2}" 0 "$HBn"; }
+for f in Ooff1 Ooff2 Ooff3 Ow1 Ow2 Ow3 Ow4 Nooo Laugh Comeonthen Watchit Illgetyou Cutitout Youllregretthat Leavemealone \
+  Stupid Coward Nutter Hello Yessir Victory Byebye Oops Uh-oh; do v $f; done
+v PoisonCough -3
 snd "$WS/groan.wav" bob_huh -3 0 "$WSg"
 # ---------------------------------------------------------------- cage / grill / misc
 snd "$CACHE/wesnoth/data/campaigns/The_Hammer_of_Thursagan/sounds/unlock.ogg" unlock -3 0 "$WSg"
