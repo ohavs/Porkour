@@ -11,6 +11,7 @@ import type { DayNight } from './daynight';
 import type { PROPS } from './props';
 import { Outhouse } from './outhouse';
 import { Phones } from './phone';
+import { Hammock } from './hammock';
 
 interface Ctx {
   scene: THREE.Scene; t: Terrain; rng: Rng; out: FarmBuild; daynight: DayNight; blocked: Rect[];
@@ -45,6 +46,7 @@ export function buildDecor(c: Ctx) {
   d.outhouse(-41, -45, Math.PI / 2);
   d.phone(-12.4, -34.2, 0, -9.6, -31.0);
   d.payphone(-4.6, 13.2, Math.PI / 2);
+  d.hammock(-24.6, -21.3, Math.PI / 2);
   d.mailbox(5.2, 18.2);
   d.rocker(-15.3, -29.2, -12, -22);
   // pumpkin patch (grab-able) + water trough
@@ -235,6 +237,12 @@ export function decorKit(c: Ctx) {
     block(x, z, 0.7);
   };
 
+  // ---------------------------------------------------------------- Bob's hammock between two posts (his siesta: world/hammock.ts)
+  const hammock = (x: number, z: number, yaw: number) => {
+    out.hammock = new Hammock(scene, x, y(x, z), z, yaw);
+    for (const s of [-1, 1]) block(x + Math.cos(yaw) * s * 1.7, z - Math.sin(yaw) * s * 1.7, 0.4);
+  };
+
   // ---------------------------------------------------------------- mailbox by the gate
   const mailbox = (x: number, z: number) => {
     const g = group(x, z, -0.2);
@@ -267,5 +275,5 @@ export function decorKit(c: Ctx) {
   // fewer draw calls: each piece becomes one skinned mesh (moving pivots are its bones)
   const finish = () => { for (const g of groups) rigidSkin(g, keep); };
   void c.decor; void c.F;
-  return { y, group, add, block, keep, lamps, pond, laundry, scarecrow, hives, picnic, outhouse, phone, payphone, mailbox, rocker, trough, finish };
+  return { y, group, add, block, keep, lamps, pond, laundry, scarecrow, hives, picnic, outhouse, phone, payphone, hammock, mailbox, rocker, trough, finish };
 }

@@ -212,6 +212,7 @@ export class Hud {
     else if (st === 'sleep') { txt = t('bob.sleep'); cls = 'blue'; ic = 'zzz'; }
     else if (st === 'away') { txt = t('bob.market'); cls = 'blue'; ic = 'cart'; }
     else if (st === 'loo' || st === 'inLoo') { txt = t(st === 'loo' ? 'bob.loo' : 'bob.inLoo'); cls = 'blue'; ic = 'loo'; }
+    else if (st === 'toHammock' || st === 'hammock') { txt = t(st === 'hammock' ? 'bob.nap' : 'bob.toNap'); cls = 'blue'; ic = 'zzz'; }
     else if (st === 'phone' || st === 'onPhone') { txt = t(st === 'phone' ? 'bob.phone' : 'bob.onPhone'); cls = 'blue'; ic = 'phone'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; ic = 'wolf'; }
     else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; ic = 'trap'; }

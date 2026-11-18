@@ -37,14 +37,16 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // every farm: Bob's outhouse, his safe (heavy: two pigs)
   | 'looLock' | 'looTip' | 'safeSteal'
   // every farm: Bob's phone (cut him off mid-call, prank-call him from the payphone), more heavy loot
-  | 'hangUp' | 'prankCall' | 'tvSteal' | 'clockSteal';
+  | 'hangUp' | 'prankCall' | 'tvSteal' | 'clockSteal'
+  // farms with a hammock: Bob's siesta
+  | 'hammockFlip' | 'mudFace';
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
-  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall'];
-const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', ...REQ_POOL];
+  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip'];
+const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
 export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
@@ -194,7 +196,8 @@ export class Round {
       ...(this.game.farm.props.some((p) => p.def === PROPS.safe) ? ['safeSteal'] as MissionId[] : []),
       ...(this.game.farm.props.some((p) => p.def === PROPS.tv) ? ['tvSteal'] as MissionId[] : []),
       ...(this.game.farm.props.some((p) => p.def === PROPS.clock) ? ['clockSteal'] as MissionId[] : []),
-      ...(this.game.phones?.wall ? ['hangUp'] as MissionId[] : []), ...(this.game.phones?.pay ? ['prankCall'] as MissionId[] : [])];
+      ...(this.game.phones?.wall ? ['hangUp'] as MissionId[] : []), ...(this.game.phones?.pay ? ['prankCall'] as MissionId[] : []),
+      ...(this.game.hammock ? ['hammockFlip', 'mudFace'] as MissionId[] : [])];
     const own = this.game.farm.featured ?? [];
     // a farm with its own pranks: one of the two required ones is always one of them
     const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
@@ -256,6 +259,8 @@ export class Round {
     if (type === 'looTipped' && text === 'bob') this.done('looTip');
     if (type === 'hangUp') this.done('hangUp');
     if (type === 'prankCall') this.done('prankCall');
+    if (type === 'hammockFlip') this.done('hammockFlip');
+    if (type === 'mudFace') this.done('mudFace');
   }
 
   step(dt: number) {
@@ -468,6 +473,7 @@ export class Round {
         case 'looLock': case 'looTip': { const o = near(G.loos as Outhouse[], (x) => x.base); mark(i, o?.markPos); return; }
         case 'hangUp': { const ph = g.phones; mark(i, ph?.off && ph.ring === 1 ? ph.jackMark : ph?.phoneMark); return; }
         case 'prankCall': mark(i, g.phones?.payMark); return;
+        case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
         case 'mudPorch': if (L.muddy > 0) mark(i, this.wherePos('porch', new THREE.Vector3()), 1.4); return;
         case 'wolfScare': { const w = near((G.wolves as { active: boolean; pos: THREE.Vector3 }[]).filter((x) => x.active), (x) => x.pos); if (w) mark(i, w.pos, 1.2); return; }
         case 'whackBob': {

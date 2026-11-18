@@ -20,6 +20,7 @@ import { toonMat } from '../render/toon';
 import { GATE, type Gate, type Gates } from '../world/gates';
 import { LOO, looFirst, looEvery, type Outhouse } from '../world/outhouse';
 import { PHONE, type Phones } from '../world/phone';
+import { NAP, type Hammock } from '../world/hammock';
 
 /** Tuning. */
 export const BOB = {
@@ -82,7 +83,7 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone' | 'toHammock' | 'hammock';
 
 /** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
 export interface BobJob {
@@ -212,6 +213,12 @@ export class Farmer {
    * The phone (world/phone.ts): the call he already reacted to, when the call / his "Hello?" ends, when the line went
    * dead, his next bit of chatter, glances over his shoulder.
    */
+  /**
+   * The siesta (world/hammock.ts): the game hour he naps after, whether he had it this round, when he wakes up, a noise
+   * that will wake him (groggy first), what he does once he's up after being flipped out; mud marks on his face (synced).
+   */
+  private napHour = NAP.hour + Math.random() * NAP.spread; private napped = false; private napUntil = 0; private napWake = 0;
+  private napHeard: THREE.Vector3 | null = null; private afterStun: (() => void) | null = null; mudMarks = 0;
   private phoneCall = -1; private phoneUntil = 0; private phoneDeadT = 0; private phoneChat = 0; private phoneGlance = 0; private glanceT = -10; private glanceDir = 1;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
@@ -271,6 +278,7 @@ export class Farmer {
     if (s !== 'investigate') this.tracking = false;
     if (this.state === 'inLoo' && s !== 'inLoo' && this.loo) { this.loo.vacate(); this.loo = null; }
     if (this.state === 'onPhone' && s !== 'onPhone') { (G.phones as Phones | null)?.hangUp(); this.lookYaw = 0; }
+    if (this.state === 'hammock' && s !== 'hammock') { (G.hammock as Hammock | null)?.climbOut(); this.body.setEnabled(true); this.parts.setEnabled(true); }
     this.state = s; this.stateT = this.now;
   }
   /** Day chores, evening flashlight round, bed at night — but on alert (2+) he keeps patrolling all night. */
@@ -334,6 +342,8 @@ export class Farmer {
     if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
     this.loo = null; this.looNext = this.now + looFirst(); this.looHeard = null;
     this.phoneCall = -1;
+    if (this.state === 'hammock') { (G.hammock as Hammock | null)?.climbOut(); this.body.setEnabled(true); this.parts.setEnabled(true); }
+    this.napped = false; this.napHour = NAP.hour + Math.random() * NAP.spread; this.napHeard = null; this.afterStun = null; this.setMud(0);
     if (this.level) { this.level = 0; G.events.push({ type: 'alert', why: '0', text: 'down' }); }
     this.parts.snap();
     this.go('routine');
@@ -371,7 +381,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo', 'phone', 'onPhone'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo', 'phone', 'onPhone', 'toHammock'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -385,6 +395,7 @@ export class Farmer {
     if (this.state === 'sleep') { this.sleepStep(dt); return; }
     if (this.state === 'away') { if (!marketHours()) this.wake(); return; }
     if (this.state === 'inLoo') { this.looStep(); return; }
+    if (this.state === 'hammock') { this.napStep(); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     if (p.y < -20) { const d = this.zones.door; this.body.setTranslation({ x: d.x, y: d.y + 3, z: d.z + 3 }, true); return; }
@@ -401,6 +412,8 @@ export class Farmer {
       this.go(this.carrying ? 'carry' : this.target ? 'chase' : this.cage.pigs.length >= 2 ? 'guard' : 'routine');
       if (this.state === 'chase') this.lastSeenT = this.now;
       this.path = [];
+      const then = this.afterStun; this.afterStun = null;
+      if (then && this.state === 'routine') then();
     }
     if (this.state !== 'down' && this.state !== 'stagger' && this.state !== 'cough') this.checkClouds();
     if (!this.stunUntil) this.perceive(dt);
@@ -499,6 +512,7 @@ export class Farmer {
       case 'loo': want = this.looWalk(dt); break;
       case 'phone': want = this.phoneWalk(dt); break;
       case 'onPhone': want = this.phoneStep(dt); break;
+      case 'toHammock': want = this.napWalk(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -1015,6 +1029,10 @@ export class Farmer {
       if (o) { this.loo = o; this.go('loo'); this.voice('mutter', 0.6); G.events.push({ type: 'bobLoo' }); return; }
       this.looNext = this.now + 20;
     }
+    // after lunch: a nap in the hammock (once a round)
+    if (phase === 'day' && !this.napped && G.hour >= this.napHour && !this.carrying && (G.hammock as Hammock | null)?.usable) {
+      this.napped = true; this.go('toHammock'); this.voice('yawn', 0.8); G.events.push({ type: 'bobNap' }); return;
+    }
     if (phase === 'day' && G.mod !== 'grumpy' && Math.random() < BOB.danceChance) this.dance(BOB.danceTime);
     else if (Math.random() < 0.4) this.voice('mutter', 0.5);
   }
@@ -1180,6 +1198,92 @@ export class Farmer {
     }
     return 0;
   }
+
+  // ================================================================== the siesta (world/hammock.ts)
+  /** Admin: off to the hammock now / straight in. */
+  napNow(inside = false) {
+    const h = G.hammock as Hammock | null;
+    if (!h || this.state === 'hammock' || this.state === 'off' || this.state === 'down') return;
+    if (this.gone) this.wake();
+    if (this.carrying) this.release(false);
+    this.stopRiding(); this.doing = false; this.path = []; this.target = null; this.hunt = null; this.napped = true;
+    if (inside) this.enterNap(h); else { this.go('toHammock'); G.events.push({ type: 'bobNap' }); }
+  }
+  private napWalk(dt: number) {
+    const h = G.hammock as Hammock | null;
+    this.activity = 'bob.toNap';
+    if (!h || !h.usable) { this.backToWork(); return 0; }
+    const d = this.moveTo(h.getIn, BOB.walk * 0.9, dt);
+    if (d < 0.6 || (d < 2 && this.stuck >= 2)) { this.stuck = 0; this.enterNap(h); return 0; }
+    return BOB.walk * 0.9;
+  }
+  private enterNap(h: Hammock) {
+    this.stopRiding(); this.dropProp(); this.doing = false; this.path = [];
+    h.climbIn();
+    this.go('hammock'); this.activity = 'bob.nap';
+    this.napUntil = this.now + NAP.time * (0.85 + Math.random() * 0.3); this.napWake = 0; this.napHeard = null;
+    this.body.setEnabled(false); this.parts.setEnabled(false);
+    this.vel.set(0, 0, 0);
+  }
+  /** Asleep: blind; a noise close by (or a hard swinging) wakes him — groggy for a moment first. */
+  private napStep() {
+    const h = G.hammock as Hammock | null;
+    if (!h) { this.go('routine'); return; }
+    this.activity = 'bob.nap';
+    for (const n of G.noises) {
+      if (n.t <= this.noiseT) continue;
+      this.noiseT = n.t;
+      if (Math.abs(n.t - h.pushT) < 0.05) continue;   // the hammock being shoved: the rocking lulls him
+      const d = Math.hypot(n.x - h.base.x, n.z - h.base.z);
+      if (d < Math.min(NAP.hear, n.radius) * ALERT.hear[this.level] * modHear()) {
+        if (!this.napWake) { this.napWake = this.now + NAP.groggy; this.voice('huh', 0.6); }
+        this.napHeard = new THREE.Vector3(n.x, n.y, n.z);
+      }
+    }
+    if (h.rousing && !this.napWake) { this.napWake = this.now + 0.6; this.voice('huh', 0.7); }
+    if ((this.napWake && this.now > this.napWake) || this.now > this.napUntil) this.leaveNap(h);
+  }
+  /** Out of the hammock: yawns and back to work — or off to see what woke him. */
+  private leaveNap(h: Hammock) {
+    const at = h.getIn;
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.05, z: at.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.pos.copy(at); this.yaw = Math.atan2(h.side.x, h.side.z);
+    this.state = 'routine';   // (go() below must not climb out twice)
+    h.climbOut(); this.body.setEnabled(true); this.parts.setEnabled(true); this.parts.snap();
+    const heard = this.napHeard; this.napHeard = null;
+    if (heard) { this.searchAt.copy(heard); this.go('investigate'); this.voice('huh'); }
+    else { this.voice('yawn', 0.8); this.backToWork(); }
+  }
+  /** The hammock swung over: he's flung out onto the ground (a knock-down), then looks around, furious. */
+  hammockFlipped(h: Hammock, dir: THREE.Vector3) {
+    if (this.state !== 'hammock') return;
+    const at = v1.copy(h.base).addScaledVector(dir, 0.7);
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.7, z: at.z }, true);
+    this.body.setLinvel({ x: dir.x * 3, y: 1, z: dir.z * 3 }, true);
+    this.pos.copy(at); this.yaw = Math.atan2(-dir.x, -dir.z);
+    this.state = 'routine';
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.parts.snap();
+    this.napHeard = null;
+    this.voice('oops');
+    this.stun('down', BOB.downTime);
+    this.raise('prank');
+    G.events.push({ type: 'hammockFlip' });
+    const look = at.clone();
+    this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
+  }
+  /** A muddy pig smeared his face while he napped: spectacles, a pig snout, whiskers (he wears them all round). */
+  mudFace(p: Pig) {
+    if (this.state !== 'hammock' || this.mudMarks >= NAP.marks) return;
+    this.setMud(this.mudMarks + 1);
+    p.muddyUntil = p.now;   // the mud is on Bob now
+    const h = (G.hammock as Hammock).headPos(v1);
+    G.audio.play('splat', { pos: h, vol: 0.8, pitch: 1.2 });
+    G.fx.bits(h, { count: 10, color: 0x6b4a2b, speed: 1.6, up: 1.2, life: 0.5, size: 0.08, grow: 0, alpha: 1 });
+    G.events.push({ type: 'mudFace', who: p });
+    if (Math.random() < 0.2 && !this.napWake) { this.voice('huh', 0.5); this.napUntil = Math.min(this.napUntil, this.now + 3); }   // he stirs…
+  }
+  setMud(n: number) { this.mudMarks = n; this.visual.setMud(n); }
 
   // ================================================================== the phone (world/phone.ts)
   /** He can come to the phone now (doing something that can wait). */
@@ -1924,7 +2028,7 @@ export class Farmer {
     const hp = this.grip.pos, bp = this.body.translation();
     const hl = this.carrying || this.heldProp ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyAxisAngle(UP, -this.yaw) : v1.set(0, 0, 0);
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000);
-    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level);
+    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level, this.mudMarks);
     s.push(this.state, this.activity, this.debugAnim ?? '');
   }
   netApply(n: number[], s: string[], nb: number[] = n, alpha = 0) {
@@ -1944,6 +2048,7 @@ export class Farmer {
     this.netHolding = n[at + 19] === 1;
     this.heat = n[at + 20] ?? 0;
     this.level = n[at + 21] ?? 0;   // the 'alert' event itself comes with the host's recorded events
+    if ((n[at + 22] ?? 0) !== this.mudMarks) this.setMud(n[at + 22] ?? 0);
     this.visual.root.visible = !this.asleep;
   }
   netPose(p: THREE.Vector3) { this.pos.copy(p).setY(p.y - CENTER); }
@@ -1961,6 +2066,7 @@ export class Farmer {
     this.synced.pos(alpha, r.position);
     r.position.sub(v1.set(0, CENTER, 0).applyQuaternion(this.vq));
     r.quaternion.copy(this.vq);
+    if (this.state === 'hammock' && G.hammock) { (G.hammock as Hammock).bobPose(r.position, r.quaternion); this.vq.copy(r.quaternion); }
     let hand: THREE.Vector3 | null = null;
     const holding = !!this.carrying || (G.net === 'client' ? this.netHolding : !!this.heldProp);
     if (holding) {
@@ -2033,6 +2139,7 @@ export class Farmer {
       case 'shoot': return 'shoot';
       case 'setTrap': case 'gate': case 'job': return this.doing ? 'fix' : 'idle';
       case 'onPhone': return 'phone';
+      case 'hammock': return 'hammock';
       default: return 'idle';
     }
   }

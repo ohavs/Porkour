@@ -18,6 +18,7 @@ import type { Pumpkins } from './pumpkins';
 import type { Winter } from './winter';
 import type { Outhouse } from './outhouse';
 import type { Phones } from './phone';
+import type { Hammock } from './hammock';
 import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
@@ -67,6 +68,8 @@ export interface FarmBuild {
   loos?: Outhouse[];
   /** Bob's phone by the porch + the payphone by the road gate (one synced entity, built by the decor kit). */
   phones?: Phones;
+  /** Bob's hammock (his siesta; synced entity, decor kit). */
+  hammock?: Hammock;
   /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
   clock?: { start: number; secsPerHour: number };
   /** 0..1 darker nights (farm 4). */
