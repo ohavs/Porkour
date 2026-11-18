@@ -54,6 +54,8 @@ export interface Socket {
   ghost?: boolean;
   /** Keep the item's yaw (round things: any angle fits) — only the tilt is matched. */
   anyYaw?: boolean;
+  /** HUD: what this place is (shown next to the hold prompt: "it goes there"). */
+  icon?: IconId;
 }
 export interface Receiver {
   id: number;
@@ -254,6 +256,17 @@ class Hands {
     if (it.ghosted === on) return;
     it.ghosted = on;
     it.body.collider(0)?.setCollisionGroups(on ? groups(L.PROP, L.PROP) : groups(L.PROP));
+  }
+  /** HUD: where what I hold goes (the nearest place that takes it, any distance) — its icon, or ''. */
+  destIcon(p: Pig): IconId | '' {
+    const it = p.held as Prop | null;
+    if (!it || it.kind !== 'prop') return '';
+    let best: Socket | null = null, bd = 60;
+    for (const s of this.sockets) {
+      if (s.occupant || !s.icon || !s.accepts(it, p)) continue;
+      const d = s.p.distanceTo(it.synced.currP); if (d < bd) { bd = d; best = s; }
+    }
+    return best?.icon ?? '';
   }
   /** The rotation it will sit at in a socket. */
   private alignQ(s: Socket, it: Prop, out: THREE.Quaternion) {

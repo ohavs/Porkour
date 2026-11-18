@@ -311,6 +311,7 @@ export class Hud {
     const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
     const snack = pig.held as { def?: { snack?: string; smokes?: boolean }; left?: number } | null;
     const chainIc = pig.held && G.chain ? G.chain.itemIcon(pig) : '';
+    const dest = pig.held ? HANDS.destIcon(pig) : '';   // it has a place it goes (the hopper, the mat, the oven…): show it
     const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
     const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
     if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
@@ -320,7 +321,7 @@ export class Hud {
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
     else if (G.phones?.oinkNow(pig)) p = row(P(kc('F'), IC.pig, IC.phone));
     else if (pig.handle) p = row(P(IC.rmb, IC.drop), P(IC.mouse, pig.handle.kind === 'crank' ? IC.circle : IC[pig.handle.icon]));
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), pours(pig.held) ? P(kc('R'), IC.pour) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));

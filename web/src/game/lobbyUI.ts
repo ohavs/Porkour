@@ -5,7 +5,10 @@ import { level } from './shop';
 import { IC, kc } from './icons';
 import { ICONS, SVG } from './hud';
 import { fullIcon, toggleFull, onFull } from './fullscreen';
-import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from '../world/farms';
+import { farmId, FARM_IDS, reloadOnFarm, STORY, MODES, stageOf, type FarmId } from '../world/farms';
+import { canAdmin } from '../net/auth';
+/** A story stage is open once the one before is won (the owner / admins: all). */
+const unlocked = (f: FarmId) => canAdmin() || stageOf(f) <= (SETTINGS.story ?? 0) + 1;
 import { online } from '../net/online';
 /** "Random" in a room: one of the regular farms (not the chain modes). */
 const RANDOM_FARMS = FARM_IDS.filter((f) => f !== 'farm6' && f !== 'farm7');
@@ -67,6 +70,7 @@ export class LobbyUI {
         return;
       }
       if (!f) { this.farmPick = !this.farmPick; this.render(); return; }
+      if (f !== 'random' && !unlocked(f)) return;   // locked stage
       SETTINGS.farm = f; saveSettings();
       if (f === 'random') { const q = new URLSearchParams(location.search); q.delete('farm'); location.href = location.pathname + (q.size ? '?' + q : ''); }
       else if (f !== farmId()) reloadOnFarm(f);
@@ -95,8 +99,14 @@ export class LobbyUI {
     const cur = SETTINGS.farm === 'random' ? 'random' : farmId(), inRoom = this.h.party() !== null, locked = inRoom && !this.roomHost();
     if (locked) this.farmPick = false;
     document.getElementById('lFarm')!.classList.toggle('locked', locked);
-    document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${t('title.farm')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
-      (this.farmPick ? `<div class="fpick">${[...FARM_IDS, 'random' as const].map((k) => `<button data-f="${k}" class="${k === cur ? 'on' : ''}">${FARM_ICON[k]}${t(('farm.' + k) as Key)}</button>`).join('')}</div>` : '');
+    // story stages (numbered, locked until the one before is won) + the separate modes
+    const st = stageOf(farmId());
+    const pickBtn = (k: FarmId) => { const ok = unlocked(k), n = stageOf(k);
+      return `<button data-f="${k}" class="${k === cur ? 'on' : ''}${ok ? '' : ' lock'}" title="${ok ? '' : t('lobby.locked')}">${n ? `<em>${n}</em>` : ''}${FARM_ICON[k]}<span>${t(('farm.' + k) as Key)}</span>${ok ? (n && n <= (SETTINGS.story ?? 0) ? '<u>★</u>' : '') : '<u>🔒</u>'}</button>`; };
+    document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${st ? t('lobby.stage', { n: st }) : t('lobby.modes')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
+      (this.farmPick ? `<div class="fpick"><div class="fgrp">📖 ${t('lobby.story')}</div>${STORY.map(pickBtn).join('')}` +
+        `<button data-f="random" class="${cur === 'random' ? 'on' : ''}">${FARM_ICON.random}<span>${t('farm.random')}</span></button>` +
+        `<div class="fgrp">🎮 ${t('lobby.modes')}</div>${MODES.map(pickBtn).join('')}</div>` : '');
     // the big button
     const mode = this.h.playMode(), btn = document.getElementById('lPlay')!;
     btn.textContent = t(mode === 'start' ? 'lobby.start' : mode === 'wait' ? 'lobby.wait' : 'lobby.play');

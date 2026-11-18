@@ -14,6 +14,8 @@ export const SETTINGS = {
   owned: [] as string[], gadgets: {} as Record<string, number>, loadout: '', shopInit: false,
   /** Farm to play: 'farm1' | 'farm2' | 'random' (world/farms.ts). */
   farm: 'random',
+  /** Story mode: the highest stage won (stage n = farm n; the next one unlocks). */
+  story: 0,
   /** Online server override (empty = the built-in one). */
   server: '',
 };

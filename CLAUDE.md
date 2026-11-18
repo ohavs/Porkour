@@ -26,6 +26,20 @@ Dead by Daylight, Party Animals.
   prompts = key/mouse icon + action icon (`game/icons.ts` `IC`, `kc()`), status = icon badges, events = icon pops over
   the actor (`hud.emote(actor, icon)`), toasts only for coins / prank done / danger / round beats (one short line +
   icon, never a subtitle). New features get an icon or a world cue, not a hint sentence.
+- **Owner account (user 2026-11-18)**: the user's Google account (only its e-mail's SHA-256 is in the code: `OWNER_HASH` in
+  `net/auth.ts` + `OWNER_HASHES` in server.js — the repo is public, never write the e-mail) = all coins + level 99
+  (`ownerPerks`), and the admin panel's 👑 tab: players online (server op `users`) → give coins / levels (`gift`) or the
+  admin mode (`grant`, kept in that browser's localStorage). **Admin mode = the owner + whoever the owner granted it to**
+  (`canAdmin()`; localhost test builds too).
+- **Game-like design (user 2026-11-18)**: "get rid of the basic look" — wood cards (brown gradient, ink border, gold inner
+  line, drop shadow), chunky cream buttons that press down, icon tiles with one or two words (full sentence in the
+  tooltip). Use it for every new screen.
+- **Every held / used thing shows what it does (user 2026-11-18)**: a prompt for its action (LMB use, R pour, the place it
+  goes `HANDS.destIcon`), and every mission line shows how to do its next step as icons (`Round.mHow`, chains:
+  `Chain.stepIcons`).
+- **Story vs Modes (user 2026-11-18)**: story = stages 1–5 (farm 1..5, unlocked by winning the one before
+  `SETTINGS.story`, harder each stage: `STAGE` quota × / Bob wary from stage 4); the chain farms (cannabis, beer) are
+  separate "Modes" in the farm picker.
 - Admin mode (user request): `` ` `` key / menu button / `?admin=1` — keep it updated with test switches for new features.
   **Tabs (s17, user: "simplify it")**: Me (powers: fly, ghost = Bob / dog / animals / wolves / traps ignore me (`ignored(p)` in
   ctx.ts), teleports) · Players (per pig: jail = sky cell `world/jail.ts`, freeze, launch, knock, bring, go to, ghost) · Bob ·
@@ -354,10 +368,35 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   → mill → kettle → barrel → tap → drunk, table dance), 2 browsers online (station state synced, player's act applied on the
   host, buzz synced), first person (arms per pose). PR #47 merged. Screenshot page for the pending checks (Hebrew):
   https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX (rebuild: scratchpad `gallery.cjs` per farm + `mkgal.py`; republish).
+- 2026-11-18 (session 18, user: "not mini-games: physically take the filter, the paper, pour, roll — like Burglin' Gnomes,
+  everywhere"; + mouse wheel reach): **active hands** (`world/hands.ts`, GDD "Active hands"): aim, light things gripped at
+  their middle (upright, R tips = pours), magnet sockets + ghosts, pour streams + pour magnet, handles (crank / lever /
+  slider), dispensers, reach extension (rubber arms standing / stretchy neck on four legs); the mini-game module is gone.
+  Cannabis + beer chains rebuilt on it; phone plug / payphone coin + handset, outhouse bolt, bear-trap jaw, cider-press
+  bar, catapult release lever + a real basket collider, touch animations (latch, mud smear, hug). Online: the crosshair /
+  reach / tilt ride the input; no player clone on rejoin (tab id: the server swaps a tab's old connection out); the host
+  switches the room's farm (the room waits for the host's reload); bigger room code; a frame error no longer freezes the
+  game. Owner mode + gifts + admin grants; admin panel redesigned (game style); story stages + modes; pause menu "back to
+  the lobby"; mission how-to icons; game-style panels / buttons.
+  Checked headless: the whole joint chain (paper → mat → filter → pour → roll → lick → ashtray → lighter → puffs), bong
+  (pour water, pinch, light, inhale, cough when held too long), grinder crank, pot → stir → magic butter → bowl → stir →
+  dough → tray → oven door → bake → cookies, mill crank, pump + bucket on the stone, kettle water / malt / paddle, spigot,
+  catapult basket, farm switch in a room (2 browsers), ghost connection replaced (server test), admin panel look.
+  Not fully run end-to-end: the beer chain after the paddle (hops → boil → barrel → tap → mug: each piece runs).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Active hands (s18)**: does holding things at the crosshair feel good? R = tip / pour, mouse wheel = reach further —
+  natural? Snapping into place (the ghost shows where) clear? Cranks / stirring (circle the mouse), levers (oven door,
+  pump, taps), sliders (outhouse bolt, phone plug, rolling the paper) — fun or fiddly?
+- **Cannabis / beer chains with the hooves** (no mini-games now): is each step clear with the arrow + the mission line's
+  icons + the "where it goes" prompt? Too long / too fiddly?
+- **Online**: the rejoin "clone" is gone? The host changing the farm inside the room (everyone reloads, back in the room)?
+  The bigger room code readable?
+- **Owner**: coins / level on your account (sign in with Google)? Giving coins / admin to a friend (admin 👑 tab)?
+- **Story mode**: stages 1–5 unlocking in order, harder each stage (quota, Bob wary from stage 4) — right pace?
+- New admin panel + game-style menus: better? What else still looks "basic"?
 - **Entry code (early access)**: which option (code screen / server-checked codes / real lock), one shared code or one per
   tester, and the code itself (set it in Render, not in the chat).
 - **Cannabis farm + wheat & beer (new modes)**: fun? Each step a real game (water / harvest / wheelbarrow / grinder crank /
@@ -408,6 +447,10 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Hands: four-legged pigs can't reach counter tops / the kettle without the wheel (by design: stand up or stretch); a
+  carried thing can catch on furniture (lift it); the pot / bowl / mug fills are simple discs; the wheelbarrow is still
+  a dragged box. The beer chain's last steps weren't run end to end in one test.
+- Online hands: held things still move at host speed for a player (no client prediction of the grip).
 - Chain modes: no online 2-browser test of every station yet (the act code was checked); the shed is a static model (Bob's
   nav grid may route through its walls); the wheelbarrow is a dragged box (no wheel physics); stations don't show their contents except the pot / bowl / bong water / oven ring.
 - Siesta: no hammock on farm 4 (night round) or farm 5 (winter); Bob's straw hat covers his face while he naps (the mud

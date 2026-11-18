@@ -13,6 +13,8 @@ import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
 import { V3 } from '../core/util';
 import { CENTER } from '../pig/pigBody';
+import { t } from '../i18n';
+const kcJump = () => t('key.space');
 
 /**
  * Farm 7 — Bob grows wheat; the pigs brew beer (user: "the same idea as the cannabis farm: make beer and drink it"),
@@ -123,7 +125,7 @@ export class Brew extends Chain {
     this.millOut.copy(mach.localToWorld(V3(0.42, 0.22, 0.75)));
     HANDS.receiver({ r: 0.5, at: (out) => out.copy(this.millHopper), accepts: (st) => st === 'grain' && this.grainIn < 6,
       fill: (_s, a) => { this.grainIn = Math.min(6, this.grainIn + a); } });
-    this.maltSock = HANDS.socket({ p: mach.localToWorld(V3(0.42, 0.24, 0.92)), q: qs, on: null, r: 0.35, dock: true, anyYaw: true,
+    this.maltSock = HANDS.socket({ icon: 'gear', p: mach.localToWorld(V3(0.42, 0.24, 0.92)), q: qs, on: null, r: 0.35, dock: true, anyYaw: true,
       accepts: (it) => it.def.item === 'malt' && it.left < 3 });
     this.millCrank = crank({ c: mach.localToWorld(V3(-0.32, 0.55, 0.58)), axis: fwd, r: 0.28, icon: 'gear', max: 10,
       turn: (d, p) => this.mill(d, p) });
@@ -155,10 +157,10 @@ export class Brew extends Chain {
     HANDS.receiver({ r: 0.5, at: (out) => out.copy(this.kettleTop),
       accepts: (st) => this.stage === 0 && ((st === 'water' && this.water < 2) || (st === 'malt' && this.malt < 1)),
       fill: (st, a) => { if (st === 'water') this.water = Math.min(2, this.water + a); else this.malt = Math.min(1, this.malt + a); G.audio.play('splash', { pos: this.kettleTop, vol: 0.3, minGap: 0.5 }); } });
-    HANDS.socket({ p: this.kettleTop.clone().setY(this.kettleTop.y + 0.1), q: new THREE.Quaternion(), on: null, r: 0.45, dock: false, bin: true,
+    HANDS.socket({ icon: 'fire', p: this.kettleTop.clone().setY(this.kettleTop.y + 0.1), q: new THREE.Quaternion(), on: null, r: 0.45, dock: false, bin: true,
       accepts: (it) => it.def.item === 'hops' && this.stage === 1 && this.hops < 2,
       onSnap: (it) => { this.consume(it); this.hops++; G.audio.play('splash', { pos: this.kettleTop, vol: 0.3, pitch: 1.4 }); if (this.hops >= 2) { this.stage = 2; this.boilT = G.time; } } });
-    HANDS.socket({ p: this.fireC.clone().setY(fy + 0.35), q: new THREE.Quaternion(), on: null, r: 1.15, dock: false, bin: true, ghost: false,
+    HANDS.socket({ icon: 'fire', p: this.fireC.clone().setY(fy + 0.35), q: new THREE.Quaternion(), on: null, r: 1.15, dock: false, bin: true, ghost: false,
       accepts: (it) => it.def.item === 'log' && this.fuel < 200,
       onSnap: (it) => { this.fuel = Math.min(240, this.fuel + BREW.fuelLog); this.consume(it); G.audio.play('crackle', { pos: this.fireC, vol: 0.8 }); } });
     this.paddle = crank({ c: this.kettleTop.clone().setY(this.kettleTop.y + 0.12), axis: V3(0, 1, 0), r: 0.18, icon: 'stir', max: 7,
@@ -478,6 +480,28 @@ export class Brew extends Chain {
       case 'brew:drunk': me.addBuzz(2, 0.9, 90); return true;
     }
     return false;
+  }
+  /** How to do the next step (mission list icons). */
+  stepIcons(id: string, me: Pig): string {
+    const I = (...k: (IconId | string)[]) => k.map((x) => (x in IC ? IC[x as IconId] : `<kbd class="kc">${x}</kbd>`)).join('');
+    const held = this.item(me.held), has = (item: string, full = false) => this.props.some((p) => !p.banked && p.def.item === item && (!full || p.left > 0.05));
+    switch (id) {
+      case 'brewBeer':
+        if (this.barrelState === 2) return I('beer', 'rmb', 'lever');
+        if (this.barrelState === 1) return I('barrel', 'clock');
+        if (this.stage === 3) return I('barrel', 'rmb', 'lever');
+        if (this.stage === 2) return I('fire', 'clock');
+        if (this.stage === 1) return I('rmb', 'leaf', 'aim', 'fire');
+        if (this.water >= 1.9 && this.malt >= 0.9) return this.fuel <= 0 ? I('rmb', 'fire') : I('rmb', 'stir', 'circle');
+        if (this.water < 1.9) return held === 'can' ? I('R', 'pour', 'fire') : I('water', 'rmb', 'lever');
+        if (has('malt', true)) return I('R', 'wheat', 'pour', 'fire');
+        if (this.grainIn >= 0.5) return I('rmb', 'gear', 'circle');
+        if (has('grain', true)) return I('R', 'wheat', 'pour', 'gear');
+        if (has('sheaf') || this.floorSheaves) return I('wheat', kcJump(), 'note');
+        return I('sickle', 'lmb', 'wheat');
+      case 'drinkUp': return held === 'beer' ? I('lmb', 'beer') : I('beer', 'rmb', 'lever');
+    }
+    return '';
   }
   markFor(id: string, me: Pig): THREE.Vector3 | null {
     const near = (item: string, full = false) => { let best: Prop | null = null, bd = Infinity; for (const p of this.props) { if (p.banked || p.def.item !== item || (full && p.left <= 0.05)) continue; const d = flat(p.synced.currP, me.pos); if (d < bd) { bd = d; best = p; } } return best?.synced.currP.clone().setY(best.synced.currP.y + 0.3) ?? null; };

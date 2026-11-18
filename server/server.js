@@ -203,6 +203,13 @@ async function control(ws, m) {
       send(to, { op: 'gift', coins, levels, from: ws.user.name });
       return send(ws, { op: 'gifted', to: to.cid, name: to.user.name, coins, levels });
     }
+    case 'grant': {   // the owner lets someone use the admin mode (or takes it back): their browser keeps it
+      if (!ws.user.owner) return;
+      const to = [...wss.clients].find((c) => c.cid === Number(m.to) && c.user && !c.user.pending);
+      if (!to) return send(ws, { op: 'error', code: 'nouser' });
+      send(to, { op: 'grant', admin: !!m.admin, from: ws.user.name });
+      return send(ws, { op: 'granted', to: to.cid, name: to.user.name, admin: !!m.admin });
+    }
     // WebRTC signalling for the direct (peer-to-peer) connection: forwarded to one peer of the room
     case 'signal': {
       const p = r?.peers.get(Number(m.to)); if (!p) return;

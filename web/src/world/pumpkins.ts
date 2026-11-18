@@ -33,7 +33,7 @@ export const PUMPKIN = {
 
 const UP = new THREE.Vector3(0, 1, 0);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion(), s1 = new THREE.Vector3();
-const v3 = new THREE.Vector3(), q3 = new THREE.Quaternion();
+const v3 = new THREE.Vector3(), q3 = new THREE.Quaternion(), q2b = new THREE.Quaternion(), XA = new THREE.Vector3(1, 0, 0);
 const c1 = new THREE.Color();
 const LIT = new THREE.Color(2.4, 1.45, 0.42), OUT = new THREE.Color(0.06, 0.03, 0.015);
 const GLOW = new THREE.Color(0.62, 0.32, 0.09);
@@ -291,6 +291,14 @@ export class Catapult {
   private payload: Holdable[] = [];
   private by: Pig | null = null;
   private turnT = -10;
+  private basketBody: RAPIER.RigidBody;
+  /** The basket's colliders follow the arm (every browser: own pigs are predicted against it online). */
+  private placeBasket(rx: number) {
+    const q = q3.setFromAxisAngle(UP, this.yaw).multiply(q2b.setFromAxisAngle(XA, rx));
+    const p = v3.copy(AXLE).applyAxisAngle(UP, this.yaw).add(v2.set(this.x, this.y0, this.z));
+    this.basketBody.setTranslation(p, true); this.basketBody.setRotation(q, true);
+    this.basketBody.setEnabled(rx < COCKED + 0.06);
+  }
   /** The release lever: pull it back and it lets fly. */
   release: Handle; private leverG: THREE.Group;
   /** Shots in the air (host): does one come down on Bob? */
@@ -341,6 +349,16 @@ export class Catapult {
       owners.set(world.createCollider(RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(px, py, pz).setCollisionGroups(groups(L.STATIC)), this.body).handle, own);
     for (const s of [-1, 1]) { col(0.14, 0.4, 2.3, s * 0.78, 0.5, -0.6); col(0.11, 0.9, 0.11, s * 0.75, 1.45, 0.4); }
     col(0.9, 0.12, 0.12, 0, 0.66, 1.6);
+    // the basket is a real tub (user: "the pig goes inside it"): a floor + a ring of walls riding on the arm, so things
+    // sit IN it; off while the arm swings (the launch sets the speeds)
+    this.basketBody = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
+    const bcol = (d: RAPIER.ColliderDesc) => world.createCollider(d.setCollisionGroups(groups(L.STATIC)).setFriction(0.9), this.basketBody);
+    bcol(RAPIER.ColliderDesc.cylinder(0.04, 0.56).setTranslation(0, -0.03, -ARM));
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      bcol(RAPIER.ColliderDesc.cuboid(0.2, 0.2, 0.04).setTranslation(Math.cos(a) * 0.6, 0.15, -ARM + Math.sin(a) * 0.6).setRotation(q1.setFromAxisAngle(UP, -a + Math.PI / 2)));
+    }
+    this.placeBasket(COCKED);
     this.spot = { kind: 'spot', markPos: new THREE.Vector3(x, this.y0 + 3, z), heldBy: null };
   }
 
@@ -461,6 +479,7 @@ export class Catapult {
     else if (e >= sw && e < sw + 0.3) rx = FIRED - Math.sin(((e - sw) / 0.3) * Math.PI) * 0.12;
     else if (e >= sw + 0.3 && e < PUMPKIN.reload) rx = FIRED + (COCKED - FIRED) * smoothstep(0, 1, (e - sw - 0.3) / back);
     this.arm.rotation.x = rx;
+    this.placeBasket(rx);
     this.spot.markPos.set(this.x, this.y0 + 3, this.z);
   }
   reset() { this.fireT = -10; this.launchAt = 0; this.payload = []; this.flying = []; }

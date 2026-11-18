@@ -18,6 +18,10 @@ export interface Profile {
  */
 const OWNER_HASH = '6b8626b254d97cb0dc01f56029abc7abdef3970048c91128372a16eb24910923';
 export const isOwner = () => profile.google && profile.emailHash === OWNER_HASH;
+/** The admin mode: the owner, and whoever the owner gave it to (kept in this browser); local test builds too. */
+export const canAdmin = () => isOwner() || adminGranted() || ['localhost', '127.0.0.1'].includes(location.hostname);
+export function adminGranted() { try { return localStorage.getItem('porkour.admin') === '1'; } catch { return false; } }
+export function setAdminGrant(on: boolean) { try { if (on) localStorage.setItem('porkour.admin', '1'); else localStorage.removeItem('porkour.admin'); } catch { /* */ } }
 async function sha256(s: string) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');

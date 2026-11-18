@@ -144,7 +144,7 @@ export class Phones {
       ready: () => this.payReady && this.coins.some((c) => c.banked),
       take: (_p, at) => { const c = this.coins.find((k) => k.banked); if (!c) return null; c.unbank(at, yaw); return c; } });
     // … and drop it in the slot (it clicks in)
-    HANDS.socket({ p: L(0.09, H_PAY + 0.17, 0.3), q: new THREE.Quaternion().setFromAxisAngle(UP, yaw), on: null, r: 0.22, dock: false,
+    HANDS.socket({ icon: 'phone', p: L(0.09, H_PAY + 0.17, 0.3), q: new THREE.Quaternion().setFromAxisAngle(UP, yaw), on: null, r: 0.22, dock: false,
       accepts: (it) => it.def.item === 'coin' && this.payReady && !this.ring && !this.dialAt && this.caller < 0,
       onSnap: (it, by) => { it.bank(); if (by) this.dialFrom(by); } });
     // the handset: take it off its hook and it's at your snout (oink into it); its cord pulls it back if you walk off

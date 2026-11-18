@@ -134,6 +134,7 @@ export class Online {
   /** Owner: who's online / give coins + levels. */
   users() { this.send({ op: 'users' }); }
   gift(to: number, coins: number, levels = 0) { this.send({ op: 'gift', to, coins, levels }); }
+  grant(to: number, admin: boolean) { this.send({ op: 'grant', to, admin }); }
 
   // ---------------------------------------------------------------- game data
   /** Send to one peer (or 0 = everyone else). Direct when possible, else through the server. */

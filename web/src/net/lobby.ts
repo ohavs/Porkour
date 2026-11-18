@@ -7,7 +7,7 @@ import { SETTINGS, saveSettings } from '../game/settings';
 import type { Game } from '../game/game';
 import { asFarm, farmId, reloadOnFarm, onBeforeReload } from '../world/farms';
 import { receiveGift, ownerPerks } from '../game/shop';
-import { isOwner } from './auth';
+import { setAdminGrant } from './auth';
 import { PLAYER_COLORS } from '../game/game';
 
 const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -113,6 +113,8 @@ export class Lobby {
         this.opts.onRoom();
         break;
       }
+      case 'grant': setAdminGrant(!!m.admin); g.hud.toast(`${m.admin ? '🛠️' : '🚫'} ${esc(String(m.from ?? ''))}`, 3); break;
+      case 'granted': g.hud.toast(`${m.admin ? '🛠️' : '🚫'} → ${esc(String(m.name ?? ''))}`, 2.5); break;
       case 'gifted': g.hud.toast(`🎁 → ${esc(String(m.name ?? ''))}: +${m.coins} <i class="coin"></i>${m.levels ? ` · +${m.levels} ⭐` : ''}`, 2.5); break;
       case 'host': if (online.isHost && this.preGame && g.net && 'needKey' in g.net) for (const id of online.peers.keys()) if (id !== online.myId) (g.net as { needKey: Set<number> }).needKey.add(id); break;
       case 'peer_join':

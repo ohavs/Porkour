@@ -156,6 +156,8 @@ export abstract class Chain {
   abstract admin(a: string, me: Pig): boolean;
   /** Where the round's arrows point for this mode's missions (null = nothing to show). */
   abstract markFor(id: string, me: Pig): THREE.Vector3 | null;
+  /** The mission list: how to do the next step, as icons (keys + things), or ''. */
+  stepIcons(_id: string, _me: Pig): string { return ''; }
   /** A drunk / high pig oinked (farm 7: singing to Bob). */
   oinked(_p: Pig) { /* per mode */ }
 }
@@ -374,7 +376,7 @@ export class Pump {
         G.audio.play('pour', { pos: this.spout, vol: 0.5, pitch: 1.2, minGap: 0.3 });
       } });
     // a can / bucket parked on the stone fills while you pump
-    HANDS.socket({ p: g.localToWorld(V3(0, 0.3, 0.5)), q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), on: null, r: 0.45, dock: true, anyYaw: true,
+    HANDS.socket({ icon: 'water', p: g.localToWorld(V3(0, 0.3, 0.5)), q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), on: null, r: 0.45, dock: true, anyYaw: true,
       accepts: (it) => it.def.item === 'can' });
     kit.blocked.push({ x0: x - 1, x1: x + 1, z0: z - 1, z1: z + 1 });
   }
