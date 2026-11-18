@@ -36,8 +36,13 @@ export abstract class Chain {
   private pools = new Map<string, Prop[]>();
   visions: Visions;
   beams: Beams;
-  /** The shed (Bob finds a pig in there suspicious). */
-  shedAt = new THREE.Vector3(); shedR = 0;
+  /** The shed (Bob finds a pig in there suspicious); its roof (hidden while my pig is inside). */
+  shedAt = new THREE.Vector3(); shedR = 0; shedRoof: THREE.Object3D | null = null;
+  /** Every frame: the roof goes see-through while my pig works in the shed (the camera looks in from above). */
+  protected shedRender() {
+    const L = G.localPig as Pig | null;
+    if (this.shedRoof) this.shedRoof.visible = !(L && !L.out && this.inShed(L.pos) && L.pos.y < this.shedAt.y + 2.5);
+  }
   inShed(p: THREE.Vector3) { return this.shedR > 0 && Math.hypot(p.x - this.shedAt.x, p.z - this.shedAt.z) < this.shedR; }
   /** This mode's buzz: 1 = high (cannabis), 2 = drunk (beer). */
   abstract kind: 1 | 2;
@@ -304,8 +309,10 @@ export function buildShed(kit: Kit, scene: THREE.Scene, cx: number, cz: number, 
   box(W, H, 0.16, plank, 0, H / 2 + 0.2, -D / 2);                         // back wall
   box(0.16, H, D, plank2, -W / 2, H / 2 + 0.2, 0); box(0.16, H, D, plank2, W / 2, H / 2 + 0.2, 0);   // side walls
   for (const x of [-W / 2, -W / 6, W / 6, W / 2]) box(0.22, H + 0.4, 0.22, plank2, x, (H + 0.4) / 2, D / 2);   // front posts
-  const roof = box(W + 1.2, 0.16, D + 1.6, roofM, 0, H + 0.55, 0.2); roof.rotation.x = -0.12;
-  for (let i = 0; i < 7; i++) box(0.05, 0.1, D + 1.6, toonMat(0xa0372e), -W / 2 - 0.3 + (i + 0.5) * (W + 0.6) / 7, H + 0.66, 0.2).rotation.x = -0.12;
+  // the roof (its own group: it's hidden while my pig works inside, so the camera sees in)
+  const roofG = new THREE.Group(); g.add(roofG);
+  const roof = box(W + 1.2, 0.16, D + 1.6, roofM, 0, H + 0.55, 0.2); roof.rotation.x = -0.12; roofG.add(roof);
+  for (let i = 0; i < 7; i++) { const st = box(0.05, 0.1, D + 1.6, toonMat(0xa0372e), -W / 2 - 0.3 + (i + 0.5) * (W + 0.6) / 7, H + 0.66, 0.2); st.rotation.x = -0.12; roofG.add(st); }
   const place = (x: number, z: number) => new THREE.Vector3(cx + Math.cos(yaw) * x + Math.sin(yaw) * z, y0 + 0.2, cz - Math.sin(yaw) * x + Math.cos(yaw) * z);
   // colliders: walls (+ the floor's lip)
   const wall = (x: number, z: number, hx: number, hz: number) => { const p = place(x, z); staticBox(V3(p.x, y0 + H / 2 + 0.2, p.z), V3(hx, H / 2, hz), yaw); };
@@ -313,7 +320,7 @@ export function buildShed(kit: Kit, scene: THREE.Scene, cx: number, cz: number, 
   staticBox(V3(cx, y0 + 0.1, cz), V3(W / 2 + 0.2, 0.1, D / 2 + 0.2), yaw);
   const r = { x0: cx - W / 2 - 1, x1: cx + W / 2 + 1, z0: cz - D / 2 - 1, z1: cz + D / 2 + 1 };
   G.terrain.noGrass(r); kit.blocked.push({ x0: r.x0 - 1.5, x1: r.x1 + 1.5, z0: r.z0 - 1.5, z1: r.z1 + 1.5 });
-  return { place, y0: y0 + 0.2, yaw, g };
+  return { place, y0: y0 + 0.2, yaw, g, roof: roofG };
 }
 
 // ====================================================================== shared hands-on pieces

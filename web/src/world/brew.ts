@@ -95,7 +95,7 @@ export class Brew extends Chain {
 
   private buildShedStations(kit: Kit, [cx, cz, yaw]: [number, number, number]) {
     const scene = this.scene, sh = buildShed(kit, scene, cx, cz, yaw);
-    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2;
+    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2; this.shedRoof = sh.roof;
     const at = (x: number, z: number) => sh.place(x, z);
     const qs = new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), fwd = V3(Math.sin(yaw), 0, Math.cos(yaw));
     const deco = (model: string, lx: number, lz: number, h: number, collide = true) => {
@@ -412,6 +412,7 @@ export class Brew extends Chain {
 
   render(dt: number) {
     this.visions.render(dt);
+    this.shedRender();
     this.pump.render(dt);
     for (const pa of this.patches) { pa.up.visible = !pa.cut; pa.down.visible = pa.cut; if (!pa.cut) pa.up.rotation.z = Math.sin(G.time * 1.1 + pa.x * 0.7) * 0.04; }
     const burning = this.fuel > 0;
@@ -465,7 +466,7 @@ export class Brew extends Chain {
       ['brew:drunk', 'a.brewDrunk'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
   }
   admin(a: string, me: Pig): boolean {
-    const f = me.forward, front = V3(me.pos.x + f.x * 1.3, me.pos.y + 0.5, me.pos.z + f.z * 1.3);
+    const f = me.forward, front = V3(me.pos.x + f.x * 0.9, me.pos.y + 0.3, me.pos.z + f.z * 0.9);
     switch (a) {
       case 'brew:sheaves': for (let i = 0; i < 4; i++) this.spawn('sheaf', front.clone().add(V3((i % 2) * 0.4, 0.3 * i, 0)), 0); return true;
       case 'brew:floor': this.floorSheaves = 4; return true;

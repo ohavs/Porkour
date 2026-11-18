@@ -86,6 +86,10 @@ export class Prop implements Holdable {
   dockedIn: any = null;
   /** Just snapped somewhere: bins don't catch it again for a moment. */
   snapCd = 0;
+  /** The socket it was just taken out of (it isn't pulled back in until it's been carried away). */
+  outOf: any = null;
+  /** Tipped over an opening (pouring): it passes through static things for now (world/hands.ts). */
+  ghosted = false;
   /** What it pours now when it has contents that change (a pot of butter, a bowl of dough); else def.pour. */
   pourNow?: () => { stuff: string; color: number } | null;
   /** Its size (the model's box). */
@@ -346,7 +350,7 @@ export const PROPS: Record<string, PropDef> = {
   // (pours the dough), baking trays, the wheelbarrow
   bud: { make: makeBud, mass: 0.3, shape: 'ball', r: 0.1, damp: 2, sound: 'squish', label: 'item.bud', item: 'bud', friction: 0.9 },
   weedBag: { make: makeWeedBag, mass: 0.4, sound: 'squish', label: 'item.weedBag', item: 'weed', servings: 4,
-    pour: { stuff: 'weed', rate: 0.9, spout: [0, 0.09, 0], color: 0x6fae3e, size: 0.03, sound: 'rustle' } },
+    pour: { stuff: 'weed', rate: 0.6, spout: [0, 0.09, 0], color: 0x6fae3e, size: 0.03, sound: 'rustle' } },
   paper: { make: makePaper, mass: 0.1, sound: 'thud', label: 'item.paper', item: 'paper', friction: 0.95 },
   filter: { make: makeFilter, mass: 0.06, sound: 'thud', label: 'item.filter', item: 'filter', friction: 0.9 },
   joint: { make: makeJoint, mass: 0.05, sound: 'thud', label: 'item.joint', item: 'joint', servings: 5, friction: 0.9 },

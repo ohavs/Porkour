@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clone as skClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { RAPIER, ignorePair } from '../core/physics';
+import { RAPIER, ignorePair, groups, L } from '../core/physics';
 import { G } from '../game/ctx';
 import { clamp, wrapAngle } from '../core/util';
 import type { Pig } from '../pig/pig';
@@ -87,8 +87,8 @@ export interface Dispenser {
 export type Target = { h: import('../game/ctx').Holdable; handle?: undefined; disp?: undefined }
   | { handle: Handle; h?: undefined; disp?: undefined } | { disp: Dispenser; h?: undefined; handle?: undefined };
 
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
-const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3(), vS = new THREE.Vector3(), vR = new THREE.Vector3();
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), qF = new THREE.Quaternion(), vF = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const smooth = (k: number) => k * k * (3 - 2 * k);
 
@@ -143,15 +143,18 @@ class Hands {
   }
   /** The crosshair point (world) this pig aims at (sent by its player). */
   aimAt(p: Pig, out: THREE.Vector3) { const i = p.input; return out.set(p.pos.x + (i.ax ?? 0), p.pos.y + (i.ay ?? 0.3), p.pos.z + (i.az ?? 1)); }
-  /** Where the pig wants its hoof / snout: the crosshair, kept within reach and in front of it. */
-  aimGoal(p: Pig, out: THREE.Vector3) {
+  /**
+   * Where the pig wants its hoof / snout: the crosshair, kept within reach and in front of it. `loose` (a machine part
+   * in the hoof): anywhere within reach — pulling a door / a lever toward yourself is fine.
+   */
+  aimGoal(p: Pig, out: THREE.Vector3, loose = false) {
     const R = p.standing ? REACH.two : REACH.four, e = this.ext(p);
     const c = v4, rr = this.reach(p, c);
     const d = this.aimAt(p, out).sub(c);
     if (d.length() > rr) d.setLength(rr);
     // pig space (+z = forward): keep it in front of the pig, between the ground and over its head
     const s = Math.sin(p.yaw), co = Math.cos(p.yaw);
-    const lx = d.x * co - d.z * s, lz = Math.max(d.x * s + d.z * co, R.minZ - R.c.z);
+    const lx = d.x * co - d.z * s, lz = Math.max(d.x * s + d.z * co, loose ? -R.c.z - 0.1 : R.minZ - R.c.z);
     const feet = p.pos.y - CENTER[p.standing ? 'two' : 'four'];
     const y = clamp(c.y + d.y, feet + R.minY, feet + R.maxY + e * 0.5);
     return out.set(c.x + lx * co + lz * s, y, c.z - lx * s + lz * co);
@@ -176,7 +179,8 @@ class Hands {
       const t = h.body.translation();
       consider({ h }, v1.set(t.x, t.y, t.z), h.radius * 0.8);
     }
-    for (const hd of this.handles) if (!hd.heldBy && hd.ready(p)) consider({ handle: hd }, hd.knob(v1), 0.05);
+    // (a ready machine part wins over the pot / bowl it sits in: the spoon, not the bowl)
+    for (const hd of this.handles) if (!hd.heldBy && hd.ready(p)) consider({ handle: hd }, hd.knob(v1), 0.22);
     for (const ds of this.dispensers) if (ds.ready(p)) consider({ disp: ds }, v1.copy(ds.at), ds.r);
     if (best) return best;
     // the crosshair is on something out of reach: nothing (the HUD shows the wheel: reach further) — else, nothing
@@ -202,14 +206,16 @@ class Hands {
     for (const s of this.sockets) {
       if (s.occupant || !s.accepts(it, by)) continue;
       const d = Math.hypot(ip.x - s.p.x, ip.y - s.p.y, ip.z - s.p.z);
+      // just taken out of this one: it doesn't pull it back until it has been carried away from it
+      if (it.outOf === s) { if (d > s.r * 1.3) it.outOf = null; else continue; }
       if (d < (range || s.r) && d < bd) { bd = d; best = s; }
     }
     return best;
   }
-  /** Pull the hand goal + the orientation toward the socket it fits (blend by how close). */
+  /** Pull the hand goal + the orientation toward the socket it fits (blend by how close). Returns the pull (0..1). */
   magnet(p: Pig, it: Prop, goal: THREE.Vector3, q: THREE.Quaternion) {
     const s = this.socketFor(it, p);
-    if (!s) return null;
+    if (!s) return 0;
     const ip = it.body.translation(), ir = it.body.rotation(), hp = p.grip.pos;
     const d = Math.hypot(ip.x - s.p.x, ip.y - s.p.y, ip.z - s.p.z);
     const k = smooth(clamp((s.r - d) / (s.r * 0.55), 0, 1));
@@ -218,7 +224,36 @@ class Hands {
     v1.set(hp.x - ip.x, hp.y - ip.y, hp.z - ip.z).applyQuaternion(q1.set(ir.x, ir.y, ir.z, ir.w).invert()).applyQuaternion(sq).add(s.p);
     goal.lerp(v1, k);
     q.slerp(sq, k);
-    return s;
+    return k;
+  }
+  /**
+   * Pouring help (the magnet of a pour): tipped over near an opening that takes what it pours, the hand slides so the
+   * spout comes over the opening (a little above it).
+   */
+  pourMagnet(p: Pig, it: Prop, goal: THREE.Vector3) {
+    const st = this.stuffOf(it);
+    if (!st || it.left <= 0.001) return null;
+    // (own temps: accepts() / at() use the shared ones)
+    const sp = this.spout(it, vS);
+    let best: Receiver | null = null, bd = 0.55;
+    for (const r of this.receivers) {
+      if (!r.accepts(st.stuff)) continue;
+      r.at(vR);
+      const d = Math.hypot(sp.x - vR.x, sp.z - vR.z);
+      if (d < bd && sp.y > vR.y - 0.3) { bd = d; best = r; }
+    }
+    if (!best) return null;
+    best.at(vR);
+    const k = smooth(clamp((0.55 - bd) / 0.3, 0, 1)) * clamp(p.tiltK * 3, 0, 1);
+    goal.x += (vR.x - sp.x) * k; goal.z += (vR.z - sp.z) * k;
+    if (sp.y < vR.y + 0.18) goal.y += (vR.y + 0.18 - sp.y) * k;
+    return best;
+  }
+  /** While it's tipped over an opening it doesn't bump into what it pours into (it would sit on the rim, not tip). */
+  ghostly(it: Prop, on: boolean) {
+    if (it.ghosted === on) return;
+    it.ghosted = on;
+    it.body.collider(0)?.setCollisionGroups(on ? groups(L.PROP, L.PROP) : groups(L.PROP));
   }
   /** The rotation it will sit at in a socket. */
   private alignQ(s: Socket, it: Prop, out: THREE.Quaternion) {
@@ -243,7 +278,7 @@ class Hands {
       const s = this.socketFor(it, p, 0.6);
       if (!s) continue;
       const ip = it.body.translation();
-      if (Math.hypot(ip.x - s.p.x, ip.y - s.p.y, ip.z - s.p.z) < Math.max(REACH.snap, s.r * 0.16)) this.snap(s, it, p);
+      if (Math.hypot(ip.x - s.p.x, ip.y - s.p.y, ip.z - s.p.z) < Math.max(REACH.snap, s.r * (s.bin ? 0.6 : 0.16))) this.snap(s, it, p);
     }
     // bins catch dropped / thrown things
     for (const s of this.sockets) {
@@ -281,7 +316,7 @@ class Hands {
   undock(it: Prop, by: Pig | null, notify = true) {
     const s = it.dockedIn as Socket | null;
     if (!s) return;
-    it.dockedIn = null;
+    it.dockedIn = null; it.outOf = s;
     if (s.occupant === it) s.occupant = null;
     if (s.on) ignorePair(it.body, s.on.body, false);
     if (G.net !== 'client') it.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
@@ -296,7 +331,7 @@ class Hands {
   // ------------------------------------------------------------------ pouring
   /** Tipped far enough to pour (0 = no, up to 1 = upside down). */
   flow(it: Prop, q = it.body.rotation()) {
-    const up = v1.set(0, 1, 0).applyQuaternion(q1.set(q.x, q.y, q.z, q.w));
+    const up = vF.set(0, 1, 0).applyQuaternion(qF.set(q.x, q.y, q.z, q.w));
     return clamp((0.35 - up.y) / 0.6, 0, 1);
   }
   stuffOf(it: Prop) { return it.pourNow ? it.pourNow() : it.def.pour ? { stuff: it.def.pour.stuff, color: it.def.pour.color } : null; }
@@ -307,7 +342,8 @@ class Hands {
     return out.set(sp[0], sp[1], sp[2]).applyQuaternion(q1.set(r.x, r.y, r.z, r.w)).add(v2.set(t.x, t.y, t.z));
   }
   /** The receiver under a spout that takes this stuff (or null). */
-  under(sp: THREE.Vector3, stuff: string) {
+  under(spIn: THREE.Vector3, stuff: string) {
+    const sp = vS.copy(spIn);
     let best: Receiver | null = null, bd = Infinity;
     for (const r of this.receivers) {
       if (!r.accepts(stuff)) continue;

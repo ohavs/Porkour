@@ -45,7 +45,7 @@ export class CamRig {
     this.focus.x = damp(this.focus.x, ax, 18, dt);
     this.focus.z = damp(this.focus.z, az, 18, dt);
     this.focus.y = damp(this.focus.y, fy, 9, dt);
-    const want = (this.dist + (standing ? 0.4 : 0)) * (1 - 0.2 * wk);
+    const want = (this.dist + (standing ? 0.4 : 0)) * (1 - 0.32 * wk);
     const dir = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
     const hit = raycast(this.focus, dir, want + 0.3, L.STATIC, undefined, (c) => owners.get(c.handle)?.kind !== 'cage');
     const d = hit ? Math.max(0.6, hit.dist - 0.3) : want;

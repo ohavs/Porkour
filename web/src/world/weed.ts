@@ -37,7 +37,7 @@ import { V3, clamp } from '../core/util';
  */
 export const WEED = {
   dry: 1 / 55, grow: 1 / 62, water: 0.34, drown: 1.05, seed: 0.3, bakeMin: 22, bakeMax: 34, alarm: 38, jointBuzz: 0.14, cookieBuzz: 0.45,
-  potTurns: 7, bowlTurns: 6, burnAfter: 9, jam: 8.5, bagMax: 4, paperMin: 0.6, paperGood: [0.85, 1.3] as const,
+  potTurns: 6, bowlTurns: 5, burnAfter: 9, jam: 7.5, bagMax: 4, paperMin: 0.6, paperGood: [0.85, 1.3] as const,
 };
 const POINTS: Record<string, number> = { bud: 5, weedUnit: 6, joint: 40, bong: 40, magic: 40, cookies: 120 };
 
@@ -65,7 +65,7 @@ export class Weed extends Chain {
   barrow!: Prop; cargo = 0;
   pump: Pump;
   // grinder
-  buds = 0; private grindProg = 0; private crankSpd = 0; private jamUntil = 0;
+  buds = 0; private grindProg = 0; private crankSpd = 0; private jamUntil = 0; private overT = 0;
   private grindCrank!: Handle; private bagSock!: Socket; private wheel!: THREE.Object3D; private hopper = new THREE.Vector3(); private chute = new THREE.Vector3();
   // rolling table
   private paperSock!: Socket; private filterSock!: Socket; private rollH!: Handle; fill = 0;
@@ -111,6 +111,15 @@ export class Weed extends Chain {
     P('wateringCan', px + 1.4, pz - 0.6); P('wateringCan', o.field.x1 - 1.2, o.field.z1 + 1.6);
     P('sickle', px - 1, pz + 0.6); P('sickle', this.L(-1.2, 0, 1.6).x, this.L(-1.2, 0, 1.6).z);
     fillable(this.props, 'can', 'water', 6);
+    // things you can't take right now: a paper with its filter on (take the edge and roll it instead), the filter
+    // once rolling started, a tray behind the shut oven door
+    const atSock = (pr: Prop, sk: Socket) => pr.synced.currP.distanceTo(sk.p) < 0.06;
+    for (const pr of this.props) {
+      const it = pr.def.item ?? '';
+      if (it === 'paper') pr.noGrab = () => this.filterIn && atSock(pr, this.paperSock);
+      else if (it === 'filter') pr.noGrab = () => this.rollH.v > 0 && atSock(pr, this.filterSock);
+      else if (['tray', 'trayRaw', 'cookies', 'cookiesBurnt'].includes(it)) pr.noGrab = () => this.ovenDoor.v < 1.1 && atSock(pr, this.ovenSock);
+    }
     // hits on ripe plants harvest them (headbutt / punch / weapon whack)
     G.hittables.push({ hit: (hx, _hy, hz, reach, dir, _k, by) => this.hitPlant(hx, hz, reach, dir, by as Pig) });
   }
@@ -148,34 +157,44 @@ export class Weed extends Chain {
   private buildShedStations(kit: Kit, [cx, cz, yaw]: [number, number, number]) {
     const scene = this.scene;
     const sh = buildShed(kit, scene, cx, cz, yaw);
-    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2;
+    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2; this.shedRoof = sh.roof;
     this.shedQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
     this.fwd.set(Math.sin(yaw), 0, Math.cos(yaw)); this.right.set(Math.cos(yaw), 0, -Math.sin(yaw));
     const L = this.L = (x: number, y: number, z: number) => sh.place(x, z).setY(sh.y0 + y);
     const qs = this.shedQ;
-    /** A model on the shed floor; returns it + its size (before turning it). */
-    const deco = (model: string, lx: number, lz: number, h: number, ry = 0, collide = true) => {
+    /**
+     * A model on the shed floor; returns it + its size (before turning it). `wd` = [width, depth] to squash it to
+     * (KayKit's kitchen pieces are 2-tile blocks: a stove 1.9 m deep — the pot would be out of reach).
+     */
+    const deco = (model: string, lx: number, lz: number, h: number, ry = 0, collide = true, wd?: [number, number]) => {
       const p = L(lx, 0, lz), o = fitted(model, { height: h }), size = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+      if (wd) { o.scale.x *= wd[0] / size.x; o.scale.z *= wd[1] / size.z; size.x = wd[0]; size.z = wd[1]; }
       o.position.copy(p); o.rotation.y = yaw + ry; scene.add(o);
       if (collide) staticBox(V3(p.x, p.y + size.y / 2, p.z), V3(size.x / 2 * 0.9, size.y / 2, size.z / 2 * 0.9), yaw + ry);
       return { o, size };
     };
     // ---- back wall (local z = -3.5): fridge · stove · oven · counter · the grinder · the bong
-    const fr = deco('kaykit/fridge_A', -4.6, -2.95, 2.0);
-    deco('kaykit/stove_single', -3.2, -2.95, 1.0);
-    const ov = deco('kaykit/oven', -1.8, -2.95, 1.0);
-    deco('kaykit/kitchencounter_straight_A', -0.4, -2.95, 1.0);
-    deco('kaykit/shelf_papertowel_decorated', -1.1, -3.3, 0.5, 0, false).o.position.y += 1.6;
+    // a row of kitchen pieces 0.7 m deep against the back wall (fronts at FZ), worktops at TOP
+    const BZ = -3.1, FZ = BZ + 0.35, TOP = 0.95;
+    const fr = deco('kaykit/fridge_A', -4.75, BZ, 2.0, 0, true, [0.9, 0.7]);
+    deco('kaykit/stove_single', -3.75, BZ, TOP, 0, true, [0.85, 0.7]);
+    const ov = deco('kaykit/oven', -2.85, BZ, TOP, 0, false, [0.85, 0.7]);
+    // its collider is hollow: a cavity behind the door the tray slides into (base, roof, back, sides)
+    const ob = (lx: number, ly: number, lz: number, hx: number, hy: number, hz: number) => { const c = L(lx, ly, lz); staticBox(c, V3(hx, hy, hz), yaw); };
+    ob(-2.85, 0.1, BZ, 0.42, 0.1, 0.35); ob(-2.85, 0.86, BZ, 0.42, 0.09, 0.35); ob(-2.85, 0.48, BZ - 0.3, 0.42, 0.3, 0.05);
+    ob(-2.85 - 0.37, 0.48, BZ, 0.05, 0.3, 0.35); ob(-2.85 + 0.37, 0.48, BZ, 0.05, 0.3, 0.35);
+    deco('kaykit/kitchencounter_straight_A', -1.55, BZ, TOP, 0, true, [1.6, 0.7]);
+    deco('kaykit/shelf_papertowel_decorated', -1.55, -3.35, 0.5, 0, false).o.position.y += 1.6;
     const P = (kind: string, p: THREE.Vector3, ry = 0) => kit.prop(kind as never, p.x, p.z, yaw + ry, p.y - kit.y(p.x, p.z));
 
     // ---- the fridge: open it (RMB at the door) → a block of butter (every 15 s)
     const door = new THREE.Mesh(new THREE.BoxGeometry(fr.size.x * 0.92, 1.2, 0.05), toonMat(0xf2f4f6));
-    const dg = new THREE.Group(); dg.position.copy(L(-4.6 - fr.size.x * 0.46, 0.75, -2.95 + fr.size.z / 2 + 0.03)); dg.rotation.y = yaw; scene.add(dg);
+    const dg = new THREE.Group(); dg.position.copy(L(-4.75 - fr.size.x * 0.46, 0.75, FZ + 0.03)); dg.rotation.y = yaw; scene.add(dg);
     door.position.set(fr.size.x * 0.46, 0.6, 0); dg.add(door);
     const knobF = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.04), toonMat(0xaab3bd)); knobF.position.set(fr.size.x * 0.82, 0.6, 0.05); dg.add(knobF);
     this.fridgeDoor = dg;
     HANDS.dispenser({
-      at: L(-4.6 + fr.size.x * 0.36, 1.35, -2.95 + fr.size.z / 2 + 0.08), r: 0.25, icon: 'butter',
+      at: L(-4.75 + fr.size.x * 0.36, 1.25, FZ + 0.08), r: 0.25, icon: 'butter',
       ready: () => G.time > this.fridgeAt,
       take: (p, at) => {
         this.fridgeAt = G.time + 15;
@@ -183,17 +202,17 @@ export class Weed extends Chain {
         return this.spawn('butter', at.clone().setY(at.y - 0.05), yaw);
       },
     });
-    this.spot({ at: L(-4.6, 0, -1.6), r: 1.2, markPos: L(-4.6, 2.4, -2.9), needs: () => '' });
+    this.spot({ at: L(-4.75, 0, -2.0), r: 1.0, markPos: L(-4.75, 2.4, BZ), needs: () => '' });
 
     // ---- the stove: the pot on the burner (butter in, weed in, stir — don't stop or it burns)
-    const potHome = L(-3.2, 1.02, -2.95);
+    const potHome = L(-3.75, TOP + 0.01, BZ + 0.1);
     this.pot = P('cookPot', potHome);
     ownMat(this.pot.obj.getObjectByName('fill'));
     this.burner = HANDS.socket({ p: potHome.clone().setY(potHome.y + this.pot.half), q: qs, on: null, r: 0.4, dock: true, anyYaw: true,
       accepts: (it) => it === this.pot && !this.potOn });
     HANDS.dock(this.burner, this.pot);
     // butter: drop it in (a bin on the pot); weed: tip the bag over it
-    HANDS.socket({ on: { body: this.pot.body, lp: V3(0, 0.06, 0), lq: new THREE.Quaternion() }, r: 0.2, dock: false, bin: true,
+    HANDS.socket({ on: { body: this.pot.body, lp: V3(0, 0.16, 0), lq: new THREE.Quaternion() }, r: 0.24, dock: false, bin: true,
       accepts: (it) => it.def.item === 'butter' && !this.potButter && this.potCook < 1,
       onSnap: (it) => { this.consume(it); this.potButter = 1; G.audio.play('sizzle', { pos: this.pot.synced.currP, vol: 0.6 }); } });
     HANDS.receiver({ r: 0.17, at: (out) => { const t = this.pot.body.translation(); return out.set(t.x, t.y + this.pot.half, t.z); },
@@ -205,10 +224,10 @@ export class Weed extends Chain {
       turn: (d) => { this.potCook = Math.min(1, this.potCook + Math.abs(d) / TWO_PI / WEED.potTurns); this.lastStir = G.time; this.potBurn = Math.max(0, this.potBurn - Math.abs(d) * 0.5); G.audio.play('sizzle', { pos: this.pot.synced.currP, vol: 0.35, minGap: 0.5 }); } });
     this.potSpoon = makeSpoon(); this.potSpoon.visible = false; scene.add(this.potSpoon);
     this.pot.pourNow = () => (this.potCook >= 1 && this.pot.left > 0 ? { stuff: 'magic', color: 0x9fbf4a } : null);
-    this.spot({ at: L(-3.2, 0, -1.6), r: 1.1, markPos: L(-3.2, 1.9, -2.9), needs: () => need('butter', this.potButter) + need('leaf', this.potWeed >= 0.6 ? 1 : 0) + need('stir', this.potCook >= 1 ? 1 : 0) });
+    this.spot({ at: L(-3.75, 0, -2.0), r: 0.9, markPos: L(-3.75, 1.9, BZ), needs: () => need('butter', this.potButter) + need('leaf', this.potWeed >= 0.6 ? 1 : 0) + need('stir', this.potCook >= 1 ? 1 : 0) });
 
     // ---- the counter: the mixing bowl (magic butter + flour, stir → dough), baking trays
-    const bowlHome = L(-0.55, 1.02, -2.95);
+    const bowlHome = L(-1.95, TOP + 0.01, BZ + 0.1);
     this.bowl = P('mixBowl', bowlHome);
     ownMat(this.bowl.obj.getObjectByName('fill'));
     this.counter = HANDS.socket({ p: bowlHome.clone().setY(bowlHome.y + this.bowl.half), q: qs, on: null, r: 0.4, dock: true, anyYaw: true,
@@ -228,9 +247,9 @@ export class Weed extends Chain {
     this.bowlSpoon = makeSpoon(); this.bowlSpoon.visible = false; scene.add(this.bowlSpoon);
     this.bowl.pourNow = () => (this.bowlMix >= 1 && this.bowl.left > 0 ? { stuff: 'dough', color: 0xf2dcae } : null);
     // trays: one on the counter, one on the floor by it; tip the bowl of dough over one
-    const traySock = this.traySock = HANDS.socket({ p: L(0.35, 1.02, -2.95), q: qs, on: null, r: 0.35, dock: true, anyYaw: true,
+    const traySock = this.traySock = HANDS.socket({ p: L(-1.15, TOP + 0.01, BZ + 0.1), q: qs, on: null, r: 0.35, dock: true, anyYaw: true,
       accepts: (it) => ['tray', 'trayRaw', 'cookies', 'cookiesBurnt'].includes(it.def.item ?? '') });
-    this.trays = [P('tray', L(0.35, 1.02, -2.95)), P('tray', L(0.95, 0.02, -2.3))];
+    this.trays = [P('tray', L(-1.15, TOP + 0.01, BZ + 0.1)), P('tray', L(-0.4, 0.02, -2.4))];
     traySock.p.y += this.trays[0].half;
     HANDS.dock(traySock, this.trays[0]);
     for (const tr of this.trays) HANDS.receiver({ r: 0.24, at: (out) => { const t = tr.body.translation(); return out.set(t.x, t.y + 0.03, t.z); },
@@ -239,24 +258,24 @@ export class Weed extends Chain {
         const d = (this.trayDough.get(tr) ?? 0) + a; this.trayDough.set(tr, d);
         if (d >= 0.8) { this.trayDough.set(tr, 0); this.swap(tr, 'trayRaw'); G.audio.play('squish', { pos: tr.synced.currP, vol: 0.6 }); void by; }
       } });
-    this.spot({ at: L(-0.4, 0, -1.6), r: 1.1, markPos: L(-0.4, 1.7, -2.9), needs: () => need('butter', this.bowlMagic >= 0.6 ? 1 : 0) + need('bowl', this.bowlFlour >= 0.6 ? 1 : 0) + need('stir', this.bowlMix >= 1 ? 1 : 0) });
-    for (const [x, z] of [[-4.6, -1.6], [-4.1, -1.4]] as const) P('flour', L(x, 0, z));
+    this.spot({ at: L(-1.6, 0, -2.0), r: 0.9, markPos: L(-1.95, 1.7, BZ), needs: () => need('butter', this.bowlMagic >= 0.6 ? 1 : 0) + need('bowl', this.bowlFlour >= 0.6 ? 1 : 0) + need('stir', this.bowlMix >= 1 ? 1 : 0) });
+    for (const [x, z] of [[-0.9, -2.4], [-0.55, -2.2]] as const) P('flour', L(x, 0, z));
 
     // ---- the oven: a door you pull down (grab its handle), the tray goes in, shut it, bake
-    const ovFront = -2.95 + ov.size.z / 2 + 0.03;
-    this.door = new THREE.Group(); this.door.position.copy(L(-1.8, 0.14, ovFront)); this.door.rotation.order = 'YXZ'; this.door.rotation.y = yaw; scene.add(this.door);
+    const ovFront = FZ + 0.03;
+    this.door = new THREE.Group(); this.door.position.copy(L(-2.85, 0.14, ovFront)); this.door.rotation.order = 'YXZ'; this.door.rotation.y = yaw; scene.add(this.door);
     const dW = ov.size.x * 0.82;
     const panel = new THREE.Mesh(new THREE.BoxGeometry(dW, 0.56, 0.05), toonMat(0x3a3d44)); panel.position.set(0, 0.28, 0); panel.castShadow = true; this.door.add(panel);
     this.ovenGlow = toonMat(0x2b2b30, { emissive: new THREE.Color(0) });
     const win = new THREE.Mesh(new THREE.PlaneGeometry(dW * 0.6, 0.24), this.ovenGlow); win.position.set(0, 0.3, 0.03); this.door.add(win);
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, dW * 0.7, 8), toonMat(0xc9ced8)); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.52, 0.06); this.door.add(bar);
     this.ovenDoor = lever({ pivot: this.door.position.clone(), axis: this.right.clone(), arm: V3(0, 0.52, 0).addScaledVector(this.fwd, 0.06), min: 0, max: 1.45, icon: 'door', speed: 4 });
-    this.ovenSock = HANDS.socket({ p: L(-1.8, 0.42, ovFront - 0.28), q: qs, on: null, r: 0.38, dock: true,
-      accepts: (it) => ['trayRaw', 'cookies', 'cookiesBurnt', 'tray'].includes(it.def.item ?? '') && this.ovenDoor.v > 0.9 && !this.trayIn });
-    this.ovenMark.copy(L(-1.8, 1.9, -2.9));
+    this.ovenSock = HANDS.socket({ p: L(-2.85, 0.25, ovFront - 0.3), q: qs, on: null, r: 0.65, dock: true,
+      accepts: (it) => ['trayRaw', 'cookies', 'cookiesBurnt', 'tray'].includes(it.def.item ?? '') && this.ovenDoor.v > 1.1 && !this.trayIn });
+    this.ovenMark.copy(L(-2.85, 1.9, BZ));
     this.ovenRing = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 32, 1, 0, Math.PI * 2), new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, depthTest: false, transparent: true }));
-    this.ovenRing.position.copy(L(-1.8, 1.75, -2.45)); this.ovenRing.renderOrder = 9; this.ovenRing.visible = false; scene.add(this.ovenRing);
-    this.spot({ at: L(-1.8, 0, -1.6), r: 1.1, markPos: this.ovenMark, needs: () => (this.trayIn ? `<b>${Math.floor(this.bakeT)}</b>` : need('cookie', 0)) });
+    this.ovenRing.position.copy(L(-2.85, 1.75, FZ)); this.ovenRing.renderOrder = 9; this.ovenRing.visible = false; scene.add(this.ovenRing);
+    this.spot({ at: L(-2.85, 0, -2.0), r: 0.9, markPos: this.ovenMark, needs: () => (this.trayIn ? `<b>${Math.floor(this.bakeT)}</b>` : need('cookie', 0)) });
 
     // ---- the grinder: buds into the hopper, turn the crank (front), ground weed into the bag under the chute
     const gP = L(2.2, 0, -2.7);
@@ -281,7 +300,7 @@ export class Weed extends Chain {
       onSnap: (it) => { this.consume(it); this.buds++; G.audio.play('squish', { pos: this.hopper, vol: 0.5, pitch: 1.3 }); } });
     this.bagSock = HANDS.socket({ p: mach.localToWorld(V3(0.42, 0.09, 0.88)), q: qs, on: null, r: 0.3, dock: true,
       accepts: (it) => it.def.item === 'weed' && it.left < WEED.bagMax });
-    this.grindCrank = crank({ c: mach.localToWorld(V3(-0.32, 0.55, 0.58)), axis: this.fwd.clone(), r: 0.28, icon: 'gear', max: 11,
+    this.grindCrank = crank({ c: mach.localToWorld(V3(-0.32, 0.55, 0.58)), axis: this.fwd.clone(), r: 0.28, icon: 'gear', max: 10,
       ready: () => G.time > this.jamUntil,
       turn: (d, p) => this.grind(d, p) });
     this.spot({ at: L(2.2, 0, -1.6), r: 1.4, markPos: L(2.2, 2.2, -2.7), needs: () => need('leaf', this.buds, 1) });
@@ -313,7 +332,7 @@ export class Weed extends Chain {
       ready: () => this.paperIn && this.filterIn && this.fill >= WEED.paperMin,
       moved: (v, _d, p) => { G.audio.play('rustle', { pos: this.matC, vol: 0.25, pitch: 1.8, minGap: 0.35 }); if (v >= 0.999) this.rolled(p); } });
     HANDS.socket({ p: ashP.clone().setY(ashP.y + 0.035), q: qs, on: null, r: 0.2, dock: true, anyYaw: true, accepts: (it) => it.def.item === 'joint' });
-    this.lighters = [P('lighter', L(2.7, top + 0.02, 1.15)), P('lighter', L(-0.9, 1.02, -2.75))]; this.flame = [0, 0];
+    this.lighters = [P('lighter', L(2.7, top + 0.02, 1.15)), P('lighter', L(-0.95, TOP + 0.02, FZ - 0.12))]; this.flame = [0, 0];
     P('seedBag', L(4.4, 0, 1.4));
     this.spot({ at: L(3.2, 0, 2.3), r: 1.3, markPos: L(3.2, 1.7, 1.42), needs: () => need('paper', this.paperIn ? 1 : 0) + need('filter', this.filterIn ? 1 : 0) + need('leaf', this.fill >= WEED.paperMin ? 1 : 0) });
 
@@ -321,8 +340,8 @@ export class Weed extends Chain {
     const bP = L(4.45, 0, -2.35), glass = toonMat(0x9fe8d6, { transparent: true, opacity: 0.55 });
     const bong = new THREE.Group(); bong.position.copy(bP); bong.rotation.y = yaw - Math.PI / 2; scene.add(bong);
     const base = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), glass); base.position.y = 0.22; base.scale.y = 0.9; bong.add(base);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.095, 0.72, 12), glass); neck.position.y = 0.76; bong.add(neck);
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 6, 14), glass); lip.rotation.x = Math.PI / 2; lip.position.y = 1.12; bong.add(lip);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.095, 0.52, 12), glass); neck.position.y = 0.64; bong.add(neck);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 6, 14), glass); lip.rotation.x = Math.PI / 2; lip.position.y = 0.9; bong.add(lip);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8), glass); stem.position.set(0.19, 0.34, 0); stem.rotation.z = -0.8; bong.add(stem);
     this.bowlEmber = toonMat(0x8fdcc8, { emissive: new THREE.Color(0) });
     const bowlB = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.03, 0.09, 10), this.bowlEmber); bowlB.position.set(0.3, 0.45, 0); bong.add(bowlB);
@@ -331,9 +350,9 @@ export class Weed extends Chain {
     this.smokeM = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.085, 1, 10), toonMat(0xf2f2f2, { transparent: true, opacity: 0.75 }));
     this.smokeM.visible = false; bong.add(this.smokeM);
     bong.updateMatrixWorld(true);
-    this.bongTop.copy(bong.localToWorld(V3(0, 1.12, 0)));
+    this.bongTop.copy(bong.localToWorld(V3(0, 0.9, 0)));
     this.bongBowl.copy(bong.localToWorld(V3(0.3, 0.5, 0)));
-    staticCylinder(V3(bP.x, bP.y + 0.22, bP.z), 0.2, 0.22); staticCylinder(V3(bP.x, bP.y + 0.75, bP.z), 0.35, 0.09);
+    staticCylinder(V3(bP.x, bP.y + 0.22, bP.z), 0.2, 0.22); staticCylinder(V3(bP.x, bP.y + 0.64, bP.z), 0.26, 0.09);
     HANDS.receiver({ r: 0.13, at: (out) => out.copy(this.bongTop), accepts: (s) => s === 'water' && this.bongWater < 1,
       fill: (_s, a) => { this.bongWater = Math.min(1, this.bongWater + a * 0.45); } });
     HANDS.receiver({ r: 0.11, at: (out) => out.copy(this.bongBowl), accepts: (s) => s === 'weed' && this.bongPacked < 0.5,
@@ -354,8 +373,9 @@ export class Weed extends Chain {
     this.crankSpd = this.crankSpd * 0.88 + Math.abs(d) * 60 * 0.12;
     G.audio.play('tick', { pos: this.chute, vol: 0.4, pitch: 0.55, minGap: 0.16 });
     if (this.buds <= 0) return;
-    if (this.crankSpd > WEED.jam) {   // jammed: one bud chewed to nothing, a loud clank; the crank kicks out of the hoof
-      this.jamUntil = G.time + 2; this.crankSpd = 0; this.buds--;
+    this.overT = this.crankSpd > WEED.jam ? this.overT + 1 / 60 : Math.max(0, this.overT - 1 / 30);
+    if (this.overT > 1.2) {   // cranked too fast for too long: jammed — one bud chewed to nothing, a loud clank; the crank kicks out of the hoof
+      this.jamUntil = G.time + 2; this.crankSpd = 0; this.overT = 0; this.buds--;
       G.audio.play('metal', { pos: this.hopper, vol: 1, pitch: 0.5 }); G.noise(this.hopper, 12);
       G.fx.puff(this.hopper, { count: 8, color: 0x55575c, speed: 0.8, up: 1, life: 1.2, size: 0.4, alpha: 0.6 });
       p.letGo();
@@ -468,7 +488,7 @@ export class Weed extends Chain {
         this.serve(h);
         p.addBuzz(1, WEED.jointBuzz, 26);
         G.audio.play('fill', { pos: p.pos, vol: 0.35, pitch: 1.8 });
-        G.fx.puff(this.snout(p, v1), { count: 6, color: 0xeeeeee, speed: 0.6, up: 0.7, life: 1.8, size: 0.45, alpha: 0.5 });
+        G.fx.puff(this.snout(p, v1), { count: 4, color: 0xeeeeee, speed: 0.5, up: 0.6, life: 1.5, size: 0.22, alpha: 0.45 });
         G.noise(p.pos, 6);
         G.events.push({ type: 'puff', who: p });
         return true;
@@ -561,6 +581,11 @@ export class Weed extends Chain {
     if (this.potCook >= 1 && this.pot.left <= 0.01) { this.potCook = 0; this.potWeed = 0; this.pot.setLeft(0); }   // poured out
     if (this.bowlMix >= 1 && this.bowl.left <= 0.01 && this.bowlMagic > 0) { this.bowlMix = this.bowlMagic = this.bowlFlour = 0; this.bowl.setLeft(0); }
     if (this.bowlMix >= 1) this.bowlStir.heldBy?.letGo();
+    // the oven door, let go: past halfway it drops open (its own weight), below that its springs pull it shut
+    if (!this.ovenDoor.heldBy) {
+      const v = this.ovenDoor.v, to = v > 0.6 ? 1.45 : 0;
+      if (v !== to) { this.ovenDoor.v = to > v ? Math.min(to, v + dt * 4) : Math.max(to, v - dt * 3); if (this.ovenDoor.v === to) G.audio.play('clunk', { pos: this.ovenMark, vol: to ? 0.4 : 0.6, pitch: to ? 0.8 : 1.2 }); }
+    }
     // the oven: bakes while a tray is in and the door is shut; golden, then burnt, then the alarm
     const tray = this.ovenSock.occupant;
     if (!tray) this.bakeT = 0;
@@ -610,6 +635,7 @@ export class Weed extends Chain {
   // ------------------------------------------------------------------ every frame
   render(dt: number) {
     this.visions.render(dt);
+    this.shedRender();
     this.pump.render(dt);
     const L = G.localPig as Pig | null, can = this.item(L?.held) === 'can';
     for (const pl of this.plants) {
@@ -662,7 +688,7 @@ export class Weed extends Chain {
     this.bongWaterM.scale.y = Math.max(0.01, this.bongWater);
     this.bongWaterM.visible = this.bongWater > 0.02;
     this.smokeM.visible = this.chamber > 0.02;
-    if (this.smokeM.visible) { const h = Math.min(1.12, this.chamber) * 0.7; this.smokeM.scale.set(1, h, 1); this.smokeM.position.y = 0.42 + h / 2; }
+    if (this.smokeM.visible) { const h = Math.min(1.12, this.chamber) * 0.5; this.smokeM.scale.set(1, h, 1); this.smokeM.position.y = 0.4 + h / 2; }
     this.bowlEmber.emissive.setHex(this.bowlLit > G.time ? 0xff6a1a : 0).multiplyScalar(this.bowlLit > G.time ? 0.6 + Math.sin(G.time * 9) * 0.3 : 0);
     if (this.bowlLit > G.time && Math.random() < dt * 4) G.fx.puff(this.bongBowl, { count: 1, color: 0xdddddd, speed: 0.15, up: 0.5, life: 1.2, size: 0.15, alpha: 0.4 });
     // lit joints smoulder, lighters show their flame
@@ -714,7 +740,7 @@ export class Weed extends Chain {
       ['weed:pot', 'a.weedPot'], ['weed:high', 'a.weedHigh'], ['weed:cookies', 'a.weedCookies'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
   }
   admin(a: string, me: Pig): boolean {
-    const f = me.forward, front = V3(me.pos.x + f.x * 1.3, me.pos.y + 0.5, me.pos.z + f.z * 1.3);
+    const f = me.forward, front = V3(me.pos.x + f.x * 0.9, me.pos.y + 0.3, me.pos.z + f.z * 0.9);
     switch (a) {
       case 'weed:ripe': for (const pl of this.plants) if (pl.g > 0) pl.g = 1; return true;
       case 'weed:water': for (const pl of this.plants) pl.w = 0.8; return true;
@@ -774,7 +800,7 @@ export class Weed extends Chain {
         if (this.potCook >= 1 && this.pot.left > 0) return held === 'pot' ? this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5) : this.pot.synced.currP.clone().setY(this.pot.synced.currP.y + 0.5);
         if (this.bowlMagic >= 0.6) return held === 'flour' ? this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5) : near('flour', true);
         const potAt = this.pot.synced.currP.clone().setY(this.pot.synced.currP.y + 0.5);
-        if (!this.potButter && this.potCook < 1) return held === 'butter' ? potAt : near('butter') ?? this.L(-4.6, 1.6, -2.4);
+        if (!this.potButter && this.potCook < 1) return held === 'butter' ? potAt : near('butter') ?? this.L(-4.75, 1.6, -2.6);
         if (this.potWeed < 0.6) return held === 'weed' && heldFull ? potAt : toWeed();
         return potAt;
       }

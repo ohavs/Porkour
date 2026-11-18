@@ -72,6 +72,7 @@ const MOUTH = { four: new THREE.Vector3(0, 0.72, 0.82), two: new THREE.Vector3(0
 /** Heavy loot two pigs can hold together (Bob's safe). */
 const coopOf = (h: Holdable | null) => (h as { def?: { coop?: boolean } } | null)?.def?.coop === true;
 const snackOf = (h: Holdable | null) => { const p = h as Prop | null; return p?.kind === 'prop' && (p.def.snack || p.def.smokes) && p.left > 0 ? p : null; };
+const MIDDLE = new THREE.Vector3();
 const QSTAND = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -STAND_ANGLE);
 
 type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
@@ -978,7 +979,10 @@ export class Pig implements Holdable {
     if (!join) h.onGrabbed?.(this);
     if (h.kind === 'pig') (h as Pig).grabbedByPig();
     this.swingT = -1; this.strainT = 0;
-    this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : undefined);
+    // pigs by the scruff; light things at their middle (they stick to the hooves: upright, aimed, tipped to pour —
+    // no swinging about the grab point); heavy ones by the edge nearest the snout (dragged along)
+    const atMiddle = h.kind === 'prop' && h.mass <= this.liftMax;
+    this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : atMiddle ? MIDDLE : undefined);
     G.audio.play('bite', { pos: this.pos, vol: 0.7 });
     G.noise(this.pos, 4);
   }
@@ -994,7 +998,7 @@ export class Pig implements Holdable {
   private handleStep(dt: number) {
     const hd = this.handle; if (!hd) return;
     if (this.mode !== 'normal' || hd.heldBy !== this) { this.letGo(); return; }
-    hd.drive(HANDS.aimGoal(this, v1), this, dt);
+    hd.drive(HANDS.aimGoal(this, v1, true), this, dt);
     const rr = HANDS.reach(this, v2), kd = hd.knob(v3).distanceTo(v2);
     this.handleFar = kd > rr + 0.5 ? this.handleFar + dt : 0;
     if (this.handleFar > 0.3) this.letGo();
@@ -1008,6 +1012,7 @@ export class Pig implements Holdable {
     else if (h.heldBy === this) { h.heldBy = hp.helper ?? null; if (hp.helper) hp.helper = null; }   // the first one: the other keeps it
     this.grip.detach();
     ignorePair(this.body, h.body, false);
+    if (h.kind === 'prop') HANDS.ghostly(h as Prop, false);
     if (!h.heldBy) h.onReleased?.(this, thrown);
     if (h.kind === 'pig') (h as Pig).startRagdoll(null, false);
   }
@@ -1069,7 +1074,9 @@ export class Pig implements Holdable {
     let qT: THREE.Quaternion | null = null;
     if (h.kind === 'prop' && h.mass <= this.liftMax && !swing) {
       qT = qHold.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw).multiply(qTilt.setFromAxisAngle(XAXIS, this.tiltK * 2.0));
-      if (this.charge() <= 0 && !this.eating && this.tiltK < 0.3) HANDS.magnet(this, h as Prop, goal, qT);
+      // being pulled into its place (or tipped over an opening): it slides in without catching on edges
+      const pull = this.charge() <= 0 && !this.eating && this.tiltK < 0.3 ? HANDS.magnet(this, h as Prop, goal, qT) : 0;
+      HANDS.ghostly(h as Prop, pull > 0.3 || (this.tiltK > 0.05 && !!HANDS.pourMagnet(this, h as Prop, goal)));
     }
     this.grip.drive(goal, this.body, h.mass, dt, {
       up: (this.liftMax * PIG.gripLift + Grip.MASS) * g * (swing ? 2.5 : 1),
