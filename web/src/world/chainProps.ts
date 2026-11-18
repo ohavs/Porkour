@@ -40,7 +40,7 @@ function bake(parts: Part[]) {
 }
 const mtx = (x: number, y: number, z: number, rx = 0, ry = 0, rz = 0, s = 1) =>
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(s, s, s));
-const LEAF = [leaflet(0.34, 0.05), leaflet(0.26, 0.042), leaflet(0.16, 0.032)];
+const LEAF = [leaflet(0.44, 0.08), leaflet(0.34, 0.065), leaflet(0.22, 0.05)];
 const STEM = new THREE.CylinderGeometry(0.018, 0.03, 1, 6);
 const BUD = new THREE.IcosahedronGeometry(0.07, 0);
 const HAIR = new THREE.IcosahedronGeometry(0.018, 0);
@@ -56,12 +56,12 @@ function fan(parts: Part[], x: number, y: number, z: number, yaw: number, tilt: 
 /** Stage 0 seedling · 1 small · 2 bushy · 3 flowering (ripe: fat buds). */
 export function plantGeometry(stage: 0 | 1 | 2 | 3) {
   const parts: Part[] = [];
-  const h = [0.28, 0.65, 1.05, 1.3][stage], G1 = 0x3f9a34, G2 = 0x56b83e, G3 = 0x2f7a2c;
+  const h = [0.32, 0.8, 1.25, 1.55][stage], G1 = 0x4fae3c, G2 = 0x66c84a, G3 = 0x3f9434;
   parts.push([STEM, 0x5c8a2e, mtx(0, h / 2, 0).multiply(new THREE.Matrix4().makeScale(1, h, 1))]);
   const nodes = [1, 3, 5, 6][stage];
   for (let i = 0; i < nodes; i++) {
-    const y = h * (0.3 + 0.65 * (i / Math.max(1, nodes - 1))) * (stage === 0 ? 0.9 : 1), s = (stage === 0 ? 0.55 : 1.15 - (i / nodes) * 0.45);
-    for (let k = 0; k < 2; k++) fan(parts, 0, y, 0, i * 1.57 + k * Math.PI, 0.55, s, i % 2 ? G1 : G2);
+    const y = h * (0.3 + 0.65 * (i / Math.max(1, nodes - 1))) * (stage === 0 ? 0.9 : 1), s = (stage === 0 ? 0.6 : 1.3 - (i / nodes) * 0.5);
+    for (let k = 0; k < (stage >= 2 ? 3 : 2); k++) fan(parts, 0, y, 0, i * 1.57 + k * (stage >= 2 ? 2.09 : Math.PI), 0.55, s, i % 2 ? G1 : G2);
     if (stage >= 2 && i > 0) for (let k = 0; k < 2; k++) {   // side branches
       const a = i * 1.57 + 0.78 + k * Math.PI, bx = Math.sin(a) * 0.12, bz = Math.cos(a) * 0.12;
       fan(parts, bx, y + 0.06, bz, a, 0.35, s * 0.6, G3);

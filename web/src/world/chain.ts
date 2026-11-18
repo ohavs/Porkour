@@ -51,6 +51,9 @@ export abstract class Chain {
   private pools = new Map<string, Prop[]>();
   visions: Visions;
   beams: Beams;
+  /** The shed (Bob finds a pig in there suspicious). */
+  shedAt = new THREE.Vector3(); shedR = 0;
+  inShed(p: THREE.Vector3) { return this.shedR > 0 && Math.hypot(p.x - this.shedAt.x, p.z - this.shedAt.z) < this.shedR; }
   /** This mode's buzz: 1 = high (cannabis), 2 = drunk (beer). */
   abstract kind: 1 | 2;
   /** Seconds each pig has been lying back watching the clouds while buzzed. */

@@ -81,6 +81,7 @@ export class Brew extends Chain {
 
   private buildShedStations(kit: Kit, [cx, cz, yaw]: [number, number, number]) {
     const scene = this.scene, sh = buildShed(kit, scene, cx, cz, yaw);
+    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2;
     const at = (x: number, z: number) => sh.place(x, z);
     const deco = (model: string, lx: number, lz: number, h: number, collide = true) => {
       const p = at(lx, lz), o = fitted(model, { height: h }); o.position.copy(p); o.rotation.y = yaw; scene.add(o);

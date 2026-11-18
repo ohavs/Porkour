@@ -125,6 +125,7 @@ export class Weed extends Chain {
   private buildShedStations(kit: Kit, [cx, cz, yaw]: [number, number, number]) {
     const scene = this.scene;
     const sh = buildShed(kit, scene, cx, cz, yaw);
+    this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2;
     const at = this.shedPlace = (x: number, z: number) => sh.place(x, z);
     const deco = (model: string, lx: number, lz: number, h: number, ry = 0, collide = true) => {
       const p = at(lx, lz), o = fitted(model, { height: h }); o.position.copy(p); o.rotation.y = yaw + ry; scene.add(o);
@@ -430,7 +431,8 @@ export class Weed extends Chain {
       if (this.cargo < 12) for (const pr of this.props) {
         if (pr.def.item !== 'bud' || pr.banked || pr.heldBy) continue;
         const pp = pr.body.translation(), l = v2.set(pp.x - bp.x, pp.y - bp.y, pp.z - bp.z).applyQuaternion(inv);
-        if (Math.abs(l.x) < 0.36 && Math.abs(l.z) < 0.48 && l.y > -0.1 && l.y < 0.9) { this.consume(pr); this.cargo++; G.audio.play('squish', { pos: pr.synced.currP, vol: 0.4, pitch: 1.3 }); }
+        const scoop = !!b.heldBy && Math.hypot(pp.x - bp.x, pp.z - bp.z) < 1.05 && pp.y < bp.y + 0.6;   // pushed over buds on the ground: it scoops them up
+        if (scoop || (Math.abs(l.x) < 0.36 && Math.abs(l.z) < 0.48 && l.y > -0.1 && l.y < 0.9)) { this.consume(pr); this.cargo++; G.audio.play('squish', { pos: pr.synced.currP, vol: 0.4, pitch: 1.3 }); }
       }
       if (this.cargo > 0 && up.y < 0.35) {
         for (let i = 0; i < this.cargo; i++) this.spawn('bud', V3(bp.x + (Math.random() - 0.5) * 0.8, bp.y + 0.3, bp.z + (Math.random() - 0.5) * 0.8), 0, V3((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3));

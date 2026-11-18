@@ -483,8 +483,8 @@ export class Pig implements Holdable {
     const u = clamp(mx * b.right.x + mz * b.right.z, -1, 1), f = clamp(mx * b.axis.x + mz * b.axis.z, -1, 1);
     const two = this.standing, t = this.now + this.seed * 31;
     // the push you have (14) always beats the worst teeter (≈ 9 when very high): it's hard because of the lag, not impossible
-    const shake = (Math.sin(t * 1.7) + 0.6 * Math.sin(t * 3.1 + 1) + 0.5 * Math.sin(t * 0.7 + 2)) * (0.6 + 2.2 * bz + (this.buzzKind === 2 ? 1.0 * bz : 0)) * (two ? 1 : 0.55);
-    const acc = (two ? 4 : 2.5) * this.beamLean + 14 * u - 2 * this.beamLeanV + shake * (1 + Math.abs(f) * 0.5);
+    const shake = (Math.sin(t * 1.7) + 0.6 * Math.sin(t * 3.1 + 1) + 0.5 * Math.sin(t * 0.7 + 2)) * (0.5 + 1.6 * bz + (this.buzzKind === 2 ? 0.8 * bz : 0)) * (two ? 1 : 0.55);
+    const acc = (two ? 4 : 2.5) * this.beamLean + 14 * u - 2.6 * this.beamLeanV + shake * (1 + Math.abs(f) * 0.5);
     this.beamLeanV += acc * dt; this.beamLean += this.beamLeanV * dt;
     // stay on the log: walk along it, pulled to its centre line
     const off = (this.pos.x - b.a.x) * b.right.x + (this.pos.z - b.a.z) * b.right.z, sp = f * (two ? 1.7 : 2.2);
