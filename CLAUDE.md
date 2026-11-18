@@ -30,6 +30,9 @@ Dead by Daylight, Party Animals.
   **Tabs (s17, user: "simplify it")**: Me (powers: fly, ghost = Bob / dog / animals / wolves / traps ignore me (`ignored(p)` in
   ctx.ts), teleports) · Players (per pig: jail = sky cell `world/jail.ts`, freeze, launch, knock, bring, go to, ghost) · Bob ·
   World · Farm (this farm's / mode's buttons) · Items. New test switches go into the matching tab. Host / solo only.
+  **First person** (admin → Me, or `?fp=1`; user wants to try it, maybe for real later): camera in the pig's head
+  (`CamRig.updateFP`), my pig hidden, `game/fpHands.ts` = FPS-style pink arms + hooves (camera children, drawn on top):
+  trot on four legs, T-rex standing, jab on a punch, both forward when holding, back on a wind-up, hoof to mouth eating.
 - Quality bar: "not embarrassing next to popular Steam games" — use many free technologies / assets; no "AI slop" look.
 - Look (user feedback): **cartoon, not realistic**; pigs **round, fat, long**; animals must not look like Roblox; the level =
   **one fenced farm compound**. Standing on 2 legs must be worth it and wobbly. **Animals + characters as goofy / ragdolly as
@@ -356,6 +359,7 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   tap)? Too long for 10 min? Is "chill Bob" right, or full Bob / no Bob (admin → Bob tab)? The log walk: too hard / easy?
   Screen effects too strong?
 - New admin panel (tabs): simpler? Fly / ghost / jail work for you (online: as host)?
+- **First person** (admin → Me → "First person"): how does it feel? Worth making a real option?
 - Bob's new voice (hillbilly lines: "Come on then!", "Yessir!", "Bye bye!", insults): does it fit Bob? Too chatty?
 - Bob's siesta (hammock, once a round after lunch): fun? Flipping him out (one ram, or ~4 headbutts timed with the swing)
   too easy / hard? Mud face-paint (wallow, then RMB at his head while he sleeps) fun / visible enough?

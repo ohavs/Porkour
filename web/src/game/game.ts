@@ -35,6 +35,7 @@ import { Hud } from './hud';
 import { Menu } from './menu';
 import { Lockpick } from './lockpick';
 import { Minigame } from './minigame';
+import { FpHands } from './fpHands';
 import { Markers } from './markers';
 import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
@@ -98,6 +99,8 @@ export class Game {
   lockpick!: Lockpick;
   /** Chain modes: the station mini-game on my screen. */
   mini!: Minigame;
+  /** Admin first-person test: the pig's arms on screen. */
+  fpHands!: FpHands;
   markers!: Markers;
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
@@ -173,6 +176,8 @@ export class Game {
     this.menu = new Menu(this);
     this.lockpick = new Lockpick();
     this.mini = new Minigame();
+    if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
+    this.fpHands = new FpHands(this.gfx.camera);
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
       if (this.mini.isOpen) {
@@ -205,6 +210,7 @@ export class Game {
       if (code === 'KeyP') this.menu.cyclePreset();
       if (code === 'KeyR' && this.input.held.size === 0 && G.net !== 'client') this.local.respawn();
     };
+    if (new URLSearchParams(location.search).has('fp')) ADMIN.fp = true;   // admin test: first person from the URL
     const h = new URLSearchParams(location.search).get('hour');
     if (h) this.daynight.setHour(parseFloat(h));
     this.applySettings();
@@ -876,7 +882,15 @@ export class Game {
     const lp = this.local.visual.root.position;
     const look = this.running && !this.menu.blocking && !this.mini.isOpen;
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
-    else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    else if (ADMIN.fp) {
+      // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen
+      const eye = this.local.visual.rig.head.getWorldPosition(tmpV), f = this.local.forward;
+      eye.addScaledVector(f, 0.22); eye.y += 0.08;
+      this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
+    } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    const fp = ADMIN.fp && this.mode === 'play';
+    this.local.visual.root.visible = !fp && !this.local.out;
+    this.fpHands.update(dt, this.local, fp);
     // high / drunk: the screen (post effect) and the camera (drunk: it rolls; high: it breathes)
     if (this.gfx.buzz) {
       const L = this.local, b = this.mode === 'play' ? L.buzz : 0, dr = L.buzzKind === 2, tt = G.time, cam = this.gfx.camera;

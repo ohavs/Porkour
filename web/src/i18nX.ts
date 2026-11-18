@@ -5,7 +5,7 @@
 export const EN_X = {
   // admin panel (tabs + powers + punishments)
   'at.me': 'Me', 'at.players': 'Players', 'at.bob': 'Bob', 'at.world': 'World', 'at.farm': 'Farm', 'at.items': 'Items',
-  'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
+  'a.fp': 'First person (only the hooves)', 'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
   'a.respawn': 'Back to the sty', 'a.jail': 'Jail', 'a.unjail': 'Free', 'a.freezeP': 'Freeze', 'a.unfreeze': 'Thaw',
   'a.launch': 'Launch', 'a.bring': 'Bring here', 'a.goto': 'Go to', 'a.jailSecs': 'Jail time (s)', 'a.freeJail': 'Free everyone',
   'a.jailOthers': 'Jail everyone else', 'a.knockP': 'Knock over', 'a.ghostP': 'Ghost',
@@ -34,7 +34,7 @@ export const EN_X = {
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
   'at.me': 'Yo', 'at.players': 'Jugadores', 'at.bob': 'Bob', 'at.world': 'Mundo', 'at.farm': 'Granja', 'at.items': 'Objetos',
-  'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
+  'a.fp': 'Primera persona (solo las pezuñas)', 'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
   'a.respawn': 'Volver a la pocilga', 'a.jail': 'Cárcel', 'a.unjail': 'Liberar', 'a.freezeP': 'Congelar', 'a.unfreeze': 'Descongelar',
   'a.launch': 'Lanzar', 'a.bring': 'Traer aquí', 'a.goto': 'Ir hasta', 'a.jailSecs': 'Tiempo de cárcel (s)', 'a.freeJail': 'Liberar a todos',
   'a.jailOthers': 'Encarcelar a los demás', 'a.knockP': 'Tumbar', 'a.ghostP': 'Fantasma',

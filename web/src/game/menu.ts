@@ -229,7 +229,7 @@ export class Menu {
     let body = '';
     switch (this.aTab) {
       case 'me':
-        body = sec('a.powers') + tog('fly', 'a.fly') + tog('god', 'a.ghost') + tog('noCooldowns', 'a.cooldowns') + tog('easyEscape', 'a.escape') +
+        body = sec('a.powers') + tog('fp', 'a.fp') + tog('fly', 'a.fly') + tog('god', 'a.ghost') + tog('noCooldowns', 'a.cooldowns') + tog('easyEscape', 'a.escape') +
           grid(btn('respawn', 'a.respawn'), btn('mud', 'a.mud'), btn('knock', 'a.knockMe'), btn('tp:bush', 'a.tpBush'), hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : '') +
           sec('a.teleport') + `<div class="tp">${f.places.tp.filter(([k]) => k !== 'wheat').map(([k]) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>` +
           (G.net !== 'solo' ? sec('a.online') + `<div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) + tog('predict', 'a.predict') : '');

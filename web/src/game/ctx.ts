@@ -51,6 +51,7 @@ export const ADMIN = {
   showSight: false,     // HUD line: does Bob see me right now
   mod: 'random',        // next round's modifier: random or a fixed one (admin)
   fly: false,           // admin power: my pig flies (Space up, C down, Shift fast), through walls
+  fp: false,            // admin test: first-person camera (my pig hidden, only its arms / hooves on screen)
   chill: false,         // "chill Bob" (chain modes, farms 6 / 7): sees / hears less, slower, suspicion builds slower
 };
 

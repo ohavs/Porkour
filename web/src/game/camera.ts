@@ -19,6 +19,19 @@ export class CamRig {
     return { f, r };
   }
 
+  /** First person (admin test): the camera is the pig's eyes — same yaw / pitch, so turning feels the same. */
+  updateFP(dt: number, lookX: number, lookY: number, eye: THREE.Vector3) {
+    void dt;
+    this.yaw -= lookX;
+    this.pitch = clamp(this.pitch + lookY, -1.35, 1.35);
+    this.camera.position.copy(eye);
+    const cp = Math.cos(this.pitch);
+    this.camera.lookAt(eye.x + Math.sin(this.yaw) * cp, eye.y - Math.sin(this.pitch), eye.z + Math.cos(this.yaw) * cp);
+    const s = G.fx.shakeAmt * G.fx.shakeAmt * 0.35;
+    if (s > 0.0005) this.camera.rotateZ((Math.random() - 0.5) * s * 0.3);
+    this.first = true;   // back in third person: snap the orbit focus to the pig
+  }
+
   update(dt: number, lookX: number, lookY: number, target: THREE.Vector3, standing: boolean) {
     this.yaw -= lookX;
     this.pitch = clamp(this.pitch + lookY, -0.5, 1.25);
