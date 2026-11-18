@@ -130,6 +130,7 @@ async function boot() {
     playMode: () => (!lobby.inRoom ? 'play' : online.isHost ? 'start' : 'wait'),
   });
   (window as any).__lobbyUI = ui;
+  import('./game/saves').then((m) => ((window as any).__saves = m));
   onProfile(() => { if (isOwner() && ownerPerks()) ui.render(); });
   wardrobe.onShop = () => { ui.render(); sendOutfit(); };
   game.menu.onShopChanged = () => ui.render();
@@ -167,6 +168,7 @@ async function boot() {
     else if (wardrobe.isOpen) wardrobe.close();
     else if (ADMIN.open) { game.menu.toggleAdmin(); input.lock(); }
     else if (game.menu.menuOpen) game.menu.close();
+    else if (ui.savesOpen) { ui.closeSaves(); return; }
     else if (lobby.isOpen) { lobby.escape(); return; }
     else if (game.hud.showHelp) { game.hud.toggleHelp(); return; }
     else if (game.running) { game.menu.open(); return; }

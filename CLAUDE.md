@@ -39,7 +39,10 @@ Dead by Daylight, Party Animals.
   `Chain.stepIcons`).
 - **Story vs Modes (user 2026-11-18)**: story = stages 1–5 (farm 1..5, unlocked by winning the one before
   `SETTINGS.story`, harder each stage: `STAGE` quota × / Bob wary from stage 4); the chain farms (cannabis, beer) are
-  separate "Modes" in the farm picker.
+  separate "Modes" in the farm picker. **Saves (user 2026-11-18)**: 5 story save slots at the host (solo too:
+  `game/saves.ts`, in settings): 💾 chip above the farm card → saves card (load / new game / start over / delete; each
+  slot shows its stages, stars, who played, date); a won stage goes into the save in use; results "Next stage ▶" (in a
+  room: the whole room reloads onto it); the room shows the host's save label to the players (server `room.save`).
 - Admin mode (user request): `` ` `` key / menu button / `?admin=1` — keep it updated with test switches for new features.
   **Tabs (s17, user: "simplify it")**: Me (powers: fly, ghost = Bob / dog / animals / wolves / traps ignore me (`ignored(p)` in
   ctx.ts), teleports) · Players (per pig: jail = sky cell `world/jail.ts`, freeze, launch, knock, bring, go to, ghost) · Bob ·
@@ -123,6 +126,7 @@ Dead by Daylight, Party Animals.
 |---|---|
 | `main.ts` | Boot: settings + language, preload models / sounds (progress bar), physics, build game, `game.enterLobby()` + `LobbyUI`, PLAY → `game.startPlay()`, Esc → menu. |
 | `game/lobbyStage.ts`, `game/lobbyUI.ts` | **Lobby (s13, "Fortnite style, but the pig moves")**: `LobbyStage` = a farmyard diorama at z 760 (far from every farm; sky + clouds ride with the camera), fixed camera, invisible walls on the screen edges (rebuilt on resize; online every machine uses 16:9 walls), throwables (beach ball, apples, eggs, pie, crate, 2 cans, cigarettes: lobby copies with value 0, respawn). `Game.mode` 'lobby' (clock frozen at 16:24, `G.lobby`: idle pigs face the camera, holding / clicking = face the pointer, W = away from the camera, mouse not locked: `Input.free` + `mouseX/Y`) / 'play'. `LobbyUI`: top bar (Play / Wardrobe / Shop = wardrobe's gadget tab / Online, wallet, sound, full screen, settings), party (left), controls as icons, farm card + PLAY. Online: joining a waiting room = `goOnline` right away, the party plays on the stage, party panel = room (code, seats, chat, leave = reload); host's PLAY = start for all. |
+| `game/saves.ts` | Story saves: `SLOTS` 5, `saves()` / `slot()` / `storyWon()` (unlocks), `newGame` / `loadGame` / `deleteSave`, `recordStage(stage, won, stars, names)` (Round, host / solo), `saveLabel()` ("💾 2 · ★★☆☆☆"). Old `SETTINGS.story` moves into save 1. UI in `lobbyUI.ts` (`#lSave` chip, `#saves` card, Esc closes). |
 | `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
 | `world/outhouse.ts` | **Bob's outhouse (s14)** — one per farm (decor kit `outhouse()` → `FarmBuild.loos`, `G.loos`, synced entity after the gates). Bob's toilet breaks (`LOO`): first ~70–120 s into the round, then every 150–210 s, taken between two chores (`nextChore`, not at night / market) → state `loo` (walks over) → `inLoo` (hidden like sleep, sees nothing ~18 s; a noise ≤14 m / a knock on the hut = he comes out within 5 s and looks there). Pigs: grab the **bolt**'s handle (outside, door side; a `slider` handle, s18) and slide it across (LMB = headbutt = a knock) → he bangs (hut jolts, noise) then bursts the door off after 20 s and searches angrily (prank `looLock`). **Rocking** (`rock` 0..1: ram 0.62, headbutt / punch 0.3 × strength, thrown things by momentum) → at 1 it **tips** (kinematic body turns about a bottom edge, snapped to the hut's 4 sides): with Bob inside = prank `looTip` — door up / sideways: he's flung out (knock-down), onto its door: stuck banging 10 s, then heaves it back up. Bob fixes a tipped hut / missing door when he sees it (`G.jobs`, `bob.fixLoo`). Admin → "Outhouse & safe". |
 | `world/phone.ts`, `world/heavyLoot.ts` | **Bob's phone (s15)** = breathing window #2, one synced entity per farm (decor kit `phone(x, z, yaw, jx, jz)` + `payphone(x, z, yaw)` → `FarmBuild.phones`, `G.phones`). Old crank wall phone on a post by the porch: real calls (`PHONE.first` 110–160 s, then every 170–230 s, when `Farmer.phoneFree()`) ring (2 bursts / 3 s, ≤30 s) → Bob state `phone` (hurries over) → `onPhone` (16–24 s facing the box, view `phone` = narrow 12 m, glances over his shoulder every 6–10 s, hears only noises ≤9 m, `onPhoneHand` puts the receiver at his ear; coiled cord). Its wire runs to a **jack** on a stake: grab the plug (a `slider` handle, s18) and yank it out → mid-call = line dead (static) → he rattles the hook 2.4 s, then searches from the jack (prank `hangUp`); he plugs it back when he sees it (`G.jobs`). **Payphone** by the road gate: take a coin from the cup (dispenser), drop it in the slot (socket) → after 1.6 s Bob's phone rings (prank call) → he answers "Hello?" for 7 s; the caller takes the handset off its hook (a handle: it rides at the snout, its cord yanks it back past 3.6 m) and presses F = oink down the line (`phoneoink`) → furious (prank `prankCall`); 2 prank calls within 150 s = `wise`: the next prank ring sends him to the payphone. Payphone cooldown 40 s. **Heavy loot (s15)**: Bob's old TV (`tv`, 85 kg, 220 → 30 once the screen cracks: `PropDef.screen` 5.2 m/s or a punch, `Prop.crack()` / `broken`, synced) + the grandfather clock (`clock`, 110 kg, tall: topples when dragged hard (clang + noise); `HeavyLoot`: hands show `G.hour`, pendulum, ticking loop, BONG on every full hour (3 on 6 / 12) = noise 22 m wherever it is). Missions `hangUp` (bonus), `prankCall`, `tvSteal`, `clockSteal` (bonus) added per farm in `Round.start`. Admin → "Phone, TV & clock". |
@@ -383,6 +387,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   dough → tray → oven door → bake → cookies, mill crank, pump + bucket on the stone, kettle water / malt / paddle, spigot,
   catapult basket, farm switch in a room (2 browsers), ghost connection replaced (server test), admin panel look.
   Not fully run end-to-end: the beer chain after the paddle (hops → boil → barrel → tap → mug: each piece runs).
+  Online hands (2 browsers): the player grabs the grinder crank and turns it (host + player crank in sync, buds → bag),
+  takes the bag out of its socket. **Story saves** (user: "the host keeps the progress, Load / New game, ~5 saves"):
+  checked headless (old progress → save 1, new game in slot 3, win → stage stored + names + stars, Next stage →
+  farm 2, load save 1 → farm 3, delete, Esc).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -395,6 +403,8 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
 - **Online**: the rejoin "clone" is gone? The host changing the farm inside the room (everyone reloads, back in the room)?
   The bigger room code readable?
 - **Owner**: coins / level on your account (sign in with Google)? Giving coins / admin to a friend (admin 👑 tab)?
+- **Saves** (💾 above the farm card): 5 slots, load / new game / delete; the host's save is shown to the room; "Next
+  stage ▶" after a win. Is it clear? Should players' progress count too (now only the host's save)?
 - **Story mode**: stages 1–5 unlocking in order, harder each stage (quota, Bob wary from stage 4) — right pace?
 - New admin panel + game-style menus: better? What else still looks "basic"?
 - **Entry code (early access)**: which option (code screen / server-checked codes / real lock), one shared code or one per

@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import { SETTINGS } from '../game/settings';
+import { storyWon } from '../game/saves';
 import { buildFarm1 } from './farm1';
 import { buildFarm2 } from './farm2';
 import { buildFarm3 } from './farm3';
@@ -28,7 +29,7 @@ export function farmId(): FarmId {
   const q = new URLSearchParams(location.search).get('farm');
   const want = isFarm(q) ? q : SETTINGS.farm;
   // 'random': one of the story stages I've unlocked
-  const open = CLASSIC_FARMS.slice(0, Math.max(1, Math.min(CLASSIC_FARMS.length, (SETTINGS.story ?? 0) + 1)));
+  const open = CLASSIC_FARMS.slice(0, Math.max(1, Math.min(CLASSIC_FARMS.length, storyWon() + 1)));
   current = isFarm(want) ? want : open[Math.floor(Math.random() * open.length)];
   return current;
 }

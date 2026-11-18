@@ -4,7 +4,7 @@ import { profile } from './auth';
 import { ADMIN } from '../game/ctx';
 
 export interface Peer { id: number; uid: string; name: string; picture: string; google: boolean; slot: number; outfit: string }
-export interface RoomInfo { code: string; name: string; public: boolean; state: 'lobby' | 'playing'; players: number; max: number; host: string; farm: string }
+export interface RoomInfo { code: string; name: string; public: boolean; state: 'lobby' | 'playing'; players: number; max: number; host: string; farm: string; save?: string }
 
 type Handler = (m: any) => void;
 
@@ -123,7 +123,7 @@ export class Online {
   join(code: string) { this.send({ op: 'join', code }); }
   quick() { this.send({ op: 'quick', farm: farmId() }); }
   leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); }
-  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string }) { this.send({ op: 'room', ...m }); }
+  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string; save?: string }) { this.send({ op: 'room', ...m }); }
   kick(id: number) { this.send({ op: 'kick', id }); }
   chat(text: string) { this.send({ op: 'chat', text }); }
   setOutfit(outfit: string) { this.send({ op: 'outfit', outfit }); }

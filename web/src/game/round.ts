@@ -11,7 +11,10 @@ import { SETTINGS, saveSettings } from './settings';
 import { gadget, consumeGadget, loadout, level, levelProgress, HORSESHOE_BONUS, type GadgetId } from './shop';
 import { POOL_IDS, type PoolId } from '../world/gadgets';
 import type { Game } from './game';
-import { farmId, stageOf, STAGE } from '../world/farms';
+import { farmId, stageOf, STAGE, STORY, reloadOnFarm } from '../world/farms';
+import { recordStage, saveLabel } from './saves';
+import { online } from '../net/online';
+import { profile } from '../net/auth';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 import type { Spot } from '../world/pumpkins';
 import { IC, kc, type IconId } from './icons';
@@ -657,13 +660,19 @@ export class Round {
     const earned = this.myCoins(), lv0 = level();
     if (this.paid !== this.no) {
       this.paid = this.no; SETTINGS.coins += earned; SETTINGS.xp += earned;
-      const st = stageOf(farmId());
-      if (this.won && st > SETTINGS.story) SETTINGS.story = st;   // the next stage unlocks
       saveSettings(); this.lvUp = level() > lv0 ? level() : 0;
+      // story: the host's save (solo: mine) keeps the stage won (the next one unlocks), its stars and who played
+      const st = stageOf(farmId());
+      if (st && G.net !== 'client') {
+        const names = online.room ? [...online.peers.values()].sort((a, b) => a.slot - b.slot).map((p) => p.name) : [profile.name];
+        recordStage(st, this.won, this.stars(), names);
+      }
     }
     const lv = level(), shoe = this.myGadget() === 'horseshoe' && earned > 0;
     const stars = this.stars();
     const can = G.net !== 'client';
+    // story stage won → straight on to the next one (in a room: everyone reloads into it, back in the room)
+    const sn = stageOf(farmId()), next = this.won && sn && sn < STORY.length ? STORY[sn] : null;
     const li = this.missions.map((x) => {
       const txt = this.mText(x);
       return `<li class="${x.done ? 'ok' : 'no'}"><i>${x.done ? '✔' : '✘'}</i>${txt}${x.req ? '' : ` <em>${t('m.bonus')}</em>`}</li>`;
@@ -675,10 +684,15 @@ export class Round {
       (shoe ? `<div class="tot shoe">${t('r.horseshoe')}</div>` : '') +
       `<div class="tot">${t('r.total', { n: SETTINGS.coins })}</div>` +
       `<div class="lvl${this.lvUp ? ' up' : ''}"><b>${this.lvUp ? t('r.levelUp', { n: lv }) : t('shop.level', { n: lv })}</b><div class="xp"><div style="width:${Math.round(levelProgress() * 100)}%"></div></div></div>` +
-      `<div class="btns">${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
+      `<div class="btns">${can && next ? `<button class="chip big" data-r="next">${t('r.next')} ▶</button>` : ''}${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
     this.res.style.display = 'flex';
     document.exitPointerLock?.();
     this.res.querySelector('[data-r=again]')?.addEventListener('click', () => this.game.restartRound());
+    this.res.querySelector('[data-r=next]')?.addEventListener('click', () => {
+      if (!next) return;
+      if (G.net === 'host') online.setRoom({ farm: next, save: saveLabel() });
+      else { SETTINGS.farm = next; saveSettings(); reloadOnFarm(next); }
+    });
     this.res.querySelector('[data-r=menu]')?.addEventListener('click', () => { location.href = G.net === 'solo' ? location.pathname : location.pathname + '?lobby=1'; });
   }
 }

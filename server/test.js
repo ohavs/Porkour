@@ -49,6 +49,7 @@ try {
   const bin2 = await b.next('bin'); assert.deepEqual([...bin2.data], [1, 7]);
   a.send({ op: 'chat', text: 'hi' }); assert.equal((await b.next('chat')).text, 'hi');
   a.send({ op: 'room', state: 'playing' }); assert.equal((await b.next('room')).room.state, 'playing');
+  a.send({ op: 'room', save: '💾 2 · ★★☆☆☆<b>' }); assert.equal((await b.next('room')).room.save, '💾 2 · ★★☆☆☆b');   // the host's story save, shown to the players
   b.send({ op: 'join', code: 'ZZZZ' }); assert.equal((await b.next('error')).code, 'notfound');
   // host leaves → room closes
   a.ws.close();

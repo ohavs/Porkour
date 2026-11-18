@@ -90,6 +90,26 @@
   body.inLobby #hud > :not(.emote):not(.tag):not(#toast) { display:none !important; }
   #lParty { max-height: calc(100vh - 150px); overflow: auto; }
   #lParty .ptitle .chip { margin-left: auto; font-size: 12px; padding: 3px 8px; }
+  /* story saves: the chip above the farm card + the saves card (s19) */
+  .saveChip { display:flex; align-items:center; gap: 8px; background: linear-gradient(180deg, #fffaf0, #f2dcae); color: var(--ink); border: 3px solid #2a170b; border-radius: 14px;
+    padding: 5px 12px; font-size: 16px; font-weight: bold; box-shadow: 0 4px 0 #2a170b; cursor: pointer; letter-spacing: .5px; }
+  .saveChip:hover { background: linear-gradient(180deg, #fff6c8, #ffd98a); } .saveChip:active { transform: translateY(3px); box-shadow: 0 1px 0 #2a170b; }
+  .saveChip i { margin-left:auto; font-style: normal; } .saveChip.ro { cursor: default; } .saveChip.ro:active { transform:none; box-shadow: 0 4px 0 #2a170b; }
+  .savesCard { width: 560px; } .savesCard .shead { display:flex; align-items:center; } .savesCard .shead h2 { margin: 0 0 10px; }
+  .savesCard .x { margin-left:auto; width: 34px; height: 34px; border-radius: 50%; background: #c0453a; border: 3px solid #2a170b; color:#fff6e6; font-weight: bold; box-shadow: 0 3px 0 #2a170b; }
+  .sslot { display:flex; align-items:center; gap: 12px; padding: 9px 10px; margin: 7px 0; border-radius: 14px; background: rgba(255,246,230,.07); border: 2px solid rgba(42,23,11,.6); }
+  .sslot.on { background: rgba(255,209,102,.16); border-color: var(--gold); }
+  .sslot > em { font-style: normal; font-family: Title; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); color: var(--ink); display:grid; place-items:center; font-size: 19px; border: 3px solid #2a170b; flex: none; }
+  .sslot.empty > em { background: #8a6a4a; color: #f2dcae; }
+  .sslot .sinfo { flex: 1; min-width: 0; display:flex; flex-direction:column; gap: 4px; }
+  .sslot .spips { display:flex; gap: 5px; } .sslot .spips i { position: relative; width: 30px; height: 30px; border-radius: 9px; background: rgba(0,0,0,.25); display:grid; place-items:center; opacity: .35; }
+  .sslot .spips i svg { width: 22px; height: 22px; } .sslot .spips i.won { opacity: 1; background: rgba(255,209,102,.25); } .sslot .spips i.next { opacity: .8; outline: 2px dashed var(--gold); }
+  .sslot .spips u { position:absolute; right: -4px; top: -6px; text-decoration: none; color: var(--gold); font-size: 13px; text-shadow: 0 1px 0 #2a170b; }
+  .sslot .smeta { display:flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; } .sslot .smeta span { display:flex; align-items:center; gap: 4px; } .sslot .smeta .dot { width: 9px; height: 9px; border-radius: 50%; display:inline-block; }
+  .sslot .dim { opacity: .7; } .sslot .sbtns { display:flex; gap: 6px; align-items:center; flex: none; }
+  .sslot .chip { font-size: 15px; padding: 5px 12px; } .sslot .chip.sm { padding: 5px 9px; } .sslot .chip.go { background: linear-gradient(180deg, #9be06a, #5fb33a); }
+  .sslot .chip.warn { background: linear-gradient(180deg, #ff9a7a, #d8503a); color: #fff6e6; } .sslot .inuse { color: var(--gold); font-size: 22px; padding: 0 8px; }
+  @media (max-width: 640px) { .savesCard { width: auto; } .sslot .spips i { width: 24px; height: 24px; } .sslot .spips i svg { width: 17px; height: 17px; } }
   .farmCard.locked { cursor: default; } .farmCard.locked .fcur i { display:none; }
   @media (max-width: 1100px) { #lKeys { display:none; } #lTop { gap: 8px; } #lTop .logo { font-size: 24px; } #lTabs button { font-size: 17px; padding: 0 9px; } #lParty { width: 200px; } #lPlayBox { width: 240px; } .playBtn { font-size: 36px; } }
   @media (max-width: 760px) { #lTabs button { font-size: 14px; padding: 0 6px; } #lTop .logo { display:none; } #lTop .lRight .wallet { display:none; } #lParty { width: 165px; } #lPlayBox { width: 190px; } .playBtn { font-size: 28px; } }

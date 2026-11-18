@@ -45,7 +45,7 @@ function send(ws, obj) { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(o
 const peerInfo = (ws) => ({ id: ws.pid, uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, slot: ws.slot, outfit: ws.outfit });
 function roomInfo(r) {
   const host = r.peers.get(r.hostId);
-  return { code: r.code, name: r.name, public: r.public, state: r.state, players: r.peers.size, max: r.max, host: host?.user.name ?? '?', farm: r.farm };
+  return { code: r.code, name: r.name, public: r.public, state: r.state, players: r.peers.size, max: r.max, host: host?.user.name ?? '?', farm: r.farm, save: r.save ?? '' };
 }
 function broadcast(r, obj, except) { for (const p of r.peers.values()) if (p !== except) send(p, obj); }
 function publicRooms() {
@@ -160,13 +160,14 @@ async function control(ws, m) {
       return open ? join(ws, open) : createRoom(ws, { public: true, farm: m.farm });
     }
     case 'leave': return leave(ws);
-    case 'room': {   // host changes the room (state lobby / playing, name, public, farm)
+    case 'room': {   // host changes the room (state lobby / playing, name, public, farm, story save label)
       if (!r || r.hostId !== ws.pid) return;
       if (m.state === 'lobby' || m.state === 'playing') r.state = m.state;
       // another farm: every page (the host's too) reloads onto it; the room waits for the host to come back
       if (typeof m.farm === 'string' && /^farm\d{1,2}$/.test(m.farm) && m.farm !== r.farm) { r.farm = m.farm; r.state = 'lobby'; r.hostTab = ws.tab; r.switchUntil = Date.now() + SWITCH_GRACE; }
       if (typeof m.public === 'boolean') r.public = m.public;
       if (m.name) r.name = clean(m.name, 28) || r.name;
+      if (typeof m.save === 'string') r.save = clean(m.save, 40);   // the host's story save ("💾 2 · ★★☆☆☆"), shown to the players
       return broadcast(r, { op: 'room', room: roomInfo(r) });
     }
     case 'kick': {
