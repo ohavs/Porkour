@@ -882,8 +882,8 @@ export class Pig implements Holdable {
       const hv = h.body.linvel(), pulling = this.input.mx * this.input.mx + this.input.mz * this.input.mz > 0.09;
       this.stuckT = pulling && Math.hypot(hv.x, hv.z) < 0.2 ? this.stuckT + dt : 0;
     } else this.stuckT = 0;
-    const lost = this.grip.strain > (coop ? 2.6 : 2) || (this.grip.strain > 1.1 && (this.strainT += dt) > (coop ? 0.7 : 0.4)) || this.stuckT > 1;
-    if (this.grip.strain <= 1.1) this.strainT = 0;
+    const lost = this.grip.strain > (coop ? 2.6 : 2) || (this.grip.strain > (coop ? 1.4 : 1.1) && (this.strainT += dt) > (coop ? 0.7 : 0.4)) || this.stuckT > 1;
+    if (this.grip.strain <= (coop ? 1.4 : 1.1)) this.strainT = 0;
     if (lost) {
       this.release(false);
       // heavy loot alone: it won't budge (a friend, or spinach)

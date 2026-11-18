@@ -344,7 +344,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 ## Known issues / TODO
 - Outhouse: a tipped hut isn't in Bob's nav grid (baked upright; he may bump into it); Bob fixes it only when he passes
   by and sees it. Online: two pigs dragging side by side can bump (the player's predicted pig shoves the host's) →
-  they pull at an angle, slower — stand on different sides of the safe.
+  they pull at an angle, slower — stand on different sides of the safe. In one online test run the helper pig let go
+  once with low strain (cause not found: maybe a follow bump → ragdoll); later runs held fine.
 - Farm 5: Bob's nav grid ignores the ice (he walks onto it, slides, can slip mid-chase — intended); prints are flat decals
   (float a little on slopes); the sled is a plain prop (no riding); snowball piles restock even if a pig is standing on them.
 - Unused i18n keys from the old wordy HUD (p.*, s.*, hint subtitles) are still in `i18n.ts` (harmless; clean up later).
