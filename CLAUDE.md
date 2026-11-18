@@ -144,7 +144,7 @@ Dead by Daylight, Party Animals.
 WASD move · mouse look · Space jump · **RMB grab / drop** (user 2026-11-13) · **LMB click = hit** (punch standing, headbutt on four legs,
 weapon whack, bash with what you hold) · **LMB hold = wind up + throw** what you hold · Shift sprint · Q fart · C wallow (hold = play dead) ·
 E stand · F oink · H controls · M sound · P next graphics preset · Esc menu / **closes any open overlay** · `` ` `` admin.
-**LMB click with a snack = eat it / light a cigarette.** Lobby: WASD on the screen, the pointer aims (grab / hit / throw toward it).
+**LMB click with a snack = eat it / light a cigarette.** RMB at a latch / the outhouse bolt = open / slide it (no grab there). Lobby: WASD on the screen, the pointer aims (grab / hit / throw toward it).
 Gamepad: A jump, B fart, X wallow, Y stand, LT grab, RT hit / throw, LB/L3 sprint. Input `Button`s `grab` (RMB) + `attack` (LMB); `PigInput`
 has `attack*` + `pickP` / `pickFailP` (12 press bits on the wire).
 
@@ -300,9 +300,17 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   for a predicted online player too), alone it won't budge → after 1 s of pulling the pig lets go + `two` icon
   ("bring a friend"); spinach (`Pig.dragMax` ×1.6) lets one pig drag it at ≤1.4 m/s (two pigs ≈2 m/s). Scrapes = low metal clank + noise 13 m. Bonus prank `safeSteal`.
   Missions `looLock` / `looTip` / `safeSteal` are added per farm automatically (`Round.start`: outhouse / safe exist).
+  Checked headless: Bob walks over + goes in (hidden), bolt → bangs → bursts the door off → angry search (prank ticks),
+  tipped backward → flung out (knock-down, prank ticks), onto its door → stuck, heaves it up, comes out; solo ram + 4
+  headbutts tips it with him inside; safe alone / two pigs (≈2 m/s) / spinach (≤1.4 m/s); 2 browsers online (outhouse
+  state + hidden Bob on the player, host pig + player pig drag the safe together ≈1.7 m/s, the player sees it held).
+  Test hook fix: a scripted press now lasts one frame on an online player too.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- Bob's outhouse: fun? Breaks often enough (~every 3 min, ~18 s inside)? Bolting him in / tipping it over (a ram + a
+  few headbutts, or 2 rams) too easy / hard? Does the knock-and-run (he comes out within 5 s) feel fair?
+- Bob's safe (heavy loot, 300 coins): dragging it with a friend fun? Alone with spinach (slow crawl) OK?
 - New lobby: fun to move / throw there? Camera distance OK (pig size)? Is the party / PLAY layout clear?
 - Pig arms: do eating / smoking / punching / holding read now? Are the stretchy arms OK (rubber-hose) or too odd?
 - Snacks: boosts strong enough / too strong (30 s)? How many cans / packs on the farm (8 + 3)?
@@ -334,6 +342,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Outhouse: a tipped hut isn't in Bob's nav grid (baked upright; he may bump into it); Bob fixes it only when he passes
+  by and sees it. Online: two pigs dragging side by side can bump (the player's predicted pig shoves the host's) →
+  they pull at an angle, slower — stand on different sides of the safe.
 - Farm 5: Bob's nav grid ignores the ice (he walks onto it, slides, can slip mid-chase — intended); prints are flat decals
   (float a little on slopes); the sled is a plain prop (no riding); snowball piles restock even if a pig is standing on them.
 - Unused i18n keys from the old wordy HUD (p.*, s.*, hint subtitles) are still in `i18n.ts` (harmless; clean up later).
