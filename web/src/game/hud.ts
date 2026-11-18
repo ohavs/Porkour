@@ -376,6 +376,7 @@ export class Hud {
 }
 
 /** Something you hold that pours when you tip it (R) and still has something in it. */
-function pours(h: unknown) { const p = h as { def?: { pour?: unknown }; pourNow?: () => unknown; left?: number }; return !!(p.def?.pour || p.pourNow?.()) && (p.left ?? 0) > 0.001; }
+/** R does something with it: tips it (pours its contents) / lifts a wheelbarrow's handles (dumps its load). */
+function pours(h: unknown) { const p = h as { def?: { pour?: unknown }; pourNow?: () => unknown; left?: number; pushAt?: unknown }; return !!p.pushAt || (!!(p.def?.pour || p.pourNow?.()) && (p.left ?? 0) > 0.001); }
 /** Loot value tag for prompts (M5). */
 function val(h: unknown) { const v = (h as { value?: number }).value ?? 0; return v > 0 ? ` <span class="val"><i class="coin"></i>${v}</span>` : ''; }

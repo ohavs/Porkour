@@ -80,8 +80,10 @@ hooves (see Active hands), then challenges that are hard to do high / drunk. Poi
 round's quota line.
 - **Cannabis farm (farm 6)**: water the plants (tip the watering can over them; fill it under the pump — pump the
   handle — or dip it in the pond; too much water = puddle, growth stalls; Bob waters them too) · tip the seed bag over
-  an empty mound · harvest ripe ones (sickle = 3 buds, a headbutt = 2) → wheelbarrow → grinder (drop buds in the
-  hopper, turn the crank — too fast for too long jams, loud) → the bag under the chute fills (4 pinches) → **joint**:
+  an empty mound · harvest ripe ones (sickle = 3 buds, a headbutt = 2) → toss them into the **wheelbarrow** (a real
+  one: hold it by the handles, it rolls on its wheel and steers round it — look / A·D to turn; stand up and hold R =
+  lift the handles high, it tips and the load slides out) → dump it on the **grate** beside the grinder (or drop buds
+  on it): a belt carries them up into the hopper → turn the grinder's crank (too fast for too long jams, loud) → the bag under the chute fills (4 pinches) → **joint**:
   a paper from the booklet onto the mat, a filter onto its end, tip the bag over it (not too little / much), take the
   edge and push it away to roll, click = lick it shut → light it (strike the lighter, flame to its tip — a friend can
   hold the flame, or lay it in the ashtray) → click = puff · **bong**: pour water in the top, tip a pinch into the
@@ -89,6 +91,8 @@ round's quota line.
   hears) · **cookies**: butter into the pot, tip weed in, stir with the spoon (stop and it burns: smoke alarm) → tip
   the pot over the bowl + pour flour, stir → tip the bowl of dough over a tray → pull the oven door down, tray in, shut
   it → golden (late = burnt + alarm) → cookies kick in late.
+- **View**: the modes start in **first person** (hooves on screen, they reach for what you hold / work); V (gamepad
+  View, the 👁 button) switches to third person and back any time; knocked over / carried = third person for a moment.
 - **Wheat & beer (farm 7)**: scythe the wheat → sheaves on the threshing floor → JUMP on them (a drum beats: stomps on
   the beat count double; all pigs together = fast) → grain sack → tip it into the mill's hopper, crank → malt sack →
   kettle over the fire pit: 2 water (bucket from the pump), tip the malt in, throw logs on the fire, stir with the

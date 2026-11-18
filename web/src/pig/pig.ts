@@ -14,6 +14,7 @@ import type { Tone } from '../core/ragdoll';
 import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
 import { SNACK, SNACK_IDS, type SnackId } from '../world/snacks';
 import type { Prop } from '../world/props';
+import { Wheelbarrow } from '../world/barrow';
 import { HANDS, type Handle } from '../world/hands';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
@@ -73,6 +74,8 @@ const MOUTH = { four: new THREE.Vector3(0, 0.72, 0.82), two: new THREE.Vector3(0
 /** A snack in the hooves that a click uses (eat it / light a cigarette), not a hit. */
 /** Heavy loot two pigs can hold together (Bob's safe). */
 const coopOf = (h: Holdable | null) => (h as { def?: { coop?: boolean } } | null)?.def?.coop === true;
+/** Pushed by its handles (the wheelbarrow): where it's held (body space), else null. */
+const pushOf = (h: Holdable | null) => (h as Prop | null)?.kind === 'prop' ? (h as Prop).pushAt : null;
 const snackOf = (h: Holdable | null) => { const p = h as Prop | null; return p?.kind === 'prop' && (p.def.snack || p.def.smokes) && p.left > 0 ? p : null; };
 const MIDDLE = new THREE.Vector3();
 const QSTAND = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -STAND_ANGLE);
@@ -147,6 +150,8 @@ export class Pig implements Holdable {
   private swingT = -1; private swingC = 0; private strainT = 0; private heavyTold = -10;
   /** Heavy loot: how far its centre was when it was grabbed (the leash). */
   private leash = 1; private stuckT = 0;
+  /** Pushing a wheelbarrow: how far the handles go sideways to turn it (−1..1 rad-ish; + = turn left). */
+  private steer = 0;
   /** Just thrown: it may still overlap us for a moment (no collision, doesn't count as a hit). */
   private thrown: { h: Holdable; until: number } | null = null;
   /** Online, host: the player's own simulation of this pig (pose it reports); host control window (knocks, rams…). */
@@ -386,7 +391,7 @@ export class Pig implements Holdable {
     const moving = mx * mx + mz * mz > 0.01;
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
-    if (this.held) speed *= 1 - clamp(this.held.mass / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);
+    if (this.held) speed *= 1 - clamp(this.held.mass * (pushOf(this.held) ? 0.35 : 1) / (this.liftMax * 2.5), 0, 0.55) * (this.standing ? 0.5 : 1);   // (a wheelbarrow: the wheel carries most of it)
     if (coopOf(this.held)) {
       // heavy loot on a leash: past the distance you grabbed it at you slow right down (it drags you back), so you
       // go as fast as it slides (positions, not speeds: an online player sees it where the snapshots put it); alone
@@ -399,6 +404,23 @@ export class Pig implements Holdable {
     if (this.high) speed *= 1 - 0.2 * this.high;
     if (this.boosted('energy')) speed *= SNACK.fast;
     let tx = mx * speed, tz = mz * speed;
+    const push = pushOf(this.held);
+    this.steer = 0;
+    if (push) {
+      // pushing a wheelbarrow: W / S = along where it points (I stay behind its handles); turning = the handles go
+      // sideways (gripGoal) and it pivots on its wheel: look where you want to go while pushing, or A / D
+      const cf = Math.sin(inp.yaw) * mx + Math.cos(inp.yaw) * mz, cs = -Math.cos(inp.yaw) * mx + Math.sin(inp.yaw) * mz;
+      tx = Math.sin(this.yaw) * cf * speed; tz = Math.cos(this.yaw) * cf * speed;
+      this.steer = clamp((Math.abs(cf) > 0.1 ? wrapAngle(inp.yaw - this.yaw) * Math.sign(cf) : 0) - cs * 0.7, -0.9, 0.9);
+      // a wheelbarrow: you can't walk into it faster than it rolls away (blocked wheel = you stop, it doesn't flip
+      // over its nose) — positions, not speeds, so a predicted online player gets the same
+      const hp = this.held!.body.translation(), ux = hp.x - this.pos.x, uz = hp.z - this.pos.z, d = Math.hypot(ux, uz);
+      if (d > 0.01) {
+        const hold = (this.standing ? 0.5 : 0.74) + Math.abs(push.z);   // where it rides when held (the handles in front of me)
+        const f = (tx * ux + tz * uz) / d, allowed = Math.max(0, (d - (hold - 0.3)) * 6);
+        if (f > allowed) { const k = allowed / f; tx *= k; tz *= k; }   // (all of it: no sliding round a stuck barrow either)
+      }
+    }
     if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
     if (this.grounded && G.iceAt?.(this.pos.x, this.pos.z)) acc *= this.sprinting ? PIG.iceSprint : PIG.ice;   // farm 5: hooves on ice
@@ -408,7 +430,7 @@ export class Pig implements Holdable {
     if (dl > maxD) { this.vel.x += (dx / dl) * maxD; this.vel.z += (dz / dl) * maxD; } else { this.vel.x = tx; this.vel.z = tz; }
 
     // facing: camera direction while moving (strafe), movement direction while sprinting
-    const want = this.sprinting ? Math.atan2(this.vel.x, this.vel.z) : inp.yaw;
+    const want = this.sprinting ? Math.atan2(this.vel.x, this.vel.z) : push ? Wheelbarrow.heading(this.held as Prop) : inp.yaw;   // (behind the wheelbarrow's handles)
     if (moving || this.held || this.handle || this.chargeStart >= 0 || G.lobby || inp.face) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
 
     // jump
@@ -451,15 +473,16 @@ export class Pig implements Holdable {
     this.lastVx = this.vel.x; this.lastVz = this.vel.z;
     const dYaw = wrapAngle(this.yaw - this.lastYaw); this.lastYaw = this.yaw;
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    const heavy = this.held ? clamp(this.held.mass / 50, 0, 1) : 0;
+    // (a wheelbarrow: the wheel takes the weight and the two handles steady you, like a walking frame)
+    const pushing = !!pushOf(this.held), heavy = this.held ? clamp(this.held.mass * (pushing ? 0.12 : 1) / 50, 0, 1) : 0;
     // slow, smooth random teeter (fixed frequencies per pig: no phase jumps)
     const t = this.now + this.seed * 37;
     const bz = this.buzz, dr = this.buzzKind === 2 ? bz : 0;
-    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1) * (1 + bz * 2.2 + dr * 0.5);
+    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (pushing ? 0.6 : 1) * (this.smoking ? SNACK.calm : 1) * (1 + bz * 2.2 + dr * 0.5);
     const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp + Math.sin(t * 0.27) * 2 * dr;
     const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp + Math.cos(t * 0.23) * 2 * dr;
     // turning while moving: lean out of the turn
-    const turn = clamp(dYaw / Math.max(dt, 1e-3), -8, 8) * sp * B.turn;
+    const turn = clamp(dYaw / Math.max(dt, 1e-3), -8, 8) * sp * B.turn * (pushing ? 0.4 : 1);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);     // pig's right (world)
     const am = Math.hypot(ax, az), acc = am > 60 ? 60 / am : 1;     // collisions are handled as kicks (postStep)
     const L0 = Math.hypot(this.leanX, this.leanZ);
@@ -862,7 +885,7 @@ export class Pig implements Holdable {
       else if (quick && this.buzz > 0.2 && (this.held as Prop).def?.food) { this.eatAt = this.now; this.eatProp = this.held as Prop; G.audio.play('munch', { pos: this.pos, vol: 0.9 }); }   // the munchies
       else if (quick) this.startHit();
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
-      else if (this.held.mass > this.liftMax) this.throwHeld(c);
+      else if (this.held.mass > this.liftMax || pushOf(this.held)) this.throwHeld(c);
       else { this.swingT = 0; this.swingC = c; }
     }
     if (this.swingT >= 0) {
@@ -983,8 +1006,9 @@ export class Pig implements Holdable {
     this.swingT = -1; this.strainT = 0;
     // pigs by the scruff; light things at their middle (they stick to the hooves: upright, aimed, tipped to pour —
     // no swinging about the grab point); heavy ones by the edge nearest the snout (dragged along)
-    const atMiddle = h.kind === 'prop' && h.mass <= this.liftMax;
-    this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : atMiddle ? MIDDLE : undefined);
+    // (a wheelbarrow: by its handles)
+    const push = pushOf(h), atMiddle = h.kind === 'prop' && h.mass <= this.liftMax && !push;
+    this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : push ?? (atMiddle ? MIDDLE : undefined));
     G.audio.play('bite', { pos: this.pos, vol: 0.7 });
     G.noise(this.pos, 4);
   }
@@ -1021,7 +1045,7 @@ export class Pig implements Holdable {
 
   private throwHeld(c: number) {
     const h = this.held; if (!h) return;
-    const heavy = h.mass > this.liftMax;
+    const heavy = h.mass > this.liftMax || !!pushOf(h);
     const pitch = clamp(-this.input.pitch, -0.3, 0.7) + 0.32;
     const dir = v1.set(Math.sin(this.input.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(this.input.yaw) * Math.cos(pitch));
     const sp = (PIG.throwMin + (PIG.throwMax - PIG.throwMin) * c) * Math.sqrt(clamp(14 / Math.max(h.mass, 6), 0.2, 1.4)) * (heavy ? 0.35 : 1)
@@ -1054,6 +1078,13 @@ export class Pig implements Holdable {
     } else if ((this.eatProp && this.eating) || this.now - this.mouthAt < MOUTH_T) {   // bring it to the mouth (eat / lick / light), back down
       const e = this.eatProp && this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.mouthAt) / MOUTH_T, k = clamp(Math.min(e / 0.22, (1 - e) / 0.18), 0, 1);
       out.lerpVectors(g.hold, MOUTH[this.standing ? 'two' : 'four'], k * k * (3 - 2 * k));
+    } else if (pushOf(this.held)) {
+      // a wheelbarrow: the handles at hoof / snout height in front, the wheel on the ground; R lifts them high (it tips
+      // forward over its wheel: the load slides out of the front)
+      const st = this.standing, k = this.tiltK;
+      // (handles to the right = it turns left; lifted, they also go forward on their arc round the wheel, so the wheel
+      // stays where it is)
+      out.set(-this.steer * 0.4, (st ? 0.78 : 0.56) + k * (st ? 0.85 : 0.6), (st ? 0.5 : 0.74) + k * 0.8);
     } else if (!this.held || this.held.mass > this.liftMax) out.copy(g.hold);   // heavy: dragged along in front
     else {
       // light: it goes where I aim (the crosshair, within reach); pulled back while winding up; a whack thrusts it out
@@ -1074,7 +1105,7 @@ export class Pig implements Holdable {
     // light props stay upright, facing where I face (R tips them over: pour); near a socket that takes them, the
     // magnet pulls them in and turns them to fit
     let qT: THREE.Quaternion | null = null;
-    if (h.kind === 'prop' && h.mass <= this.liftMax && !swing) {
+    if (h.kind === 'prop' && h.mass <= this.liftMax && !swing && !pushOf(h)) {
       qT = qHold.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw).multiply(qTilt.setFromAxisAngle(XAXIS, this.tiltK * 2.0));
       // being pulled into its place (or tipped over an opening): it slides in without catching on edges
       const pull = this.charge() <= 0 && !this.eating && this.tiltK < 0.3 ? HANDS.magnet(this, h as Prop, goal, qT) : 0;
@@ -1303,7 +1334,7 @@ export class Pig implements Holdable {
       // the hooves go on the thing itself (where it really is on screen), not on the invisible grip point
       const hv = (this.held as { obj?: THREE.Object3D; visual?: { root: THREE.Object3D } });
       const ho = hv.obj ?? hv.visual?.root;
-      if (ho && this.standing) {
+      if (ho && this.standing && !pushOf(this.held)) {
         hand.copy(ho.position).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
         hand.y += CENTER[this.shape];
       }
@@ -1319,7 +1350,7 @@ export class Pig implements Holdable {
       this.handAt.applyQuaternion(r.quaternion).add(r.position);
     } else this.handAt = null;
     this.visual.update({
-      limp, rel: this.relQ, hand, handW: this.held ? this.held.radius : this.handle ? 0.04 : 0,
+      limp, rel: this.relQ, hand, handW: this.held ? (pushOf(this.held) ? 0.3 : this.held.radius) : this.handle ? 0.04 : 0,
       act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',
       actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
       cig: this.smoking, strong: this.boosted('spinach'),

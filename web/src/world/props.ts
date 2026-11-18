@@ -44,6 +44,11 @@ export interface PropDef {
    * the stream's colour / bit size / sound. `left` = how much is in it (servings: the starting amount).
    */
   pour?: { stuff: string; rate: number; spout: [number, number, number]; color: number; size?: number; sound?: string };
+  /**
+   * Pushed, not carried (the wheelbarrow): held at this point (model space: its handles), at hoof / snout height in
+   * front of the pig — never aimed or turned upright; R lifts the handles high (dump it); LMB = a shove.
+   */
+  push?: [number, number, number];
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -79,6 +84,24 @@ export class Prop implements Holdable {
   /** Snacks: bites / cigarettes left (an eaten can loses its lid). */
   left = 0;
   private lid: THREE.Object3D | null = null;
+  /**
+   * Swap its one box collider for several pieces (the wheelbarrow: a hollow tray, legs, a wheel). Body space (the
+   * centre of the model's box). `slick` = no friction from this piece (a wheel: something else grips for it).
+   */
+  compound(parts: { box?: [number, number, number]; ball?: number; at: [number, number, number]; rot?: [number, number, number]; mass: number; friction?: number; slick?: boolean }[]) {
+    const c0 = this.body.collider(0);
+    owners.delete(c0.handle); world.removeCollider(c0, false);
+    for (const p of parts) {
+      const d = p.ball ? RAPIER.ColliderDesc.ball(p.ball) : RAPIER.ColliderDesc.cuboid(p.box![0], p.box![1], p.box![2]);
+      d.setTranslation(p.at[0], p.at[1], p.at[2]);
+      if (p.rot) { const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(p.rot[0], p.rot[1], p.rot[2])); d.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }); }
+      d.setMass(p.mass).setFriction(p.slick ? 0 : p.friction ?? this.def.friction ?? 0.7).setRestitution(this.def.bounce ?? 0.15)
+        .setCollisionGroups(groups(L.PROP)).setActiveHooks(HOOKS)
+        .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(this.def.mass * 90);
+      if (p.slick) d.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+      owners.set(world.createCollider(d, this.body).handle, this);
+    }
+  }
   setLeft(n: number) { this.left = n; if (this.lid) this.lid.visible = n > 0; this.onLeft?.(n); }
   /** A container shows how full it is (chain props: the mug's beer, the bag's weed). */
   onLeft?: (n: number) => void;
@@ -96,6 +119,8 @@ export class Prop implements Holdable {
   size = new THREE.Vector3();
   /** Can't be taken right now (a paper being rolled, a tray behind a shut oven door). */
   noGrab?: () => boolean;
+  /** Pushed by its handles (def.push), body space; null = carried normally. */
+  pushAt: THREE.Vector3 | null = null;
   constructor(scene: THREE.Scene, public def: PropDef, at: THREE.Vector3, yaw = 0) {
     const model = def.make ? made(def.make()) : fitted(def.model!, { height: def.height, scale: def.scale });
     const size = sizeOf(model);
@@ -125,6 +150,7 @@ export class Prop implements Holdable {
     this.mass = def.mass;
     this.radius = Math.max(size.x, size.z) / 2;
     this.half = size.y / 2;
+    if (def.push) this.pushAt = new THREE.Vector3(def.push[0], def.push[1] - size.y / 2, def.push[2]);
     this.label = def.label;
     this.synced = new Synced(body, this.obj);
     this.home = { p: new THREE.Vector3(at.x, at.y + size.y / 2 + 0.02, at.z), q: q.clone() };
@@ -372,7 +398,7 @@ export const PROPS: Record<string, PropDef> = {
   trayRaw: { make: () => makeTray('raw'), mass: 1.2, sound: 'metal', label: 'item.trayRaw', item: 'trayRaw' },
   cookies: { make: () => makeTray('baked'), mass: 1.2, sound: 'metal', label: 'item.cookies', item: 'cookies', servings: 6, food: true },
   cookiesBurnt: { make: () => makeTray('burnt'), mass: 1.2, sound: 'metal', label: 'item.cookiesBurnt', item: 'burnt' },
-  wheelbarrow: { make: makeWheelbarrow, mass: 60, sound: 'metal', label: 'item.wheelbarrow', item: 'barrow', friction: 0.25, bounce: 0.02 },
+  wheelbarrow: { make: makeWheelbarrow, mass: 30, sound: 'metal', label: 'item.wheelbarrow', item: 'barrow', friction: 0.6, bounce: 0.02, push: [0, 0.44, -0.84] },
   // farm 7 (beer — world/brew.ts): the scythe, wheat sheaves, grain sacks (pour into the mill) → malt sacks (pour into
   // the kettle), hops, the water bucket, the barrel, mugs (fill them at the tap, drink, refill)
   scythe: { model: 'brew/Scythe', height: 1.3, mass: 2.5, sound: 'metal', label: 'item.scythe', item: 'scythe' },
