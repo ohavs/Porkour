@@ -349,9 +349,14 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   server-checked codes on Render as an env var / real lock: itch.io restricted page or Cloudflare Access + private repo);
   Claude recommended server-checked personal codes now (+ a real lock before a public early access). Waiting for the user's
   choice — then build it. The repo is public (anyone can read the code).
+  Checked headless: cannabis chain (harvest → grinder → table → joint → high, log fall), beer chain (scythe → stomp → grain
+  → mill → kettle → barrel → tap → drunk, table dance), 2 browsers online (station state synced, player's act applied on the
+  host, buzz synced), first person (arms per pose). PR #47 merged. Screenshot page for the pending checks (Hebrew):
+  https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX (rebuild: scratchpad `gallery.cjs` per farm + `mkgal.py`; republish).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
 - **Entry code (early access)**: which option (code screen / server-checked codes / real lock), one shared code or one per
   tester, and the code itself (set it in Render, not in the chat).
 - **Cannabis farm + wheat & beer (new modes)**: fun? Each step a real game (water / harvest / wheelbarrow / grinder crank /
