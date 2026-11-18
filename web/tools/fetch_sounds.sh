@@ -50,7 +50,8 @@ phone() {
 # ---------------------------------------------------------------- sources
 pack https://github.com/VoxeLibre/VoxeLibre VoxeLibre '/mods/ENTITIES/mobs_mc/sounds/' '/mods/ENTITIES/mobs_mc/LICENSE-media.md' \
   '/mods/CORE/mcl_sounds/sounds/' '/mods/CORE/mcl_sounds/README.txt' '/mods/ITEMS/mcl_fishing/sounds/' '/mods/ITEMS/mcl_fishing/README.txt' \
-  '/mods/ITEMS/mcl_bells/sounds/' '/mods/ITEMS/mcl_bells/README.md'
+  '/mods/ITEMS/mcl_bells/sounds/' '/mods/ITEMS/mcl_bells/README.md' '/mods/ITEMS/mcl_potions/sounds/' '/mods/ITEMS/mcl_potions/README.txt' \
+  '/mods/ITEMS/mcl_fire/sounds/' '/mods/ITEMS/mcl_fire/README.txt' '/mods/ITEMS/REDSTONE/mesecons_noteblock/sounds/' '/mods/ITEMS/REDSTONE/mesecons_noteblock/README.txt'
 A=binaries/data/mods/public/audio
 pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fauna/animal/chicken_*" "/$A/actor/fauna/animal/cattle_*" \
   "/$A/actor/singlesteps/fs_grass*" "/$A/actor/singlesteps/fs_gravel[1-4]*" "/$A/attack/impact/fleshimp_*" \
@@ -205,6 +206,17 @@ if [ -d "$WEB/sfx_user" ]; then
 fi
 
 # ---------------------------------------------------------------- credits
+# ---------------------------------------------------------------- chain modes (farms 6 / 7): drinking, pouring, the lighter, fire, the oven bell, the threshing drum
+VI=$CACHE/VoxeLibre/mods/ITEMS
+snd "$VI/mcl_potions/sounds/mcl_potions_drinking.ogg" drink -4 0 "VoxeLibre mcl_potions, CC0"
+snd "$VI/mcl_potions/sounds/mcl_potions_bottle_pour.ogg" pour -4 0 "VoxeLibre mcl_potions, CC0"
+snd "$VI/mcl_potions/sounds/mcl_potions_bottle_fill.ogg" fill -4 0 "VoxeLibre mcl_potions, CC0"
+snd "$VI/mcl_fire/sounds/fire_flint_and_steel.ogg" flint -4 0 "Benboncan (freesound 66457) via VoxeLibre mcl_fire, CC BY 3.0"
+snd "$VI/mcl_fire/sounds/fire_fire.1.ogg" fire -6 0 "Dynamicell (freesound 17548) via VoxeLibre mcl_fire, CC BY 3.0"
+snd "$VI/mcl_fire/sounds/fire_extinguish_flame.1.ogg" hiss -5 0 "Perttu Ahola (celeron55) via VoxeLibre mcl_fire, CC BY-SA 3.0"
+snd "$VI/REDSTONE/mesecons_noteblock/sounds/mesecons_noteblock_bell.ogg" ding -4 0 "Brandon75689 (opengameart point-bell) via VoxeLibre mesecons_noteblock, CC0"
+snd "$VI/REDSTONE/mesecons_noteblock/sounds/mesecons_noteblock_bass_drum.ogg" drum -3 0 "Mattc90 (freesound 264285) via VoxeLibre mesecons_noteblock, CC0"
+
 {
   echo "# Sound credits"
   echo

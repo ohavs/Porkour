@@ -41,7 +41,11 @@ const MODELS = [
   ...COVER_MODELS, ...LANDMARK_MODELS,
 ];
 /** + the models only the farm this page plays needs. */
-const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : farmId() === 'farm4' ? FARM4_MODELS : farmId() === 'farm5' ? FARM5_MODELS : []);
+/** The chain modes' shed kitchen + brewing bits (KayKit Restaurant, Quaternius; CC0). */
+const CHAIN_MODELS = ['kaykit/fridge_A', 'kaykit/stove_single', 'kaykit/oven', 'kaykit/kitchencounter_straight_A', 'kaykit/shelf_papertowel_decorated', 'kaykit/pot_A',
+  'kaykit/bowl', 'kaykit/kitchentable_A', 'kaykit/chair_stool', 'brew/Scythe', 'brew/Bag', 'brew/Bag_Open', 'brew/Barrel', 'brew/Bucket', 'village/Cauldron', 'kenney/campfire_logs'];
+const farmModels = () => (farmId() === 'farm2' ? FARM2_MODELS : farmId() === 'farm3' ? FARM3_MODELS : farmId() === 'farm4' ? FARM4_MODELS : farmId() === 'farm5' ? FARM5_MODELS
+  : farmId() === 'farm6' || farmId() === 'farm7' ? CHAIN_MODELS : []);
 
 loadSettings();
 initShop();

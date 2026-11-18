@@ -39,6 +39,8 @@ kbd.kc { font-family: Title; font-size:16px; color:#3b2412; background:#fff6e6; 
 #status { display:flex; gap:8px; align-items:flex-end; }
 .sb { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border-radius:12px; background: rgba(30,16,6,.5); font-family: Title; font-size:18px; color: var(--cream); }
 .sb .ic { width:28px; height:28px; }
+.pp.needs { gap: 8px; } .pp.needs .nd { display:inline-flex; align-items:center; opacity:.55; } .pp.needs .nd.ok { opacity: 1; } .pp.needs b { font-family: Title; font-size: 16px; margin-left: 2px; color: var(--gold); }
+.sb.buzz .mbar { width: 56px; height: 8px; } .sb.buzz .mbar i { background: linear-gradient(90deg, #8be04e, #b57bff, #ff6fa8); }
 .sb.warn { animation: sbFlash .6s ease-in-out infinite alternate; }
 @keyframes sbFlash { from { background: rgba(30,16,6,.5); } to { background: rgba(255,90,60,.55); } }
 #bob.ico { padding:2px 8px; display:flex; gap:2px; } #bob.ico .ic { width:30px; height:30px; }
@@ -284,7 +286,9 @@ export class Hud {
       && tr.holding !== pig && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 1.4) : null;
     const weapon = !!(pig.held as { def?: { weapon?: number } } | null)?.def?.weapon;
     const snack = pig.held as { def?: { snack?: string; smokes?: boolean }; left?: number } | null;
-    const useIc = snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
+    const chainIc = pig.held && G.chain ? G.chain.itemIcon(pig) : '';
+    const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
+    const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
     if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())), P(kc('Q'), ICONS.fart));
     else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
@@ -303,11 +307,12 @@ export class Hud {
       if (tg) p = row(P(IC.rmb, IC.grab, val(tg)), coop(tg) && !tg.heldBy ? P(IC.two) : '');
       else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
+    if (!p && G.chain && !pig.out && !pig.cage && !pig.heldBy) { const nd = G.chain.needsAt(pig); if (nd) p = `<div class="pr"><span class="pp needs">${nd}</span></div>`; }
     const c = pig.charge();
     if (this.prompt.dataset.h !== p) { this.prompt.dataset.h = p; this.prompt.innerHTML = p; }
     this.charge.style.opacity = c > 0 ? '1' : '0';
     this.chargeBar.style.width = `${c * 100}%`;
-    const w = pig.standing ? clamp(pig.wobble, 0, 1) : 0;
+    const w = pig.standing || pig.onBeam ? clamp(pig.wobble, 0, 1) : 0;
     this.wob.style.opacity = w > 0.25 ? '1' : '0';
     this.wobBar.style.width = `${w * 100}%`;
     // status: a row of badges (icon + a number when it counts down)
@@ -317,6 +322,12 @@ export class Hud {
     if (pig.mode === 'wallow') st.push(B(IC.dead));
     for (const k of SNACK_IDS) if (pig.boosted(k)) st.push(B(IC[`boost_${k}`], String(Math.ceil(pig.boostUntil[k] - pig.now))));
     if (pig.smoking) st.push(B(IC.cig, String(Math.ceil(pig.cigUntil - pig.now))));
+    // chain modes: how high / drunk (a little meter in the badge); jailed / frozen by the admin
+    const bz = pig.buzz;
+    if (bz > 0.02) st.push(`<span class="sb buzz">${pig.buzzKind === 2 ? IC.beer : IC.leaf}<span class="mbar"><i style="width:${Math.round(bz * 100)}%"></i></span></span>`);
+    else if (pig.buzzKind && pig.now < pig.buzzFrom) st.push(B(IC.cookie, '…'));
+    if (pig.jailed) st.push(B(IC.lock, String(Math.ceil(pig.jailUntil - pig.now)), true));
+    if (pig.frozen) st.push(B(IC.snow, String(Math.ceil(pig.frozenUntil - pig.now)), true));
     if (!pig.out && !pig.heldBy && G.traps?.list.some((tr: { active: boolean; armed: boolean; pos: THREE.Vector3 }) => tr.active && tr.armed
       && Math.hypot(tr.pos.x - pig.pos.x, tr.pos.z - pig.pos.z) < 3.5)) st.push(B(IC.trap, '', true));
     if (ADMIN.showSight && G.farmer) st.push(B(IC.eye, G.farmer.sees(pig) ? ' ✔' : ' ✘', G.farmer.sees(pig)));

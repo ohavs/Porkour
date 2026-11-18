@@ -33,7 +33,7 @@ const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab', 'attack'] as 
 const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 
 export function entities(game: Game): NetEnt[] {
-  const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy, game.farm.pumpkins, game.farm.winter].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
+  const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy, game.farm.pumpkins, game.farm.winter, game.farm.chain, game.farm.chain?.visions].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
   return [...game.pigs, game.farmer!, game.farm.cage, game.round, game.traps, ...game.gates.list, ...game.loos, ...(game.phones ? [game.phones] : []), ...(game.hammock ? [game.hammock] : []), ...extra, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
 }
 
@@ -41,7 +41,7 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), qq = new THREE.Quaternion();
 
 // ====================================================================== host
-interface Remote { inp: PigInput; presses: number; seq: number; pose: RemotePose | null }
+interface Remote { inp: PigInput; presses: number; seq: number; pose: RemotePose | null; act: number }
 
 export class NetHost {
   private ents: NetEnt[];
@@ -71,6 +71,7 @@ export class NetHost {
       const inp = { ...r.inp };
       PRESS.forEach((k, i) => (inp[k] = !!(r.presses & (1 << i))));
       r.presses = 0;
+      inp.act = r.act; r.act = 0;
       return inp;
     }
     return null;
@@ -90,13 +91,14 @@ export class NetHost {
     if (type !== T.INPUT) return;
     const seq = r.u32();
     let rm = this.remote.get(from);
-    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1, pose: null }; this.remote.set(from, rm); }
+    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1, pose: null, act: 0 }; this.remote.set(from, rm); }
     if (seq <= rm.seq) return;
     rm.seq = seq;
     const inp = rm.inp;
     inp.mx = r.i8() / 127; inp.mz = r.i8() / 127; inp.yaw = r.f32(); inp.pitch = r.f32();
     const held = r.u8r(); HELD.forEach((k, i) => (inp[k] = !!(held & (1 << i))));
     rm.presses |= r.u16();
+    const act = r.u8r(); if (act) rm.act = act;
     if (r.left >= 28) {   // their own pig's pose (they move it themselves)
       const pose = rm.pose ?? (rm.pose = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, at: 0 });
       pose.x = r.f32(); pose.y = r.f32(); pose.z = r.f32(); pose.vx = r.f32(); pose.vy = r.f32(); pose.vz = r.f32(); pose.yaw = r.f32();
@@ -215,7 +217,7 @@ export class NetClient {
   private keyAskedAt = -1e9;
   renderT = 0;
   delay = 0.1; private jitter = 0.01;
-  private inputSeq = 0; private pending = 0; private lastSend = 0; private lastSig = '';
+  private inputSeq = 0; private pending = 0; private pendAct = 0; private lastSend = 0; private lastSig = '';
   rtt = 0;
   started = false;
   onFirstFrame?: () => void;
@@ -305,11 +307,14 @@ export class NetClient {
     const mx = Math.round(inp.mx * 127), mz = Math.round(inp.mz * 127);
     const sig = `${mx},${mz},${held},${inp.yaw.toFixed(2)}`;
     const now = performance.now();
-    if (!this.pending && !pose && sig === this.lastSig && now - this.lastSend < 100) return;
-    if (!this.pending && now - this.lastSend < (pose ? 33 : 30)) return;
+    if (inp.act) this.pendAct = inp.act;
+    if (!this.pending && !this.pendAct && !pose && sig === this.lastSig && now - this.lastSend < 100) return;
+    if (!this.pending && !this.pendAct && now - this.lastSend < (pose ? 33 : 30)) return;
     this.lastSend = now; this.lastSig = sig;
     const w = new Writer();
-    w.u8w(T.INPUT).u32(++this.inputSeq).i8(mx).i8(mz).f32(inp.yaw).f32(inp.pitch).u8w(held).u16(this.pending);
+    if (inp.act) this.pendAct = inp.act;
+    w.u8w(T.INPUT).u32(++this.inputSeq).i8(mx).i8(mz).f32(inp.yaw).f32(inp.pitch).u8w(held).u16(this.pending).u8w(this.pendAct);
+    this.pendAct = 0;
     if (pose) for (const x of pose) w.f32(x);
     this.pending = 0;
     this.on.sendData(this.on.hostId, w.bytes());

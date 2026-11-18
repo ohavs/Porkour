@@ -70,6 +70,8 @@ export interface FarmBuild {
   phones?: Phones;
   /** Bob's hammock (his siesta; synced entity, decor kit). */
   hammock?: Hammock;
+  /** Chain modes (farms 6 / 7): the production chain (world/chain.ts; one synced entity + its visions). */
+  chain?: import('./chain').Chain;
   /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
   clock?: { start: number; secsPerHour: number };
   /** 0..1 darker nights (farm 4). */

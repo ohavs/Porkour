@@ -22,11 +22,13 @@ export interface PigInput {
   jumpP: boolean; sprintP: boolean; fartP: boolean; standP: boolean; wallowP: boolean; grabP: boolean; grabR: boolean; oinkP: boolean;
   /** LMB pressed / released; the lock-pick puzzle was solved / a pin slipped (the puzzle runs on the player's screen). */
   attackP: boolean; attackR: boolean; pickP: boolean; pickFailP: boolean;
+  /** Chain modes: a station mini-game's result (1 + station × 8 + result; 0 = none). */
+  act: number;
 }
 export const emptyInput = (): PigInput => ({
   mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false, attack: false,
   jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false,
-  attackP: false, attackR: false, pickP: false, pickFailP: false,
+  attackP: false, attackR: false, pickP: false, pickFailP: false, act: 0,
 });
 
 /** Where a player's own copy of their pig is (sent with the controls, host follows it). */
@@ -136,6 +138,61 @@ export class Pig implements Holdable {
   private predIgnore: Holdable | null = null;
   /** Player side: hand position (torso space) from the host. */
   private netHand = new THREE.Vector3(); private netHasHand = false;
+  // ---- chain modes (farms 6 / 7): high (cannabis) / drunk (beer)
+  /** 1 = high, 2 = drunk, 0 = sober. Level (0..1.3) kicks in over 5 s from buzzFrom, fades over 25 s after buzzUntil. */
+  buzzKind = 0; buzzLvl = 0; buzzFrom = 0; buzzUntil = 0;
+  private lagX = 0; private lagZ = 0;
+  /** Balance beam (world/beams.ts): sideways lean (rad) and its speed while walking a log. */
+  beamLean = 0; private beamLeanV = 0; onBeam: unknown = null;
+  get buzz() {
+    if (!this.buzzKind) return 0;
+    const n = this.now;
+    return Math.min(1, this.buzzLvl) * clamp((n - this.buzzFrom) / 5, 0, 1) * clamp(1 - (n - this.buzzUntil) / 25, 0, 1);
+  }
+  get high() { return this.buzzKind === 1 ? this.buzz : 0; }
+  get drunk() { return this.buzzKind === 2 ? this.buzz : 0; }
+  /** Host: a puff / a hit / a cookie / a mug: `amount` stronger, `secs` longer (a cookie kicks in after `delay`). */
+  addBuzz(kind: 1 | 2, amount: number, secs: number, delay = 0) {
+    const n = this.now;
+    if (this.buzzKind !== kind || (this.buzz < 0.02 && n > this.buzzUntil + 25)) { this.buzzKind = kind; this.buzzLvl = 0; this.buzzFrom = n + delay; this.buzzUntil = n + delay; }
+    if (this.buzz < 0.02 && n < this.buzzFrom) this.buzzFrom = Math.min(this.buzzFrom, n + delay);
+    this.buzzLvl = Math.min(1.3, this.buzzLvl + amount);
+    this.buzzUntil = Math.min(n + 200, Math.max(this.buzzUntil, n + delay) + secs);
+  }
+  clearBuzz() { this.buzzKind = 0; this.buzzLvl = 0; this.buzzUntil = 0; this.beamLean = this.beamLeanV = 0; }
+  private buzzState() { return [this.buzzKind, this.buzzLvl, this.buzzFrom, this.buzzUntil, this.beamLean]; }
+  private buzzApply(n: number[], j: number) {
+    if (n[j] === undefined) return;
+    this.buzzKind = n[j]; this.buzzLvl = n[j + 1]; this.buzzFrom = n[j + 2]; this.buzzUntil = n[j + 3];
+    if (!this.predicting) this.beamLean = n[j + 4] ?? 0;
+  }
+  /** High / drunk controls: late (lag), drifting sideways; drunk also swaps left / right for a moment now and then. */
+  private buzzMove(mx: number, mz: number, dt: number): [number, number] {
+    const b = this.buzz;
+    if (b < 0.02) { this.lagX = mx; this.lagZ = mz; return [mx, mz]; }
+    const t = this.now + this.seed * 50, drunk = this.buzzKind === 2;
+    const lag = Math.min(1, dt * (16 - (drunk ? 13 : 11) * b));
+    this.lagX += (mx - this.lagX) * lag; this.lagZ += (mz - this.lagZ) * lag;
+    mx = this.lagX; mz = this.lagZ;
+    const ml = Math.hypot(mx, mz);
+    if (ml < 0.1) return [mx, mz];
+    const drift = drunk ? (Math.sin(t * 0.9) + Math.sin(t * 2.3) * 0.5) * 0.5 * b : Math.sin(t * 0.55) * 0.38 * b;
+    mx += (-mz / ml) * drift * ml; mz += (mx / ml) * drift * ml;
+    if (drunk && b > 0.55 && Math.sin(t * 0.21) > 0.82) {   // "which way is left?"
+      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw), d = mx * rx + mz * rz;
+      mx -= 2 * d * rx; mz -= 2 * d * rz;
+    }
+    return [mx, mz];
+  }
+
+  /** Admin powers / punishments (host): ghost = nobody notices this pig; jailed (the sky cell) / frozen until. */
+  pw = { ghost: false };
+  jailUntil = 0; frozenUntil = 0;
+  private flyOn = false;
+  /** Admin power (host / solo, my own pig): flies through everything. */
+  get flying() { return this === G.localPig && ADMIN.fly && G.net !== 'client' && !this.out && !this.heldBy; }
+  get jailed() { return this.now < this.jailUntil; }
+  get frozen() { return this.now < this.frozenUntil; }
   label: string;
   spawn: THREE.Vector3;
   pos = new THREE.Vector3();
@@ -221,6 +278,7 @@ export class Pig implements Holdable {
     }
     if (this.pos.y < -25) this.respawn();
     this.snackStep();
+    this.jailStep();
 
     if (this.heldBy) {
       this.mode = 'held';
@@ -232,6 +290,9 @@ export class Pig implements Holdable {
       return;
     }
     if (this.mode === 'held') this.mode = 'ragdoll', this.startRagdoll(null, false);
+    if (this.flying) { if (this.mode !== 'normal') { if (this.mode === 'ragdoll') this.getUp(); this.mode = 'normal'; } this.flyStep(inp, dt); return; }
+    if (this.flyOn) this.flyOff();
+    if (this.frozen) { inp.mx = inp.mz = 0; inp.jumpP = inp.fartP = inp.sprintP = inp.standP = inp.wallowP = inp.grabP = inp.attackP = false; }
 
     // ground
     const hit = this.shape === 'rag' ? null : raycast(this.pos, DOWN, this.bottom() + 0.16, ~L.FARMER & 0xffff, this.body,
@@ -268,14 +329,41 @@ export class Pig implements Holdable {
     this.follow(dt);
 
     if (this.sprinting) this.ramStep();
-    if (this.standing) this.balanceStep(dt); else if (this.wobble || this.leanX || this.leanZ) this.resetLean();
+    if (!this.beamCheck(dt, true)) { if (this.standing) this.balanceStep(dt); else if (this.wobble || this.leanX || this.leanZ) this.resetLean(); }
     if (this.punchAt > 0 && !this.punched && this.now - this.punchAt > 0.12) { this.punched = true; this.punchHit(); }
     this.finishStep(dt);
   }
 
+  /** Admin flying: no gravity, through walls; WASD along the camera, Space up, C down, Shift fast. Grabs still work. */
+  private flyStep(inp: PigInput, dt: number) {
+    if (this.standing) this.setStanding(false);
+    if (!this.flyOn) { this.flyOn = true; this.body.setGravityScale(0, true); this.collider.setSensor(true); }
+    const sp = inp.sprint ? 26 : 11;
+    const tx = inp.mx * sp, tz = inp.mz * sp, ty = (inp.jump ? 1 : 0) - (inp.wallow ? 1 : 0);
+    const k = Math.min(1, dt * 8);
+    this.vel.x += (tx - this.vel.x) * k; this.vel.z += (tz - this.vel.z) * k; this.vel.y += (ty * sp * 0.7 - this.vel.y) * k;
+    this.yaw = dampAngle(this.yaw, inp.yaw, 14, dt);
+    this.grounded = false;
+    this.grabStep(inp);
+    if (inp.oinkP) this.oink();
+    this.finishStep(dt);
+  }
+  private flyOff() { this.flyOn = false; this.body.setGravityScale(1, true); this.collider.setSensor(false); }
+  /** Admin jail (host): kept in the sky cell until the time is up, then back to the sty. */
+  private jailStep() {
+    if (!this.jailUntil || G.net === 'client') return;
+    const J = G.jail;
+    if (!this.jailed || !J) { this.jailUntil = 0; this.respawn(); return; }
+    if (!J.inside(this.pos) && !this.heldBy) {
+      const s = J.spot(G.pigs.indexOf(this), v1);
+      if (this.mode === 'ragdoll') this.getUp();
+      this.body.setTranslation(s, true); this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.parts.snap(); this.hostTakes(0.4);
+    }
+  }
+
   /** Walk / sprint / jump / facing from the controls (host, solo, and the player's own prediction). */
   private moveStep(inp: PigInput, dt: number) {
-    let mx = inp.mx, mz = inp.mz;
+    let [mx, mz] = this.buzzMove(inp.mx, inp.mz, dt);
     const moving = mx * mx + mz * mz > 0.01;
     if (this.sprinting && !moving) { mx = Math.sin(this.yaw); mz = Math.cos(this.yaw); }
     let speed = this.sprinting ? PIG.sprint : this.standing ? PIG.standWalk : PIG.walk;
@@ -289,6 +377,7 @@ export class Pig implements Holdable {
       speed = Math.min(speed, Math.max(0.25, (this.leash + 0.6 - d) * 2.5), alone ? 1.4 : Infinity);
     }
     if (this.muddy > 0) speed *= 0.95;
+    if (this.high) speed *= 1 - 0.2 * this.high;
     if (this.boosted('energy')) speed *= SNACK.fast;
     let tx = mx * speed, tz = mz * speed;
     if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
@@ -346,15 +435,16 @@ export class Pig implements Holdable {
     const heavy = this.held ? clamp(this.held.mass / 50, 0, 1) : 0;
     // slow, smooth random teeter (fixed frequencies per pig: no phase jumps)
     const t = this.now + this.seed * 37;
-    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1);
-    const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp;
-    const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp;
+    const bz = this.buzz, dr = this.buzzKind === 2 ? bz : 0;
+    const amp = B.noise * (0.35 + sp * 0.22 + heavy * 1.4) * (this.grounded ? 1 : 1.8) * (this.smoking ? SNACK.calm : 1) * (1 + bz * 2.2 + dr * 0.5);
+    const nx = (Math.sin(t * 1.31) + Math.sin(t * 2.17 + 1.3) * 0.6 + Math.sin(t * 0.53 + 4) * 0.8) * amp + Math.sin(t * 0.27) * 2 * dr;
+    const nz = (Math.sin(t * 1.07 + 2.1) + Math.sin(t * 2.71 + 0.4) * 0.6 + Math.sin(t * 0.61 + 1) * 0.8) * amp + Math.cos(t * 0.23) * 2 * dr;
     // turning while moving: lean out of the turn
     const turn = clamp(dYaw / Math.max(dt, 1e-3), -8, 8) * sp * B.turn;
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);     // pig's right (world)
     const am = Math.hypot(ax, az), acc = am > 60 ? 60 / am : 1;     // collisions are handled as kicks (postStep)
     const L0 = Math.hypot(this.leanX, this.leanZ);
-    const kp = B.kp * (1 - heavy * 0.35) * (this.grounded ? 1 : 0.5) * (L0 > B.sat ? B.sat / L0 : 1);
+    const kp = B.kp * (1 - heavy * 0.35) * (1 - bz * 0.3) * (this.grounded ? 1 : 0.5) * (L0 > B.sat ? B.sat / L0 : 1);
     const fx = B.fall0 * this.leanX - B.accel * ax * acc - kp * this.leanX - B.kd * this.leanVX + nx - turn * rx;
     const fz = B.fall0 * this.leanZ - B.accel * az * acc - kp * this.leanZ - B.kd * this.leanVZ + nz - turn * rz;
     this.leanVX += fx * dt; this.leanVZ += fz * dt;
@@ -371,6 +461,43 @@ export class Pig implements Holdable {
       this.resetLean();
       this.startRagdoll(v1.set(dx * 2.5, 0.5, dz * 2.5), true);
       G.audio.play('grunt', { pos: this.pos, vol: 0.8 });
+      G.events.push({ type: 'fell', who: this });
+    }
+  }
+  /** Walking a balance beam (chain modes)? Then the beam balance runs instead of the normal one. */
+  private beamCheck(dt: number, canFall: boolean) {
+    const beams = G.chain?.beams;
+    const b = beams && this.mode === 'normal' && this.grounded ? beams.at(this, this.pos.y - CENTER[this.standing ? 'two' : 'four']) : null;
+    if (b !== this.onBeam) { this.onBeam = b; this.beamLean = 0; this.beamLeanV = 0; if (!b) this.resetLean(); }
+    if (!b) return false;
+    this.beamStep(dt, b, canFall);
+    return true;
+  }
+  /**
+   * The beam: a sideways inverted pendulum. It tips over by itself (and teeters — much worse high / drunk); A / D
+   * (whatever is left / right of the log on screen) push back: it leans left → press right. Walking makes it worse;
+   * on four legs it's calmer. Past the edge you fall off sideways (host).
+   */
+  private beamStep(dt: number, b: { a: THREE.Vector3; axis: THREE.Vector3; right: THREE.Vector3 }, canFall: boolean) {
+    const bz = this.buzz, mx = bz > 0.02 ? this.lagX : this.input.mx, mz = bz > 0.02 ? this.lagZ : this.input.mz;
+    const u = clamp(mx * b.right.x + mz * b.right.z, -1, 1), f = clamp(mx * b.axis.x + mz * b.axis.z, -1, 1);
+    const two = this.standing, t = this.now + this.seed * 31;
+    // the push you have (14) always beats the worst teeter (≈ 9 when very high): it's hard because of the lag, not impossible
+    const shake = (Math.sin(t * 1.7) + 0.6 * Math.sin(t * 3.1 + 1) + 0.5 * Math.sin(t * 0.7 + 2)) * (0.5 + 1.6 * bz + (this.buzzKind === 2 ? 0.8 * bz : 0)) * (two ? 1 : 0.55);
+    const acc = (two ? 4 : 2.5) * this.beamLean + 14 * u - 2.6 * this.beamLeanV + shake * (1 + Math.abs(f) * 0.5);
+    this.beamLeanV += acc * dt; this.beamLean += this.beamLeanV * dt;
+    // stay on the log: walk along it, pulled to its centre line
+    const off = (this.pos.x - b.a.x) * b.right.x + (this.pos.z - b.a.z) * b.right.z, sp = f * (two ? 1.7 : 2.2);
+    this.vel.x = b.axis.x * sp - b.right.x * off * 6; this.vel.z = b.axis.z * sp - b.right.z * off * 6;
+    this.leanX = b.right.x * this.beamLean; this.leanZ = b.right.z * this.beamLean;
+    const fall = two ? 0.62 : 0.8;
+    this.wobble = clamp(Math.abs(this.beamLean) / fall, 0, 1);
+    this.stumbleX = this.stumbleZ = 0;
+    if (canFall && Math.abs(this.beamLean) > fall) {
+      const s = Math.sign(this.beamLean);
+      this.beamLean = this.beamLeanV = 0; this.onBeam = null;
+      this.startRagdoll(v1.set(b.right.x * s * 5, 2, b.right.z * s * 5), true);   // off the log, into the pond
+      G.audio.play('squeal', { pos: this.pos, vol: 0.9 });
       G.events.push({ type: 'fell', who: this });
     }
   }
@@ -573,7 +700,8 @@ export class Pig implements Holdable {
   }
 
   private oink() {
-    G.audio.play('oink', { pos: this.pos, vol: 0.9, minGap: 0.25 });
+    if (this.buzz > 0.2) G.chain?.oinked(this);
+    G.audio.play('oink', { pos: this.pos, vol: 0.9, minGap: 0.25, pitch: this.buzz > 0.2 ? 1.25 + Math.random() * 0.3 : 1 });
     G.noise(this.pos, 15);
   }
 
@@ -702,6 +830,8 @@ export class Pig implements Holdable {
       this.chargeStart = -1;
       const snack = quick ? snackOf(this.held) : null;
       if (snack && !(snack.def.smokes && this.smoking)) this.useSnack(snack);
+      else if (quick && G.chain && (this.held as Prop).def?.item && G.chain.useItem(this, this.held as Prop)) { /* a chain item did its thing */ }
+      else if (quick && this.buzz > 0.2 && (this.held as Prop).def?.food) { this.eatAt = this.now; this.eatProp = this.held as Prop; G.audio.play('munch', { pos: this.pos, vol: 0.9 }); }   // the munchies
       else if (quick) this.startHit();
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
       else if (this.held.mass > this.liftMax) this.throwHeld(c);
@@ -785,6 +915,12 @@ export class Pig implements Holdable {
         this.boostUntil[id] = this.now + SNACK.secs[id];
         G.audio.play('oink', { pos: this.pos, vol: 0.8, pitch: 0.7 });
         G.events.push({ type: 'ate', who: this, text: id });
+        if (this.buzz > 0.2) G.events.push({ type: 'munch', who: this });
+      } else if (!id && e.def.food) {   // the munchies: gone in a few bites
+        this.release(false); e.bank();
+        G.audio.play('oink', { pos: this.pos, vol: 0.8, pitch: 0.8 });
+        G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 0.6), { count: 10, color: e.def.bits ?? 0xffd166, speed: 2, up: 2, life: 0.6, size: 0.08, grow: 0, alpha: 1 });
+        G.events.push({ type: 'munch', who: this });
       }
     }
     if (this.smoking) { if (this.now > this.nextPuff) { this.puffAt = this.now; this.nextPuff = this.now + SNACK.puffEvery; } }
@@ -927,6 +1063,7 @@ export class Pig implements Holdable {
     const hl = this.held ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w).invert()) : v1.set(0, 0, 0);
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000, this.leanZ);
     n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
+    n.push(this.jailUntil, this.frozenUntil, this.flying ? 1 : 0, ...this.buzzState());
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -973,7 +1110,11 @@ export class Pig implements Holdable {
     this.parts.netApply(n, 22);
     this.netHand.set(n[37] ?? 0, n[38] ?? 0, n[39] ?? 0); this.netHasHand = !!this.held;
     if (n[41] !== undefined) { this.eatAt = n[41]; this.cigUntil = n[42]; this.puffAt = n[43]; SNACK_IDS.forEach((k, i) => (this.boostUntil[k] = n[44 + i])); }
+    const j = 44 + SNACK_IDS.length;
+    if (n[j] !== undefined) { this.jailUntil = n[j]; this.frozenUntil = n[j + 1]; this.netFly = n[j + 2] === 1; this.buzzApply(n, j + 3); }
   }
+  /** Player side: the host's pig is flying (admin). */
+  netFly = false;
 
   /** Player: take over my pig from the latest snapshot (pose, speed, heading, stance). */
   private startPredicting(n: number[]) {
@@ -1036,7 +1177,7 @@ export class Pig implements Holdable {
       if (inp.wallow) this.predWallow = Math.max(this.predWallow, this.now + 0.15);
       this.vel.x *= 0.8; this.vel.z *= 0.8;
     } else this.moveStep(inp, dt);
-    if (this.standing) this.balanceStep(dt, false); else if (this.wobble || this.leanX || this.leanZ) this.resetLean();   // the host decides falls
+    if (!this.beamCheck(dt, false)) { if (this.standing) this.balanceStep(dt, false); else if (this.wobble || this.leanX || this.leanZ) this.resetLean(); }   // the host decides falls
     this.body.setLinvel(this.vel, true);
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
     // what I hold isn't simulated here: don't bump into it
@@ -1090,7 +1231,7 @@ export class Pig implements Holdable {
       cig: this.smoking, strong: this.boosted('spinach'),
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
-      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT,
+      burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,
       leanF: this.leanX * Math.sin(this.yaw) + this.leanZ * Math.cos(this.yaw), leanS: this.leanX * Math.cos(this.yaw) - this.leanZ * Math.sin(this.yaw),
     });
     // smoking: a wisp off the ember, and a puff of smoke out of the snout after each drag

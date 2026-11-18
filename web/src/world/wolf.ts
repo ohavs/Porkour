@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, HOOKS, ignorePair } from '../core/physics';
 import { Synced } from '../core/synced';
-import { G, ADMIN, type Cloud } from '../game/ctx';
+import { G, ADMIN, ignored, type Cloud } from '../game/ctx';
 import { clamp, dampAngle, Rng } from '../core/util';
 import { animalVisual } from './animalGlb';
 import type { Nav } from '../farmer/nav';
@@ -116,7 +116,7 @@ export class Wolf {
   private pickTarget(): Pig | null {
     let best: Pig | null = null, bd = WOLF.chaseRange;
     for (const p of G.pigs as Pig[]) {
-      if (p.out || p.cage || p.heldBy || (ADMIN.god && p === G.localPig)) continue;
+      if (p.out || p.cage || p.heldBy || ignored(p)) continue;
       if (p.pos.y - G.terrain.height(p.pos.x, p.pos.z) > 1.8) continue;          // up on something
       const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
       if (d < bd) { bd = d; best = p; }
@@ -170,7 +170,7 @@ export class Wolf {
         break;
       case 'chase': {
         const t = this.target;
-        if (!t || t.out || t.cage || t.heldBy || (ADMIN.god && t === G.localPig) || sinceT > 18) { this.target = null; this.go('prowl'); break; }
+        if (!t || t.out || t.cage || t.heldBy || ignored(t) || sinceT > 18) { this.target = null; this.go('prowl'); break; }
         const d = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
         if (d > WOLF.chaseRange * 1.4) { this.target = null; this.go('prowl'); break; }
         speed = WOLF.run;

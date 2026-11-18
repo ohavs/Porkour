@@ -3,7 +3,7 @@ import { RAPIER, world, groups, L, owners, HOOKS, raycast, SEE_THROUGH } from '.
 import { Synced } from '../core/synced';
 import { Ragdoll, type LimbDef, type Tone } from '../core/ragdoll';
 import type { AnimalRig } from './animalModels';
-import { G, ADMIN, type Holdable } from '../game/ctx';
+import { G, ADMIN, ignored, type Holdable } from '../game/ctx';
 import { dampAngle, Rng } from '../core/util';
 import { type AnimalKind } from './animalModels';
 import { animalVisual, GlbAnimalVisual, type AnyAnimalVisual } from './animalGlb';
@@ -358,7 +358,7 @@ export class Critter implements Holdable {
       let best: any = null, bdist = 1e9;
       for (const pig of G.pigs) {
         if (pig.out || pig.cage || pig.heldBy?.kind === 'farmer' || (this.pigSkip.get(pig) ?? 0) > now) continue;
-        if (pig === G.localPig && (ADMIN.god || !ADMIN.bobSees)) continue;
+        if (ignored(pig)) continue;
         if (pig.boosted?.('dogfood')) continue;   // smells like its dinner: a friend
         const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
         if (d > (G.cover.at(pig.pos) ? DOG.smellHidden : DOG.smell) || d > bdist) continue;
@@ -424,7 +424,7 @@ export class Critter implements Holdable {
     let best: any = null, bd = 1e9;
     for (const pig of G.pigs) {
       if (pig.out || pig.cage || pig.heldBy || (this.pigSkip.get(pig) ?? 0) > now) continue;
-      if (pig === G.localPig && (ADMIN.god || !ADMIN.bobSees)) continue;
+      if (ignored(pig)) continue;
       const d = Math.hypot(pig.pos.x - p.x, pig.pos.z - p.z);
       const up2 = pig.held || pig.standing || pig.sprinting;
       if (d > (turkey ? BIRD.turkeySee : up2 ? BIRD.see : BIRD.close) || d > bd) continue;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RAPIER, world, groups, L, owners, raycast, ignorePair, SEE_THROUGH } from '../core/physics';
 import { Synced } from '../core/synced';
 import { clamp, dampAngle, wrapAngle } from '../core/util';
-import { G, ADMIN, type Holdable, type Cloud } from '../game/ctx';
+import { G, ADMIN, ignored, type Holdable, type Cloud } from '../game/ctx';
 import type { Pig } from '../pig/pig';
 import type { Cage } from '../world/cage';
 import type { Rect } from '../world/terrain';
@@ -639,13 +639,15 @@ export class Farmer {
   /** How un-piggy is this pig right now (0 = just a pig). */
   private suspicious(p: Pig): number {
     if (p.out || p.cage || (p.heldBy && p.heldBy.kind !== 'trap')) return 0;
-    if (p === G.localPig && (!ADMIN.bobSees || ADMIN.god)) return 0;
+    if (ignored(p)) return 0;
     if (p.heldBy) return 1;                                    // squealing in one of his traps
     let w = 0;
     if (p.held) w = 1;
     if (p.standing) w = Math.max(w, 0.55);
     if (p.sprinting) w = Math.max(w, 0.3);
     if (p.smoking) w = Math.max(w, 0.5);                       // a pig smoking a cigarette is NOT normal
+    if (p.buzz > 0.3) w = Math.max(w, 0.35);                   // chain modes: a giggling, swaying pig
+    if (G.chain?.inShed(p.pos)) w = Math.max(w, 0.6);          // chain modes: a pig in his shed, at his machines
     if (p.mode === 'ragdoll' && p.vel.length() > 4) w = Math.max(w, 0.5);
     if (this.zones.garden.some((r) => p.pos.x > r.x0 && p.pos.x < r.x1 && p.pos.z > r.z0 && p.pos.z < r.z1)) w = Math.max(w, 0.4);
     if (this.cage.pigs.length && this.cage.contains(p.pos, 2.2)) w = Math.max(w, 0.9);
@@ -704,7 +706,7 @@ export class Farmer {
       }
       if ((p === this.target || p === this.hunt) && seen) { this.lastSeen.copy(p.pos); this.lastVel.copy(p.vel); this.lastSeenT = this.now; }
       // only un-piggy behaviour he SEES raises it; out of sight it drains slowly (slowest for the pig he's hunting)
-      if (w > 0 && seen) s += w * (0.25 + 1.3 * near * near) * dt * (looking ? 1.5 : 1) * ALERT.sus[this.level];
+      if (w > 0 && seen) s += w * (0.25 + 1.3 * near * near) * dt * (looking ? 1.5 : 1) * ALERT.sus[this.level] * (ADMIN.chill ? 0.6 : 1);
       else if (p !== this.target || !this.chasing) {
         // hunting it: no let-up until he has reached the place he lost it
         const huntK = this.state === 'search' && this.spotIdx === 0 && !this.lookUntil ? 0 : BOB.huntDecay * ALERT.hunt[this.level];
@@ -1538,6 +1540,21 @@ export class Farmer {
     this.stopRiding(); this.voice('huh');
     this.startSearch(at, p, 3);
   }
+  /**
+   * Chain modes: a high / drunk pig hugs him (or sings to him) — he freezes, "huh?!", hearts pop, then he wants to know
+   * who that was (a search from there). True = it counted.
+   */
+  hugged(p: Pig): boolean {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away' || this.state === 'inLoo' || this.carrying) return false;
+    if ((this.hitBy.get('hug') ?? -10) > this.now - 3) return false;
+    this.hitBy.set('hug', this.now);
+    this.voice('huh');
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.9), { count: 8, color: 0xff6fa8, speed: 1.6, up: 2.2, life: 1.1, size: 0.16, grow: 0, drag: 2, alpha: 1 });
+    if (this.state !== 'stagger') this.stun('stagger', BOB.staggerTime + 0.6);
+    this.raise('suspect');
+    this.tipOff(p, p.pos);
+    return true;
+  }
   /** A pig stepped in one of his traps: he heard the snap and knows exactly where to go. */
   trapSprung(p: Pig, at: THREE.Vector3) { this.raise('trap'); this.tipOff(p, at); }
 
@@ -1558,7 +1575,7 @@ export class Farmer {
       return d < 1.3 || (dx * f.x + dz * f.z) / d > ALERT.gunCone ? d : -1;
     };
     for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy?.kind === 'farmer' || (p === G.localPig && ADMIN.god)) continue;
+      if (p.out || p.cage || p.heldBy?.kind === 'farmer' || ignored(p)) continue;
       const d = cone(p.pos.x, p.pos.z); if (d < 0) continue;
       const to = v2.set(p.pos.x - muzzle.x, p.pos.y + 0.3 - muzzle.y, p.pos.z - muzzle.z), len = to.length(); to.divideScalar(len);
       const wall = raycast(muzzle, to, len, L.STATIC, undefined, (c) => !SEE_THROUGH.has(c.handle));
@@ -1588,7 +1605,7 @@ export class Farmer {
   private chase(dt: number) {
     const t = this.target;
     this.activity = 'bob.chaseYou';
-    if (!t || t.out || t.cage || (t.heldBy && t.heldBy !== this && t.heldBy.kind !== 'trap') || (t === G.localPig && ADMIN.god)) { this.giveUp(); return 0; }
+    if (!t || t.out || t.cage || (t.heldBy && t.heldBy !== this && t.heldBy.kind !== 'trap') || ignored(t)) { this.giveUp(); return 0; }
     if (this.now - this.lastSeenT > BOB.loseSight) {        // lost it: hunt for it around where it was last seen
       this.sus.set(t, Math.max(0.85, this.sus.get(t) ?? 0));
       this.voice('huh'); this.startSearch(this.lastSeen, t, BOB.huntSpots);
@@ -1620,7 +1637,7 @@ export class Farmer {
       if (this.unreachableT > 0.6 && d < 8) { this.unreachableT = 0; this.go('fist'); return 0; }
     } else this.unreachableT = 0;
     const goal = this.now - this.lastSeenT < 0.3 ? t.pos : this.lastSeen;
-    const run = BOB.run * ALERT.run[this.level];
+    const run = BOB.run * ALERT.run[this.level] * (ADMIN.chill ? 0.85 : 1);
     this.moveTo(goal, run, dt, 0.45);
     return run;
   }
@@ -1632,7 +1649,7 @@ export class Farmer {
     const hx = this.pos.x + f.x * at, hz = this.pos.z + f.z * at, hy = this.pos.y + 0.8;
     let best: Pig | null = null, bd = fork ? ALERT.catchR : BOB.catchR;
     for (const p of this.pigs) {
-      if (p.out || p.cage || (p.heldBy && p.heldBy.kind !== 'trap') || (p === G.localPig && ADMIN.god)) continue;
+      if (p.out || p.cage || (p.heldBy && p.heldBy.kind !== 'trap') || ignored(p)) continue;
       const d = Math.hypot(p.pos.x - hx, (p.pos.y - hy) * 0.6, p.pos.z - hz);
       if (d < bd) { bd = d; best = p; }
     }
@@ -1645,7 +1662,7 @@ export class Farmer {
     const hx = this.pos.x + f.x * 0.9, hz = this.pos.z + f.z * 0.9;
     this.slapped = [];
     for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
+      if (p.out || p.cage || p.heldBy || ignored(p)) continue;
       if (Math.hypot(p.pos.x - hx, p.pos.z - hz) > BOB.slapReach || Math.abs(p.pos.y - this.pos.y - 0.4) > 1.4) continue;
       const imp = v2.copy(right).multiplyScalar(-9).addScaledVector(f, 4); imp.y = 6.5;
       p.knock(imp, true);
@@ -1789,7 +1806,7 @@ export class Farmer {
     // he's mad now: the nearest free pig did it
     let best: Pig | null = null, bd = 12;
     for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
+      if (p.out || p.cage || p.heldBy || ignored(p)) continue;
       const d = p.pos.distanceTo(this.pos);
       if (d < bd) { bd = d; best = p; }
     }

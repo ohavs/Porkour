@@ -64,6 +64,10 @@ grab kaykit "$CACHE/kk-restaurant/addons/kaykit_restaurant_bits/Assets/gltf" 102
   crate crate_carrots crate_potatoes crate_tomatoes crate_cheese crate_ham crate_onions crate_lettuce \
   food_ingredient_ham food_ingredient_cheese food_ingredient_tomato food_ingredient_carrot food_ingredient_steak \
   jar_A_large jar_B_medium
+# chain modes (farms 6 / 7): the shed's kitchen (KayKit Restaurant, CC0)
+grab kaykit "$CACHE/kk-restaurant/addons/kaykit_restaurant_bits/Assets/gltf" 1024 \
+  oven stove_single fridge_A kitchencounter_straight_A kitchencounter_straight_B kitchentable_A kitchentable_A_large bowl pot_A cuttingboard \
+  shelf_papertowel_decorated dishrack_plates lid_A kitchencabinet chair_stool
 pack $KK/KayKit-Character-Pack-Adventures-1.0 kk-adv '/addons/kaykit_character_pack_adventures/Assets/gltf/'
 grab kaykit "$CACHE/kk-adv/addons/kaykit_character_pack_adventures/Assets/gltf" 1024 \
   sword_1handed axe_1handed dagger shield_round mug_full crossbow_2handed
@@ -106,7 +110,10 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/platformer_pack/Bomb.glb' '/public/glb/rpg_items_pack/Key2.glb' \
   '/public/glb/medieval_village_pack/Mill.glb' '/public/glb/medieval_village_pack/Stable.glb' '/public/glb/medieval_village_pack/Inn.glb' '/public/glb/medieval_village_pack/Sawmill.glb' '/public/glb/medieval_village_pack/Gazebo.glb' '/public/glb/medieval_village_pack/Bell_Tower.glb' '/public/glb/medieval_village_pack/Cart.glb' '/public/glb/medieval_village_pack/Bench_1.glb' '/public/glb/medieval_village_pack/Cauldron.glb' '/public/glb/nature_pack/Willow_1.glb' '/public/glb/nature_pack/Willow_2.glb' '/public/glb/nature_pack/TreeStump.glb' \
   '/public/glb/medieval_village_pack/House_1.glb' '/public/glb/medieval_village_pack/House_2.glb' '/public/glb/medieval_village_pack/Blacksmith.glb' '/public/glb/medieval_village_pack/Bench_2.glb' \
-  '/public/glb/nature_pack/*_Snow*.glb'
+  '/public/glb/nature_pack/*_Snow*.glb' \
+  '/public/glb/medieval_weapons_pack/Scythe.glb' '/public/glb/medieval_village_pack/Bag.glb' '/public/glb/medieval_village_pack/Bag_Open.glb' \
+  '/public/glb/medieval_village_pack/Barrel.glb' '/public/glb/modular_dungeon_1/Bucket.glb' '/public/glb/crops_pack/Wheat_Crop.glb' '/public/glb/crops_pack/Wheat_2.glb' \
+  '/public/glb/platformer_pack/Ladder_medium.glb' '/public/glb/house_interior_pack/Houseplant_1.glb'
 for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca Bull Husky Stag Deer; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null
@@ -115,6 +122,13 @@ done
 # loot (Quaternius RPG Items + Survival, CC0)
 grab loot "$CACHE/qshow/public/glb/rpg_items_pack" 256 Gold_Ingots Chest_Closed Crown Chalice Coin Necklace1
 grab loot "$CACHE/qshow/public/glb/survival_pack" 256 Radio Phone GasCan Pan PropaneTank FirstAidKit Backpack Trashcan Shovel
+
+# chain modes (farms 6 / 7): scythe, sacks, a bucket, Bob's wheat, a ladder (Quaternius, CC0)
+grab brew "$CACHE/qshow/public/glb/medieval_weapons_pack" 256 Scythe
+grab brew "$CACHE/qshow/public/glb/medieval_village_pack" 256 Bag Bag_Open Barrel
+grab brew "$CACHE/qshow/public/glb/modular_dungeon_1" 256 Bucket
+grab brew "$CACHE/qshow/public/glb/crops_pack" 256 Wheat_Crop Wheat_2
+grab brew "$CACHE/qshow/public/glb/platformer_pack" 256 Ladder_medium
 
 # crops (Quaternius Ultimate Crops, CC0)
 grab crops "$CACHE/qshow/public/glb/crops_pack" 256 Carrot_4 Lettuce_4 Tomato_4 Beet_4 BushBerries_4 Watermelon_4 Pumpkin_4 Wheat_4 Flowers_Crop Apple_Crop Orange_Crop

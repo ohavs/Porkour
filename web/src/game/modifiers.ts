@@ -1,4 +1,4 @@
-import { G } from './ctx';
+import { G, ADMIN } from './ctx';
 
 /**
  * Round modifiers (Dead by Daylight offerings / Goose Game days): one per round, rolled at the start, shown on the
@@ -20,8 +20,8 @@ export const MOD = {
 };
 
 /** How far Bob sees / hears under this round's weather (×). */
-export const modSight = () => (G.mod === 'rain' ? MOD.rain.sight : G.mod === 'fog' ? MOD.fog.sight : 1);
-export const modHear = () => (G.mod === 'rain' ? MOD.rain.hear : 1);
+export const modSight = () => (G.mod === 'rain' ? MOD.rain.sight : G.mod === 'fog' ? MOD.fog.sight : 1) * (ADMIN.chill ? 0.7 : 1);
+export const modHear = () => (G.mod === 'rain' ? MOD.rain.hear : 1) * (ADMIN.chill ? 0.75 : 1);
 /** Is Bob at the market right now (market day, his away hours)? */
 export const marketHours = () => G.mod === 'market' && G.hour >= MOD.market.leave && G.hour < MOD.market.back;
 

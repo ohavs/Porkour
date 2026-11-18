@@ -38,6 +38,8 @@ export const SOUND_SETS: Record<string, string[]> = {
   // Bob's phone: the bell, Bob rambling into it, the caller / a pig's oink through the line, a dead line, coin, receiver slam
   ring: ['ring'], phonetalk: n('phonetalk', 3), phonevoice: ['phonevoice1', 'phonevoice3', 'phonevoice5'], phoneoink: ['phoneoink'],
   static: ['static'], coin: ['coin'], clunk: ['clunk'],
+  // chain modes (farms 6 / 7): drinking, pouring / filling, the lighter, a fire, steam hiss, the oven bell, the threshing drum
+  drink: ['drink'], pour: ['pour'], fill: ['fill'], flint: ['flint'], fire: ['fire'], hiss: ['hiss'], ding: ['ding'], drum: ['drum'],
   // heavy loot: the grandfather clock (ticks, strikes the hours), the old TV's screen
   tick: ['tick'], bong: ['bong'], glass: n('glass', 2),
 };

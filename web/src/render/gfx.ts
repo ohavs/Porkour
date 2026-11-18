@@ -5,6 +5,7 @@ import {
   VignetteEffect, HueSaturationEffect, FXAAEffect, type Pass,
 } from 'postprocessing';
 import { InkOutline, toonMat } from './toon';
+import { BuzzEffect } from './buzz';
 import { Rng } from '../core/util';
 
 import { SHADOW_SIZE, type GfxOpts } from './quality';
@@ -102,6 +103,9 @@ export class Gfx {
    * Post chain from the options. Ink lines, bloom, colour, tone mapping and vignette run in ONE full-screen pass
    * (they used to be two); anti-aliasing runs last so the ink lines get smoothed too.
    */
+  /** Chain modes: the high / drunk screen effect (built once, only on farms 6 / 7). */
+  buzz: BuzzEffect | null = null;
+  useBuzz() { if (this.buzz) return; this.buzz = new BuzzEffect(); this.buildPost(); }
   private buildPost() {
     for (const p of this.passes) { this.composer.removePass(p); p.dispose(); }
     this.passes = [];
@@ -115,6 +119,7 @@ export class Gfx {
       new VignetteEffect({ darkness: 0.3, offset: 0.35 }),
     ];
     this.passes.push(new RenderPass(this.scene, this.camera), new EffectPass(this.camera, ...fx));
+    if (this.buzz) this.passes.push(new EffectPass(this.camera, this.buzz));   // chain modes: high / drunk screen
     if (o.aa === 2) this.passes.push(new EffectPass(this.camera, new SMAAEffect()));
     if (o.aa === 1) this.passes.push(new EffectPass(this.camera, new FXAAEffect()));
     for (const p of this.passes) this.composer.addPass(p);

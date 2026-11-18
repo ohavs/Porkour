@@ -10,6 +10,9 @@ import { buildHideouts } from './hideouts';
 import { buildLandmarks } from './landmarks';
 import { farmKit, type FarmBuild, type FarmDef } from './farmKit';
 import type { MissionId } from '../game/round';
+import { Weed } from './weed';
+import { Brew } from './brew';
+import { V3 as V } from '../core/util';
 
 /**
  * Farm 1 — Bob's family farm. North = −z. Everything placed from code (art-agnostic: missing models → magenta box).
@@ -50,7 +53,12 @@ const MISSIONS: MissionId[] = ['knockBob', 'staggerBob', 'fartBob', 'mugPond', '
   'sheepOut', 'hayPond', 'loseBob', 'whackBob', 'henPond', 'smashPots', 'melonSmash', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal',
   'mudPorch', 'mazeTrophy', 'cowsOut', 'gateBreak'];
 
-export function buildFarm1(scene: THREE.Scene): FarmDef {
+/**
+ * Chain modes (farms 6 / 7) are built on Bob's family farm: his vegetable garden becomes the cannabis / wheat field,
+ * the greenhouse becomes the shed (kitchen + machines), a pump by the field, a balance beam over the duck pond.
+ */
+export type FarmMode = 'weed' | 'beer';
+export function buildFarm1(scene: THREE.Scene, mode?: FarmMode): FarmDef {
   const terrain = new Terrain(FARM);
   // ---- ground paint (before terrain.build)
   const P = (pts: [number, number][], w = 3) => terrain.path(pts, w);
@@ -95,7 +103,7 @@ export function buildFarm1(scene: THREE.Scene): FarmDef {
         tp: [['sty', 30, 6], ['cage', -6.5, -33.5], ['house', -16.6, -31.4], ['barn', 0, 8], ['pasture', 30, -62], ['garden', -24, -54], ['wheat', 46, -22],
           ['maze', 47.9, -93.6], ['sunflowers', 21, -95.5], ['junkyard', -50, 5], ['greenhouse', -37, -77]],
       },
-      missions: MISSIONS,
+      missions: mode ? MISSIONS.filter((m) => !['pumpkinWell', 'melonSmash', 'smashPots'].includes(m)) : MISSIONS,
     };
     t.noGrass({ x0: -11, x1: -2, z0: -38, z1: -32 });
     const kit = farmKit(scene, t, out, F, 2026);
@@ -126,8 +134,8 @@ export function buildFarm1(scene: THREE.Scene): FarmDef {
     pen({ x0: -63, x1: -50, z0: -52, z1: -34 }, 'e', 2.6, 'kenney/fence_planks', 'sheep');                   // sheep
     kit.outerFence();
 
-    // ---------------------------------------------------------------- garden rows
-    for (let i = 0; i < 6; i++) {
+    // ---------------------------------------------------------------- garden rows (the chain modes grow their crop here)
+    for (let i = 0; i < (mode ? 0 : 6); i++) {
       const z = -63.5 + i * 2.1;
       for (let x = -48; x < -32; x += 2) {
         decor('kenney/crops_dirtRow', x + 1, z, { scale: 2, yaw: Math.PI / 2 });
@@ -201,7 +209,8 @@ export function buildFarm1(scene: THREE.Scene): FarmDef {
     for (let i = 0; i < 5; i++) critter('sheep', rng.range(-60, -52), rng.range(-50, -36), 5);
     critter('alpaca', -56, -40, 4);
     critter('dog', -16, -30, 5);
-    for (const [x, z] of [[-25.5, -56], [-26.5, -60], [-25, -63]] as const) critter('turkey', x, z, 4.5);   // guard Bob's garden
+    // turkeys guard Bob's garden (chain modes: the yard by the house — the field / shed / pump are busy work spots)
+    for (const [x, z] of (mode ? [[-6, -22], [-9, -20], [-4, -19]] : [[-25.5, -56], [-26.5, -60], [-25, -63]]) as [number, number][]) critter('turkey', x, z, 4.5);
     critter('cat', -4, 6, 6); critter('cat', -20, -36, 4);
     critter('bunny', -40, -58, 6); critter('bunny', -36, -61, 6); critter('bunny', 12, -76, 5);
     for (let i = 0; i < 3; i++) critter('duck', POND.x + rng.range(-3, 3), POND.z + rng.range(-3, 3), 3.5);
@@ -217,7 +226,13 @@ export function buildFarm1(scene: THREE.Scene): FarmDef {
     // hiding spots: big bushes, wheat + corn, bale stacks, log piles, crates…
     buildHideouts({ scene, t, rng, out, blocked, forest, decor });
     // bigger places: hedge maze, sunflower field, junkyard, greenhouse
-    buildLandmarks({ scene, t, rng, out, blocked, decor, prop });
+    buildLandmarks({ scene, t, rng, out, blocked, decor, prop }, mode ? { greenhouse: false } : {});
+    // ---------------------------------------------------------------- chain modes: the field, the shed, the pump, the beam
+    const shed: [number, number, number] = [-43, -77, Math.PI / 2];
+    const beam: [THREE.Vector3, THREE.Vector3] = [V(50, 0, -8.6), V(50, 0, 4.6)];
+    if (mode) out.places.tp.push(['shed', -36.5, -77], ['field', -27.5, -57], ['beam', 50, -17.5]);
+    if (mode === 'weed') out.chain = new Weed(scene, out.props, kit, { field: garden, shed, pump: [-27.4, -64.5], beam, barrow: [-27, -61.5] });
+    if (mode === 'beer') out.chain = new Brew(scene, out.props, kit, { field: garden, shed, pump: [-35.5, -70.5], beam, floor: [-25.5, -68.5], table: [-23.5, -76, 0.3] });
     kit.hedgeRing();
     kit.surroundings();
     // orchard + shade trees inside

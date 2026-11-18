@@ -23,6 +23,7 @@ import { Gates, type Gate } from '../world/gates';
 import type { Outhouse } from '../world/outhouse';
 import type { Phones } from '../world/phone';
 import { HeavyLoot } from '../world/heavyLoot';
+import { Jail } from '../world/jail';
 import type { Hammock } from '../world/hammock';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
@@ -33,6 +34,8 @@ import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
 import { Lockpick } from './lockpick';
+import { Minigame } from './minigame';
+import { FpHands } from './fpHands';
 import { Markers } from './markers';
 import { G, ADMIN } from './ctx';
 import { SETTINGS } from './settings';
@@ -50,7 +53,7 @@ const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'gra
 const tmpV = new THREE.Vector3();
 const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
 /** Events the round counts (each one = +1): only seen inside the fixed step, never again in handleEvents. */
-const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled', 'lanternOut']);
+const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled', 'lanternOut', 'made', 'vision', 'munch']);
 
 export class Game {
   pigs: Pig[] = [];
@@ -78,6 +81,8 @@ export class Game {
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
   onLoadout?: () => void;
+  /** The station the mini-game is open on. */
+  private miniAt: import('../world/chain').Station | null = null;
   /** What the lock-pick puzzle is open on (the cage or a gate's padlock). */
   private pickOn: Gate | null = null;
   private acc = 0;
@@ -92,6 +97,10 @@ export class Game {
   private farmSpawns: THREE.Vector3[] = [];
   round!: Round;
   lockpick!: Lockpick;
+  /** Chain modes: the station mini-game on my screen. */
+  mini!: Minigame;
+  /** Admin first-person test: the pig's arms on screen. */
+  fpHands!: FpHands;
   markers!: Markers;
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
@@ -140,6 +149,9 @@ export class Game {
     this.loos = this.farm.loos ?? []; G.loos = this.loos;
     this.phones = this.farm.phones ?? null; G.phones = this.phones;
     this.hammock = this.farm.hammock ?? null; G.hammock = this.hammock;
+    G.chain = this.farm.chain ?? null;
+    if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
+    G.cam = this.gfx.camera;
     this.gadgets = new Gadgets(scene, this.farm.props);
     // snacks: food cans (boosts) and cigarette packs scattered around (same spots on every machine)
     scatterSnacks(scene, this.farm.props, this.nav, FARM_IDS.indexOf(farmId()) + 1, this.farm.inWater, this.farm.places.stash);
@@ -154,6 +166,7 @@ export class Game {
       c.pen = this.gates.list.find((g) => { const r = g.def.rect; return c.home.x > r.x0 && c.home.x < r.x1 && c.home.z > r.z0 && c.home.z < r.z1; }) ?? null;
     }
     this.round = new Round(scene, this, this.farm.places.stash);
+    G.jail = new Jail(scene, this.farm.places.stash);
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
@@ -162,8 +175,21 @@ export class Game {
     this.hud = new Hud();
     this.menu = new Menu(this);
     this.lockpick = new Lockpick();
+    this.mini = new Minigame();
+    if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
+    this.fpHands = new FpHands(this.gfx.camera);
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
+      if (this.mini.isOpen) {
+        if (b === 'attack' || b === 'jump') this.mini.press(); else if (b === 'grab') this.mini.close();
+        this.input.clearPresses();
+        return;
+      }
+      // RMB at a chain station (empty hooves): its mini-game on my screen; the result goes to the host as an act code
+      if (b === 'grab' && !this.local.held && G.chain && this.mode === 'play') {
+        const s = G.chain.useAt(this.local), steps = s?.steps(this.local);
+        if (s && steps) { this.mini.open(steps, G.chain.codeOf(s)); this.miniAt = s; this.input.clearPresses(); return; }
+      }
       if (this.lockpick.isOpen) {
         if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
@@ -184,6 +210,7 @@ export class Game {
       if (code === 'KeyP') this.menu.cyclePreset();
       if (code === 'KeyR' && this.input.held.size === 0 && G.net !== 'client') this.local.respawn();
     };
+    if (new URLSearchParams(location.search).has('fp')) ADMIN.fp = true;   // admin test: first person from the URL
     const h = new URLSearchParams(location.search).get('hour');
     if (h) this.daynight.setHour(parseFloat(h));
     this.applySettings();
@@ -242,6 +269,8 @@ export class Game {
       Object.assign(inp, emptyInput(), { yaw, pitch });
     }
     if (first && (lp.solved || lp.slips)) { inp.pickP = lp.solved; inp.pickFailP = lp.slips > 0; lp.solved = false; lp.slips = 0; }
+    if (this.mini.isOpen) { const yaw = inp.yaw, pitch = inp.pitch; Object.assign(inp, emptyInput(), { yaw, pitch }); }
+    if (first && this.mini.out) { inp.act = this.mini.out; this.mini.out = 0; }
     return inp;
   }
 
@@ -306,13 +335,14 @@ export class Game {
       this.farm.dairy?.stepHost();
       this.farm.pumpkins?.stepHost();
       this.farm.winter?.stepHost(FIXED);
+      if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
       if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); }
       for (const pr of this.farm.props) pr.scrape();
-      for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text);
+      for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
     host?.endStep();
-    if (this.scripted) for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false;
+    if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.act = 0; }
   }
 
   private handleEvents() {
@@ -378,6 +408,24 @@ export class Game {
         case 'prankOink': if (me) H.emote(this.local, 'pig', 1.2, 1.3); break;
         case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
         case 'snowCoat': if (me) H.emote(this.local, 'snow', 1.4, 1.3); break;
+        // chain modes
+        case 'made': if (me) H.toast(`+${e.why ?? ''} <i class="coin"></i>`, 1.1); break;
+        case 'smokeAlarm': H.toast(t('e.smokeAlarm'), 1.8, '', 'alarm'); break;
+        case 'bongRip': case 'puff': H.emote(e.who, 'cloud', 1.2, 1.5); break;
+        case 'litUp': H.emote(e.who, 'lighter', 1.2, 1.5); break;
+        case 'cookieEaten': H.emote(e.who, 'cookie', 1.4, 1.5); break;
+        case 'vision': H.emote(e.who, 'swirl', 1.4, 1.5); break;
+        case 'munch': H.emote(e.who, 'eat', 1.2, 1.5); break;
+        case 'hugBob': case 'serenade': H.emote(bob, 'heart', 1.8, 2.4); break;
+        case 'cloudGaze': H.emote(e.who, 'cloud', 2, 1.2); break;
+        case 'beamCrossed': H.emote(e.who, 'beam', 1.6, 1.8); break;
+        case 'burp': case 'sip': H.emote(e.who, 'beer', 1.2, 1.5); break;
+        case 'tableDance': H.emote(e.who, 'note', 1.8, 2); break;
+        case 'stompBeat': if (me) H.emote(e.who, 'note', 0.6, 1.4); break;
+        case 'gooey': case 'burnt': H.emote(e.who, e.type === 'burnt' ? 'flame' : 'cookie', 1.4, 1.5); break;
+        case 'wortReady': case 'beerReady': { const at = (this.farm.chain as { tap?: { markPos: THREE.Vector3 } } | undefined)?.tap?.markPos; if (at) H.emote(at.clone(), 'beer', 1.6, 0); break; }
+        case 'jailed': if (me) H.toast(t('e.jailedMe'), 1.6, '', 'lock'); else H.toast(t('e.jailed', { who }), 1.6, '', 'lock'); break;
+        case 'frozen': H.emote(e.who, 'snow', 1.6, 1.3); break;
         case 'roundEnd': break;
       }
     }
@@ -415,7 +463,7 @@ export class Game {
     for (const p of this.pigs) { if (p.heldBy) p.heldBy.release?.(false); }
     this.farmer?.resetRound(this.farm.farmerSpawn);
     for (const p of this.pigs) if (!p.absent) { if (p.out && !p.absent) p.outUntil = G.time; p.respawn(); }
-    for (const p of this.pigs) p.clearSnacks();
+    for (const p of this.pigs) { p.clearSnacks(); p.clearBuzz(); }
     for (const c of this.farm.critters) c.reset();
     for (const pr of this.farm.props) { if (pr.heldBy) pr.heldBy.release?.(false); if (pr.heldBy) pr.heldBy.release?.(false); pr.reset(); }
     this.wolves.clear();
@@ -430,6 +478,7 @@ export class Game {
     this.farm.dairy?.reset();
     this.farm.pumpkins?.reset();
     this.farm.winter?.reset();
+    this.farm.chain?.reset();
     this.gadgets.clear();
     this.daynight.setHour(this.farm.clock?.start ?? ROUND_START_HOUR);
     G.grills = 0;
@@ -441,12 +490,43 @@ export class Game {
   /** The outhouse nearest to a spot. */
   nearLoo(p: THREE.Vector3) { let b: Outhouse | null = null, bd = Infinity; for (const o of this.loos) { const d = o.base.distanceTo(p); if (d < bd) { bd = d; b = o; } } return b; }
 
+  /** Admin → Players: punish / help one pig (host / solo). */
+  adminPig(i: number, a: string, secs: number) {
+    if (G.net === 'client') { this.hud.toast(t('net.hostOnly'), 1.6); return; }
+    const p = this.pigs[i], L = this.local;
+    if (!p || p.absent) return;
+    const loose = () => { if (p.held) p.release(false); if (p.heldBy) p.heldBy.release(false); if (p.cage) { p.cage.pigs = p.cage.pigs.filter((x: Pig) => x !== p); p.freed(); } };
+    const put = (x: number, y: number, z: number) => { p.body.setTranslation({ x, y, z }, true); p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.parts.snap(); p.hostTakes(0.5); };
+    switch (a) {
+      case 'jail': {
+        if (p.out) break;
+        loose(); if (p.mode === 'ragdoll') p.getUp();
+        p.jailUntil = G.time + secs;
+        const s = G.jail!.spot(i, tmpV); put(s.x, s.y, s.z);
+        G.audio.play('metal', { pos: s, vol: 1, pitch: 0.6 });
+        G.events.push({ type: 'jailed', who: p });
+        break;
+      }
+      case 'unjail': if (p.jailUntil) { p.jailUntil = 0; p.respawn(); } break;
+      case 'freeze': p.frozenUntil = G.time + 15; p.hostTakes(15); G.fx.puff(p.pos, { count: 10, color: 0xbfe8ff, speed: 1, up: 1, life: 0.8, size: 0.4, alpha: 0.7 }); G.events.push({ type: 'frozen', who: p }); break;
+      case 'unfreeze': p.frozenUntil = 0; p.ctlUntil = 0; break;
+      case 'launch': loose(); p.knock(new THREE.Vector3((Math.random() - 0.5) * 6, 24, (Math.random() - 0.5) * 6), true); G.audio.play('whoosh', { pos: p.pos, vol: 1, pitch: 0.7 }); break;
+      case 'knock': loose(); p.knock(new THREE.Vector3(Math.sin(p.yaw) * -4, 5, Math.cos(p.yaw) * -4), true); break;
+      case 'bring': { loose(); const f = L.forward; put(L.pos.x + f.x * 1.6, L.pos.y + 0.6, L.pos.z + f.z * 1.6); break; }
+      case 'goto': { if (L.heldBy) L.heldBy.release(false); L.body.setTranslation({ x: p.pos.x + 1.4, y: p.pos.y + 0.8, z: p.pos.z }, true); L.body.setLinvel({ x: 0, y: 0, z: 0 }, true); break; }
+      case 'ghost': p.pw.ghost = !p.pw.ghost; break;
+    }
+  }
+
   /** Admin panel buttons. */
   adminAction(a: string) {
     if (G.net === 'client') { this.hud.toast(t('net.hostOnly'), 1.6); return; }
     const L = this.local, cage = this.farm.cage, f = this.farmer;
     const tp = (x: number, z: number) => { if (L.heldBy) L.heldBy.release(false); L.body.setTranslation({ x, y: G.terrain.height(x, z) + 1.2, z }, true); L.body.setLinvel({ x: 0, y: 0, z: 0 }, true); };
     switch (a) {
+      case 'respawn': L.jailUntil = 0; L.respawn(); break;
+      case 'jail:others': this.pigs.forEach((p, i) => { if (p !== L && !p.absent && !p.jailed) this.adminPig(i, 'jail', 60); }); break;
+      case 'jail:free': this.pigs.forEach((p) => { if (p.jailUntil) { p.jailUntil = 0; p.respawn(); } }); break;
       case 'grill': cage.grillNow(); break;
       // Bob's outhouse
       case 'loo:go': f?.looNow(false); this.menu.toggleAdmin(); break;
@@ -627,6 +707,7 @@ export class Game {
         break;
       }
       default: {
+        if (this.farm.chain?.admin(a, L)) break;
         const p = a.startsWith('tp:') ? this.farm.places.tp.find((x) => x[0] === a.slice(3)) : null;
         if (p) tp(p[1], p[2]);
       }
@@ -753,13 +834,19 @@ export class Game {
       if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !still || this.menu.blocking) pick.close();
       else pick.update(dt);
     }
+    const mini = this.mini;
+    if (mini.isOpen) {
+      const s = this.miniAt, L = this.local;
+      if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || this.menu.blocking || !s || L.held || Math.hypot(L.pos.x - s.at.x, L.pos.z - s.at.z) > s.r + 0.8) mini.close();
+      else mini.update(dt, this.input.lookX / this.input.sensitivity, this.input.lookY / this.input.sensitivity * (this.input.invertY ? -1 : 1), this.input.held.has('attack'));
+    }
     let alpha: number;
     if (this.net instanceof NetClient) {
       if (this.running) {
         const inp = this.menu.blocking ? emptyInput() : this.buildInput(true);
         this.predict(dt, inp);
         this.net.sendInput(inp, this.local.predicting ? this.local.pose() : null);
-        if (this.scripted) for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false;   // test hook: a press is one frame
+        if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.act = 0; }   // test hook: a press is one frame
       }
       alpha = Math.max(0, this.net.frame(dt));
       this.carryAlong();
@@ -789,12 +876,29 @@ export class Game {
     this.farm.dairy?.render(dt);
     this.farm.pumpkins?.render(dt);
     this.farm.winter?.render(dt);
+    this.farm.chain?.render(dt);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;
-    const look = this.running && !this.menu.blocking;
+    const look = this.running && !this.menu.blocking && !this.mini.isOpen;
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
-    else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    else if (ADMIN.fp) {
+      // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen
+      const eye = this.local.visual.rig.head.getWorldPosition(tmpV), f = this.local.forward;
+      eye.addScaledVector(f, 0.12); eye.y += 0.08;
+      this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
+    } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    const fp = ADMIN.fp && this.mode === 'play';
+    this.local.visual.root.visible = !fp && !this.local.out;
+    this.fpHands.update(dt, this.local, fp);
+    // high / drunk: the screen (post effect) and the camera (drunk: it rolls; high: it breathes)
+    if (this.gfx.buzz) {
+      const L = this.local, b = this.mode === 'play' ? L.buzz : 0, dr = L.buzzKind === 2, tt = G.time, cam = this.gfx.camera;
+      this.gfx.buzz.set(dr ? 0 : b, dr ? b : 0, tt);
+      if (b > 0.02) cam.rotateZ(Math.sin(tt * (dr ? 0.9 : 0.5)) * (dr ? 0.075 : 0.03) * b);
+      const fov = 58 + (dr ? 0 : Math.sin(tt * 0.7) * 5 * b);
+      if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+    }
     this.grass.update(G.time, this.gfx.camera.position, this.pigs.map((p) => p.visual.root.position));
     cullDetail(this.gfx.camera.position, this.detailDist);
     G.fx.update(dt);

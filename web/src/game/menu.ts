@@ -210,53 +210,83 @@ export class Menu {
     if (ADMIN.open) { if (this.menuOpen) this.close(false); document.exitPointerLock?.(); this.renderAdmin(); }
   }
 
+  /** Admin tab (user: "simplify the admin menu"): one short page at a time. */
+  private jailSecs = 60;
+  private aTab: 'me' | 'players' | 'bob' | 'world' | 'farm' | 'items' = 'me';
   private renderAdmin() {
-    const g = this.game;
+    const g = this.game, f = g.farm;
     const tog = (k: keyof typeof ADMIN, label: Key) =>
       `<div class="field"><span>${t(label)}</span><div class="seg" data-tog="${k}"><button data-v="1" class="${ADMIN[k] ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!ADMIN[k] ? 'on' : ''}">${t('menu.off')}</button></div></div>`;
     const rng = (k: string, label: Key, v: number, min: number, max: number, step: number) =>
       `<div class="field"><span>${t(label)} <b data-val="${k}">${v}</b></span><input type="range" data-r="${k}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
-    const btn = (k: string, label: Key) => `<button data-a="${k}">${t(label)}</button>`;
-    const hasTp = (k: string) => g.farm.places.tp.some((x) => x[0] === k);
+    const btn = (k: string, label: Key, on = false) => `<button data-a="${k}" class="${on ? 'on' : ''}">${t(label)}</button>`;
+    const grid = (...b: string[]) => `<div class="grid">${b.join('')}</div>`;
+    const sec = (k: Key) => `<div class="sec">${t(k)}</div>`;
+    const hasTp = (k: string) => f.places.tp.some((x) => x[0] === k);
     let crash = '';
     try { const c = JSON.parse(localStorage.getItem('porkour.crash') ?? 'null'); if (c) crash = `<div class="hint" style="color:#ffb38a">${t('a.crash')}<br>${new Date(c.at).toLocaleString()} · ${c.mins} min · heap ${c.heap} MB · geo ${c.geo} · tex ${c.tex} · ${c.fps} fps · ${c.preset} · ${c.net}${c.lost ? ' · GL lost' : ''}</div>`; } catch { /* */ }
+    const TABS: [typeof this.aTab, string, Key][] = [['me', '🐷', 'at.me'], ['players', '👥', 'at.players'], ['bob', '👨‍🌾', 'at.bob'], ['world', '🌦', 'at.world'], ['farm', '🏡', 'at.farm'], ['items', '🎁', 'at.items']];
+    let body = '';
+    switch (this.aTab) {
+      case 'me':
+        body = sec('a.powers') + tog('fp', 'a.fp') + tog('fly', 'a.fly') + tog('god', 'a.ghost') + tog('noCooldowns', 'a.cooldowns') + tog('easyEscape', 'a.escape') +
+          grid(btn('respawn', 'a.respawn'), btn('mud', 'a.mud'), btn('knock', 'a.knockMe'), btn('tp:bush', 'a.tpBush'), hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : '') +
+          sec('a.teleport') + `<div class="tp">${f.places.tp.filter(([k]) => k !== 'wheat').map(([k]) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>` +
+          (G.net !== 'solo' ? sec('a.online') + `<div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) + tog('predict', 'a.predict') : '');
+        break;
+      case 'players': {
+        const rows = g.pigs.map((p, i) => ({ p, i })).filter(({ p }) => !p.absent && p !== g.local).map(({ p, i }) =>
+          `<div class="prow"><span><i style="background:#${p.color.toString(16).padStart(6, '0')}"></i>${p.label}${p.jailed ? ' 🔒' : ''}${p.frozen ? ' ❄' : ''}${p.pw.ghost ? ' 👻' : ''}</span>` +
+          `<div class="grid g3">${[p.jailed ? ['unjail', 'a.unjail'] : ['jail', 'a.jail'], p.frozen ? ['unfreeze', 'a.unfreeze'] : ['freeze', 'a.freezeP'], ['launch', 'a.launch'], ['knock', 'a.knockP'], ['bring', 'a.bring'], ['goto', 'a.goto'], ['ghost', 'a.ghostP']]
+            .map(([k, l]) => `<button data-p="${i}:${k}" class="${k === 'ghost' && p.pw.ghost ? 'on' : ''}">${t(l as Key)}</button>`).join('')}</div></div>`).join('');
+        body = rows + rng('jailSecs', 'a.jailSecs', this.jailSecs, 10, 300, 10) + grid(btn('jail:others', 'a.jailOthers'), btn('jail:free', 'a.freeJail'));
+        break;
+      }
+      case 'bob':
+        body = tog('bob', 'a.bob') + tog('chill', 'a.chill') + tog('showSight', 'a.showSight') + rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
+          sec('a.alert') + grid(...[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}" class="${g.farmer?.level === l ? 'on' : ''}">${l} · ${t(('alert.' + l) as Key)}</button>`)) +
+          grid(btn('catch', 'a.catchMe'), btn('bobCarry', 'a.bobCarry'), btn('slap', 'a.bobSlap'), btn('bobDown', 'a.bobDown'), btn('bobHunt', 'a.bobHunt'),
+            btn('dance', 'a.bobDance'), btn('danceNear', 'a.bobDanceNear'), btn('mow', 'a.bobMow'), btn('bed', 'a.bobSleep'),
+            g.loos.length ? btn('loo:go', 'a.looGo') : '', g.phones?.wall ? btn('phone:ring', 'a.phoneRing') : '', g.hammock ? btn('nap:go', 'a.napGo') : '',
+            btn('grill', 'a.grillNow'), btn('free', 'a.freeAll'), btn('dogMe', 'a.dogMe'), btn('trapMe', 'a.trapMe'), btn('roosterMe', 'a.roosterMe'), btn('turkeyMe', 'a.turkeyMe'));
+        break;
+      case 'world':
+        body = rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +
+          grid(btn('day', 'a.toDay'), btn('night', 'a.toNight'), btn('wolves', 'a.wolves'), btn('nowolves', 'a.noWolves')) +
+          rng('gameSpeed', 'a.gameSpeed', ADMIN.gameSpeed, 0.25, 3, 0.25) +
+          sec('a.mods') + grid(...(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) => `<button data-a="mod:${m}" class="${G.mod === m ? 'on' : ''}">${m === 'none' ? t('menu.off') : t(('mod.' + m) as Key)}</button>`),
+            `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button>`) +
+          sec('a.round') + rng('roundMins', 'a.roundMins', ADMIN.roundMins, 1, 20, 1) +
+          grid(btn('roundWin', 'a.roundWin'), btn('loot100', 'a.loot100'), btn('roundEnd', 'a.roundEnd'), btn('roundNew', 'a.roundNew')) +
+          `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>`;
+        break;
+      case 'farm':
+        body = (G.net === 'solo' ? grid(...FARM_IDS.map((x) => `<button data-farm="${x}" class="${farmId() === x ? 'on' : ''}">${t(('farm.' + x) as Key)}</button>`)) : '') +
+          (f.chain ? sec('a.chain') + grid(...f.chain.adminButtons().map(([k, l]) => btn(k, l as Key))) : '') +
+          sec('a.gates') + grid(btn('gates:lock', 'a.gatesLock'), btn('gates:shut', 'a.gatesShut'), btn('gates:open', 'a.gatesOpen'), btn('gate:smash', 'a.gateSmash'), btn('gate:bob', 'a.gateBob'), btn('tp:gate', 'a.tpGate')) +
+          (g.loos.length ? sec('a.loo') + grid(btn('loo:in', 'a.looIn'), btn('loo:bolt', 'a.looBolt'), btn('loo:tip', 'a.looTip'), btn('tp:loo', 'a.tpLoo'), btn('tp:safe', 'a.tpSafe')) : '') +
+          (g.phones ? sec('a.phone') + grid(btn('phone:prank', 'a.phonePrank'), btn('phone:plug', 'a.phonePlug'), btn('tp:phone', 'a.tpPhone'), btn('tp:pay', 'a.tpPay'), btn('clock:strike', 'a.clockStrike')) : '') +
+          (g.hammock ? sec('a.nap') + grid(btn('nap:in', 'a.napIn'), btn('nap:swing', 'a.napSwing'), btn('nap:mud', 'a.napMud'), btn('tp:hammock', 'a.tpHammock')) : '') +
+          (f.orchard ? sec('a.farm2') + grid(btn('tree:shake', 'a.treeShake'), btn('bees:me', 'a.beesMe'), btn('bringApples', 'a.bringApples')) : '') +
+          (f.dairy ? sec('a.farm3') + grid(btn('bull:me', 'a.bullMe'), btn('bull:out', 'a.bullOut'), btn('bringRag', 'a.bringRag'), btn('cow:tip', 'a.cowTip'), btn('milk:spill', 'a.milkSpill'), btn('bringCheese', 'a.bringCheese')) : '') +
+          (f.pumpkins ? sec('a.farm4') + grid(btn('lantern:out', 'a.lanternOut'), btn('lanterns:out', 'a.lanternsOut'), btn('lanterns:on', 'a.lanternsOn'), btn('bob:relight', 'a.bobRelight'), btn('catapult:me', 'a.catapultMe'), btn('catapult:fire', 'a.catapultFire'), btn('catapult:bob', 'a.catapultBob'), btn('bringPumpkin', 'a.bringPumpkin'), btn('giant:me', 'a.giantMe')) : '') +
+          (f.winter ? sec('a.farm5') + grid(btn('snowman:down', 'a.snowmanDown'), btn('snowman:bob', 'a.snowmanBob'), btn('bringSnowball', 'a.bringSnowball'), btn('bigball:me', 'a.bigBall'), btn('bob:ice', 'a.bobIce'), btn('snowcoat', 'a.snowCoat')) : '') +
+          sec('a.pranks') + grid(btn('pick', 'a.pick'), hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : '');
+        break;
+      case 'items':
+        body = sec('a.shop') + `<div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button><button data-shop="reset">${t('a.shopReset')}</button></div>` +
+          grid(btn('gadget:cherryBomb', 'a.giveBomb'), btn('gadget:stinkBomb', 'a.giveStink'), btn('gadget:bone', 'a.giveBone')) +
+          sec('a.snacks') + grid(btn('snack:canBeans', 'a.canBeans'), btn('snack:canSpinach', 'a.canSpinach'), btn('snack:canEnergy', 'a.canEnergy'), btn('snack:canDog', 'a.canDog'), btn('snack:cigPack', 'a.cigPack'), btn('smoke:me', 'a.smokeMe'), btn('boosts:all', 'a.allBoosts')) +
+          sec('a.physics') + grid(btn('bringCrate', 'a.bringCrate'), btn('bringPig', 'a.bringPig'), btn('bringPot', 'a.bringPot'), btn('bringEgg', 'a.bringEgg'), btn('bringGnome', 'a.bringGnome'), btn('bringBone', 'a.bringBone'),
+            btn('bringSafe', 'a.bringSafe'), btn('bring:tv', 'a.bringTv'), btn('bring:clock', 'a.bringClock'));
+        break;
+    }
     this.admin.innerHTML = `<h2>${t('a.title')}</h2><div class="hint">${t('a.hint')}</div>` + crash +
-      (G.net !== 'solo' ? `<div class="sec">${t('a.online')}</div><div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) + tog('predict', 'a.predict') : '') +
-      tog('bob', 'a.bob') + tog('bobSees', 'a.bobSee') + tog('god', 'a.godMode') + tog('easyEscape', 'a.escape') + tog('noCooldowns', 'a.cooldowns') +
-      rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
-      `<div class="grid">${btn('grill', 'a.grillNow')}${btn('free', 'a.freeAll')}${btn('catch', 'a.catchMe')}${btn('mud', 'a.mud')}` +
-      `${btn('dance', 'a.bobDance')}${btn('danceNear', 'a.bobDanceNear')}${btn('slap', 'a.bobSlap')}${btn('mow', 'a.bobMow')}${btn('bed', 'a.bobSleep')}</div>` +
-      `<div class="sec">${t('a.stealth')}</div>` + tog('showSight', 'a.showSight') +
-      `<div class="grid">${btn('bobHunt', 'a.bobHunt')}${btn('tp:bush', 'a.tpBush')}${hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : ''}</div>` +
-      `<div class="sec">${t('a.alert')}</div><div class="grid">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}">${l} · ${t(('alert.' + l) as Key)}</button>`).join('')}` +
-      `${btn('trapMe', 'a.trapMe')}${btn('dogMe', 'a.dogMe')}${btn('bringBone', 'a.bringBone')}</div>` +
-      `<div class="sec">${t('a.mods')}</div><div class="grid">${(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) =>
-        `<button data-a="mod:${m}" class="${G.mod === m ? 'on' : ''}">${m === 'none' ? t('menu.off') : t(('mod.' + m) as Key)}</button>`).join('')}` +
-      `<button data-a="mod:random" class="${ADMIN.mod === 'random' ? 'on' : ''}">${t('a.modRandom')}</button></div>` +
-      `<div class="sec">${t('a.gates')}</div><div class="grid">${btn('gates:lock', 'a.gatesLock')}${btn('gates:shut', 'a.gatesShut')}${btn('gates:open', 'a.gatesOpen')}` +
-      `${btn('gate:smash', 'a.gateSmash')}${btn('gate:bob', 'a.gateBob')}${btn('tp:gate', 'a.tpGate')}</div>` +
-      `<div class="sec">${t('a.loo')}</div><div class="grid">${btn('loo:go', 'a.looGo')}${btn('loo:in', 'a.looIn')}${btn('loo:bolt', 'a.looBolt')}${btn('loo:tip', 'a.looTip')}${btn('tp:loo', 'a.tpLoo')}${btn('bringSafe', 'a.bringSafe')}${btn('tp:safe', 'a.tpSafe')}</div>` +
-      `<div class="sec">${t('a.phone')}</div><div class="grid">${btn('phone:ring', 'a.phoneRing')}${btn('phone:prank', 'a.phonePrank')}${btn('phone:plug', 'a.phonePlug')}${btn('tp:phone', 'a.tpPhone')}${btn('tp:pay', 'a.tpPay')}${btn('bring:tv', 'a.bringTv')}${btn('bring:clock', 'a.bringClock')}${btn('clock:strike', 'a.clockStrike')}</div>` +
-      `<div class="sec">${t('a.nap')}</div><div class="grid">${btn('nap:go', 'a.napGo')}${btn('nap:in', 'a.napIn')}${btn('nap:swing', 'a.napSwing')}${btn('nap:mud', 'a.napMud')}${btn('tp:hammock', 'a.tpHammock')}</div>` +
-      `<div class="sec">${t('a.birds')}</div><div class="grid">${btn('roosterMe', 'a.roosterMe')}${btn('turkeyMe', 'a.turkeyMe')}${hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : ''}</div>` +
-      `<div class="sec">${t('a.shop')}</div><div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button>` +
-      `<button data-shop="reset">${t('a.shopReset')}</button>${btn('gadget:cherryBomb', 'a.giveBomb')}${btn('gadget:stinkBomb', 'a.giveStink')}${btn('gadget:bone', 'a.giveBone')}</div>` +
-      `<div class="sec">${t('a.snacks')}</div><div class="grid">${btn('snack:canBeans', 'a.canBeans')}${btn('snack:canSpinach', 'a.canSpinach')}${btn('snack:canEnergy', 'a.canEnergy')}${btn('snack:canDog', 'a.canDog')}${btn('snack:cigPack', 'a.cigPack')}${btn('smoke:me', 'a.smokeMe')}${btn('boosts:all', 'a.allBoosts')}</div>` +
-      `<div class="sec">${t('a.physics')}</div><div class="grid">${btn('knock', 'a.knockMe')}${btn('bringCrate', 'a.bringCrate')}${btn('bringPig', 'a.bringPig')}${btn('bobCarry', 'a.bobCarry')}${btn('bobDown', 'a.bobDown')}</div>` +
-      `<div class="sec">${t('a.time')}</div>` +
-      rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) + tog('freezeTime', 'a.freeze') +
-      `<div class="grid">${btn('day', 'a.toDay')}${btn('night', 'a.toNight')}${btn('wolves', 'a.wolves')}${btn('nowolves', 'a.noWolves')}</div>` +
-      rng('gameSpeed', 'a.gameSpeed', ADMIN.gameSpeed, 0.25, 3, 0.25) +
-      `<div class="sec">${t('a.round')}</div>` + rng('roundMins', 'a.roundMins', ADMIN.roundMins, 1, 20, 1) +
-      `<div class="grid">${btn('roundWin', 'a.roundWin')}${btn('loot100', 'a.loot100')}${btn('roundEnd', 'a.roundEnd')}${btn('roundNew', 'a.roundNew')}</div>` +
-      `<div class="field"><span>${t('a.fps')}</span><div class="seg" data-fps="1"><button data-v="1" class="${SETTINGS.fps ? 'on' : ''}">${t('menu.on')}</button><button data-v="0" class="${!SETTINGS.fps ? 'on' : ''}">${t('menu.off')}</button></div></div>` +
-      `<div class="sec">${t('a.pranks')}</div><div class="grid">${btn('pick', 'a.pick')}${btn('bringPot', 'a.bringPot')}${btn('bringEgg', 'a.bringEgg')}${btn('bringGnome', 'a.bringGnome')}</div>` +
-      (g.farm.orchard ? `<div class="sec">${t('a.farm2')}</div><div class="grid">${btn('tree:shake', 'a.treeShake')}${btn('bees:me', 'a.beesMe')}${btn('bringApples', 'a.bringApples')}</div>` : '') +
-      (g.farm.dairy ? `<div class="sec">${t('a.farm3')}</div><div class="grid">${btn('bull:me', 'a.bullMe')}${btn('bull:out', 'a.bullOut')}${btn('bringRag', 'a.bringRag')}${btn('cow:tip', 'a.cowTip')}${btn('milk:spill', 'a.milkSpill')}${btn('bringCheese', 'a.bringCheese')}</div>` : '') +
-      (g.farm.pumpkins ? `<div class="sec">${t('a.farm4')}</div><div class="grid">${btn('lantern:out', 'a.lanternOut')}${btn('lanterns:out', 'a.lanternsOut')}${btn('lanterns:on', 'a.lanternsOn')}${btn('bob:relight', 'a.bobRelight')}${btn('catapult:me', 'a.catapultMe')}${btn('catapult:fire', 'a.catapultFire')}${btn('catapult:bob', 'a.catapultBob')}${btn('bringPumpkin', 'a.bringPumpkin')}${btn('giant:me', 'a.giantMe')}</div>` : '') +
-      (g.farm.winter ? `<div class="sec">${t('a.farm5')}</div><div class="grid">${btn('snowman:down', 'a.snowmanDown')}${btn('snowman:bob', 'a.snowmanBob')}${btn('bringSnowball', 'a.bringSnowball')}${btn('bigball:me', 'a.bigBall')}${btn('bob:ice', 'a.bobIce')}${btn('snowcoat', 'a.snowCoat')}</div>` : '') +
-      `<div class="sec">${t('a.teleport')}</div><div class="tp">${g.farm.places.tp.filter(([k]) => k !== 'wheat' && k !== 'garden').map(([k]) => `<button data-tp="${k}">${t(('a.' + k) as Key)}</button>`).join('')}</div>` +
-      (G.net === 'solo' ? `<div class="sec">${t('a.farm')}</div><div class="grid">${FARM_IDS.map((f) => `<button data-farm="${f}" class="${farmId() === f ? 'on' : ''}">${t(('farm.' + f) as Key)}</button>`).join('')}</div>` : '');
+      `<div class="atabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${this.aTab === k ? 'on' : ''}" title="${t(l)}"><b>${ic}</b>${t(l)}</button>`).join('')}</div>` + body;
+    this.admin.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => { this.aTab = b.dataset.tab as typeof this.aTab; this.renderAdmin(); }));
+    this.admin.querySelectorAll<HTMLElement>('[data-p]').forEach((b) => b.addEventListener('click', () => {
+      const [i, k] = b.dataset.p!.split(':'); g.adminPig(Number(i), k, this.jailSecs); this.renderAdmin();
+    }));
     this.admin.querySelectorAll<HTMLElement>('[data-tog]').forEach((s) => s.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       const k = s.dataset.tog as keyof typeof ADMIN;
@@ -264,18 +294,18 @@ export class Menu {
       if (k === 'bob') g.farmer?.setEnabled(ADMIN.bob);
       this.renderAdmin();
     }));
-    this.admin.querySelector<HTMLElement>('[data-fps]')!.addEventListener('click', (e) => {
+    this.admin.querySelector<HTMLElement>('[data-fps]')?.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).dataset.v; if (v === undefined) return;
       SETTINGS.fps = v === '1'; saveSettings(); this.renderAdmin();
     });
     this.admin.querySelectorAll<HTMLInputElement>('input[data-r]').forEach((el) => el.addEventListener('input', () => {
       const k = el.dataset.r!, v = parseFloat(el.value);
-      if (k === 'hour') g.daynight.setHour(v); else (ADMIN as any)[k] = v;
+      if (k === 'hour') g.daynight.setHour(v); else if (k === 'jailSecs') this.jailSecs = v; else (ADMIN as any)[k] = v;
       (this.admin.querySelector(`[data-val="${k}"]`) as HTMLElement).textContent = String(v);
     }));
     this.admin.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => b.addEventListener('click', () => {
       g.adminAction(b.dataset.a!);
-      if (b.dataset.a!.startsWith('mod:')) this.renderAdmin();   // show which modifier is on
+      if (/^(mod:|alert:|jail:)/.test(b.dataset.a!)) this.renderAdmin();   // show what's on now
     }));
     this.admin.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) => b.addEventListener('click', () => g.adminAction('tp:' + b.dataset.tp)));
     this.admin.querySelectorAll<HTMLElement>('[data-farm]').forEach((b) => b.addEventListener('click', () => {

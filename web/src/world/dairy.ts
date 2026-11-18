@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { raycast, L, SEE_THROUGH } from '../core/physics';
-import { G } from '../game/ctx';
+import { G, ignored } from '../game/ctx';
 import { toonMat } from '../render/toon';
 import type { Critter, CritterBrain } from './animals';
 import type { Prop } from './props';
@@ -213,7 +213,7 @@ export class Dairy implements CritterBrain {
   private valid(t: Target) {
     if (t.kind === 'farmer') { const f = G.farmer; return !!f && !f.asleep && f.state !== 'down' && f.state !== 'off' && f.state !== 'away'; }
     if (t.kind === 'prop') { const pr = t as Prop; return !pr.banked; }
-    const pig = t as Pig; return !pig.out && !pig.cage && pig.heldBy?.kind !== 'farmer';
+    const pig = t as Pig; return !ignored(pig) && !pig.out && !pig.cage && pig.heldBy?.kind !== 'farmer';
   }
   private tpos(t: Target, out: THREE.Vector3) {
     if (t.kind === 'farmer') return out.copy(G.farmer.pos);

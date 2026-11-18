@@ -84,6 +84,51 @@ export const IC = {
   boost_spinach: svg(`<path d="M5 20c0-6 2-9 5-10l-1-4 4-1 2 5c3 1 5 3 5 6 0 3-3 4-6 4z" fill="#ffb3c7" ${O}/><path d="M11 14c1.5-1 3.5-1 5 .5" fill="none" ${O}/><path d="M16 4c3 1 4 3 3 6-3-1-4-3-3-6z" fill="#3f9d3a" ${O}/>`),
   boost_energy: svg(`<path d="M13.5 1.5 4.5 13.5h6l-2 9 10-13h-6.2z" fill="#ffe14a" ${O}/>`),
   boost_dogfood: svg(`<path d="M6.6 9.6a2.6 2.6 0 1 1 3.8-3.4l3.4 3.4a2.6 2.6 0 1 1 3.4 3.8 2.6 2.6 0 1 1-3.4 3.8l-3.4-3.4a2.6 2.6 0 1 1-3.8-3.4z" fill="#fff4e6" ${O} transform="rotate(10 12 12)"/>`),
+  // ---- chain modes (farms 6 / 7)
+  /** A plain mouse (move it). */
+  mouse: svg(`<rect x="6" y="2" width="12" height="20" rx="6" fill="#fff6e6" ${O}/><path d="M12 2v6" fill="none" ${O}/>`),
+  /** Cannabis leaf (7 leaflets). */
+  leaf: svg(`<g fill="#5cb83d" ${O}><path d="M12 13C11 8 11 4 12 1c1 3 1 7 0 12z"/><path d="M12 13c-2.5-3-5-5-8.5-6 1.5 3 4.5 5 8.5 6z"/><path d="M12 13c2.5-3 5-5 8.5-6-1.5 3-4.5 5-8.5 6z"/><path d="M12 13.5c-3-.5-6 0-9 2 3 1 6 .4 9-2z"/><path d="M12 13.5c3-.5 6 0 9 2-3 1-6 .4-9-2z"/></g><path d="M12 13v9" fill="none" ${O}/>`),
+  /** Watering can pouring. */
+  can: svg(`<path d="M5 9h10v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#6fb7e8" ${O}/><path d="M15 12l6-5" fill="none" ${O}/><path d="M7 9a4 4 0 0 1 6 0" fill="none" ${O}/><path d="M21 9v3M19.5 11v3" stroke="#4fb3ff" stroke-width="1.6" stroke-linecap="round"/>`),
+  /** Harvest: sickle. */
+  sickle: svg(`<path d="M6 21l5-6" fill="none" stroke="#8a5a2a" stroke-width="3" stroke-linecap="round"/><path d="M11 15C8 9 11 3 18 3c-4 2-6 6-4 11z" fill="#cfd6de" ${O}/>`),
+  /** Grinder (cog). */
+  gear: svg(`<path d="M10 2h4l.6 2.6 2.3 1 2.3-1.4 2.8 2.8-1.4 2.3 1 2.3 2.4.4v4l-2.6.6-1 2.3 1.4 2.3-2.8 2.8-2.3-1.4-2.3 1-.4 2.4h-4l-.6-2.6-2.3-1-2.3 1.4-2.8-2.8 1.4-2.3-1-2.3L2 14v-4l2.6-.6 1-2.3-1.4-2.3 2.8-2.8 2.3 1.4 2.3-1z" fill="#c9ced8" ${O} transform="scale(.92) translate(1 1)"/><circle cx="12" cy="12" r="3.5" fill="#5cb83d" ${O}/>`),
+  /** A rolled joint with a curl of smoke. */
+  joint: svg(`<path d="M3 17l15-6 2 3-15 6z" fill="#fff6e6" ${O}/><path d="M18 11l2 3 1.6-.8-1.8-3z" fill="#ff8a3a" ${O}/><path d="M20 8c-1-1.5 1-2.5 0-4.5" fill="none" stroke="#c8c8c8" stroke-width="1.6" stroke-linecap="round"/>`),
+  /** Bong. */
+  bong: svg(`<path d="M9 2h5v9l3 4a5 5 0 0 1-4 7h-3a5 5 0 0 1-4-7l3-4z" fill="#8fdcc8" ${O}/><path d="M6.6 16.5h10" stroke="#4fb3ff" stroke-width="2"/><path d="M14 15l5-4 1.4 1.4" fill="none" ${O}/>`),
+  /** Cookie. */
+  cookie: svg(`<circle cx="12" cy="12" r="9" fill="#d9a35a" ${O}/><circle cx="9" cy="9" r="1.4" fill="#5a3518"/><circle cx="14.5" cy="11" r="1.4" fill="#5a3518"/><circle cx="10" cy="15" r="1.4" fill="#5a3518"/><path d="M15 15l1 1M13 7l1 0" stroke="#5cb83d" stroke-width="1.6" stroke-linecap="round"/>`),
+  /** Oven. */
+  oven: svg(`<rect x="3" y="3" width="18" height="18" rx="2" fill="#e8e1d6" ${O}/><rect x="6" y="9" width="12" height="9" rx="1.5" fill="#ff9a3a" ${O}/><circle cx="8" cy="6" r="1.2" fill="#3b2412"/><circle cx="12" cy="6" r="1.2" fill="#3b2412"/>`),
+  /** Lighter with a flame. */
+  lighter: svg(`<rect x="7" y="10" width="10" height="12" rx="2" fill="#ff5a6a" ${O}/><rect x="9" y="7" width="6" height="3" fill="#c9ced8" ${O}/><path d="M12 7c-2-2-1-4 0-6 1 2 2 4 0 6z" fill="#ffb13a" ${O}/>`),
+  /** Rolling papers. */
+  paper: svg(`<rect x="4" y="6" width="16" height="13" rx="1.5" fill="#fff6e6" ${O}/><path d="M7 10h10M7 13h10" stroke="#d8c8a8" stroke-width="1.4"/><rect x="4" y="15" width="16" height="4" fill="#5cb83d" ${O}/>`),
+  /** Butter / stick of magic butter. */
+  butter: svg(`<path d="M3 13l5-5h13v7l-5 5H3z" fill="#ffe27a" ${O}/><path d="M3 13h13l5-5M16 13v7" fill="none" ${O}/>`),
+  /** Mixing bowl. */
+  bowl: svg(`<path d="M3 10h18a9 8 0 0 1-18 0z" fill="#9fd3ea" ${O}/><path d="M15 10l5-8" fill="none" stroke="#c98a4a" stroke-width="2.4" stroke-linecap="round"/>`),
+  /** Beer mug with foam. */
+  beer: svg(`<rect x="5" y="7" width="11" height="14" rx="2" fill="#ffc23a" ${O}/><path d="M16 10h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2" fill="none" ${O}/><path d="M4.5 8a2.5 2.5 0 0 1 3-3.5A3 3 0 0 1 13 4a2.5 2.5 0 0 1 3.5 4z" fill="#fffaf0" ${O}/>`),
+  /** Barrel. */
+  barrel: svg(`<path d="M6 3h12c2 6 2 12 0 18H6C4 15 4 9 6 3z" fill="#b5793d" ${O}/><path d="M5 8h14M5 16h14" stroke="#5c5f66" stroke-width="2"/>`),
+  /** Wheat ear. */
+  wheat: svg(`<path d="M12 22V6" fill="none" stroke="#c9a24a" stroke-width="2" stroke-linecap="round"/><g fill="#ffd166" ${O}><ellipse cx="9.5" cy="8" rx="2" ry="3" transform="rotate(-30 9.5 8)"/><ellipse cx="14.5" cy="8" rx="2" ry="3" transform="rotate(30 14.5 8)"/><ellipse cx="9.5" cy="13" rx="2" ry="3" transform="rotate(-30 9.5 13)"/><ellipse cx="14.5" cy="13" rx="2" ry="3" transform="rotate(30 14.5 13)"/><ellipse cx="12" cy="4" rx="1.8" ry="2.8"/></g>`),
+  /** Fire (kettle / kiln). */
+  fire: svg(`<path d="M12 22c-5 0-7-3-7-6 0-4 4-6 4-10 3 2 3 5 3 5s1-2 1-4c4 3 6 6 6 9 0 3-2 6-7 6z" fill="#ff7a2a" ${O}/><path d="M12 22c-2 0-3-1-3-3s2-3 2-5c2 1 4 3 4 5s-1 3-3 3z" fill="#ffd166"/>`),
+  /** Balance (a pig on a log). */
+  beam: svg(`<path d="M2 19h20" stroke="#8a5a2a" stroke-width="4" stroke-linecap="round"/><path d="M12 17V9" fill="none" ${O}/><circle cx="12" cy="7" r="3" fill="#ffb3c8" ${O}/><path d="M5 11l7-2 7-2" fill="none" ${O}/>`),
+  /** Heart (a hug). */
+  heart: svg(`<path d="M12 21C5 16 2 12 2 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 10 2.5C22 12 19 16 12 21z" fill="#ff6fa8" ${O}/>`),
+  /** Visions: a swirly eye. */
+  swirl: svg(`<circle cx="12" cy="12" r="10" fill="#b57bff" ${O}/><path d="M12 12a1.5 1.5 0 1 1 1.5 1.5A3 3 0 1 1 10.5 9a4.5 4.5 0 1 1-3 6" fill="none" stroke="#fff6e6" stroke-width="1.8" stroke-linecap="round"/>`),
+  /** A cloud (lie back and watch them). */
+  cloud: svg(`<path d="M6 19a4 4 0 0 1-.5-8A6 6 0 0 1 17 9a4.5 4.5 0 0 1 1 10z" fill="#ffffff" ${O}/>`),
+  /** Seeds in a hoof. */
+  seed: svg(`<ellipse cx="8" cy="12" rx="2.4" ry="3.4" fill="#c9a24a" ${O} transform="rotate(-20 8 12)"/><ellipse cx="15" cy="9" rx="2.4" ry="3.4" fill="#c9a24a" ${O} transform="rotate(25 15 9)"/><ellipse cx="14" cy="17" rx="2.4" ry="3.4" fill="#c9a24a" ${O}/>`),
 };
 export type IconId = keyof typeof IC;
 

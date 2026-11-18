@@ -3,6 +3,8 @@
  * (TypeScript enforces it: `es` is typed as Record<Key, string>). Placeholders: {name}.
  * Rule (CLAUDE.md): every new UI string gets an English AND a Spanish entry in the same change.
  */
+import { EN_X, ES_X } from './i18nX';
+
 const en = {
   // title / boot
   'title.sub': 'Four pigs. One farmer. Zero shame.',
@@ -378,6 +380,7 @@ const en = {
   'a.bigBall': 'Giant snowball in front of me', 'a.bobIce': 'Bob slips on the ice', 'a.snowCoat': 'Snow coat on me',
   'a.rink': 'Frozen pond', 'a.hole': 'Ice-fishing hole', 'a.snowman': 'Snowman', 'a.tree': 'Decorated tree', 'a.sled': 'Sledding hill',
   'a.paddock': 'Reindeer paddock', 'a.woodshed': 'Woodshed',
+  ...EN_X,
 } as const;
 
 export type Key = keyof typeof en;
@@ -741,6 +744,7 @@ const es: Record<Key, string> = {
   'a.bigBall': 'Bola gigante delante de mí', 'a.bobIce': 'Bob resbala en el hielo', 'a.snowCoat': 'Abrigo de nieve',
   'a.rink': 'Estanque helado', 'a.hole': 'Agujero de pesca', 'a.snowman': 'Muñeco de nieve', 'a.tree': 'Árbol decorado', 'a.sled': 'Colina de trineos',
   'a.paddock': 'Cercado de renos', 'a.woodshed': 'Leñera',
+  ...ES_X,
 };
 
 export const LANGS = { en: 'English', es: 'Español' } as const;

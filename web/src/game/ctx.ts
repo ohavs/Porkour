@@ -50,7 +50,16 @@ export const ADMIN = {
   roundMins: 10,        // round length (minutes)
   showSight: false,     // HUD line: does Bob see me right now
   mod: 'random',        // next round's modifier: random or a fixed one (admin)
+  fly: false,           // admin power: my pig flies (Space up, C down, Shift fast), through walls
+  fp: false,            // admin test: first-person camera (my pig hidden, only its arms / hooves on screen)
+  chill: false,         // "chill Bob" (chain modes, farms 6 / 7): sees / hears less, slower, suspicion builds slower
 };
+
+/**
+ * Admin "ghost" (user: Bob, the dog, the animals ignore the admin): nobody notices or catches this pig — Bob, the guard
+ * dog, alarm birds, the bull, bees, wolves, traps. The admin's own pig (ADMIN.god) or any pig given the power (`pw.ghost`).
+ */
+export const ignored = (p: any) => !!p?.pw?.ghost || (p === G.localPig && (ADMIN.god || !ADMIN.bobSees));
 
 /** Shared game context (set up once in Game). */
 export const G = {
@@ -84,6 +93,12 @@ export const G = {
   loos: [] as any[],
   /** Bob's phone + the payphone (world/phone.ts), when the farm has them. */
   phones: null as any,
+  /** The render camera (things that face it). */
+  cam: null as null | THREE.Camera,
+  /** Chain modes (farms 6 / 7): stations, items, visions, the beam (world/chain.ts). */
+  chain: null as null | import('../world/chain').Chain,
+  /** Admin jail: the barred cell in the sky (world/jail.ts). */
+  jail: null as null | import('../world/jail').Jail,
   /** Bob's hammock (world/hammock.ts: his siesta), when the farm has one. */
   hammock: null as any,
   /** Spots where RMB does something instead of a grab (the phone jack, the payphone): `icon` = the HUD prompt's icon. */
@@ -121,6 +136,7 @@ export const G = {
     else if (this.rec) { const i = this.pigs.indexOf(pig); if (i >= 0) this.rec.shakes.push([i, amount]); }
   },
   noise(p: THREE.Vector3, radius: number) {
+    for (const g of this.pigs) if (ignored(g) && Math.abs(g.pos.x - p.x) < 1 && Math.abs(g.pos.z - p.z) < 1) return;   // a ghost makes no sound
     this.noises.push({ x: p.x, y: p.y, z: p.z, radius, t: this.time });
     if (this.noises.length > 40) this.noises.shift();
   },
