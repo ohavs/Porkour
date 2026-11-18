@@ -8,6 +8,8 @@ import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
 import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
   makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe, makeTV, makeClock } from './funProps';
+import { makeBud, makeWeedBag, makeJoint, makeLighter, makeWateringCan, makeSeedBag, makeSickle, makeButter, makeSack, makeTray, makeWheelbarrow,
+  makeHops, makeSheaf, makeMug, makeBeerBarrel } from './chainProps';
 
 /** 'wheel' = a cylinder lying along x (rolls along z): cheese wheels. */
 export type PropShape = 'box' | 'ball' | 'cyl' | 'wheel';
@@ -32,6 +34,10 @@ export interface PropDef {
   coop?: boolean;
   /** Bob's TV: its screen cracks when it hits something faster than this (m/s) or gets punched — then it's worth `cracked`. */
   screen?: number; cracked?: number;
+  /** Chain modes (farms 6 / 7): what this is along the production chain (world/chain.ts: a quick LMB click uses it). */
+  item?: string;
+  /** Munchies: a high pig eats it with a click (counts for the munchies challenge). */
+  food?: boolean;
 }
 
 /** A loose physics object (crate, barrel, pumpkin…): can be pushed, rammed, grabbed and thrown. */
@@ -248,7 +254,7 @@ export const PROPS: Record<string, PropDef> = {
   undies: { make: makeUndies, mass: 0.6, sound: 'thud', label: 'item.undies', value: 25, friction: 0.9 },
   trophy: { model: 'loot/Chalice', height: 0.55, mass: 4, shape: 'cyl', sound: 'metal', label: 'item.trophy', value: 100 },
   pie: { make: makePie, mass: 1.5, shape: 'cyl', sound: 'squish', label: 'item.pie', value: 80 },
-  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log', value: 5 },
+  log: { model: 'kenney/log', height: 0.4, mass: 16, shape: 'box', sound: 'wood', label: 'item.log', value: 5, item: 'log' },
   wheel: { model: 'kenney/wheel', height: 0.9, mass: 14, shape: 'box', sound: 'wood', label: 'item.wheel', value: 25 },
   mug: { model: 'kaykit/mug_full', height: 0.22, mass: 1, shape: 'box', sound: 'metal', label: 'item.mug', value: 15 },
   sword: { model: 'kaykit/sword_1handed', height: 0.9, mass: 3, shape: 'box', sound: 'metal', label: 'item.sword', value: 60, weapon: 60, breaks: 3 },
@@ -310,7 +316,33 @@ export const PROPS: Record<string, PropDef> = {
   // clock (tall: it topples when dragged hard; BONG on every full hour wherever it is — world/heavyLoot.ts)
   tv: { make: makeTV, mass: 85, sound: 'wood', label: 'item.tv', value: 220, friction: 0.7, bounce: 0.05, coop: true, screen: 5.2, cracked: 30 },
   clock: { make: makeClock, mass: 110, sound: 'wood', label: 'item.clock', value: 260, friction: 0.65, bounce: 0.03, coop: true },
+  // chain modes (farm 6: cannabis — world/weed.ts): harvested buds, a bag of ground weed (3 pinches), rolled joints (puffs),
+  // the lighter, watering cans (6 pours), seeds, the sickle, butter → magic butter, flour (3 scoops), baking trays, the wheelbarrow
+  bud: { make: makeBud, mass: 0.3, shape: 'ball', r: 0.1, damp: 2, sound: 'squish', label: 'item.bud', item: 'bud', friction: 0.9 },
+  weedBag: { make: makeWeedBag, mass: 0.4, sound: 'squish', label: 'item.weedBag', item: 'weed', servings: 3 },
+  joint: { make: makeJoint, mass: 0.05, sound: 'thud', label: 'item.joint', item: 'joint', servings: 5, friction: 0.9 },
+  lighter: { make: makeLighter, mass: 0.1, sound: 'metal', label: 'item.lighter', item: 'lighter' },
+  wateringCan: { make: makeWateringCan, mass: 3, sound: 'metal', label: 'item.wateringCan', item: 'can', servings: 6 },
+  seedBag: { make: makeSeedBag, mass: 1, sound: 'thud', label: 'item.seedBag', item: 'seed', servings: 4 },
+  sickle: { make: makeSickle, mass: 1.2, sound: 'metal', label: 'item.sickle', item: 'sickle' },
+  butter: { make: () => makeButter(false), mass: 0.3, sound: 'squish', label: 'item.butter', item: 'butter', food: true },
+  magicButter: { make: () => makeButter(true), mass: 0.8, shape: 'cyl', sound: 'wood', label: 'item.magicButter', item: 'magic' },
+  flour: { make: () => makeSack(0xf8f4ea, 0x3f9ad8, 0.32, 0.36), mass: 5, shape: 'cyl', sound: 'thud', label: 'item.flour', item: 'flour', servings: 3 },
+  trayRaw: { make: () => makeTray('raw'), mass: 1.2, sound: 'metal', label: 'item.trayRaw', item: 'trayRaw' },
+  cookies: { make: () => makeTray('baked'), mass: 1.2, sound: 'metal', label: 'item.cookies', item: 'cookies', servings: 6, food: true },
+  cookiesBurnt: { make: () => makeTray('burnt'), mass: 1.2, sound: 'metal', label: 'item.cookiesBurnt', item: 'burnt' },
+  wheelbarrow: { make: makeWheelbarrow, mass: 60, sound: 'metal', label: 'item.wheelbarrow', item: 'barrow', friction: 0.25, bounce: 0.02 },
+  // farm 7 (beer — world/brew.ts): the scythe, wheat sheaves, grain → malt sacks, hops, the water bucket, the barrel, mugs of beer
+  scythe: { model: 'brew/Scythe', height: 1.3, mass: 2.5, sound: 'metal', label: 'item.scythe', item: 'scythe' },
+  sheaf: { make: makeSheaf, mass: 1.5, sound: 'thud', label: 'item.sheaf', item: 'sheaf', friction: 0.9 },
+  grain: { make: () => makeSack(0xe8d6b0, 0xc9a24a), mass: 8, shape: 'cyl', sound: 'thud', label: 'item.grain', item: 'grain', friction: 0.9 },
+  malt: { make: () => makeSack(0xb5793d, 0xffd166), mass: 7, shape: 'cyl', sound: 'thud', label: 'item.malt', item: 'malt', friction: 0.9 },
+  hops: { make: makeHops, mass: 0.3, sound: 'squish', label: 'item.hops', item: 'hops' },
+  bucket: { model: 'brew/Bucket', height: 0.4, mass: 2, shape: 'cyl', sound: 'metal', label: 'item.bucket', item: 'can', servings: 3 },
+  beerMug: { make: () => makeMug(true), mass: 0.6, shape: 'cyl', sound: 'metal', label: 'item.beerMug', item: 'beer', servings: 3 },
+  beerBarrel: { make: makeBeerBarrel, mass: 45, shape: 'wheel', sound: 'wood', label: 'item.beerBarrel', item: 'barrel', friction: 0.8, damp: 0.8 },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;
+for (const k of ['apple', 'pie', 'ham', 'melon', 'egg', 'cheeseWheel', 'pumpkin', 'honey', 'patchPumpkin']) PROPS[k].food = true;   // the munchies
 export const LOOT_MODELS = Object.values(PROPS).map((d) => d.model).filter((m): m is string => !!m && m.startsWith('loot/'));

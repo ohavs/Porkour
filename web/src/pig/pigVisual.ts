@@ -23,6 +23,8 @@ export interface PigPose {
   wobble?: number; punch?: number;
   /** Standing balance lean (radians): forward / sideways (+ = toward the pig's left), from the physics. */
   leanF?: number; leanS?: number;
+  /** On a balance beam: lean on four legs too. */
+  beam?: boolean;
   /** Limp (ragdoll / carried): `rel` = physical rotations of head, frontL, frontR, hindL, hindR relative to the torso. */
   limp?: boolean; rel?: THREE.Quaternion[];
   /** Grip hand position (model space) while holding something: the head (four legs) or the arms (standing) reach for it. */
@@ -138,7 +140,8 @@ export class PigVisual {
     // balance on two legs: the whole pig leans around its feet exactly as the physics lean says (smoothed a touch:
     // the sim runs at 60 Hz). The pivot is at the feet: sway sits at foot level, roll / base are lifted back up.
     const w = clamp(p.wobble ?? 0, 0, 1);
-    this.lf = damp(this.lf, (p.leanF ?? 0) * sT, 30, dt); this.ls = damp(this.ls, (p.leanS ?? 0) * sT, 30, dt);
+    const lk = Math.max(sT, p.beam ? 0.8 : 0);
+    this.lf = damp(this.lf, (p.leanF ?? 0) * lk, 30, dt); this.ls = damp(this.ls, (p.leanS ?? 0) * lk, 30, dt);
     this.sway.position.y = -this.centerHeight;
     this.sway.rotation.x = this.lf;
     this.sway.rotation.z = -this.ls;

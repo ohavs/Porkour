@@ -21,7 +21,7 @@ import { IC, type IconId } from './icons';
  * out. 3 grilled pigs = busted. Stars + coins at the end (saved for the shop). Host-authoritative: the host runs
  * `step` / `onEvent`; players get the state through `netState` like any synced entity.
  */
-export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 40, stashR: 2.3 };
+export const ROUND = { quotaBase: 400, quotaPer: 200, startHour: 7, prankCoins: 40, stashR: 2.3, madeBase: 300, madePer: 150 };
 
 export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPond' | 'catBath' | 'lambStash' | 'hensOut' | 'wolfScare' | 'pumpkinWell'
   | 'sheepOut' | 'hayPond' | 'loseBob' | 'whackBob' | 'henPond'
@@ -39,7 +39,13 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // every farm: Bob's phone (cut him off mid-call, prank-call him from the payphone), more heavy loot
   | 'hangUp' | 'prankCall' | 'tvSteal' | 'clockSteal'
   // farms with a hammock: Bob's siesta
-  | 'hammockFlip' | 'mudFace';
+  | 'hammockFlip' | 'mudFace'
+  // chain modes: farm 6 (cannabis), farm 7 (beer), and the challenges you do high / drunk
+  | 'rollJoint' | 'bongRip' | 'bakeCookies' | 'everyoneHigh' | 'brewBeer' | 'drinkUp'
+  | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade';
+/** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
+const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze'];
+const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
@@ -51,7 +57,7 @@ interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
 export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
 /** Counted pranks (progress shown as n / need). */
-const NEED: Partial<Record<MissionId, number>> = { smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5, snowballBob: 4, iceHole: 3 };
+const NEED: Partial<Record<MissionId, number>> = { visions: 6, munchies: 5, smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5, snowballBob: 4, iceHole: 3 };
 /** Which props / critters a prank is about, and where they go. */
 /** Big pasture animals (they walk out on their own when the pasture gate is open). */
 const BIG = ['cow', 'horse', 'horse2', 'donkey', 'reindeer', 'doe'];
@@ -84,7 +90,7 @@ export const missionColor = (i: number) => (i <= 0 ? MISSION_COLORS[0] : MISSION
 /** Little down arrow in a mission's colour (mission list, waypoints). */
 export const arrowSvg = (c: string, w = 14) => `<svg class="marr" viewBox="0 0 14 14" width="${w}" height="${w}"><path d="M2 2.5h10L7 12z" fill="${c}" stroke="#3b2412" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 /** Pranks done to Bob himself: the arrow sits over him. */
-const ON_BOB = new Set<MissionId>(['knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob']);
+const ON_BOB = new Set<MissionId>(['knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade']);
 export interface MissionMark { at: THREE.Vector3; top: number; color: string; i: number }
 
 /** Waypoint icons (the place a held thing goes). */
@@ -198,6 +204,17 @@ export class Round {
       ...(this.game.farm.props.some((p) => p.def === PROPS.clock) ? ['clockSteal'] as MissionId[] : []),
       ...(this.game.phones?.wall ? ['hangUp'] as MissionId[] : []), ...(this.game.phones?.pay ? ['prankCall'] as MissionId[] : []),
       ...(this.game.hammock ? ['hammockFlip', 'mudFace'] as MissionId[] : [])];
+    const ch = this.game.farm.chain;
+    if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
+      const c3 = pick(ch.kind === 1 ? HIGH_POOL : DRUNK_POOL, 3);
+      const way = pick(['bongRip', 'bakeCookies'] as MissionId[], 2);
+      const req: MissionId[] = ch.kind === 1 ? ['rollJoint', way[0], c3[0]] : ['brewBeer', 'drinkUp', c3[0]];
+      const bonus: MissionId[] = ch.kind === 1 ? [way[1], c3[1]] : [c3[1], c3[2]];
+      if (G.net !== 'solo' && ch.kind === 1) bonus.push('everyoneHigh');
+      this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
+      this.handOut();
+      return;
+    }
     const own = this.game.farm.featured ?? [];
     // a farm with its own pranks: one of the two required ones is always one of them
     const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
@@ -227,8 +244,21 @@ export class Round {
   }
 
   /** Game events (host): Bob knocked down / coughing, wolves scared… */
-  onEvent(type: string, text = '') {
+  onEvent(type: string, text = '', why = '') {
     if (this.phase === 'end') return;
+    // chain modes: everything made counts toward the quota line; the chain's goals + buzzed challenges
+    if (type === 'made') this.banked += Number(why) || 0;
+    if (type === 'puff') this.done('rollJoint');
+    if (type === 'bongRip') this.done('bongRip');
+    if (type === 'bakeCookies') this.done('bakeCookies');
+    if (type === 'brewBeer') this.done('brewBeer');
+    if (type === 'beamCrossed' && why === 'buzzed') this.done('beamWalk');
+    if (type === 'vision') this.count('visions');
+    if (type === 'munch') this.count('munchies');
+    if (type === 'hugBob') this.done('hugBob');
+    if (type === 'cloudGaze') this.done('cloudGaze');
+    if (type === 'tableDance') this.done('tableDance');
+    if (type === 'serenade') this.done('serenade');
     if (type === 'smashed' && text === 'flowerPot') this.count('smashPots');
     if (type === 'smashed' && text === 'melon') this.count('melonSmash');
     if (type === 'splatBob') this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob');
@@ -270,7 +300,11 @@ export class Round {
     const { props, critters, places: P } = this.game.farm;
     // players: solo = just you (the other pigs in the sty are idle extras); online = every connected pig
     const pigs = G.net === 'solo' ? [this.game.local] : this.game.pigs.filter((p) => !p.absent);
-    this.quota = ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
+    this.quota = this.game.farm.chain ? ROUND.madeBase + ROUND.madePer * Math.max(0, pigs.length - 1)
+      : ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0);
+    // chain modes: everyone buzzed at once / everyone finished a mug
+    if (this.wants('everyoneHigh')) this.check('everyoneHigh', pigs.every((p) => !p.out && p.high > 0.4));
+    if (this.wants('drinkUp')) { const dm = (this.game.farm.chain as { drunkMugs?: Map<unknown, number> } | undefined)?.drunkMugs; this.check('drinkUp', !!dm && pigs.every((p) => (dm.get(p) ?? 0) > 0)); }
     // a player who left takes their gadget slot along (someone joining that seat mid-round didn't bring it)
     if (this.given.some((x, i) => x && this.game.pigs[i]?.absent)) this.given = this.given.map((x, i) => (this.game.pigs[i]?.absent ? '' : x));
     // loot dropped in the stash
@@ -420,7 +454,7 @@ export class Round {
   textN(key: string) { const id = key.replace('m.', '') as MissionId; return id === 'quota' ? this.quota : NEED[id] ?? 0; }
   /** Mission line: text + progress for counted pranks. */
   private mText(x: Mission) {
-    if (x.id === 'quota') return t('m.quota', { n: this.quota });
+    if (x.id === 'quota') return t(this.game.farm.chain ? 'm.quotaMade' : 'm.quota', { n: this.quota });
     const need = NEED[x.id];
     return t(('m.' + x.id) as Key, { n: need ?? 0 }) + (need && !x.done ? ` <span class="val">${x.n}/${need}</span>` : '');
   }
@@ -455,6 +489,9 @@ export class Round {
     };
     this.missions.forEach((m, i) => {
       if (m.done || m.id === 'quota') return;
+      // chain modes: the mode knows the next step of its chain
+      const cm = g.farm.chain && !ON_BOB.has(m.id) ? g.farm.chain.markFor(m.id, L) : null;
+      if (cm) { mark(i, cm); return; }
       const d = MDEF[m.id];
       const isMine = (h: unknown) => !!h && !!d && ((d.props?.includes((h as Prop).def?.id ?? '') && (h as Prop).kind === 'prop')
         || ((h as Critter).kind === 'critter' && !!d.critters?.includes((h as Critter).def.kind)));

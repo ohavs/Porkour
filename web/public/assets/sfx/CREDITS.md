@@ -70,9 +70,15 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | cricket1.ogg | Veloren (DaforLynx), CC BY 4.0 |
 | cricket2.ogg | Veloren (DaforLynx), CC BY 4.0 |
 | cricket3.ogg | Veloren (DaforLynx), CC BY 4.0 |
+| ding.ogg | Brandon75689 (opengameart point-bell) via VoxeLibre mesecons_noteblock, CC0 |
+| drink.ogg | VoxeLibre mcl_potions, CC0 |
+| drum.ogg | Mattc90 (freesound 264285) via VoxeLibre mesecons_noteblock, CC0 |
 | fanfare.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | fart_deep.ogg | User's own audio (Assets/Audio) |
 | fart_short.ogg | User's own audio (Assets/Audio) |
+| fill.ogg | VoxeLibre mcl_potions, CC0 |
+| fire.ogg | Dynamicell (freesound 17548) via VoxeLibre mcl_fire, CC BY 3.0 |
+| flint.ogg | Benboncan (freesound 66457) via VoxeLibre mcl_fire, CC BY 3.0 |
 | fuse.ogg | TumeniNodes / theneedle.tv (freesound 316682) via Minetest Game, CC0 |
 | glass1.ogg | chewiesmissus (freesound 244238) via CDDA CC-Sounds, CC0 |
 | glass2.ogg | logant547 (freesound 677734) via CDDA CC-Sounds, CC0 |
@@ -85,6 +91,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | grunt1.ogg | VoxeLibre mobs_mc, CC0 |
 | grunt2.ogg | VoxeLibre mobs_mc, CC0 |
 | gust.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
+| hiss.ogg | Perttu Ahola (celeron55) via VoxeLibre mcl_fire, CC BY-SA 3.0 |
 | howl.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | icecrack.ogg | Angel_Perez_Grandi (freesound 49190) via VoxeLibre mcl_sounds, CC BY 3.0 |
 | icestep1.ogg | InspectorJ (freesound 416967) via VoxeLibre mcl_sounds, CC BY 3.0 |
@@ -118,6 +125,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | phonevoice5.ogg | kwahmah_02 (freesound 255851) via CDDA CC-Sounds, CC BY 3.0 (telephone-filtered) |
 | pigcry1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | pigcry2.ogg | VoxeLibre mobs_mc, CC0 |
+| pour.ogg | VoxeLibre mcl_potions, CC0 |
 | punch1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | punch2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rain.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |

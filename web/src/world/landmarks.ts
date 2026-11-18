@@ -29,11 +29,11 @@ function mesh(g: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material 
  * a hedge maze with a golden trophy in the middle (NE), a sunflower field taller than a standing pig (N),
  * a junkyard of old cars and tyre stacks (SW) and a greenhouse full of flower pots to smash (W, by the garden).
  */
-export function buildLandmarks(c: Ctx) {
+export function buildLandmarks(c: Ctx, o: { greenhouse?: boolean } = {}) {
   hedgeMaze(c);
   sunflowers(c);
   junkyard(c);
-  greenhouse(c);
+  if (o.greenhouse !== false) greenhouse(c);
 }
 
 // ---------------------------------------------------------------- hedge maze

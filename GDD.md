@@ -61,6 +61,37 @@ Random farm + random modifier. Missions: **loot quota** (value carried to the hi
 1. Bob's family farm (the current world: barn, sty, house, garage, windmill, pasture) ← first.
 2. Orchard & beehives · 3. Dairy & cheese (bull!) · 4. Pumpkin farm at night · 5. Winter farm (ice).
 
+## Chain modes (2026-11-18: user "modes where the missions are very specific")
+Built on Bob's family farm (his garden = the crop field, the greenhouse = the shed with a kitchen + machines, a pump by
+the field, a balance log over the duck pond). Overcooked-style co-op production chain where every step is its own
+little hands-on game (station mini-games on your own screen: crank, timing, hold, sprinkle, swipe, stir), then
+challenges that are hard to do high / drunk. Points for everything made fill the round's quota line.
+- **Cannabis farm (farm 6)**: water the plants (watering can, refill at the pump / pond; too much water = puddle, growth
+  stalls; Bob waters them too on his garden round) · plant seeds · harvest ripe ones (sickle = 3 buds, a headbutt = 2)
+  → wheelbarrow (drop buds in, push it to the shed — tip it and they spill) → grinder (crank: circle the mouse at the
+  right speed; too fast jams, loud) → bag of weed (3–4 pinches) → **joint**: fold the filter, sprinkle evenly, roll,
+  lick → light it with the lighter (strike it, bring the flame close; a friend can hold it) → puff ·
+  **bong**: water + a pinch, light, hold the breath in the band (too long = a coughing fit Bob hears) ·
+  **cookies**: butter + a pinch on the stove (stir, don't burn: smoke alarm) → magic butter + flour in the bowl (knead)
+  → tray in the oven → take it out golden (early = gooey + weak, late = burnt + smoke alarm) → cookies kick in late.
+- **Wheat & beer (farm 7)**: scythe the wheat → sheaves on the threshing floor → JUMP on them (a drum beats: stomps on
+  the beat count double; all pigs together = fast) → grain → malt mill (crank) → kettle over the fire pit: 2 water,
+  malt, logs on the fire → stir the mash (heat in the band) → 2 hops (shake the hop poles) → boils → roll the barrel
+  over, pour → ferments ~30 s → tap a mug (fill to the line, too much = foam) → drink (burps are loud).
+- **Buzzed**: high = colours shift / breathe, controls lag + drift, worse balance, giggly oinks; drunk = double vision,
+  camera rolls, the pig lists to one side, left/right swap for a moment now and then. Cookies kick in after ~10 s.
+- **Challenges** (one required, more as bonus): walk the log over the pond on two legs (counter-steer: it leans
+  left → press right; falls = splash) · catch visions only buzzed pigs see (rainbow doughnuts / pink elephants) ·
+  munchies (eat 5 things high) · hug Bob · lie back and watch the clouds · (beer) dance on the beer-garden table,
+  serenade Bob with 6 oinks.
+- **Bob (open question, user: "not sure Bob should chase in this mode")**: Claude's pick = **chill Bob** (default
+  in these modes): still there, still the threat, but laid-back — sees / hears less, slower in a chase, suspicion
+  builds slower; smoke, coughing fits, burps, the smoke alarm and the threshing drum are what bring him over. Keeps the
+  game's identity (stealth vs Bob) while the chain is the main game. Admin → Bob: "Chill Bob" off = full Bob,
+  "Farmer Bob" off = no Bob (pure co-op party). Decide after playing.
+- Store note: drug / alcohol content affects age ratings (PEGI 16–18 / ESRB M) — plan a "family" toggle or keep
+  these modes clearly separate if that matters later.
+
 ## Inspirations
 Untitled Goose Game (routine NPC, act natural, to-do list) · Burglin' Gnomes (loot to the van, weight, co-op carry) ·
 Hello Neighbor / Granny (learning AI, traps) · Dead by Daylight (hook ≈ cage + team rescue) ·

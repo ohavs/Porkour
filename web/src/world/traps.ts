@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { G, ADMIN, type Carrier } from '../game/ctx';
+import { G, ADMIN, ignored, type Carrier } from '../game/ctx';
 import { fitted } from '../core/assets';
 import { Grip } from '../core/grip';
 import type { Pig } from '../pig/pig';
@@ -81,7 +81,7 @@ export class BearTrap implements Carrier {
     if (!this.active) return;
     if (this.armed) {
       for (const p of G.pigs as Pig[]) {
-        if (p.out || p.cage || p.heldBy || (p === G.localPig && ADMIN.god)) continue;
+        if (p.out || p.cage || p.heldBy || ignored(p)) continue;
         if (Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < TRAP.r && p.pos.y - this.pos.y < 1.0) { this.snap(p); return; }
       }
       // things thrown on it set it off (disarm it with a pumpkin!)

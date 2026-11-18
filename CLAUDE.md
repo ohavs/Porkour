@@ -27,6 +27,9 @@ Dead by Daylight, Party Animals.
   the actor (`hud.emote(actor, icon)`), toasts only for coins / prank done / danger / round beats (one short line +
   icon, never a subtitle). New features get an icon or a world cue, not a hint sentence.
 - Admin mode (user request): `` ` `` key / menu button / `?admin=1` — keep it updated with test switches for new features.
+  **Tabs (s17, user: "simplify it")**: Me (powers: fly, ghost = Bob / dog / animals / wolves / traps ignore me (`ignored(p)` in
+  ctx.ts), teleports) · Players (per pig: jail = sky cell `world/jail.ts`, freeze, launch, knock, bring, go to, ghost) · Bob ·
+  World · Farm (this farm's / mode's buttons) · Items. New test switches go into the matching tab. Host / solo only.
 - Quality bar: "not embarrassing next to popular Steam games" — use many free technologies / assets; no "AI slop" look.
 - Look (user feedback): **cartoon, not realistic**; pigs **round, fat, long**; animals must not look like Roblox; the level =
   **one fenced farm compound**. Standing on 2 legs must be worth it and wobbly. **Animals + characters as goofy / ragdolly as
@@ -109,7 +112,9 @@ Dead by Daylight, Party Animals.
 | `world/hammock.ts` | **Bob's siesta (s16)** = breathing window #3, farms 1–3 (decor kit `hammock(x, z, yaw)` → `FarmBuild.hammock`, `G.hammock`, synced entity after the phones). Once a round by day after `NAP.hour` 12.5–13.5 (between two chores) Bob walks over (`toHammock`) and naps ~28 s (`hammock`: body off, lies in the bed via `bobPose` + anim `hammock`, straw hat over his face, Zzz): blind, a noise ≤8 m wakes him after a groggy 1.2 s, noises made by shoving the hammock itself don't (`pushT`). Swing physics (`swing`/`omega`, k 9, damp 0.35): a ram on a post +3.6 rad/s, hits (`G.hittables`) +2.4 × strength (headbutt 0.6, punch 1) → past 1.05 rad he's flung out (`Farmer.hammockFlipped` = knock-down, then `afterStun` = angry search; prank `hammockFlip`): one ram, 2 punches or ~4–5 headbutts timed with the swing; swinging > 0.7 rad for 3 s rouses him. A muddy pig RMB at his head (`G.uses`, icon mud) = `Farmer.mudFace` → `mudMarks` 1–3 (mud spectacles, pig snout, whiskers on `FarmerVisual.setMud`; synced in Bob's numbers; 20 % he stirs and gets up 3 s later; prank `mudFace`). Admin → "Siesta (hammock)". |
 | `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
-| `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
+| `i18n.ts`, `i18nX.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. New strings (s17+) go in `i18nX.ts` (`EN_X` / `ES_X`, spread into both). |
+| `world/chain.ts`, `game/minigame.ts` | **Chain modes (s17)** framework: `Chain` (G.chain) = stations (`station({at, r, icon, ready, steps, done, takes, take})`: RMB with empty hooves → mini-game on MY screen (`Minigame`: crank / timing / hold / sprinkle / swipe / stir) → result rides the input as `PigInput.act` (1 + station×8 + result 0 fail · 1–3 · 4 overdone; u8 on the wire); a quick LMB with an item (`PropDef.item`) next to a station = `take` it, else the mode's `selfUse`), pools of item props (`pool` / `spawn` / `consume` / `serve`), shared challenges (hug Bob = RMB next to him buzzed → `Farmer.hugged`, cloud gazing = play dead 6 s buzzed, munchies = LMB with `PropDef.food` while high), `Visions` (synced entity: 5 floating hallucinations only buzzed browsers draw, buzzed pigs catch), `Beams` + `buildBeam` (log over the pond: `Pig.beamStep` = sideways inverted pendulum, counter-steer A/D, also predicted online), `buildShed` (open-front pavilion). Pig buzz (`buzzKind` 1 high / 2 drunk, `addBuzz(kind, amount, secs, delay)`, `buzzMove` lag + drift + drunk left/right swaps, worse balance; synced) → `render/buzz.ts` post pass + camera roll / FOV breathing. Missions in `Round.start` (chain branch), `made` events fill the quota line (`m.quotaMade`). `ADMIN.chill` = laid-back Bob (default on in chain modes). |
+| `world/weed.ts`, `world/brew.ts`, `world/chainProps.ts` | **Farm 6 cannabis / farm 7 wheat & beer** (built by `buildFarm1(scene, 'weed' / 'beer')`: garden = field, greenhouse = shed, pump, beam; ids farm6 / farm7, not in 'random'). Weed: 15 plants (water / grow / drown, Bob waters them on his garden round), sickle / hits harvest → buds → wheelbarrow cargo (tips = spill, parked at the grinder = unloads) → grinder (crank) → bag (pinches) → rolling table (filter timing ×3, sprinkle, swipe roll, lick) → joint (lit by a lighter flame ≤0.75 m; puffs) · bong (water + pinch; timing + hold) · stove (butter + pinch, stir; burnt = smoke alarm) → magic butter + flour → bowl (swipe) → tray → oven (golden 22–34 s, burnt + alarm after) → cookies (kick in after 10 s). Brew: 24 wheat patches (scythe / hits) → sheaves → threshing floor (jump on them; drum beat = double) → grain → mill (crank) → malt → kettle (2 water, malt, logs = fire; stir; 2 hops from the hop poles; boils 12 s) → barrel nearby (pour) → ferments 30 s → tap (hold) → mugs (3 sips, burp) · beer-garden table dance, serenade Bob. Models: KayKit Restaurant kitchen, Quaternius Scythe / Bag / Barrel / Bucket / Cauldron; plants + wheat procedural (baked vertex colours). Sounds: VoxeLibre drink / pour / fill / flint / fire / hiss / ding / drum. |
 | `game/game.ts` | Game loop: fixed steps (clock, pigs, Bob, critters, wolves, physics, cage, pond cleans mud), render, camera, events → toasts, `adminAction`. |
 | `game/ctx.ts` | `G` shared context (time, hour/day/night, fx, audio, pigs, farmer, wolves, noises, clouds…), `ADMIN` switches, `SECS_PER_HOUR` 25 (day = 10 min). |
 | `game/hud.ts`, `game/icons.ts` | HUD (icon-first, s12): ability rings, clock dial, Bob chip (state icon, words in its tooltip) + ?/! marker, prompts = icon pairs, status badges, `emote()` pops over actors, wobble bar, controls card (first game only, then H). `IC` = shared 24×24 cartoon SVG icons. |
@@ -196,7 +201,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    and oink), ✅ **more heavy loot**: old TV (screen cracks if dropped / hit) + grandfather clock (bongs every hour).
    Session 16: ✅ **Bob speaks** (hillbilly voice lines: chase, anger, insults, "Yessir" on a catch, "Bye bye" at the cage,
    "Hello?" on the phone, his cough), ✅ **Bob's siesta** (hammock nap: flip him out, paint his face with mud).
-   Next: user feedback; ideas: Bob's coffee break / newspaper on the porch as a pranks spot, more heavy loot, a snoring recording.
+   Session 17: ✅ **admin rework** (tabs, fly, ghost, jail / freeze / launch players), ✅ **chain modes**: farm 6 cannabis
+   farm + farm 7 wheat & beer (production chains with station mini-games, high / drunk effects, balance log, visions,
+   challenges), Bob "chill" by default there (user still deciding whether Bob chases in these modes).
+   Next: user feedback on the modes; the early-access entry code (waiting for the user's choice of option, see Status);
+   ideas: Bob's coffee break / newspaper on the porch, more heavy loot, a snoring recording.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -331,9 +340,22 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   smears from a muddy pig → marks on his face (seen on him once up), a sprint-ram into a post flips him out (down,
   prank ticks), 5 headbutts timed with the swing flip him too, voice throttle (1 line, then grunts).
   2 browsers online: the player sees Bob napping, the player's RMB mud smear lands (marks synced), the flip shows.
+- 2026-11-18 (session 17, user list): admin tabs + powers + jail; chain modes (see `chain.ts` / `weed.ts` / `brew.ts`,
+  GDD "Chain modes"). Bob in the modes = **chill Bob** (Claude's pick, user wanted to discuss it; admin → Bob: "Chill Bob"
+  off = full Bob, "Farmer Bob" off = none). **Early-access entry code (user asked)**: options given (code screen only /
+  server-checked codes on Render as an env var / real lock: itch.io restricted page or Cloudflare Access + private repo);
+  Claude recommended server-checked personal codes now (+ a real lock before a public early access). Waiting for the user's
+  choice — then build it. The repo is public (anyone can read the code).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- **Entry code (early access)**: which option (code screen / server-checked codes / real lock), one shared code or one per
+  tester, and the code itself (set it in Render, not in the chat).
+- **Cannabis farm + wheat & beer (new modes)**: fun? Each step a real game (water / harvest / wheelbarrow / grinder crank /
+  rolling / lighter / bong hold / stove stir / oven timing; wheat scythe / stomp to the drum / mill / kettle / barrel /
+  tap)? Too long for 10 min? Is "chill Bob" right, or full Bob / no Bob (admin → Bob tab)? The log walk: too hard / easy?
+  Screen effects too strong?
+- New admin panel (tabs): simpler? Fly / ghost / jail work for you (online: as host)?
 - Bob's new voice (hillbilly lines: "Come on then!", "Yessir!", "Bye bye!", insults): does it fit Bob? Too chatty?
 - Bob's siesta (hammock, once a round after lunch): fun? Flipping him out (one ram, or ~4 headbutts timed with the swing)
   too easy / hard? Mud face-paint (wallow, then RMB at his head while he sleeps) fun / visible enough?
@@ -376,6 +398,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Chain modes: no online 2-browser test of every station yet (the act code was checked); the shed is a static model (Bob's
+  nav grid may route through its walls); the wheelbarrow is a dragged box (no wheel physics); visions spawn anywhere ≤ 21 m
+  (can be inside a building); stations don't show their contents except the pot / bowl / bong water / oven ring.
 - Siesta: no hammock on farm 4 (night round) or farm 5 (winter); Bob's straw hat covers his face while he naps (the mud
   marks show once he's up); Bob's mumbled phone chatter is a different (recorded) voice than his hillbilly lines.
 - Phone: a pig can stand at the jack while Bob is on the phone without him noticing if it's out of his narrow cone (by

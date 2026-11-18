@@ -1,0 +1,61 @@
+/**
+ * More UI text (session 17+), split out of i18n.ts to keep that file manageable. Same rule: every key has an English
+ * AND a Spanish entry (ES_X is typed against EN_X, so a missing one fails `tsc`).
+ */
+export const EN_X = {
+  // admin panel (tabs + powers + punishments)
+  'at.me': 'Me', 'at.players': 'Players', 'at.bob': 'Bob', 'at.world': 'World', 'at.farm': 'Farm', 'at.items': 'Items',
+  'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
+  'a.respawn': 'Back to the sty', 'a.jail': 'Jail', 'a.unjail': 'Free', 'a.freezeP': 'Freeze', 'a.unfreeze': 'Thaw',
+  'a.launch': 'Launch', 'a.bring': 'Bring here', 'a.goto': 'Go to', 'a.jailSecs': 'Jail time (s)', 'a.freeJail': 'Free everyone',
+  'a.jailOthers': 'Jail everyone else', 'a.knockP': 'Knock over', 'a.ghostP': 'Ghost',
+  'e.jailed': '{who} is in jail!', 'e.jailedMe': 'Jail!', 'e.frozenMe': 'Frozen!',
+  // chain modes: farm 6 (cannabis), farm 7 (wheat & beer)
+  'farm.farm6': 'Cannabis farm', 'farm.farm7': 'Wheat & beer',
+  'm.quotaMade': 'Make goods worth {n} coins', 'm.rollJoint': 'Roll a joint and smoke it', 'm.bongRip': 'Take a bong hit',
+  'm.bakeCookies': 'Bake a tray of golden space cookies', 'm.everyoneHigh': 'Everyone high at the same time',
+  'm.brewBeer': 'Brew beer and tap the barrel', 'm.drinkUp': 'Everyone downs a whole mug',
+  'm.beamWalk': 'Walk the log over the pond on two legs, buzzed', 'm.visions': 'Catch {n} visions (only buzzed pigs see them)',
+  'm.munchies': 'Munchies: eat {n} things while high', 'm.hugBob': 'Hug Bob', 'm.cloudGaze': 'Lie back and watch the clouds, buzzed',
+  'm.tableDance': 'Dance on the beer-garden table, drunk', 'm.serenade': 'Sing to Bob: oink 6 times, drunk',
+  'item.bud': 'Bud', 'item.weedBag': 'Bag of weed', 'item.joint': 'Joint', 'item.lighter': 'Lighter', 'item.wateringCan': 'Watering can',
+  'item.seedBag': 'Seeds', 'item.sickle': 'Sickle', 'item.butter': 'Butter', 'item.magicButter': 'Magic butter', 'item.flour': 'Flour',
+  'item.trayRaw': 'Tray of cookie dough', 'item.cookies': 'Space cookies', 'item.cookiesBurnt': 'Burnt cookies', 'item.wheelbarrow': 'Wheelbarrow',
+  'item.scythe': 'Scythe', 'item.sheaf': 'Sheaf of wheat', 'item.grain': 'Sack of grain', 'item.malt': 'Sack of malt', 'item.hops': 'Hops',
+  'item.beerMug': 'Mug of beer', 'item.beerBarrel': 'Beer barrel',
+  'a.chill': 'Chill Bob (sees, hears, runs less)', 'a.chain': 'This mode', 'a.weedRipe': 'All plants ripe', 'a.weedWater': 'Water all plants',
+  'a.weedBuds': '6 buds in front of me', 'a.weedBag': 'Bag of weed in front of me', 'a.weedJoint': 'Lit joint in front of me', 'a.weedHigh': 'Make me high',
+  'a.weedCookies': 'Cookies in front of me', 'a.tpShed': 'Teleport: shed', 'a.tpField': 'Teleport: field', 'a.tpBeam': 'Teleport: log over the pond',
+  'a.brewSheaves': '4 sheaves in front of me', 'a.brewGrain': 'Grain sack in front of me', 'a.brewKettle': 'Fill the kettle (+ fire)',
+  'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
+  'a.shed': 'Shed', 'a.field': 'Field', 'a.beam': 'Log over the pond',
+  'e.smokeAlarm': 'Smoke alarm!',
+};
+
+export const ES_X: Record<keyof typeof EN_X, string> = {
+  'at.me': 'Yo', 'at.players': 'Jugadores', 'at.bob': 'Bob', 'at.world': 'Mundo', 'at.farm': 'Granja', 'at.items': 'Objetos',
+  'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
+  'a.respawn': 'Volver a la pocilga', 'a.jail': 'Cárcel', 'a.unjail': 'Liberar', 'a.freezeP': 'Congelar', 'a.unfreeze': 'Descongelar',
+  'a.launch': 'Lanzar', 'a.bring': 'Traer aquí', 'a.goto': 'Ir hasta', 'a.jailSecs': 'Tiempo de cárcel (s)', 'a.freeJail': 'Liberar a todos',
+  'a.jailOthers': 'Encarcelar a los demás', 'a.knockP': 'Tumbar', 'a.ghostP': 'Fantasma',
+  'e.jailed': '¡{who} está en la cárcel!', 'e.jailedMe': '¡A la cárcel!', 'e.frozenMe': '¡Congelado!',
+  'farm.farm6': 'Granja de cannabis', 'farm.farm7': 'Trigo y cerveza',
+  'm.quotaMade': 'Fabrica productos por {n} monedas', 'm.rollJoint': 'Lía un porro y fúmatelo', 'm.bongRip': 'Dale una calada al bong',
+  'm.bakeCookies': 'Hornea una bandeja de galletas espaciales doradas', 'm.everyoneHigh': 'Todos colocados a la vez',
+  'm.brewBeer': 'Haz cerveza y abre el barril', 'm.drinkUp': 'Todos se beben una jarra entera',
+  'm.beamWalk': 'Cruza el tronco sobre el estanque a dos patas, colocado', 'm.visions': 'Atrapa {n} visiones (solo las ven los cerdos colocados)',
+  'm.munchies': 'Bajón: cómete {n} cosas estando colocado', 'm.hugBob': 'Abraza a Bob', 'm.cloudGaze': 'Túmbate a mirar las nubes, colocado',
+  'm.tableDance': 'Baila sobre la mesa de la cervecería, borracho', 'm.serenade': 'Cántale a Bob: gruñe 6 veces, borracho',
+  'item.bud': 'Cogollo', 'item.weedBag': 'Bolsa de hierba', 'item.joint': 'Porro', 'item.lighter': 'Mechero', 'item.wateringCan': 'Regadera',
+  'item.seedBag': 'Semillas', 'item.sickle': 'Hoz', 'item.butter': 'Mantequilla', 'item.magicButter': 'Mantequilla mágica', 'item.flour': 'Harina',
+  'item.trayRaw': 'Bandeja de masa', 'item.cookies': 'Galletas espaciales', 'item.cookiesBurnt': 'Galletas quemadas', 'item.wheelbarrow': 'Carretilla',
+  'item.scythe': 'Guadaña', 'item.sheaf': 'Gavilla de trigo', 'item.grain': 'Saco de grano', 'item.malt': 'Saco de malta', 'item.hops': 'Lúpulo',
+  'item.beerMug': 'Jarra de cerveza', 'item.beerBarrel': 'Barril de cerveza',
+  'a.chill': 'Bob relajado (ve, oye y corre menos)', 'a.chain': 'Este modo', 'a.weedRipe': 'Todas las plantas maduras', 'a.weedWater': 'Regar todas las plantas',
+  'a.weedBuds': '6 cogollos delante de mí', 'a.weedBag': 'Bolsa de hierba delante de mí', 'a.weedJoint': 'Porro encendido delante de mí', 'a.weedHigh': 'Colócame',
+  'a.weedCookies': 'Galletas delante de mí', 'a.tpShed': 'Teletransporte: cobertizo', 'a.tpField': 'Teletransporte: campo', 'a.tpBeam': 'Teletransporte: tronco del estanque',
+  'a.brewSheaves': '4 gavillas delante de mí', 'a.brewGrain': 'Saco de grano delante de mí', 'a.brewKettle': 'Llenar el caldero (+ fuego)',
+  'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
+  'a.shed': 'Cobertizo', 'a.field': 'Campo', 'a.beam': 'Tronco del estanque',
+  'e.smokeAlarm': '¡Alarma de humo!',
+};
