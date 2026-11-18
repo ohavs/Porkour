@@ -308,6 +308,18 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   headbutts tips it with him inside; safe alone / two pigs (≈2 m/s) / spinach (≤1.4 m/s); 2 browsers online (outhouse
   state + hidden Bob on the player, host pig + player pig drag the safe together ≈1.7 m/s, the player sees it held).
   Test hook fix: a scripted press now lasts one frame on an online player too.
+- 2026-11-18 (session 15, "continue"): **Bob's phone** + **TV / grandfather clock** (see `phone.ts` / `heavyLoot.ts`).
+  `G.uses` = RMB spots that aren't grabs (jack, payphone; HUD prompt icon from `icon(p)`). `BobJob.then` = what Bob does
+  after a job (cut off: walk to the jack, plug it back in, then search there). Sounds (real recordings): `ring` (AntumMT
+  doorbell_03, electric bell), `phonetalk` / `phonevoice` (CDDA CC-Sounds old man rambling / radio chatter, the latter
+  telephone-filtered by `phone()` in fetch_sounds.sh), `phoneoink` (filtered oink), `static`, `coin`, `clunk`, `tick`
+  (AntumMT clock), `bong` (VoxeLibre bell stroke), `glass`. Checked headless: real call → Bob hurries over, talks facing
+  the box (receiver at his ear), jack pulled → static → hook rattle → he plugs it back (3 s) → searches; prank call:
+  coin → ring → "Hello?" → oink → furious, 2nd one → `wise` → he walks to the payphone; TV dropped from 2 m → cracks
+  (220 → 30, white cracks, dark screen); clock strike = noise 22 m; phones / TV / clock placed on all 5 farms;
+  a spinach pig drags the clock ≈1.3 m/s (it topples) / the TV ≈1.2 m/s (no crack); 2 browsers online (player sees
+  Bob on the phone, the player's RMB unplugs the jack on the host; the player's coin → prank ring → oink prompt → the
+  player's F makes Bob furious; a cracked TV shows cracked on the player).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
@@ -350,6 +362,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Phone: a pig can stand at the jack while Bob is on the phone without him noticing if it's out of his narrow cone (by
+  design); the payphone has no booth to hide in; Bob always knows where a prank call came from after the 2nd one.
+  The tall clock topples as soon as it's dragged (then it's dragged lying down, silent: it ticks / swings only upright).
 - Outhouse: a tipped hut isn't in Bob's nav grid (baked upright; he may bump into it); Bob fixes it only when he passes
   by and sees it. Online: two pigs dragging side by side can bump (the player's predicted pig shoves the host's) →
   they pull at an angle, slower — stand on different sides of the safe. In one online test run the helper pig let go
