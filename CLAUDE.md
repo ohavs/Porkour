@@ -388,7 +388,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   catapult basket, farm switch in a room (2 browsers), ghost connection replaced (server test), admin panel look.
   Not fully run end-to-end: the beer chain after the paddle (hops → boil → barrel → tap → mug: each piece runs).
   Online hands (2 browsers): the player grabs the grinder crank and turns it (host + player crank in sync, buds → bag),
-  takes the bag out of its socket. **Story saves** (user: "the host keeps the progress, Load / New game, ~5 saves"):
+  takes the bag out of its socket, pours onto the paper (fill 1.10, same on both), takes the roll edge; the room shows
+  the host's save label. Rolling from a step back stalled at the reach limit → a hoof on a machine part may lean 0.3 m
+  further (`aimGoal(..., lean)`), now rolls from 0.8 m. **Story saves** (user: "the host keeps the progress, Load / New game, ~5 saves"):
   checked headless (old progress → save 1, new game in slot 3, win → stage stored + names + stars, Next stage →
   farm 2, load save 1 → farm 3, delete, Esc).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.

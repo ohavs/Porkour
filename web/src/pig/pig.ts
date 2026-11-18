@@ -998,7 +998,7 @@ export class Pig implements Holdable {
   private handleStep(dt: number) {
     const hd = this.handle; if (!hd) return;
     if (this.mode !== 'normal' || hd.heldBy !== this) { this.letGo(); return; }
-    hd.drive(HANDS.aimGoal(this, v1, true), this, dt);
+    hd.drive(HANDS.aimGoal(this, v1, true, 0.3), this, dt);   // on a machine part: lean a little further
     const rr = HANDS.reach(this, v2), kd = hd.knob(v3).distanceTo(v2);
     this.handleFar = kd > rr + 0.5 ? this.handleFar + dt : 0;
     if (this.handleFar > 0.3) this.letGo();

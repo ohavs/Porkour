@@ -147,11 +147,12 @@ class Hands {
   aimAt(p: Pig, out: THREE.Vector3) { const i = p.input; return out.set(p.pos.x + (i.ax ?? 0), p.pos.y + (i.ay ?? 0.3), p.pos.z + (i.az ?? 1)); }
   /**
    * Where the pig wants its hoof / snout: the crosshair, kept within reach and in front of it. `loose` (a machine part
-   * in the hoof): anywhere within reach — pulling a door / a lever toward yourself is fine.
+   * in the hoof): anywhere within reach — pulling a door / a lever toward yourself is fine. `lean`: a hoof already on a
+   * machine part may lean that much further (pushing the roll / a lever to its end from a step back).
    */
-  aimGoal(p: Pig, out: THREE.Vector3, loose = false) {
+  aimGoal(p: Pig, out: THREE.Vector3, loose = false, lean = 0) {
     const R = p.standing ? REACH.two : REACH.four, e = this.ext(p);
-    const c = v4, rr = this.reach(p, c);
+    const c = v4, rr = this.reach(p, c) + lean;
     const d = this.aimAt(p, out).sub(c);
     if (d.length() > rr) d.setLength(rr);
     // pig space (+z = forward): keep it in front of the pig, between the ground and over its head
