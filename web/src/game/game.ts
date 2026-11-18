@@ -712,6 +712,7 @@ export class Game {
         const inp = this.menu.blocking ? emptyInput() : this.buildInput(true);
         this.predict(dt, inp);
         this.net.sendInput(inp, this.local.predicting ? this.local.pose() : null);
+        if (this.scripted) for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false;   // test hook: a press is one frame
       }
       alpha = Math.max(0, this.net.frame(dt));
       this.carryAlong();
