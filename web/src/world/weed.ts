@@ -5,8 +5,9 @@ import type { Prop } from './props';
 import type { IconId } from '../game/icons';
 import type { Rect } from './terrain';
 import type { Kit } from './farmKit';
-import { Chain, buildShed, buildBeam, need, type Station } from './chain';
-import { plantGeometry, plantMaterial } from './chainProps';
+import { Chain, buildShed, buildBeam, need, fillable, Pump } from './chain';
+import { plantGeometry, plantMaterial, makeSpoon } from './chainProps';
+import { HANDS, crank, lever, slider, type Socket, type Handle } from './hands';
 import { staticBox, staticCylinder } from '../core/physics';
 import { fitted } from '../core/assets';
 import { toonMat } from '../render/toon';
@@ -14,27 +15,37 @@ import { V3, clamp } from '../core/util';
 
 /**
  * Farm 6 — Bob's cannabis farm (user: "seeds, water to speed it up, harvest, wheelbarrow, the shed's grinding machine,
- * rolling papers + a filter + a lighter, bongs, cookies in the oven — I like all the options, combine them"). The chain:
- *   field (water with the can, refill at the pump · plant seeds · harvest ripe plants with the sickle or by hitting them)
- *   → buds → wheelbarrow (drop them in, push it to the shed; tip it and they spill)
- *   → grinder (crank: circle the mouse, not too fast) → bag of ground weed (3–4 pinches)
- *   → rolling table (fold the filter · sprinkle evenly · roll · lick) → joint → light it (strike the lighter, bring the flame
- *     to it — a friend can hold it) → puff
- *   → bong (fill water, pack a pinch, light + hold the breath in the band; too long = coughing fit Bob hears)
- *   → stove (butter + a pinch, stir so it doesn't burn) → magic butter → bowl (+ flour, knead) → tray → oven
- *     (take it out golden: too early = gooey and weak, too late = burnt + the smoke alarm)
- *   → cookies (kick in late, hit hard).
+ * rolling papers + a filter + a lighter, bongs, cookies in the oven"; then: "no mini-games — the pig physically takes the
+ * filter, the paper, puts the filter on the paper, pours the weed in and rolls it"). Everything is done with the hooves
+ * (world/hands.ts: aim with the mouse, R tips what you hold, things snap where they go):
+ *   field: tip the watering can over a plant (refill: park it under the pump and pump the handle, or dip it in the
+ *     pond), tip the seed bag over an empty mound, harvest ripe plants with the sickle (click) or by hitting them
+ *   → buds → the wheelbarrow (drop them in / push it over them; tip it and they spill; parked at the grinder it unloads)
+ *   → the grinder: drop buds in the hopper, take the crank and turn it (circle the mouse; too fast = it jams, loud)
+ *     → ground weed fills the bag under the chute
+ *   → the rolling table: take a paper from the booklet, put it on the mat (it clicks in), a filter from the box onto
+ *     its end, tip the bag over the paper (not too little, not too much), take the paper's edge and push it away to
+ *     roll it, click to lick it shut → a joint → light it (strike the lighter, bring the flame to its tip — a friend
+ *     can hold the flame, or lay the joint in the ashtray), click = a puff
+ *   → the bong: pour water in (the can), tip a pinch into the bowl, light the bowl, put your snout on the mouthpiece:
+ *     the chamber fills with smoke — pull away in time (too long = a coughing fit Bob hears)
+ *   → the stove: butter in the pot (drop it in), pour weed in, take the spoon and stir (don't stop: it burns, the
+ *     smoke alarm goes off) → magic butter → tip the pot over the mixing bowl, pour flour in, stir → dough → tip the
+ *     bowl over a baking tray → open the oven door (pull the handle down), slide the tray in, shut it, take it out
+ *     golden (too late = burnt + the alarm) → cookies (kick in late, hit hard).
  * Everything made = points (the round's quota line). Then the high challenges (world/chain.ts).
  */
 export const WEED = {
-  dry: 1 / 55, grow: 1 / 62, pour: 0.42, drown: 1.05, bakeMin: 22, bakeMax: 34, alarm: 38, jointBuzz: 0.14, cookieBuzz: 0.45,
+  dry: 1 / 55, grow: 1 / 62, water: 0.34, drown: 1.05, seed: 0.3, bakeMin: 22, bakeMax: 34, alarm: 38, jointBuzz: 0.14, cookieBuzz: 0.45,
+  potTurns: 7, bowlTurns: 6, burnAfter: 9, jam: 8.5, bagMax: 4, paperMin: 0.6, paperGood: [0.85, 1.3] as const,
 };
-const POINTS: Record<string, number> = { bud: 5, weed: 20, joint: 40, bong: 40, magic: 40, cookies: 120 };
+const POINTS: Record<string, number> = { bud: 5, weedUnit: 6, joint: 40, bong: 40, magic: 40, cookies: 120 };
 
-interface Plant { x: number; z: number; y: number; g: number; w: number; root: THREE.Group; stages: THREE.Mesh[]; puddle: THREE.Mesh; drop: THREE.Sprite; star: THREE.Sprite }
+interface Plant { x: number; z: number; y: number; g: number; w: number; seed: number; root: THREE.Group; stages: THREE.Mesh[]; puddle: THREE.Mesh; drop: THREE.Sprite; star: THREE.Sprite }
 
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const flat = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+const TWO_PI = Math.PI * 2;
 
 function iconSprite(draw: (g: CanvasRenderingContext2D) => void) {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -45,64 +56,66 @@ function iconSprite(draw: (g: CanvasRenderingContext2D) => void) {
 }
 const dropTex = (g: CanvasRenderingContext2D) => { g.beginPath(); g.moveTo(32, 6); g.bezierCurveTo(52, 30, 52, 56, 32, 58); g.bezierCurveTo(12, 56, 12, 30, 32, 6); g.fillStyle = '#4fb3ff'; g.fill(); g.lineWidth = 5; g.strokeStyle = '#3b2412'; g.stroke(); };
 const starTex = (g: CanvasRenderingContext2D) => { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 12 : 28; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } g.closePath(); g.fillStyle = '#ffd166'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#3b2412'; g.stroke(); };
+/** A mesh's own material (recoloured live), so the shared toon colour isn't changed everywhere. */
+const ownMat = (o: THREE.Object3D | undefined) => { const m = o as THREE.Mesh | undefined; if (m?.isMesh) m.material = (m.material as THREE.Material).clone(); return m ?? null; };
 
 export class Weed extends Chain {
   kind = 1 as const;
   plants: Plant[] = [];
   barrow!: Prop; cargo = 0;
-  grinder!: Station; table!: Station; bong!: Station; stove!: Station; bowl!: Station; oven!: Station; fridge!: Station; pump!: Station;
-  buds = 0; tableWeed = 0; bongWater = 0; bongPacked = 0; potButter = 0; potWeed = 0; bowlMagic = 0; bowlFlour = 0; ovenTray = 0; ovenT0 = 0; fridgeAt = 0; alarmAt = 0;
-  /** Joints lit until (pool order) and lighter flames until. */
-  private joints: Prop[] = []; private lit: number[] = []; private lighters: Prop[] = []; private flame: number[] = [];
-  /** Joints rolled this round (the mission counts a puff on one of these), half-baked cookie trays. */
-  private gooey = new Set<Prop>();
-  private grinderOut = new THREE.Vector3(); private hopper = new THREE.Vector3(); private fieldC = new THREE.Vector3();
-  private crank!: THREE.Object3D; private ovenGlow!: THREE.MeshToonMaterial; private ovenRing!: THREE.Mesh; private bongWaterM!: THREE.Mesh; private bongSmoke = 0;
-  private potM!: THREE.Mesh; private bowlM!: THREE.Mesh;
+  pump: Pump;
+  // grinder
+  buds = 0; private grindProg = 0; private crankSpd = 0; private jamUntil = 0;
+  private grindCrank!: Handle; private bagSock!: Socket; private wheel!: THREE.Object3D; private hopper = new THREE.Vector3(); private chute = new THREE.Vector3();
+  // rolling table
+  private paperSock!: Socket; private filterSock!: Socket; private rollH!: Handle; fill = 0;
+  paperIn = false; filterIn = false; private matC = new THREE.Vector3(); private papersAt = new THREE.Vector3(); private filtersAt = new THREE.Vector3();
+  /** Joints (pool order): sealed (licked shut), lit until; lighters: flame until. */
+  private joints: Prop[] = []; private sealed: boolean[] = []; private lit: number[] = []; private lighters: Prop[] = []; private flame: number[] = [];
+  // bong
+  bongWater = 0; bongPacked = 0; bowlLit = 0; chamber = 0; private inhaler: Pig | null = null;
+  private bongTop = new THREE.Vector3(); private bongBowl = new THREE.Vector3(); private bongWaterM!: THREE.Mesh; private smokeM!: THREE.Mesh; private bowlEmber!: THREE.MeshToonMaterial;
+  // stove: the pot + the spoon
+  pot!: Prop; potButter = 0; potWeed = 0; potCook = 0; potBurn = 0; private lastStir = -10; private burner!: Socket; private potStir!: Handle; private potSpoon!: THREE.Object3D;
+  potOn = false;
+  // the mixing bowl
+  bowl!: Prop; bowlMagic = 0; bowlFlour = 0; bowlMix = 0; private counter!: Socket; private bowlStir!: Handle; private bowlSpoon!: THREE.Object3D; bowlOn = false;
+  private trays: Prop[] = []; private trayDough = new Map<Prop, number>(); private traySock!: Socket;
+  // oven
+  private ovenDoor!: Handle; private ovenSock!: Socket; bakeT = 0; private alarmAt = 0; trayIn = false;
+  private door!: THREE.Group; private ovenGlow!: THREE.MeshToonMaterial; private ovenRing!: THREE.Mesh; private ovenMark = new THREE.Vector3();
+  // fridge
+  private fridgeAt = 0; private fridgeDoor!: THREE.Object3D;
+  private fieldC = new THREE.Vector3();
   beamSpot = new THREE.Vector3();
+  private shedQ = new THREE.Quaternion();
+  private L!: (x: number, y: number, z: number) => THREE.Vector3;
+  private fwd = new THREE.Vector3(); private right = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, props: Prop[], kit: Kit, o: { field: Rect; shed: [number, number, number]; pump: [number, number]; beam: [THREE.Vector3, THREE.Vector3]; barrow: [number, number] }) {
     super(scene, props);
     this.buildField(kit, o.field);
+    // pools first (stations hand these out / swap into them)
+    this.pool('bud', 30); this.joints = this.pool('joint', 4); this.lit = this.joints.map(() => 0); this.sealed = this.joints.map(() => false);
+    this.pool('weedBag', 4); this.pool('butter', 3); this.pool('paper', 4); this.pool('filter', 4);
+    this.pool('trayRaw', 2); this.pool('cookies', 2); this.pool('cookiesBurnt', 2);
     this.buildShedStations(kit, o.shed);
-    // the hand pump by the field (refill the watering cans)
-    const [px, pz] = o.pump, py = kit.y(px, pz);
-    const pumpG = new THREE.Group(); pumpG.position.set(px, py, pz); scene.add(pumpG);
-    const iron = toonMat(0x3f8f5a), dk = toonMat(0x2b2b30);
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 1.1, 10), iron); body.position.y = 0.55; pumpG.add(body);
-    const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8), iron); spout.position.set(0, 0.85, 0.22); spout.rotation.x = 1.2; pumpG.add(spout);
-    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.8), dk); handle.position.set(0, 1.15, -0.3); handle.rotation.x = -0.4; pumpG.add(handle);
-    const trough = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.5), toonMat(0x7a5232)); trough.position.set(0, 0.15, 0.55); pumpG.add(trough);
-    const water = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.02, 0.4), toonMat(0x4fb3ff)); water.position.set(0, 0.28, 0.55); pumpG.add(water);
-    staticCylinder(V3(px, py + 0.55, pz), 0.55, 0.2);
-    this.pump = this.station({
-      at: V3(px, py, pz + 0.9), r: 1.6, icon: 'can', markPos: V3(px, py + 1.6, pz),
-      ready: () => false, steps: () => null, done: () => {},
-      takes: (it) => (it.def.item === 'can' && it.left < (it.def.servings ?? 6) ? 'can' : null),
-      take: (it, p) => { it.setLeft(it.def.servings ?? 6); G.audio.play('fill', { pos: p.pos, vol: 0.9 }); G.fx.bits(V3(px, py + 0.9, pz + 0.3), { count: 12, color: 0x7fd0ff, speed: 1.5, up: 1, life: 0.5, size: 0.08, grow: 0, alpha: 1 }); },
-    });
+    // the hand pump by the field (fill the watering cans)
+    const [px, pz] = o.pump;
+    this.pump = new Pump(kit, scene, px, pz, 0);
     // the beam over the pond (high challenge)
     this.beamSpot.copy(o.beam[0]);
     buildBeam(kit, scene, o.beam[0], o.beam[1], 2.4, this.beams);
-    // pools + the things lying around at the start
-    this.pool('bud', 30); this.joints = this.pool('joint', 4); this.lit = this.joints.map(() => 0);
-    this.pool('weedBag', 5); this.pool('magicButter', 2); this.pool('butter', 3); this.pool('trayRaw', 2); this.pool('cookies', 2); this.pool('cookiesBurnt', 2);
-    const P = (kind: string, x: number, z: number, lift = 0) => { const pr = kit.prop(kind as never, x, z, 0, lift); return pr; };
+    const P = (kind: string, x: number, z: number, lift = 0, yaw = 0) => kit.prop(kind as never, x, z, yaw, lift);
     this.barrow = P('wheelbarrow', o.barrow[0], o.barrow[1]);
-    const s = this.shedPlace;
-    const at = (lx: number, lz: number) => s(lx, lz);
-    const tbl = at(3.2, 0.9);
-    this.lighters = [P('lighter', tbl.x + 0.3, tbl.z - 0.2, 0.85), P('lighter', at(-0.4, -2.8).x + 0.5, at(-0.4, -2.8).z, 1.0)]; this.flame = [0, 0];
-    const fl = at(-4.6, -1.6); P('flour', fl.x, fl.z); P('flour', fl.x + 0.5, fl.z + 0.2);
-    const fr = at(-3.6, -1.6); P('butter', fr.x, fr.z, 0.1);
-    P('wateringCan', px + 1.2, pz + 0.4); P('wateringCan', o.field.x1 - 1.2, o.field.z1 + 1.6);
-    P('seedBag', at(4.4, 1.4).x, at(4.4, 1.4).z); P('sickle', px - 1, pz + 0.6); P('sickle', at(-1.2, 1.6).x, at(-1.2, 1.6).z);
+    P('wateringCan', px + 1.4, pz - 0.6); P('wateringCan', o.field.x1 - 1.2, o.field.z1 + 1.6);
+    P('sickle', px - 1, pz + 0.6); P('sickle', this.L(-1.2, 0, 1.6).x, this.L(-1.2, 0, 1.6).z);
+    fillable(this.props, 'can', 'water', 6);
     // hits on ripe plants harvest them (headbutt / punch / weapon whack)
     G.hittables.push({ hit: (hx, _hy, hz, reach, dir, _k, by) => this.hitPlant(hx, hz, reach, dir, by as Pig) });
   }
 
   // ------------------------------------------------------------------ build
-  private shedPlace!: (x: number, z: number) => THREE.Vector3;
   private buildField(kit: Kit, f: Rect) {
     const geos = [0, 1, 2, 3].map((s) => plantGeometry(s as 0 | 1 | 2 | 3)), mat = plantMaterial();
     const soil = toonMat(0x5a3518), pud = toonMat(0x4fb3ff, { transparent: true, opacity: 0.55 });
@@ -116,8 +129,18 @@ export class Weed extends Chain {
       const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.75, 16), pud); puddle.rotation.x = -Math.PI / 2; puddle.position.y = 0.16; puddle.visible = false; root.add(puddle);
       const drop = iconSprite(dropTex), star = iconSprite(starTex);
       drop.position.set(x, y + 1.7, z); star.position.set(x, y + 1.9, z); this.scene.add(drop, star);
-      this.plants.push({ x, z, y, g: (r * cols + c) % 4 === 3 ? 0 : 0.15 + ((r + c) % 3) * 0.1, w: 0.3, root, stages, puddle, drop, star });
+      const pl: Plant = { x, z, y, g: (r * cols + c) % 4 === 3 ? 0 : 0.15 + ((r + c) % 3) * 0.1, w: 0.3, seed: 0, root, stages, puddle, drop, star };
+      this.plants.push(pl);
       kit.blocked.push({ x0: x - 0.7, x1: x + 0.7, z0: z - 0.7, z1: z + 0.7 });
+      // tip the watering can over it / the seed bag over an empty mound
+      HANDS.receiver({
+        r: 0.7, at: (out) => out.set(pl.x, pl.y + 0.25, pl.z),
+        accepts: (s) => s === 'water' || (s === 'seed' && pl.g <= 0.001),
+        fill: (s, a) => {
+          if (s === 'water') { pl.w = Math.min(1.3, pl.w + a * WEED.water); if (pl.w > WEED.drown && Math.random() < 0.1) G.audio.play('splash', { pos: v1.set(pl.x, pl.y, pl.z), vol: 0.4 }); }
+          else if ((pl.seed += a) >= WEED.seed) { pl.seed = 0; pl.g = 0.02; pl.w = Math.max(pl.w, 0.2); G.audio.play('mudstep', { pos: v1.set(pl.x, pl.y, pl.z), vol: 0.6 }); }
+        },
+      });
     }
     G.terrain.noGrass({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1 });
   }
@@ -126,191 +149,263 @@ export class Weed extends Chain {
     const scene = this.scene;
     const sh = buildShed(kit, scene, cx, cz, yaw);
     this.shedAt.set(cx, sh.y0, cz); this.shedR = 5.2;
-    const at = this.shedPlace = (x: number, z: number) => sh.place(x, z);
+    this.shedQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+    this.fwd.set(Math.sin(yaw), 0, Math.cos(yaw)); this.right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+    const L = this.L = (x: number, y: number, z: number) => sh.place(x, z).setY(sh.y0 + y);
+    const qs = this.shedQ;
+    /** A model on the shed floor; returns it + its size (before turning it). */
     const deco = (model: string, lx: number, lz: number, h: number, ry = 0, collide = true) => {
-      const p = at(lx, lz), o = fitted(model, { height: h }); o.position.copy(p); o.rotation.y = yaw + ry; scene.add(o);
-      if (collide) { const b = new THREE.Box3().setFromObject(o), s = b.getSize(v1); staticBox(V3(p.x, p.y + s.y / 2, p.z), V3(s.x / 2 * 0.9, s.y / 2, s.z / 2 * 0.9)); }
-      return o;
+      const p = L(lx, 0, lz), o = fitted(model, { height: h }), size = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+      o.position.copy(p); o.rotation.y = yaw + ry; scene.add(o);
+      if (collide) staticBox(V3(p.x, p.y + size.y / 2, p.z), V3(size.x / 2 * 0.9, size.y / 2, size.z / 2 * 0.9), yaw + ry);
+      return { o, size };
     };
-    const front = (lx: number, lz: number) => { const p = at(lx, lz); return p; };
-    // back wall (local z = -3.5): fridge · stove · oven · counter with the bowl · the grinder · the bong
-    deco('kaykit/fridge_A', -4.6, -2.95, 2.0);
+    // ---- back wall (local z = -3.5): fridge · stove · oven · counter · the grinder · the bong
+    const fr = deco('kaykit/fridge_A', -4.6, -2.95, 2.0);
     deco('kaykit/stove_single', -3.2, -2.95, 1.0);
-    deco('kaykit/oven', -1.8, -2.95, 1.0);
+    const ov = deco('kaykit/oven', -1.8, -2.95, 1.0);
     deco('kaykit/kitchencounter_straight_A', -0.4, -2.95, 1.0);
-    deco('kaykit/shelf_papertowel_decorated', -1.1, -3.3, 0.5, 0, false).position.y += 1.6;
-    // the pot on the stove + the bowl on the counter (fill shows what's in them)
-    const potP = at(-3.2, -2.95); const pot = fitted('kaykit/pot_A', { height: 0.3 }); pot.position.set(potP.x, potP.y + 1.0, potP.z); scene.add(pot);
-    this.potM = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.02, 14), toonMat(0xe9d36a)); this.potM.position.set(potP.x, potP.y + 1.2, potP.z); this.potM.visible = false; scene.add(this.potM);
-    const bowlP = at(-0.4, -2.95); const bowl = fitted('kaykit/bowl', { height: 0.22 }); bowl.position.set(bowlP.x, bowlP.y + 1.0, bowlP.z); scene.add(bowl);
-    this.bowlM = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), toonMat(0xf2dcae)); this.bowlM.position.set(bowlP.x, bowlP.y + 1.06, bowlP.z); this.bowlM.visible = false; scene.add(this.bowlM);
-    // oven window glow + the bake ring over it
-    const ovP = at(-1.8, -2.45);
+    deco('kaykit/shelf_papertowel_decorated', -1.1, -3.3, 0.5, 0, false).o.position.y += 1.6;
+    const P = (kind: string, p: THREE.Vector3, ry = 0) => kit.prop(kind as never, p.x, p.z, yaw + ry, p.y - kit.y(p.x, p.z));
+
+    // ---- the fridge: open it (RMB at the door) → a block of butter (every 15 s)
+    const door = new THREE.Mesh(new THREE.BoxGeometry(fr.size.x * 0.92, 1.2, 0.05), toonMat(0xf2f4f6));
+    const dg = new THREE.Group(); dg.position.copy(L(-4.6 - fr.size.x * 0.46, 0.75, -2.95 + fr.size.z / 2 + 0.03)); dg.rotation.y = yaw; scene.add(dg);
+    door.position.set(fr.size.x * 0.46, 0.6, 0); dg.add(door);
+    const knobF = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.04), toonMat(0xaab3bd)); knobF.position.set(fr.size.x * 0.82, 0.6, 0.05); dg.add(knobF);
+    this.fridgeDoor = dg;
+    HANDS.dispenser({
+      at: L(-4.6 + fr.size.x * 0.36, 1.35, -2.95 + fr.size.z / 2 + 0.08), r: 0.25, icon: 'butter',
+      ready: () => G.time > this.fridgeAt,
+      take: (p, at) => {
+        this.fridgeAt = G.time + 15;
+        G.audio.play('creak', { pos: p.pos, vol: 0.6, pitch: 1.4 });
+        return this.spawn('butter', at.clone().setY(at.y - 0.05), yaw);
+      },
+    });
+    this.spot({ at: L(-4.6, 0, -1.6), r: 1.2, markPos: L(-4.6, 2.4, -2.9), needs: () => '' });
+
+    // ---- the stove: the pot on the burner (butter in, weed in, stir — don't stop or it burns)
+    const potHome = L(-3.2, 1.02, -2.95);
+    this.pot = P('cookPot', potHome);
+    ownMat(this.pot.obj.getObjectByName('fill'));
+    this.burner = HANDS.socket({ p: potHome.clone().setY(potHome.y + this.pot.half), q: qs, on: null, r: 0.4, dock: true, anyYaw: true,
+      accepts: (it) => it === this.pot && !this.potOn });
+    HANDS.dock(this.burner, this.pot);
+    // butter: drop it in (a bin on the pot); weed: tip the bag over it
+    HANDS.socket({ on: { body: this.pot.body, lp: V3(0, 0.06, 0), lq: new THREE.Quaternion() }, r: 0.2, dock: false, bin: true,
+      accepts: (it) => it.def.item === 'butter' && !this.potButter && this.potCook < 1,
+      onSnap: (it) => { this.consume(it); this.potButter = 1; G.audio.play('sizzle', { pos: this.pot.synced.currP, vol: 0.6 }); } });
+    HANDS.receiver({ r: 0.17, at: (out) => { const t = this.pot.body.translation(); return out.set(t.x, t.y + this.pot.half, t.z); },
+      accepts: (s) => s === 'weed' && this.potWeed < 1 && this.potCook < 1 && !this.pot.banked,
+      fill: (_s, a) => { this.potWeed = Math.min(1, this.potWeed + a); G.audio.play('sizzle', { pos: this.pot.synced.currP, vol: 0.4, minGap: 0.4 }); } });
+    const potFrame = () => ({ p: this.pot.synced.currP, q: new THREE.Quaternion() });
+    this.potStir = crank({ c: V3(0, 0.08, 0), axis: V3(0, 1, 0), r: 0.08, icon: 'stir', max: 9, frame: potFrame,
+      ready: () => this.potOn && this.potButter > 0 && this.potWeed >= 0.6 && this.potCook < 1,
+      turn: (d) => { this.potCook = Math.min(1, this.potCook + Math.abs(d) / TWO_PI / WEED.potTurns); this.lastStir = G.time; this.potBurn = Math.max(0, this.potBurn - Math.abs(d) * 0.5); G.audio.play('sizzle', { pos: this.pot.synced.currP, vol: 0.35, minGap: 0.5 }); } });
+    this.potSpoon = makeSpoon(); this.potSpoon.visible = false; scene.add(this.potSpoon);
+    this.pot.pourNow = () => (this.potCook >= 1 && this.pot.left > 0 ? { stuff: 'magic', color: 0x9fbf4a } : null);
+    this.spot({ at: L(-3.2, 0, -1.6), r: 1.1, markPos: L(-3.2, 1.9, -2.9), needs: () => need('butter', this.potButter) + need('leaf', this.potWeed >= 0.6 ? 1 : 0) + need('stir', this.potCook >= 1 ? 1 : 0) });
+
+    // ---- the counter: the mixing bowl (magic butter + flour, stir → dough), baking trays
+    const bowlHome = L(-0.55, 1.02, -2.95);
+    this.bowl = P('mixBowl', bowlHome);
+    ownMat(this.bowl.obj.getObjectByName('fill'));
+    this.counter = HANDS.socket({ p: bowlHome.clone().setY(bowlHome.y + this.bowl.half), q: qs, on: null, r: 0.4, dock: true, anyYaw: true,
+      accepts: (it) => it === this.bowl && !this.bowlOn });
+    HANDS.dock(this.counter, this.bowl);
+    HANDS.receiver({ r: 0.2, at: (out) => { const t = this.bowl.body.translation(); return out.set(t.x, t.y + this.bowl.half, t.z); },
+      accepts: (s) => ((s === 'magic' && this.bowlMagic < 1) || (s === 'flour' && this.bowlFlour < 1)) && this.bowlMix < 1 && !this.bowl.banked,
+      fill: (s, a) => { if (s === 'magic') this.bowlMagic = Math.min(1, this.bowlMagic + a); else this.bowlFlour = Math.min(1, this.bowlFlour + a); } });
+    const bowlFrame = () => ({ p: this.bowl.synced.currP, q: new THREE.Quaternion() });
+    this.bowlStir = crank({ c: V3(0, 0.06, 0), axis: V3(0, 1, 0), r: 0.1, icon: 'stir', max: 9, frame: bowlFrame,
+      ready: () => this.bowlOn && this.bowlMagic >= 0.6 && this.bowlFlour >= 0.6 && this.bowlMix < 1,
+      turn: (d) => {
+        this.bowlMix = Math.min(1, this.bowlMix + Math.abs(d) / TWO_PI / WEED.bowlTurns);
+        G.audio.play('squish', { pos: this.bowl.synced.currP, vol: 0.35, minGap: 0.45 });
+        if (this.bowlMix >= 1 && this.bowl.left <= 0) { this.bowl.setLeft(1); G.audio.play('ding', { pos: this.bowl.synced.currP, vol: 0.5, pitch: 1.3 }); }
+      } });
+    this.bowlSpoon = makeSpoon(); this.bowlSpoon.visible = false; scene.add(this.bowlSpoon);
+    this.bowl.pourNow = () => (this.bowlMix >= 1 && this.bowl.left > 0 ? { stuff: 'dough', color: 0xf2dcae } : null);
+    // trays: one on the counter, one on the floor by it; tip the bowl of dough over one
+    const traySock = this.traySock = HANDS.socket({ p: L(0.35, 1.02, -2.95), q: qs, on: null, r: 0.35, dock: true, anyYaw: true,
+      accepts: (it) => ['tray', 'trayRaw', 'cookies', 'cookiesBurnt'].includes(it.def.item ?? '') });
+    this.trays = [P('tray', L(0.35, 1.02, -2.95)), P('tray', L(0.95, 0.02, -2.3))];
+    traySock.p.y += this.trays[0].half;
+    HANDS.dock(traySock, this.trays[0]);
+    for (const tr of this.trays) HANDS.receiver({ r: 0.24, at: (out) => { const t = tr.body.translation(); return out.set(t.x, t.y + 0.03, t.z); },
+      accepts: (s) => s === 'dough' && !tr.banked && HANDS.flow(tr) <= 0,
+      fill: (_s, a, by) => {
+        const d = (this.trayDough.get(tr) ?? 0) + a; this.trayDough.set(tr, d);
+        if (d >= 0.8) { this.trayDough.set(tr, 0); this.swap(tr, 'trayRaw'); G.audio.play('squish', { pos: tr.synced.currP, vol: 0.6 }); void by; }
+      } });
+    this.spot({ at: L(-0.4, 0, -1.6), r: 1.1, markPos: L(-0.4, 1.7, -2.9), needs: () => need('butter', this.bowlMagic >= 0.6 ? 1 : 0) + need('bowl', this.bowlFlour >= 0.6 ? 1 : 0) + need('stir', this.bowlMix >= 1 ? 1 : 0) });
+    for (const [x, z] of [[-4.6, -1.6], [-4.1, -1.4]] as const) P('flour', L(x, 0, z));
+
+    // ---- the oven: a door you pull down (grab its handle), the tray goes in, shut it, bake
+    const ovFront = -2.95 + ov.size.z / 2 + 0.03;
+    this.door = new THREE.Group(); this.door.position.copy(L(-1.8, 0.14, ovFront)); this.door.rotation.order = 'YXZ'; this.door.rotation.y = yaw; scene.add(this.door);
+    const dW = ov.size.x * 0.82;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(dW, 0.56, 0.05), toonMat(0x3a3d44)); panel.position.set(0, 0.28, 0); panel.castShadow = true; this.door.add(panel);
     this.ovenGlow = toonMat(0x2b2b30, { emissive: new THREE.Color(0) });
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), this.ovenGlow); win.position.set(ovP.x, ovP.y + 0.45, ovP.z); win.rotation.y = yaw; scene.add(win);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(dW * 0.6, 0.24), this.ovenGlow); win.position.set(0, 0.3, 0.03); this.door.add(win);
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, dW * 0.7, 8), toonMat(0xc9ced8)); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.52, 0.06); this.door.add(bar);
+    this.ovenDoor = lever({ pivot: this.door.position.clone(), axis: this.right.clone(), arm: V3(0, 0.52, 0).addScaledVector(this.fwd, 0.06), min: 0, max: 1.45, icon: 'door', speed: 4 });
+    this.ovenSock = HANDS.socket({ p: L(-1.8, 0.42, ovFront - 0.28), q: qs, on: null, r: 0.38, dock: true,
+      accepts: (it) => ['trayRaw', 'cookies', 'cookiesBurnt', 'tray'].includes(it.def.item ?? '') && this.ovenDoor.v > 0.9 && !this.trayIn });
+    this.ovenMark.copy(L(-1.8, 1.9, -2.9));
     this.ovenRing = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 32, 1, 0, Math.PI * 2), new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, depthTest: false, transparent: true }));
-    this.ovenRing.position.set(ovP.x, ovP.y + 1.75, ovP.z); this.ovenRing.renderOrder = 9; this.ovenRing.visible = false; scene.add(this.ovenRing);
-    // the grinder: a big hand-cranked machine (hopper on top, crank wheel on the side, chute at the front)
-    const gP = at(2.2, -2.7), gy = gP.y;
+    this.ovenRing.position.copy(L(-1.8, 1.75, -2.45)); this.ovenRing.renderOrder = 9; this.ovenRing.visible = false; scene.add(this.ovenRing);
+    this.spot({ at: L(-1.8, 0, -1.6), r: 1.1, markPos: this.ovenMark, needs: () => (this.trayIn ? `<b>${Math.floor(this.bakeT)}</b>` : need('cookie', 0)) });
+
+    // ---- the grinder: buds into the hopper, turn the crank (front), ground weed into the bag under the chute
+    const gP = L(2.2, 0, -2.7);
     const mach = new THREE.Group(); mach.position.copy(gP); mach.rotation.y = yaw; scene.add(mach);
     const red = toonMat(0xc0453a), steel = toonMat(0xaab3bd), dk = toonMat(0x3a3d44), wood = toonMat(0x8a5a2a);
     const box = (g: THREE.Object3D, w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
     box(mach, 1.3, 0.9, 0.9, red, 0, 0.45, 0);
     for (const x of [-0.55, 0.55]) for (const z of [-0.35, 0.35]) box(mach, 0.12, 0.3, 0.12, dk, x, -0.0, z);
     const hop = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.22, 0.6, 12, 1, true), steel); hop.position.set(0, 1.2, 0); (hop.material as THREE.Material).side = THREE.DoubleSide; mach.add(hop);
-    box(mach, 0.4, 0.25, 0.5, steel, 0, 0.3, 0.6).rotation.x = 0.4;   // chute
-    const wheel = new THREE.Group(); wheel.position.set(0.72, 0.6, 0); mach.add(wheel);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.04, 6, 20), dk); rim.rotation.y = Math.PI / 2; wheel.add(rim);
-    for (let k = 0; k < 4; k++) { const sp = box(wheel, 0.04, 0.74, 0.04, dk, 0, 0, 0); sp.rotation.x = k * Math.PI / 4; }
-    const knob = box(wheel, 0.2, 0.08, 0.08, wood, 0.12, 0.34, 0); void knob;
-    this.crank = wheel;
-    staticBox(V3(gP.x, gy + 0.6, gP.z), V3(0.7, 0.6, 0.5), yaw);
-    this.hopper.set(gP.x, gy + 1.5, gP.z);
-    this.grinderOut.copy(at(2.2, -1.75)).setY(gy + 0.3);
-    // rolling table: papers, a filter card, the lighter (props)
+    box(mach, 0.3, 0.22, 0.4, steel, 0.42, 0.32, 0.6).rotation.x = 0.5;   // chute
+    const wheel = new THREE.Group(); wheel.position.set(-0.32, 0.55, 0.5); mach.add(wheel);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 6, 20), dk); wheel.add(rim);
+    for (let k = 0; k < 4; k++) { const sp = box(wheel, 0.035, 0.56, 0.035, dk, 0, 0, 0); sp.rotation.z = k * Math.PI / 4; }
+    const kn = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 8), wood); kn.rotation.x = Math.PI / 2; kn.position.set(0.28, 0, 0.08); wheel.add(kn);
+    this.wheel = wheel;
+    staticBox(V3(gP.x, gP.y + 0.6, gP.z), V3(0.7, 0.6, 0.5), yaw);
+    mach.updateMatrixWorld(true);
+    this.hopper.copy(mach.localToWorld(V3(0, 1.3, 0)));
+    this.chute.copy(mach.localToWorld(V3(0.42, 0.22, 0.75)));
+    HANDS.socket({ p: this.hopper.clone(), q: qs, on: null, r: 0.5, dock: false, bin: true, ghost: false,
+      accepts: (it) => it.def.item === 'bud' && this.buds < 24,
+      onSnap: (it) => { this.consume(it); this.buds++; G.audio.play('squish', { pos: this.hopper, vol: 0.5, pitch: 1.3 }); } });
+    this.bagSock = HANDS.socket({ p: mach.localToWorld(V3(0.42, 0.09, 0.88)), q: qs, on: null, r: 0.3, dock: true,
+      accepts: (it) => it.def.item === 'weed' && it.left < WEED.bagMax });
+    this.grindCrank = crank({ c: mach.localToWorld(V3(-0.32, 0.55, 0.58)), axis: this.fwd.clone(), r: 0.28, icon: 'gear', max: 11,
+      ready: () => G.time > this.jamUntil,
+      turn: (d, p) => this.grind(d, p) });
+    this.spot({ at: L(2.2, 0, -1.6), r: 1.4, markPos: L(2.2, 2.2, -2.7), needs: () => need('leaf', this.buds, 1) });
+
+    // ---- the rolling table: the mat, the paper booklet, the filter box, the ashtray, the lighter
     deco('kaykit/kitchentable_A', 3.2, 0.9, 0.85);
-    const papers = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.08), toonMat(0x5cb83d)); const pp = at(3.0, 0.8); papers.position.set(pp.x, pp.y + 0.86, pp.z); papers.rotation.y = yaw + 0.3; scene.add(papers);
-    const card = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.06), toonMat(0xe8c48a)); card.position.set(pp.x + 0.25, pp.y + 0.86, pp.z + 0.15); scene.add(card);
-    // the bong on a stool by the side wall
-    deco('kaykit/chair_stool', 4.6, -2.4, 0.7);
-    const bP = at(4.6, -2.4), glass = toonMat(0x9fe8d6, { transparent: true, opacity: 0.55 });
-    const bong = new THREE.Group(); bong.position.set(bP.x, bP.y + 0.72, bP.z); scene.add(bong);
-    const base = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), glass); base.position.y = 0.2; base.scale.y = 0.9; bong.add(base);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.8, 12), glass); neck.position.y = 0.72; bong.add(neck);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8), glass); stem.position.set(0.17, 0.32, 0); stem.rotation.z = -0.8; bong.add(stem);
-    const bowlB = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.03, 0.08, 10), toonMat(0x8fdcc8)); bowlB.position.set(0.28, 0.42, 0); bong.add(bowlB);
-    this.bongWaterM = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), toonMat(0x4fb3ff, { transparent: true, opacity: 0.7 }));
-    this.bongWaterM.position.y = 0.2; bong.add(this.bongWaterM);
-    // stations
-    const ST = (lx: number, lz: number) => front(lx, lz);
-    this.fridge = this.station({
-      at: ST(-4.6, -1.5), r: 1.3, icon: 'butter', markPos: at(-4.6, -2.9).setY(sh.y0 + 2.4),
-      ready: () => G.time > this.fridgeAt, steps: () => null,
-      done: (p) => {
-        if (G.time < this.fridgeAt) return;
-        this.fridgeAt = G.time + 20;
-        G.audio.play('creak', { pos: p.pos, vol: 0.6, pitch: 1.4 });
-        this.spawn('butter', at(-4.6, -1.9).setY(sh.y0 + 0.6), yaw);
-      },
-    });
-    this.stove = this.station({
-      at: ST(-3.2, -1.5), r: 1.3, icon: 'butter', markPos: at(-3.2, -2.9).setY(sh.y0 + 1.9),
-      ready: () => this.potButter > 0 && this.potWeed > 0, needs: () => need('butter', this.potButter) + need('leaf', this.potWeed),
-      steps: () => [{ kind: 'stir', icon: 'butter', secs: 6, color: '#e9d36a' }],
-      takes: (it) => (it.def.item === 'butter' && !this.potButter ? 'butter' : it.def.item === 'weed' && !this.potWeed ? 'leaf' : null),
-      take: (it, p) => {
-        if (it.def.item === 'butter') { this.potButter = 1; this.consume(it); } else { this.potWeed = 1; this.serve(it); }
-        G.audio.play('sizzle', { pos: p.pos, vol: 0.5 });
-      },
-      done: (p, q) => {
-        if (!this.potButter || !this.potWeed) return;
-        if (q === 0) return;
-        this.potButter = this.potWeed = 0;
-        if (q === 4) { this.smokeAlarm(this.stove.markPos, p); return; }
-        this.spawn('magicButter', at(-3.2, -1.9).setY(sh.y0 + 0.6), yaw);
-        this.made('magic', p);
-      },
-    });
-    this.bowl = this.station({
-      at: ST(-0.4, -1.5), r: 1.3, icon: 'bowl', markPos: at(-0.4, -2.9).setY(sh.y0 + 1.7),
-      ready: () => this.bowlMagic > 0 && this.bowlFlour > 0, needs: () => need('butter', this.bowlMagic) + need('bowl', this.bowlFlour),
-      steps: () => [{ kind: 'swipe', icon: 'bowl', n: 10, color: '#f2dcae' }],
-      takes: (it) => (it.def.item === 'magic' && !this.bowlMagic ? 'butter' : it.def.item === 'flour' && !this.bowlFlour ? 'bowl' : null),
-      take: (it, p) => { if (it.def.item === 'magic') { this.bowlMagic = 1; this.consume(it); } else { this.bowlFlour = 1; this.serve(it); } G.audio.play('squish', { pos: p.pos, vol: 0.6 }); },
-      done: (p, q) => {
-        if (!this.bowlMagic || !this.bowlFlour || q === 0) return;
-        this.bowlMagic = this.bowlFlour = 0;
-        this.spawn('trayRaw', at(-0.4, -1.9).setY(sh.y0 + 0.6), yaw);
-        G.audio.play('wood', { pos: p.pos, vol: 0.5 });
-      },
-    });
-    this.oven = this.station({
-      at: ST(-1.8, -1.5), r: 1.3, icon: 'oven', markPos: at(-1.8, -2.9).setY(sh.y0 + 1.9),
-      ready: () => this.ovenTray > 0, steps: () => null, needs: () => (this.ovenTray ? '' : need('cookie', 0)),
-      takes: (it) => (it.def.item === 'trayRaw' && !this.ovenTray ? 'oven' : null),
-      take: (it, p) => { this.consume(it); this.ovenTray = 1; this.ovenT0 = G.time; this.alarmAt = 0; G.audio.play('clunk', { pos: p.pos, vol: 0.7 }); },
-      done: (p) => {
-        if (!this.ovenTray) return;
-        const t = G.time - this.ovenT0, out = at(-1.8, -1.85).setY(sh.y0 + 0.6);
-        this.ovenTray = 0;
-        G.audio.play('clunk', { pos: p.pos, vol: 0.7, pitch: 1.2 });
-        if (t > WEED.bakeMax) { this.spawn('cookiesBurnt', out, yaw); G.events.push({ type: 'burnt', who: p }); return; }
-        const c = this.spawn('cookies', out, yaw);
-        if (!c) return;
-        if (t < WEED.bakeMin) { this.gooey.add(c); G.events.push({ type: 'gooey', who: p }); this.made('cookiesGooey', p, 40); }
-        else { this.gooey.delete(c); this.made('cookies', p); G.events.push({ type: 'bakeCookies', who: p }); }
-      },
-    });
-    this.grinder = this.station({
-      at: ST(3.3, -1.7), r: 1.4, icon: 'gear', markPos: at(2.2, -2.7).setY(sh.y0 + 2.2),
-      ready: () => this.buds >= 3, steps: () => [{ kind: 'crank', icon: 'gear', n: 3, speed: 10 }], needs: () => need('leaf', this.buds, 3),
-      takes: (it) => (it.def.item === 'bud' ? 'gear' : null),
-      take: (it, p) => { this.consume(it); this.buds++; G.audio.play('squish', { pos: p.pos, vol: 0.5, pitch: 1.3 }); },
-      done: (p, q) => {
-        if (this.buds < 3) return;
-        if (q === 0) { this.buds -= 1; G.audio.play('metal', { pos: this.hopper, vol: 0.9, pitch: 0.5 }); G.noise(this.hopper, 12); return; }   // jammed: one bud chewed to nothing, loud
-        this.buds -= 3;
-        const bag = this.spawn('weedBag', this.grinderOut, yaw, V3(Math.sin(yaw) * 1.5, 1.5, Math.cos(yaw) * 1.5));
-        if (bag && q === 3) bag.setLeft(4);
-        G.fx.puff(this.grinderOut, { count: 8, color: 0x8fcf5a, speed: 0.8, up: 0.8, life: 0.8, size: 0.25, alpha: 0.6 });
-        this.made('weed', p);
-      },
-    });
-    this.table = this.station({
-      at: ST(3.2, 2.1), r: 1.5, icon: 'paper', markPos: at(3.2, 0.9).setY(sh.y0 + 1.6),
-      ready: () => this.tableWeed > 0, needs: () => need('leaf', this.tableWeed),
-      steps: () => [
-        { kind: 'timing', icon: 'paper', n: 3, zone: 0.18, speed: 1.1 },   // fold the filter (crutch): 3 folds
-        { kind: 'sprinkle', icon: 'leaf', n: 8, color: '#5e9c3a' },          // fill the paper evenly
-        { kind: 'swipe', icon: 'joint', n: 8, color: '#fff6e6' },            // roll it
-        { kind: 'timing', icon: 'pig', n: 1, zone: 0.22, speed: 1.4 },       // lick + seal
-      ],
-      takes: (it) => (it.def.item === 'weed' ? 'leaf' : null),
-      take: (it, p) => { this.tableWeed++; this.serve(it); G.audio.play('squish', { pos: p.pos, vol: 0.4, pitch: 1.5 }); },
-      done: (p, q) => {
-        if (!this.tableWeed || q === 0) return;
-        this.tableWeed--;
-        const j = this.spawn('joint', at(3.2, 0.9).setY(sh.y0 + 0.95), yaw);
-        if (j) { j.setLeft(3 + q); this.lit[this.joints.indexOf(j)] = 0; }
-        this.made('joint', p);
-      },
-    });
-    this.bong = this.station({
-      at: ST(3.6, -1.9), r: 1.3, icon: 'bong', markPos: bP.clone().setY(sh.y0 + 2.0),
-      ready: () => this.bongWater > 0.1 && this.bongPacked > 0, needs: () => need('can', this.bongWater > 0.1 ? 1 : 0) + need('leaf', this.bongPacked),
-      steps: () => [{ kind: 'timing', icon: 'lighter', n: 1, zone: 0.2, speed: 1.3 }, { kind: 'hold', icon: 'bong', speed: 0.8, zone: 0.25, color: '#dfe9e6' }],
-      takes: (it) => (it.def.item === 'can' && it.left > 0 && this.bongWater < 0.9 ? 'can' : it.def.item === 'weed' && !this.bongPacked ? 'leaf' : null),
-      take: (it, p) => {
-        if (it.def.item === 'can') { this.bongWater = 1; this.pour(it); G.audio.play('pour', { pos: p.pos, vol: 0.8 }); }
-        else { this.bongPacked = 1; this.serve(it); G.audio.play('squish', { pos: p.pos, vol: 0.4, pitch: 1.5 }); }
-      },
-      done: (p, q) => {
-        if (!this.bongPacked || q === 0) return;
-        this.bongPacked = 0; this.bongWater = Math.max(0, this.bongWater - 0.34); this.bongSmoke = G.time + 2;
-        G.audio.play('fill', { pos: p.pos, vol: 0.8, pitch: 0.6 });
-        if (q === 4) {   // held it too long: a coughing fit the whole farm hears
-          p.addBuzz(1, 0.55, 60);
-          G.audio.play('cough', { pos: p.pos, vol: 1 }); G.audio.play('squeal', { pos: p.pos, vol: 0.7, pitch: 0.8 });
-          G.fx.puff(V3(p.pos.x, p.pos.y + 0.8, p.pos.z), { count: 22, color: 0xe8e8e8, speed: 2.2, up: 1.2, life: 2.2, size: 0.9, alpha: 0.6 });
-          G.noise(p.pos, 16);
-          G.events.push({ type: 'pigCough', who: p });
-        } else {
-          p.addBuzz(1, 0.25 + 0.12 * q, 40 + 10 * q);
-          G.fx.puff(V3(p.pos.x, p.pos.y + 0.8, p.pos.z), { count: 10, color: 0xe8e8e8, speed: 1, up: 0.8, life: 2, size: 0.6, alpha: 0.5 });
-        }
-        G.events.push({ type: 'bongRip', who: p });
-        this.made('bong', p);
-      },
-    });
+    const top = 0.855;
+    this.matC.copy(L(3.2, top, 1.42));   // near the table's front edge (the pig works from the front)
+    const mat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.012, 0.28), toonMat(0x3f8f5a)); mat.position.copy(this.matC).setY(this.matC.y + 0.006); mat.rotation.y = yaw; scene.add(mat);
+    const booklet = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.09), toonMat(0x5cb83d)); this.papersAt.copy(L(2.72, top + 0.02, 1.5)); booklet.position.copy(this.papersAt); booklet.rotation.y = yaw + 0.2; scene.add(booklet);
+    const fbox = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.06, 0.07), toonMat(0xe8c48a)); this.filtersAt.copy(L(3.68, top + 0.03, 1.5)); fbox.position.copy(this.filtersAt); fbox.rotation.y = yaw - 0.15; scene.add(fbox);
+    const ash = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.03, 14), toonMat(0x8a8f99)); const ashP = L(3.75, top + 0.015, 1.15); ash.position.copy(ashP); scene.add(ash);
+    HANDS.dispenser({ at: this.papersAt, r: 0.1, icon: 'paper', ready: () => true, take: (_p, at) => this.spawn('paper', at, yaw) });
+    HANDS.dispenser({ at: this.filtersAt, r: 0.08, icon: 'filter', ready: () => true, take: (_p, at) => this.spawn('filter', at, yaw) });
+    const paperHalf = 0.012;
+    this.paperSock = HANDS.socket({ p: this.matC.clone().setY(this.matC.y + 0.012 + paperHalf), q: qs, on: null, r: 0.32, dock: true,
+      accepts: (it) => it.def.item === 'paper' && !this.paperIn });
+    this.filterSock = HANDS.socket({ p: this.matC.clone().addScaledVector(this.right, -0.1).setY(this.matC.y + 0.012 + 0.024 + 0.014), q: qs, on: null, r: 0.25, dock: true,
+      accepts: (it) => it.def.item === 'filter' && this.paperIn && !this.filterIn && this.rollH.v <= 0 });
+    HANDS.receiver({ r: 0.16, at: (out) => out.copy(this.matC).setY(this.matC.y + 0.03),
+      accepts: (s) => s === 'weed' && this.paperIn && this.rollH.v <= 0 && this.fill < 2,
+      fill: (_s, a) => {
+        this.fill = Math.min(2, this.fill + a);
+        if (this.fill > 1.6) G.fx.bits(v1.copy(this.matC).addScaledVector(this.fwd, 0.12).setY(this.matC.y + 0.05), { count: 2, color: 0x6fae3e, speed: 0.6, up: 0.3, grav: 6, life: 0.6, size: 0.025, grow: 0, alpha: 1 });   // overflowing
+      } });
+    // the paper's near edge: take it and push it away from you to roll it up
+    this.rollH = slider({ a: this.matC.clone().addScaledVector(this.fwd, 0.08).setY(this.matC.y + 0.045), b: this.matC.clone().addScaledVector(this.fwd, -0.08).setY(this.matC.y + 0.045),
+      icon: 'joint', speed: 0.5, ratchet: true,
+      ready: () => this.paperIn && this.filterIn && this.fill >= WEED.paperMin,
+      moved: (v, _d, p) => { G.audio.play('rustle', { pos: this.matC, vol: 0.25, pitch: 1.8, minGap: 0.35 }); if (v >= 0.999) this.rolled(p); } });
+    HANDS.socket({ p: ashP.clone().setY(ashP.y + 0.035), q: qs, on: null, r: 0.2, dock: true, anyYaw: true, accepts: (it) => it.def.item === 'joint' });
+    this.lighters = [P('lighter', L(2.7, top + 0.02, 1.15)), P('lighter', L(-0.9, 1.02, -2.75))]; this.flame = [0, 0];
+    P('seedBag', L(4.4, 0, 1.4));
+    this.spot({ at: L(3.2, 0, 2.3), r: 1.3, markPos: L(3.2, 1.7, 1.42), needs: () => need('paper', this.paperIn ? 1 : 0) + need('filter', this.filterIn ? 1 : 0) + need('leaf', this.fill >= WEED.paperMin ? 1 : 0) });
+
+    // ---- the bong on the floor by the side wall (water in the top, a pinch in the bowl, light it, snout on it)
+    const bP = L(4.45, 0, -2.35), glass = toonMat(0x9fe8d6, { transparent: true, opacity: 0.55 });
+    const bong = new THREE.Group(); bong.position.copy(bP); bong.rotation.y = yaw - Math.PI / 2; scene.add(bong);
+    const base = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 10), glass); base.position.y = 0.22; base.scale.y = 0.9; bong.add(base);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.095, 0.72, 12), glass); neck.position.y = 0.76; bong.add(neck);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 6, 14), glass); lip.rotation.x = Math.PI / 2; lip.position.y = 1.12; bong.add(lip);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8), glass); stem.position.set(0.19, 0.34, 0); stem.rotation.z = -0.8; bong.add(stem);
+    this.bowlEmber = toonMat(0x8fdcc8, { emissive: new THREE.Color(0) });
+    const bowlB = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.03, 0.09, 10), this.bowlEmber); bowlB.position.set(0.3, 0.45, 0); bong.add(bowlB);
+    this.bongWaterM = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), toonMat(0x4fb3ff, { transparent: true, opacity: 0.7 }));
+    this.bongWaterM.position.y = 0.22; bong.add(this.bongWaterM);
+    this.smokeM = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.085, 1, 10), toonMat(0xf2f2f2, { transparent: true, opacity: 0.75 }));
+    this.smokeM.visible = false; bong.add(this.smokeM);
+    bong.updateMatrixWorld(true);
+    this.bongTop.copy(bong.localToWorld(V3(0, 1.12, 0)));
+    this.bongBowl.copy(bong.localToWorld(V3(0.3, 0.5, 0)));
+    staticCylinder(V3(bP.x, bP.y + 0.22, bP.z), 0.2, 0.22); staticCylinder(V3(bP.x, bP.y + 0.75, bP.z), 0.35, 0.09);
+    HANDS.receiver({ r: 0.13, at: (out) => out.copy(this.bongTop), accepts: (s) => s === 'water' && this.bongWater < 1,
+      fill: (_s, a) => { this.bongWater = Math.min(1, this.bongWater + a * 0.45); } });
+    HANDS.receiver({ r: 0.11, at: (out) => out.copy(this.bongBowl), accepts: (s) => s === 'weed' && this.bongPacked < 0.5,
+      fill: (_s, a) => { this.bongPacked = Math.min(0.5, this.bongPacked + a); } });
+    this.spot({ at: L(4.3, 0, -1.4), r: 1.3, markPos: L(4.45, 1.9, -2.35), needs: () => need('water', this.bongWater >= 0.3 ? 1 : 0) + need('leaf', this.bongPacked >= 0.3 ? 1 : 0) + need('lighter', this.bowlLit > G.time ? 1 : 0) });
   }
 
-  // ------------------------------------------------------------------ host
-  private made(kind: string, p: Pig, pts = POINTS[kind] ?? 10) { G.events.push({ type: 'made', who: p, text: kind, why: String(pts) }); }
+  // ------------------------------------------------------------------ host: actions
+  private made(kind: string, p: Pig | null, pts = POINTS[kind] ?? 10) { G.events.push({ type: 'made', who: p, text: kind, why: String(pts) }); }
   private smokeAlarm(at: THREE.Vector3, p: Pig | null) {
     G.audio.play('ring', { pos: at, vol: 1 }); G.audio.play('hiss', { pos: at, vol: 0.8 });
     G.fx.puff(at, { count: 30, color: 0x55575c, speed: 1.4, up: 1.6, life: 3, size: 1.2, alpha: 0.7 });
     G.noise(at, 34);
     G.events.push({ type: 'smokeAlarm', who: p });
+  }
+  /** The grinder's crank turned by `d` rad: a full turn grinds a bud into the bag (too fast = jammed). */
+  private grind(d: number, p: Pig) {
+    this.crankSpd = this.crankSpd * 0.88 + Math.abs(d) * 60 * 0.12;
+    G.audio.play('tick', { pos: this.chute, vol: 0.4, pitch: 0.55, minGap: 0.16 });
+    if (this.buds <= 0) return;
+    if (this.crankSpd > WEED.jam) {   // jammed: one bud chewed to nothing, a loud clank; the crank kicks out of the hoof
+      this.jamUntil = G.time + 2; this.crankSpd = 0; this.buds--;
+      G.audio.play('metal', { pos: this.hopper, vol: 1, pitch: 0.5 }); G.noise(this.hopper, 12);
+      G.fx.puff(this.hopper, { count: 8, color: 0x55575c, speed: 0.8, up: 1, life: 1.2, size: 0.4, alpha: 0.6 });
+      p.letGo();
+      G.events.push({ type: 'jammed', who: p });
+      return;
+    }
+    let bag = this.bagSock.occupant;
+    if (!bag) { bag = this.spawn('weedBag', this.bagSock.p.clone().setY(this.bagSock.p.y - 0.09), 0, undefined, 0); if (bag) HANDS.dock(this.bagSock, bag); }
+    if (!bag || bag.left >= WEED.bagMax) return;
+    this.grindProg += Math.abs(d) / TWO_PI;
+    if (this.grindProg < 1) return;
+    this.grindProg = 0; this.buds--;
+    bag.setLeft(bag.left + 1);
+    G.fx.puff(this.chute, { count: 6, color: 0x8fcf5a, speed: 0.6, up: 0.2, life: 0.7, size: 0.18, alpha: 0.7 });
+    G.audio.play('squish', { pos: this.chute, vol: 0.5, pitch: 1.2 });
+    this.made('weedUnit', p);
+  }
+  /** The paper is rolled all the way: a joint in the roller's hooves (lick it shut next). */
+  private rolled(p: Pig) {
+    const f = this.fill, q = f >= WEED.paperGood[0] && f <= WEED.paperGood[1] ? 3 : f >= 0.7 && f <= 1.55 ? 2 : 1;
+    const pa = this.paperSock.occupant, fi = this.filterSock.occupant;
+    if (pa) this.consume(pa); if (fi) this.consume(fi);
+    this.fill = 0; this.rollH.v = 0; p.letGo();
+    const j = this.spawn('joint', v1.copy(this.matC).setY(this.matC.y + 0.05), this.shedYaw(), undefined, 3 + q);
+    if (j) { const i = this.joints.indexOf(j); this.sealed[i] = false; this.lit[i] = 0; p.grab(j); }
+    G.audio.play('rustle', { pos: this.matC, vol: 0.6, pitch: 1.5 });
+    this.made('joint', p);
+    G.events.push({ type: 'rolled', who: p });
+  }
+  private shedYaw() { return new THREE.Euler().setFromQuaternion(this.shedQ, 'YXZ').y; }
+  /** A hit off the bong: how full the chamber got (pull away in time). */
+  private bongHit(p: Pig, c: number) {
+    this.chamber = 0; this.inhaler = null;
+    if (c < 0.2) return;
+    this.bongPacked = 0; this.bowlLit = 0; this.bongWater = Math.max(0, this.bongWater - 0.3);
+    G.audio.play('fill', { pos: this.bongTop, vol: 0.8, pitch: 0.6 });
+    const sn = this.snout(p, v1);
+    if (c > 1.1) {   // held it too long: a coughing fit the whole farm hears
+      p.addBuzz(1, 0.55, 60);
+      G.audio.play('cough', { pos: p.pos, vol: 1 }); G.audio.play('squeal', { pos: p.pos, vol: 0.7, pitch: 0.8 });
+      G.fx.puff(sn, { count: 22, color: 0xe8e8e8, speed: 2.2, up: 1.2, life: 2.2, size: 0.9, alpha: 0.6 });
+      G.noise(p.pos, 16);
+      G.events.push({ type: 'pigCough', who: p });
+    } else {
+      const q = c < 0.55 ? 1 : c < 0.85 ? 2 : 3;
+      p.addBuzz(1, 0.25 + 0.12 * q, 40 + 10 * q);
+      G.fx.puff(sn, { count: 10, color: 0xe8e8e8, speed: 1, up: 0.8, life: 2, size: 0.6, alpha: 0.5 });
+    }
+    G.events.push({ type: 'bongRip', who: p });
+    this.made('bong', p);
   }
 
   private nearPlant(x: number, z: number, r: number, want?: (pl: Plant) => boolean) {
@@ -335,31 +430,19 @@ export class Weed extends Chain {
     G.audio.play('rustle', { pos: v1.set(pl.x, pl.y + 0.6, pl.z), vol: 0.6 });
     return true;
   }
+  private jointTip(j: Prop, out: THREE.Vector3) { const t = j.body.translation(), r = j.body.rotation(); return out.set(0.1, 0, 0).applyQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w)).add(v3.set(t.x, t.y, t.z)); }
+  private flamePos(l: Prop, out = v2) { const p = l.body.translation(); return out.set(p.x, p.y + 0.12, p.z); }
 
   protected selfUse(p: Pig, h: Prop): boolean {
-    const it = h.def.item, f = p.forward, fx = p.pos.x + f.x * 1.1, fz = p.pos.z + f.z * 1.1;
+    const it = h.def.item, f = p.forward;
     switch (it) {
-      case 'can': {
+      case 'can': {   // dip it in the pond
         const pond = G.places?.pond;
         if (pond && Math.hypot(p.pos.x - pond.x, p.pos.z - pond.z) < pond.r + 0.6) { h.setLeft(h.def.servings ?? 6); G.audio.play('fill', { pos: p.pos, vol: 0.8 }); return true; }
-        if (h.left <= 0) return false;
-        const pl = this.nearPlant(fx, fz, 1.6);
-        this.pour(h);
-        G.audio.play('pour', { pos: p.pos, vol: 0.8 });
-        const hp = h.body.translation();
-        G.fx.bits(v1.set(hp.x + f.x * 0.4, hp.y + 0.1, hp.z + f.z * 0.4), { count: 16, color: 0x7fd0ff, spread: 0.1, speed: 1.6, up: 0.4, grav: 9, life: 0.6, size: 0.07, grow: 0, alpha: 1 });
-        if (pl) { pl.w = Math.min(1.25, pl.w + WEED.pour); if (pl.w > WEED.drown) G.audio.play('splash', { pos: v1.set(pl.x, pl.y, pl.z), vol: 0.4 }); }
-        return true;
-      }
-      case 'seed': {
-        const pl = this.nearPlant(fx, fz, 1.6, (x) => x.g <= 0.001);
-        if (!pl) return false;
-        pl.g = 0.02; pl.w = Math.max(pl.w, 0.2); this.serve(h);
-        G.audio.play('mudstep', { pos: p.pos, vol: 0.6 });
-        return true;
+        return false;
       }
       case 'sickle': {
-        const pl = this.nearPlant(fx, fz, 1.7, (x) => x.g >= 1);
+        const pl = this.nearPlant(p.pos.x + f.x * 1.1, p.pos.z + f.z * 1.1, 1.7, (x) => x.g >= 1);
         if (!pl) return false;
         this.harvest(pl, 3, f, p);
         G.audio.play('whoosh', { pos: p.pos, vol: 0.6, pitch: 1.4 });
@@ -373,25 +456,34 @@ export class Weed extends Chain {
       }
       case 'joint': {
         const i = this.joints.indexOf(h);
-        if (i < 0 || this.lit[i] < G.time) return false;   // not lit: bring a flame to it
+        if (i < 0) return false;
+        if (!this.sealed[i]) {   // lick it shut
+          this.sealed[i] = true; p.mouthAt = G.time;
+          G.audio.play('squish', { pos: p.pos, vol: 0.5, pitch: 1.7 });
+          G.events.push({ type: 'lick', who: p });
+          return true;
+        }
+        if (this.lit[i] < G.time) return false;   // not lit: bring a flame to its tip
+        p.mouthAt = G.time;
         this.serve(h);
         p.addBuzz(1, WEED.jointBuzz, 26);
         G.audio.play('fill', { pos: p.pos, vol: 0.35, pitch: 1.8 });
-        G.fx.puff(V3(p.pos.x + f.x * 0.5, p.pos.y + (p.standing ? 0.9 : 0.4), p.pos.z + f.z * 0.5), { count: 6, color: 0xeeeeee, speed: 0.6, up: 0.7, life: 1.8, size: 0.45, alpha: 0.5 });
+        G.fx.puff(this.snout(p, v1), { count: 6, color: 0xeeeeee, speed: 0.6, up: 0.7, life: 1.8, size: 0.45, alpha: 0.5 });
         G.noise(p.pos, 6);
         G.events.push({ type: 'puff', who: p });
         return true;
       }
       case 'cookies': {
-        const weak = this.gooey.has(h);
+        p.mouthAt = G.time;
         this.serve(h);
-        p.addBuzz(1, weak ? 0.25 : WEED.cookieBuzz, 70, 10);
+        p.addBuzz(1, WEED.cookieBuzz, 70, 10);
         G.audio.play('munch', { pos: p.pos, vol: 0.9 });
         G.events.push({ type: 'cookieEaten', who: p });
         if (p.buzz > 0.2) G.events.push({ type: 'munch', who: p });
         return true;
       }
       case 'burnt': {
+        p.mouthAt = G.time;
         this.serve(h); G.audio.play('cough', { pos: p.pos, vol: 0.8 }); G.events.push({ type: 'pigCough', who: p });
         return true;
       }
@@ -399,82 +491,126 @@ export class Weed extends Chain {
     return false;
   }
   protected selfIcon(p: Pig, h: Prop): IconId | '' {
-    const f = p.forward, fx = p.pos.x + f.x * 1.1, fz = p.pos.z + f.z * 1.1;
+    const f = p.forward;
     switch (h.def.item) {
-      case 'can': { const pond = G.places?.pond; if (pond && Math.hypot(p.pos.x - pond.x, p.pos.z - pond.z) < pond.r + 0.6) return 'water'; return h.left > 0 && this.nearPlant(fx, fz, 1.6) ? 'can' : ''; }
-      case 'seed': return this.nearPlant(fx, fz, 1.6, (x) => x.g <= 0.001) ? 'seed' : '';
-      case 'sickle': return this.nearPlant(fx, fz, 1.7, (x) => x.g >= 1) ? 'sickle' : '';
+      case 'can': { const pond = G.places?.pond; return pond && Math.hypot(p.pos.x - pond.x, p.pos.z - pond.z) < pond.r + 0.6 ? 'water' : ''; }
+      case 'sickle': return this.nearPlant(p.pos.x + f.x * 1.1, p.pos.z + f.z * 1.1, 1.7, (x) => x.g >= 1) ? 'sickle' : '';
       case 'lighter': return 'lighter';
-      case 'joint': { const i = this.joints.indexOf(h); return i >= 0 && this.lit[i] > G.time ? 'joint' : ''; }
+      case 'joint': { const i = this.joints.indexOf(h); return i < 0 ? '' : !this.sealed[i] ? 'tongue' : this.lit[i] > G.time ? 'joint' : ''; }
       case 'cookies': return 'cookie';
       case 'burnt': return 'cough';
     }
     return '';
   }
-  private flamePos(l: Prop) { const p = l.body.translation(); return v2.set(p.x, p.y + 0.12, p.z); }
 
+  // ------------------------------------------------------------------ host, every step
   protected tick(dt: number) {
+    // socket states (the HUD + players read these)
+    this.potOn = this.pot.dockedIn === this.burner; this.bowlOn = this.bowl.dockedIn === this.counter;
+    this.paperIn = !!this.paperSock.occupant; this.filterIn = !!this.filterSock.occupant; this.trayIn = !!this.ovenSock.occupant;
+    if (!this.paperIn) { this.fill = 0; this.rollH.v = 0; if (this.filterSock.occupant) HANDS.undock(this.filterSock.occupant, null); }
     // Bob tends his crop: while he's on his garden round, the plants around him get a drink
     const bob = G.farmer;
     const tending = !!bob && bob.state === 'routine' && flat(bob.pos, this.fieldC) < 9;
-    // plants: dry out, grow while watered, stall while drowned
     for (const pl of this.plants) {
       if (tending && flat(bob!.pos, pl) < 5) pl.w = Math.min(0.8, pl.w + dt * 0.05);
       pl.w = Math.max(0, pl.w - WEED.dry * dt * (G.mod === 'rain' ? -0.5 : 1));
       if (G.mod === 'rain') pl.w = Math.min(0.9, pl.w);
       if (pl.g > 0 && pl.g < 1 && pl.w > 0.05 && pl.w <= WEED.drown) pl.g = Math.min(1, pl.g + WEED.grow * dt * (pl.w > 0.35 ? 1 : 0.5));
     }
-    // the wheelbarrow: buds dropped in become its load; tipped = it spills; parked by the grinder = it unloads
-    const b = this.barrow, bp = b.body.translation(), bq = b.body.rotation();
-    const q = new THREE.Quaternion(bq.x, bq.y, bq.z, bq.w), inv = q.clone().invert(), up = v1.set(0, 1, 0).applyQuaternion(q);
-    if (!b.banked) {
-      if (this.cargo < 12) for (const pr of this.props) {
-        if (pr.def.item !== 'bud' || pr.banked || pr.heldBy) continue;
-        const pp = pr.body.translation(), l = v2.set(pp.x - bp.x, pp.y - bp.y, pp.z - bp.z).applyQuaternion(inv);
-        const scoop = !!b.heldBy && Math.hypot(pp.x - bp.x, pp.z - bp.z) < 1.05 && pp.y < bp.y + 0.6;   // pushed over buds on the ground: it scoops them up
-        if (scoop || (Math.abs(l.x) < 0.36 && Math.abs(l.z) < 0.48 && l.y > -0.1 && l.y < 0.9)) { this.consume(pr); this.cargo++; G.audio.play('squish', { pos: pr.synced.currP, vol: 0.4, pitch: 1.3 }); }
-      }
-      if (this.cargo > 0 && up.y < 0.35) {
-        for (let i = 0; i < this.cargo; i++) this.spawn('bud', V3(bp.x + (Math.random() - 0.5) * 0.8, bp.y + 0.3, bp.z + (Math.random() - 0.5) * 0.8), 0, V3((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3));
-        this.cargo = 0; G.audio.play('rustle', { pos: b.synced.currP, vol: 1 }); G.events.push({ type: 'barrowSpill' });
-      }
-      if (this.cargo > 0 && Math.hypot(bp.x - this.grinder.at.x, bp.z - this.grinder.at.z) < 2.8 && this.buds < 24) {
-        const n = Math.min(this.cargo, 24 - this.buds); this.buds += n; this.cargo -= n;
-        G.audio.play('squish', { pos: this.hopper, vol: 0.8 }); G.fx.bits(this.hopper, { count: 16, color: 0x8fcf5a, speed: 2, up: 2, life: 0.6, size: 0.1, grow: 0, alpha: 1 });
-      }
-    }
-    // buds thrown into the hopper
-    for (const pr of this.props) {
-      if (pr.def.item !== 'bud' || pr.banked || pr.heldBy || this.buds >= 24) continue;
-      const pp = pr.synced.currP;
-      if (Math.hypot(pp.x - this.hopper.x, pp.z - this.hopper.z) < 0.6 && Math.abs(pp.y - this.hopper.y) < 0.6) { this.consume(pr); this.buds++; }
-    }
-    // lighters: a flame near an unlit joint lights it
+    this.barrowStep();
+    // the grinder's crank slows down when nobody turns it
+    this.crankSpd *= 0.97;
+    // lighters: a flame at an unlit joint's tip lights it; at the bong's packed bowl lights the bowl
     this.lighters.forEach((l, i) => {
       if (this.flame[i] < G.time || l.banked) return;
       const fp = this.flamePos(l);
       this.joints.forEach((j, k) => {
-        if (j.banked || this.lit[k] > G.time) return;
-        const jp = j.body.translation();
-        if (Math.hypot(jp.x - fp.x, jp.y - fp.y, jp.z - fp.z) < 0.75) { this.lit[k] = G.time + 90; G.audio.play('crackle', { pos: fp, vol: 0.5 }); G.events.push({ type: 'litUp', who: (j.heldBy ?? l.heldBy) as Pig | null }); }
+        if (j.banked || this.lit[k] > G.time || !this.sealed[k]) return;
+        if (this.jointTip(j, v1).distanceTo(fp) < 0.3) { this.lit[k] = G.time + 90; G.audio.play('crackle', { pos: fp, vol: 0.5 }); G.events.push({ type: 'litUp', who: (j.heldBy ?? l.heldBy) as Pig | null }); }
       });
+      if (this.bongPacked >= 0.3 && this.bowlLit < G.time && fp.distanceTo(this.bongBowl) < 0.3) { this.bowlLit = G.time + 10; G.audio.play('crackle', { pos: this.bongBowl, vol: 0.6 }); }
     });
-    // the oven: burning → smoke, then the alarm
-    if (this.ovenTray) {
-      const t = G.time - this.ovenT0;
-      if (t > WEED.bakeMax && Math.random() < dt * 3) G.fx.puff(this.oven.markPos.clone().setY(this.oven.markPos.y - 1), { count: 3, color: 0x55575c, speed: 0.6, up: 1, life: 2, size: 0.6, alpha: 0.6 });
-      if (t > WEED.alarm && G.time > this.alarmAt) { this.alarmAt = G.time + 8; this.smokeAlarm(this.oven.markPos, null); }
+    // the bong: a snout on the mouthpiece while the bowl burns = the chamber fills with smoke; pull away to take the hit
+    if (this.inhaler && (this.inhaler.mode !== 'normal' || this.snout(this.inhaler, v1).distanceTo(this.bongTop) > 0.62 || this.bowlLit < G.time)) this.bongHit(this.inhaler, this.chamber);
+    if (!this.inhaler && this.bowlLit > G.time && this.bongWater >= 0.15 && this.bongPacked > 0) {
+      for (const p of G.pigs as Pig[]) if (!p.absent && !p.out && p.mode === 'normal' && this.snout(p, v1).distanceTo(this.bongTop) < 0.5) { this.inhaler = p; break; }
+    }
+    if (this.inhaler) {
+      this.chamber += dt / 3.6;
+      this.inhaler.touch(this.bongTop);
+      G.audio.play('fill', { pos: this.bongTop, vol: 0.4, pitch: 0.5 + this.chamber * 0.4, minGap: 0.35 });
+      if (this.chamber > 1.15) this.bongHit(this.inhaler, this.chamber);
+    }
+    // the pot: stir it or it burns
+    if (this.potOn && this.potButter > 0 && this.potWeed > 0 && this.potCook < 1) {
+      if (G.time - this.lastStir > 1.5) this.potBurn += dt;
+      if (this.potBurn > 4 && Math.random() < dt * 4) G.fx.puff(v1.copy(this.pot.synced.currP).setY(this.pot.synced.currP.y + 0.3), { count: 2, color: 0x55575c, speed: 0.5, up: 1, life: 1.6, size: 0.4, alpha: 0.6 });
+      if (this.potBurn > WEED.burnAfter) {
+        this.potButter = this.potWeed = this.potCook = 0; this.potBurn = 0;
+        this.smokeAlarm(this.pot.synced.currP, this.potStir.heldBy);
+        G.events.push({ type: 'burnt', who: this.potStir.heldBy });
+      }
+    }
+    if (this.potCook >= 1 && this.potButter > 0) {   // cooked: magic butter in the pot (tip it over the bowl)
+      this.potButter = 0; this.pot.setLeft(1);
+      G.audio.play('ding', { pos: this.pot.synced.currP, vol: 0.6 });
+      this.made('magic', this.potStir.heldBy);
+      this.potStir.heldBy?.letGo();
+    }
+    if (this.potCook >= 1 && this.pot.left <= 0.01) { this.potCook = 0; this.potWeed = 0; this.pot.setLeft(0); }   // poured out
+    if (this.bowlMix >= 1 && this.bowl.left <= 0.01 && this.bowlMagic > 0) { this.bowlMix = this.bowlMagic = this.bowlFlour = 0; this.bowl.setLeft(0); }
+    if (this.bowlMix >= 1) this.bowlStir.heldBy?.letGo();
+    // the oven: bakes while a tray is in and the door is shut; golden, then burnt, then the alarm
+    const tray = this.ovenSock.occupant;
+    if (!tray) this.bakeT = 0;
+    else if (this.ovenDoor.v < 0.15) {
+      this.bakeT += dt;
+      if (tray.def.item === 'trayRaw' && this.bakeT >= WEED.bakeMin) {
+        const c = this.swap(tray, 'cookies');
+        if (c) { this.made('cookies', null); G.events.push({ type: 'bakeCookies', who: null }); G.audio.play('ding', { pos: this.ovenMark, vol: 0.7 }); }
+      } else if (tray.def.item === 'cookies' && this.bakeT >= WEED.bakeMax) { this.swap(tray, 'cookiesBurnt'); G.events.push({ type: 'burnt', who: null }); }
+      if (this.bakeT > WEED.bakeMax && Math.random() < dt * 3) G.fx.puff(v1.copy(this.ovenMark).setY(this.ovenMark.y - 1), { count: 3, color: 0x55575c, speed: 0.6, up: 1, life: 2, size: 0.6, alpha: 0.6 });
+      if (this.bakeT > WEED.alarm && G.time > this.alarmAt) { this.alarmAt = G.time + 8; this.smokeAlarm(this.ovenMark, null); }
+    }
+  }
+  /** The wheelbarrow: buds dropped in become its load; tipped = it spills; parked by the grinder = it unloads into the hopper. */
+  private barrowStep() {
+    const b = this.barrow, bp = b.body.translation(), bq = b.body.rotation();
+    if (b.banked) return;
+    const q = new THREE.Quaternion(bq.x, bq.y, bq.z, bq.w), inv = q.clone().invert(), up = v1.set(0, 1, 0).applyQuaternion(q);
+    if (this.cargo < 12) for (const pr of this.props) {
+      if (pr.def.item !== 'bud' || pr.banked || pr.heldBy) continue;
+      const pp = pr.body.translation(), l = v2.set(pp.x - bp.x, pp.y - bp.y, pp.z - bp.z).applyQuaternion(inv);
+      const scoop = !!b.heldBy && Math.hypot(pp.x - bp.x, pp.z - bp.z) < 1.05 && pp.y < bp.y + 0.6;   // pushed over buds on the ground: it scoops them up
+      if (scoop || (Math.abs(l.x) < 0.36 && Math.abs(l.z) < 0.48 && l.y > -0.1 && l.y < 0.9)) { this.consume(pr); this.cargo++; G.audio.play('squish', { pos: pr.synced.currP, vol: 0.4, pitch: 1.3 }); }
+    }
+    if (this.cargo > 0 && up.y < 0.35) {
+      for (let i = 0; i < this.cargo; i++) this.spawn('bud', V3(bp.x + (Math.random() - 0.5) * 0.8, bp.y + 0.3, bp.z + (Math.random() - 0.5) * 0.8), 0, V3((Math.random() - 0.5) * 3, 2, (Math.random() - 0.5) * 3));
+      this.cargo = 0; G.audio.play('rustle', { pos: b.synced.currP, vol: 1 }); G.events.push({ type: 'barrowSpill' });
+    }
+    if (this.cargo > 0 && Math.hypot(bp.x - this.hopper.x, bp.z - this.hopper.z) < 2.6 && this.buds < 24) {
+      const n = Math.min(this.cargo, 24 - this.buds); this.buds += n; this.cargo -= n;
+      G.audio.play('squish', { pos: this.hopper, vol: 0.8 }); G.fx.bits(this.hopper, { count: 16, color: 0x8fcf5a, speed: 2, up: 2, life: 0.6, size: 0.1, grow: 0, alpha: 1 });
     }
   }
   protected resetMode() {
-    this.plants.forEach((pl, i) => { pl.g = i % 4 === 3 ? 0 : 0.15 + (i % 3) * 0.1; pl.w = 0.3; });
-    this.cargo = 0; this.buds = 0; this.tableWeed = 0; this.bongWater = 0; this.bongPacked = 0; this.potButter = this.potWeed = 0; this.bowlMagic = this.bowlFlour = 0;
-    this.ovenTray = 0; this.fridgeAt = 0; this.alarmAt = 0; this.lit = this.lit.map(() => 0); this.flame = [0, 0]; this.gooey.clear();
+    this.plants.forEach((pl, i) => { pl.g = i % 4 === 3 ? 0 : 0.15 + (i % 3) * 0.1; pl.w = 0.3; pl.seed = 0; });
+    this.cargo = 0; this.buds = 0; this.grindProg = 0; this.crankSpd = 0; this.jamUntil = 0; this.fill = 0;
+    this.bongWater = 0; this.bongPacked = 0; this.bowlLit = 0; this.chamber = 0; this.inhaler = null;
+    this.potButter = this.potWeed = this.potCook = this.potBurn = 0; this.bowlMagic = this.bowlFlour = this.bowlMix = 0;
+    this.bakeT = 0; this.fridgeAt = 0; this.alarmAt = 0; this.lit = this.lit.map(() => 0); this.sealed = this.sealed.map(() => false); this.flame = [0, 0];
+    this.trayDough.clear(); this.pump.reset();
+    for (const h of [this.grindCrank, this.rollH, this.potStir, this.bowlStir, this.ovenDoor]) h.v = 0;
+    // the pot / bowl / first tray back in their places
+    if (G.net !== 'client') { HANDS.dock(this.burner, this.pot); HANDS.dock(this.counter, this.bowl); HANDS.dock(this.traySock, this.trays[0]); }
+    this.pot.setLeft(0); this.bowl.setLeft(0);
   }
 
   // ------------------------------------------------------------------ every frame
   render(dt: number) {
     this.visions.render(dt);
+    this.pump.render(dt);
     const L = G.localPig as Pig | null, can = this.item(L?.held) === 'can';
     for (const pl of this.plants) {
       const st = pl.g <= 0.001 ? -1 : pl.g < 0.3 ? 0 : pl.g < 0.6 ? 1 : pl.g < 1 ? 2 : 3;
@@ -491,24 +627,44 @@ export class Weed extends Chain {
     }
     const cargo = this.barrow.obj.getObjectByName('cargo');
     if (cargo) { cargo.visible = this.cargo > 0; cargo.scale.setScalar(0.5 + 0.5 * Math.min(1, this.cargo / 12)); }
-    this.crank.rotation.x -= dt * (this.buds >= 3 ? 0.4 : 0);
-    // the oven: window colour = how done; the ring over it fills, golden in the window, red when burning
-    const t = this.ovenTray ? G.time - this.ovenT0 : -1;
+    this.wheel.rotation.z = this.grindCrank.v;
+    // the paper on the mat: weed strip (how much), the rolled edge moving across
+    const pa = this.paperIn ? this.paperSock.occupant ?? this.props.find((x) => x.def.item === 'paper' && !x.banked && x.synced.currP.distanceTo(this.paperSock.p) < 0.05) : null;
+    if (pa) {
+      const w = pa.obj.getObjectByName('weed'), c = pa.obj.getObjectByName('curl'), r = this.rollH.v;
+      if (w) { w.visible = this.fill > 0.02; w.scale.set(1, Math.max(0.01, Math.min(1.6, this.fill)) * (1 - r * 0.9), Math.min(1.4, 0.6 + this.fill * 0.5) * (1 - r * 0.8)); }
+      if (c) { c.visible = r > 0.01; c.position.z = 0.06 - r * 0.11; c.scale.set(1 + r * 0.9, 1, 1 + r * 0.9); }
+    }
+    for (const pp of this.props) if (pp.def.item === 'paper' && pp !== pa) { const w = pp.obj.getObjectByName('weed'), c = pp.obj.getObjectByName('curl'); if (w) w.visible = false; if (c) c.visible = false; }
+    // the oven: the door's angle; window colour = how done; the ring over it fills, golden in the window, red when burning
+    this.door.rotation.x = this.ovenDoor.v;
+    const t = this.trayIn ? this.bakeT : -1;
     const k = t < 0 ? 0 : Math.min(1, t / WEED.bakeMax);
     this.ovenGlow.emissive.setHex(t < 0 ? 0 : t < WEED.bakeMin ? 0x6a3a12 : t <= WEED.bakeMax ? 0xff9a2a : 0x3a1a0a).multiplyScalar(t < 0 ? 0 : 0.5 + 0.5 * Math.sin(G.time * 4) * (t > WEED.bakeMax ? 1 : 0.2));
-    this.ovenRing.visible = t >= 0;
-    if (t >= 0) {
+    this.ovenRing.visible = t > 0;
+    if (t > 0) {
       const ring = this.ovenRing;
       ring.geometry.dispose(); ring.geometry = new THREE.RingGeometry(0.22, 0.32, 32, 1, Math.PI / 2, -Math.PI * 2 * k);
       (ring.material as THREE.MeshBasicMaterial).color.setHex(t < WEED.bakeMin ? 0xfff6e6 : t <= WEED.bakeMax ? 0xffd166 : 0xff4a3a);
-      const cam = (G as { cam?: THREE.Camera }).cam; if (cam) ring.quaternion.copy(cam.quaternion);
+      const cam = G.cam; if (cam) ring.quaternion.copy(cam.quaternion);
     }
-    this.potM.visible = this.potButter > 0 || this.potWeed > 0;
-    (this.potM.material as THREE.MeshToonMaterial).color.setHex(this.potWeed ? 0x9fbf4a : 0xe9d36a);
-    this.bowlM.visible = this.bowlMagic > 0 || this.bowlFlour > 0;
+    // the fridge door swings open for a moment after you take butter
+    const fo = this.fridgeAt - G.time;
+    this.fridgeDoor.rotation.y = this.shedYaw() - (fo > 13.5 ? 1.2 * Math.min(1, (15 - fo) * 3) : fo > 12.8 ? 1.2 * Math.max(0, (fo - 12.8) / 0.7) : 0);
+    // the pot + bowl contents, the spoons
+    const pf = this.pot.obj.getObjectByName('fill') as THREE.Mesh | undefined;
+    if (pf) { pf.visible = this.potButter > 0 || this.potWeed > 0 || this.pot.left > 0; (pf.material as THREE.MeshToonMaterial).color.setHex(this.potCook >= 1 ? 0x7fae3a : this.potWeed > 0.3 ? 0xb5c24a : 0xe9d36a); }
+    const bf = this.bowl.obj.getObjectByName('fill') as THREE.Mesh | undefined;
+    if (bf) { bf.visible = this.bowlMagic > 0 || this.bowlFlour > 0; (bf.material as THREE.MeshToonMaterial).color.setHex(this.bowlMix >= 1 ? 0xf2dcae : this.bowlMagic > 0 && this.bowlFlour > 0 ? 0xd8d6a0 : this.bowlMagic > 0 ? 0x9fbf4a : 0xf8f4ea); bf.scale.set(1, 1 + this.bowlMix * 2, 1); }
+    this.spoonAt(this.potSpoon, this.potStir, this.potOn && this.potButter + this.potWeed > 0 && this.potCook < 1);
+    this.spoonAt(this.bowlSpoon, this.bowlStir, this.bowlOn && this.bowlMagic + this.bowlFlour > 0 && this.bowlMix < 1);
+    // the bong: water level, the chamber's smoke, the bowl's ember
     this.bongWaterM.scale.y = Math.max(0.01, this.bongWater);
     this.bongWaterM.visible = this.bongWater > 0.02;
-    if (this.bongSmoke > G.time && Math.random() < dt * 6) G.fx.puff(this.bong.markPos.clone().setY(this.bong.markPos.y - 0.6), { count: 1, color: 0xeeeeee, speed: 0.3, up: 0.6, life: 1.6, size: 0.35, alpha: 0.4 });
+    this.smokeM.visible = this.chamber > 0.02;
+    if (this.smokeM.visible) { const h = Math.min(1.12, this.chamber) * 0.7; this.smokeM.scale.set(1, h, 1); this.smokeM.position.y = 0.42 + h / 2; }
+    this.bowlEmber.emissive.setHex(this.bowlLit > G.time ? 0xff6a1a : 0).multiplyScalar(this.bowlLit > G.time ? 0.6 + Math.sin(G.time * 9) * 0.3 : 0);
+    if (this.bowlLit > G.time && Math.random() < dt * 4) G.fx.puff(this.bongBowl, { count: 1, color: 0xdddddd, speed: 0.15, up: 0.5, life: 1.2, size: 0.15, alpha: 0.4 });
     // lit joints smoulder, lighters show their flame
     this.joints.forEach((j, i) => {
       const e = j.obj.getObjectByName('ember') as THREE.Mesh | undefined; if (!e) return;
@@ -516,29 +672,46 @@ export class Weed extends Chain {
       (e.material as THREE.MeshToonMaterial).emissive.setHex(on ? 0xff6a1a : 0);
       if (on && Math.random() < dt * 3) G.fx.puff(e.getWorldPosition(v1), { count: 1, color: 0xdddddd, speed: 0.15, up: 0.5, life: 1.4, size: 0.18, alpha: 0.4 });
     });
-    this.lighters.forEach((l, i) => { if (this.flame[i] > G.time && !l.banked && Math.random() < dt * 20) G.fx.bits(this.flamePos(l), { count: 1, color: Math.random() < 0.5 ? 0xffb13a : 0xff6a1a, speed: 0.2, up: 0.8, life: 0.25, size: 0.07, grow: 0, alpha: 1 }); });
+    this.lighters.forEach((l, i) => { if (this.flame[i] > G.time && !l.banked && Math.random() < dt * 20) G.fx.bits(this.flamePos(l, v1), { count: 1, color: Math.random() < 0.5 ? 0xffb13a : 0xff6a1a, speed: 0.2, up: 0.8, life: 0.25, size: 0.07, grow: 0, alpha: 1 }); });
+  }
+  private spoonAt(sp: THREE.Object3D, h: Handle, show: boolean) {
+    sp.visible = show || !!h.heldBy;
+    if (!sp.visible) return;
+    h.knob(sp.position); sp.position.y -= 0.12;
+    sp.rotation.set(0.25 * Math.cos(h.v), 0, -0.25 * Math.sin(h.v));
   }
 
   // ------------------------------------------------------------------ net (≤ 64 numbers)
   netState(n: number[]) {
-    for (const pl of this.plants) n.push(Math.round(pl.g * 100) / 100, Math.round(pl.w * 100) / 100);
-    n.push(this.cargo, this.buds, this.tableWeed, Math.round(this.bongWater * 100) / 100, this.bongPacked, this.potButter, this.potWeed, this.bowlMagic, this.bowlFlour,
-      this.ovenTray, this.ovenT0, this.fridgeAt, ...this.lit, ...this.flame);
+    for (const pl of this.plants) n.push(Math.round(pl.g * 100) * 256 + Math.round(pl.w * 100));
+    const r2 = (x: number) => Math.round(x * 100) / 100;
+    const occ = (this.paperIn ? 1 : 0) | (this.filterIn ? 2 : 0) | (this.potOn ? 4 : 0) | (this.bowlOn ? 8 : 0) | (this.trayIn ? 16 : 0);
+    let seal = 0; this.sealed.forEach((s, i) => { if (s) seal |= 1 << i; });
+    n.push(this.cargo, this.buds, r2(this.grindCrank.v), r2(this.fill), r2(this.rollH.v), occ, seal,
+      this.potButter, r2(this.potWeed), r2(this.potCook), r2(this.potBurn), r2(this.potStir.v),
+      r2(this.bowlMagic), r2(this.bowlFlour), r2(this.bowlMix), r2(this.bowlStir.v), r2(this.ovenDoor.v), r2(this.bakeT), this.fridgeAt,
+      r2(this.bongWater), r2(this.bongPacked), this.bowlLit, r2(this.chamber), r2(this.pump.lever.v), this.pump.flowUntil, ...this.lit, ...this.flame);
   }
   netApply(n: number[]) {
-    if (n.length < this.plants.length * 2 + 12) return;
-    this.plants.forEach((pl, i) => { pl.g = n[i * 2]; pl.w = n[i * 2 + 1]; });
-    let j = this.plants.length * 2;
-    [this.cargo, this.buds, this.tableWeed, this.bongWater, this.bongPacked, this.potButter, this.potWeed, this.bowlMagic, this.bowlFlour, this.ovenTray, this.ovenT0, this.fridgeAt] = n.slice(j, j + 12);
-    j += 12;
-    this.lit = this.lit.map((_, i) => n[j + i] ?? 0); j += this.lit.length;
-    this.flame = this.flame.map((_, i) => n[j + i] ?? 0);
+    const P = this.plants.length;
+    if (n.length < P + 25) return;
+    this.plants.forEach((pl, i) => { pl.g = Math.floor(n[i] / 256) / 100; pl.w = (n[i] % 256) / 100; });
+    let j = P;
+    const x = () => n[j++];
+    this.cargo = x(); this.buds = x(); this.grindCrank.v = x(); this.fill = x(); this.rollH.v = x();
+    const occ = x(); this.paperIn = !!(occ & 1); this.filterIn = !!(occ & 2); this.potOn = !!(occ & 4); this.bowlOn = !!(occ & 8); this.trayIn = !!(occ & 16);
+    const seal = x(); this.sealed = this.sealed.map((_, i) => !!(seal & (1 << i)));
+    this.potButter = x(); this.potWeed = x(); this.potCook = x(); this.potBurn = x(); this.potStir.v = x();
+    this.bowlMagic = x(); this.bowlFlour = x(); this.bowlMix = x(); this.bowlStir.v = x(); this.ovenDoor.v = x(); this.bakeT = x(); this.fridgeAt = x();
+    this.bongWater = x(); this.bongPacked = x(); this.bowlLit = x(); this.chamber = x(); this.pump.lever.v = x(); this.pump.flowUntil = x();
+    this.lit = this.lit.map(() => x() ?? 0);
+    this.flame = this.flame.map(() => x() ?? 0);
   }
 
   // ------------------------------------------------------------------ admin + arrows
   adminButtons(): [string, string][] {
-    return [['weed:ripe', 'a.weedRipe'], ['weed:water', 'a.weedWater'], ['weed:buds', 'a.weedBuds'], ['weed:bag', 'a.weedBag'], ['weed:joint', 'a.weedJoint'],
-      ['weed:high', 'a.weedHigh'], ['weed:cookies', 'a.weedCookies'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
+    return [['weed:ripe', 'a.weedRipe'], ['weed:water', 'a.weedWater'], ['weed:buds', 'a.weedBuds'], ['weed:bag', 'a.weedBag'], ['weed:mat', 'a.weedMat'], ['weed:joint', 'a.weedJoint'],
+      ['weed:pot', 'a.weedPot'], ['weed:high', 'a.weedHigh'], ['weed:cookies', 'a.weedCookies'], ['tp:shed', 'a.tpShed'], ['tp:field', 'a.tpField'], ['tp:beam', 'a.tpBeam']];
   }
   admin(a: string, me: Pig): boolean {
     const f = me.forward, front = V3(me.pos.x + f.x * 1.3, me.pos.y + 0.5, me.pos.z + f.z * 1.3);
@@ -546,46 +719,65 @@ export class Weed extends Chain {
       case 'weed:ripe': for (const pl of this.plants) if (pl.g > 0) pl.g = 1; return true;
       case 'weed:water': for (const pl of this.plants) pl.w = 0.8; return true;
       case 'weed:buds': for (let i = 0; i < 6; i++) this.spawn('bud', front.clone().add(V3((i % 3 - 1) * 0.3, 0.2 * i, 0)), 0); return true;
-      case 'weed:bag': this.spawn('weedBag', front, me.yaw); return true;
-      case 'weed:joint': { const j = this.spawn('joint', front, me.yaw); if (j) this.lit[this.joints.indexOf(j)] = G.time + 90; return true; }
+      case 'weed:bag': this.spawn('weedBag', front, me.yaw, undefined, WEED.bagMax); return true;
+      case 'weed:mat': {   // a paper + a filter on the mat, filled: ready to roll
+        if (!this.paperSock.occupant) { const pa = this.spawn('paper', this.matC, this.shedYaw()); if (pa) HANDS.dock(this.paperSock, pa); }
+        if (!this.filterSock.occupant) { const fi = this.spawn('filter', this.matC, this.shedYaw()); if (fi) HANDS.dock(this.filterSock, fi); }
+        this.paperIn = this.filterIn = true; this.fill = 1.05;
+        return true;
+      }
+      case 'weed:joint': { const j = this.spawn('joint', front, me.yaw); if (j) { const i = this.joints.indexOf(j); this.sealed[i] = true; this.lit[i] = G.time + 90; } return true; }
+      case 'weed:pot': if (!this.potOn) HANDS.dock(this.burner, this.pot); this.potButter = 1; this.potWeed = 1; this.potCook = 0; this.potBurn = 0; return true;
       case 'weed:high': me.addBuzz(1, 0.9, 90); return true;
       case 'weed:cookies': this.spawn('cookies', front, me.yaw); return true;
     }
     return false;
   }
   markFor(id: string, me: Pig): THREE.Vector3 | null {
-    const has = (item: string) => this.props.some((p) => !p.banked && p.def.item === item);
-    const near = (item: string) => { let best: Prop | null = null, bd = Infinity; for (const p of this.props) { if (p.banked || p.def.item !== item) continue; const d = flat(p.synced.currP, me.pos); if (d < bd) { bd = d; best = p; } } return best?.synced.currP.clone().setY(best.synced.currP.y + 0.3) ?? null; };
+    const has = (item: string, full = false) => this.props.some((p) => !p.banked && p.def.item === item && (!full || p.left > 0.05));
+    const near = (item: string, full = false) => { let best: Prop | null = null, bd = Infinity; for (const p of this.props) { if (p.banked || p.def.item !== item || (full && p.left <= 0.05)) continue; const d = flat(p.synced.currP, me.pos); if (d < bd) { bd = d; best = p; } } return best?.synced.currP.clone().setY(best.synced.currP.y + 0.3) ?? null; };
     const ripe = () => { const pl = this.plants.filter((x) => x.g >= 1).sort((a, b) => flat(a, me.pos) - flat(b, me.pos))[0]; return pl ? V3(pl.x, pl.y + 1.6, pl.z) : null; };
+    const held = this.item(me.held), heldFull = !!me.held && (me.held as Prop).left > 0.05;
+    const grinder = () => this.hopper.clone().setY(this.hopper.y + 0.6);
     // the next step of the chain towards a bag of ground weed
     const toWeed = (): THREE.Vector3 | null => {
-      if (has('weed')) return near('weed');
-      if (this.buds >= 3) return this.grinder.markPos;
+      if (held === 'weed' && heldFull) return null;
+      if (has('weed', true)) return near('weed', true);
+      if (this.buds > 0) return grinder();
+      if (held === 'bud') return grinder();
       if (this.cargo > 0) return this.barrow.synced.currP.clone().setY(this.barrow.synced.currP.y + 1);
       if (has('bud')) return near('bud');
       return ripe() ?? V3(this.fieldC.x, this.fieldC.y + 2, this.fieldC.z);
     };
-    const held = this.item(me.held);
+    const mat = this.matC.clone().setY(this.matC.y + 0.5);
     switch (id) {
-      case 'rollJoint':
-        if (held === 'joint') return null;
+      case 'rollJoint': {
+        if (held === 'joint') { const i = this.joints.indexOf(me.held as Prop); return i >= 0 && this.sealed[i] && this.lit[i] < G.time ? near('lighter') : null; }
+        if (held === 'lighter' && has('joint')) return near('joint');
         if (has('joint')) return near('joint');
-        if (this.tableWeed > 0) return this.table.markPos;
-        if (held === 'weed') return this.table.markPos;
-        return toWeed();
+        if (!this.paperIn) return held === 'paper' ? mat : this.papersAt.clone().setY(this.papersAt.y + 0.4);
+        if (!this.filterIn) return held === 'filter' ? mat : this.filtersAt.clone().setY(this.filtersAt.y + 0.4);
+        if (this.fill < WEED.paperMin) return held === 'weed' && heldFull ? mat : toWeed();
+        return mat;
+      }
       case 'bongRip':
-        if (this.bongPacked && this.bongWater > 0.1) return this.bong.markPos;
-        if (held === 'weed' || held === 'can') return this.bong.markPos;
-        return this.bongWater > 0.1 ? toWeed() : near('can');
-      case 'bakeCookies':
-        if (this.ovenTray) return this.oven.markPos;
-        if (held === 'trayRaw') return this.oven.markPos;
+        if (this.bongWater < 0.3) return held === 'can' && heldFull ? this.bongTop.clone().setY(this.bongTop.y + 0.4) : near('can', true) ?? this.pump.spout;
+        if (this.bongPacked < 0.3) return held === 'weed' && heldFull ? this.bongBowl.clone().setY(this.bongBowl.y + 0.4) : toWeed();
+        if (this.bowlLit < G.time) return held === 'lighter' ? this.bongBowl.clone().setY(this.bongBowl.y + 0.4) : near('lighter');
+        return this.bongTop.clone().setY(this.bongTop.y + 0.5);
+      case 'bakeCookies': {
+        const oven = this.ovenMark;
+        if (this.trayIn || held === 'trayRaw') return oven;
         if (has('trayRaw')) return near('trayRaw');
-        if (held === 'magic' || held === 'flour') return this.bowl.markPos;
-        if (has('magic')) return this.bowlFlour ? near('magic') : near('flour');
-        if (held === 'butter' || held === 'weed') return this.stove.markPos;
-        if (!this.potButter) return has('butter') ? near('butter') : this.fridge.markPos;
-        return toWeed();
+        if (this.bowlMix >= 1) return held === 'bowl' ? near('tray') : this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5);
+        if (this.bowlMagic >= 0.6 && this.bowlFlour >= 0.6) return this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5);
+        if (this.potCook >= 1 && this.pot.left > 0) return held === 'pot' ? this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5) : this.pot.synced.currP.clone().setY(this.pot.synced.currP.y + 0.5);
+        if (this.bowlMagic >= 0.6) return held === 'flour' ? this.bowl.synced.currP.clone().setY(this.bowl.synced.currP.y + 0.5) : near('flour', true);
+        const potAt = this.pot.synced.currP.clone().setY(this.pot.synced.currP.y + 0.5);
+        if (!this.potButter && this.potCook < 1) return held === 'butter' ? potAt : near('butter') ?? this.L(-4.6, 1.6, -2.4);
+        if (this.potWeed < 0.6) return held === 'weed' && heldFull ? potAt : toWeed();
+        return potAt;
+      }
       case 'beamWalk': return this.beamSpot.clone().setY(this.beamSpot.y + 1.5);
     }
     return null;

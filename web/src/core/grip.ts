@@ -58,6 +58,21 @@ export class Grip {
   }
 
   /**
+   * Turn the held thing toward `qT` (world): a soft angular drive (things in the hooves stay upright and face where
+   * the pig faces; the hands system tips them to pour / turns them to fit a socket). `k` = how firmly (0..1 per step).
+   */
+  orient(qT: THREE.Quaternion, k: number) {
+    const b = this.held; if (!b) return;
+    const r = b.rotation();
+    const dq = q1.set(r.x, r.y, r.z, r.w).invert().premultiply(qT);
+    if (dq.w < 0) dq.set(-dq.x, -dq.y, -dq.z, -dq.w);
+    const s = Math.sqrt(Math.max(0, 1 - dq.w * dq.w)), ang = 2 * Math.acos(Math.min(1, dq.w));
+    const w = b.angvel();
+    const sp = s < 1e-4 ? 0 : Math.min(ang * 11, 13) / s;
+    b.setAngvel({ x: w.x + (dq.x * sp - w.x) * k, y: w.y + (dq.y * sp - w.y) * k, z: w.z + (dq.z * sp - w.z) * k }, true);
+  }
+
+  /**
    * Pull the hand toward `T` (world). Forces: `up` (N) lifting, `side` (N) dragging. `mass` = held mass.
    * The reaction pushes the pig back (`react`: share felt, the rest goes into the ground).
    */

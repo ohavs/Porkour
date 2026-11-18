@@ -14,6 +14,7 @@ import type { Tone } from '../core/ragdoll';
 import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
 import { SNACK, SNACK_IDS, type SnackId } from '../world/snacks';
 import type { Prop } from '../world/props';
+import { HANDS, type Handle } from '../world/hands';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
 export interface PigInput {
@@ -22,13 +23,15 @@ export interface PigInput {
   jumpP: boolean; sprintP: boolean; fartP: boolean; standP: boolean; wallowP: boolean; grabP: boolean; grabR: boolean; oinkP: boolean;
   /** LMB pressed / released; the lock-pick puzzle was solved / a pin slipped (the puzzle runs on the player's screen). */
   attackP: boolean; attackR: boolean; pickP: boolean; pickFailP: boolean;
-  /** Chain modes: a station mini-game's result (1 + station × 8 + result; 0 = none). */
-  act: number;
+  /** The crosshair: where the player aims (world offset from the pig, m; NaN = none) — held things go there (world/hands.ts). */
+  ax: number; ay: number; az: number;
+  /** Mouse wheel: how far the arms / neck stretch (0..1). R held: tip what you hold (pour). */
+  reach: number; tilt: boolean;
 }
 export const emptyInput = (): PigInput => ({
   mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false, attack: false,
   jumpP: false, sprintP: false, fartP: false, standP: false, wallowP: false, grabP: false, grabR: false, oinkP: false,
-  attackP: false, attackR: false, pickP: false, pickFailP: false, act: 0,
+  attackP: false, attackR: false, pickP: false, pickFailP: false, ax: NaN, ay: 0, az: 0, reach: 0, tilt: false,
 });
 
 /** Where a player's own copy of their pig is (sent with the controls, host follows it). */
@@ -61,6 +64,8 @@ const GRIP = {
   four: { hold: new THREE.Vector3(0, 0.6, 0.86), wind: new THREE.Vector3(0, 1.05, 0.42), rel: new THREE.Vector3(0, 0.95, 1.2) },
   two: { hold: new THREE.Vector3(0, 0.92, 0.4), wind: new THREE.Vector3(0, 1.5, -0.1), rel: new THREE.Vector3(0, 1.3, 0.8) },
 };
+/** Hand-to-mouth (lick / light up): how long. */
+const MOUTH_T = 0.6;
 /** Eating: where the food goes (the mouth), per stance. */
 const MOUTH = { four: new THREE.Vector3(0, 0.72, 0.82), two: new THREE.Vector3(0, 1.3, 0.34) };
 /** A snack in the hooves that a click uses (eat it / light a cigarette), not a hit. */
@@ -73,7 +78,8 @@ type Mode = 'normal' | 'ragdoll' | 'wallow' | 'held';
 const MODES: Mode[] = ['normal', 'ragdoll', 'wallow', 'held'];
 const SHAPES: Shape[] = ['four', 'two', 'rag'];
 const QX90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
+const qHold = new THREE.Quaternion(), qTilt = new THREE.Quaternion(), XAXIS = new THREE.Vector3(1, 0, 0);
 /** Poise damage of a held weapon (0 = not a weapon). */
 const weaponOf = (h: Holdable) => (h as { def?: { weapon?: number } }).def?.weapon ?? 0;
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -90,6 +96,16 @@ export class Pig implements Holdable {
   /** Grilled: out of the game until outUntil, then back in the sty. */
   out = false; outUntil = 0; burntUntil = 0;
   held: Holdable | null = null;
+  /** A machine part in my hoof (a crank, a spoon, a lever, a bolt…: world/hands.ts). */
+  handle: Handle | null = null; private handleFar = 0;
+  /** R held: what I hold tips over (0 upright … 1 tipped, pouring). */
+  tiltK = 0;
+  /** Hand to mouth with what I hold (lick a joint, puff): since when. */
+  mouthAt = -10;
+  /** Reaching out to touch something (hug Bob, pull a plug, smear mud, drop a coin in a slot): since when, where. */
+  touchAt = -10; touchP = new THREE.Vector3();
+  /** Host: a short reach of the hooves / snout to a spot (the animation of an RMB "use"). */
+  touch(at: THREE.Vector3) { this.touchAt = this.now; this.touchP.copy(at); }
   input = emptyInput();
   yaw = 0;
   standing = false;
@@ -390,7 +406,7 @@ export class Pig implements Holdable {
 
     // facing: camera direction while moving (strafe), movement direction while sprinting
     const want = this.sprinting ? Math.atan2(this.vel.x, this.vel.z) : inp.yaw;
-    if (moving || this.held || this.chargeStart >= 0 || G.lobby) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
+    if (moving || this.held || this.handle || this.chargeStart >= 0 || G.lobby) this.yaw = dampAngle(this.yaw, want, this.sprinting ? 10 : 14, dt);
 
     // jump
     if (this.jumpBuf > 0 && this.coyote > 0) {
@@ -553,6 +569,7 @@ export class Pig implements Holdable {
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw), true);
     this.setVel.copy(this.vel);
     this.holdStep(dt);
+    this.handleStep(dt);
   }
 
   // ------------------------------------------------------------------ after physics: did something hit us?
@@ -818,10 +835,18 @@ export class Pig implements Holdable {
    */
   private grabStep(inp: PigInput) {
     if (inp.grabP && this.mode === 'normal') {
-      if (this.held) this.release(false);
-      else if (!this.cageLatchNear()) { const t = this.findGrabTarget(); if (t) this.grab(t); }
+      if (this.handle) this.letGo();
+      else if (this.held) this.release(false);
+      else if (!this.cageLatchNear()) {
+        // what's under the crosshair (in reach): a thing, a machine part, a dispenser
+        const t = HANDS.target(this);
+        if (t?.h) this.grab(t.h);
+        else if (t?.handle) this.takeHandle(t.handle);
+        else if (t?.disp) { const pr = t.disp.take(this, HANDS.aimGoal(this, v4)); if (pr) this.grab(pr); }
+      }
     }
-    if (inp.attackP && this.mode === 'normal' && !this.eating) {
+    this.tiltK = clamp(this.tiltK + (inp.tilt && this.held ? 2.2 : -3) * (1 / 60), 0, 1);
+    if (inp.attackP && this.mode === 'normal' && !this.eating && !this.handle) {
       if (this.held) this.chargeStart = this.now;
       else this.startHit();
     }
@@ -865,19 +890,25 @@ export class Pig implements Holdable {
     G.events.push({ type: 'weaponBroke', who: this, text: h.label });
   }
   /** At the cage latch / a closed gate's latch: RMB opens it there (lock-pick puzzle: game.ts), so the pig doesn't grab. */
-  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.loos.some((o: { boltNear(p: Pig): boolean }) => o.boltNear(this)) || G.uses.some((u) => u.near(this)); }
+  private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.uses.some((u) => u.near(this)); }
   charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - PIG.clickTime) / 0.9, 0, 1); }
 
+  /** Could this pig take hold of it at all (not counting distance)? */
+  canGrab(h: Holdable) {
+    if (h === this || (h as any).held === this) return false;
+    const coop = coopOf(h);
+    // heavy loot another pig is dragging: a second pig can take hold too
+    if (h.heldBy && !(coop && h.heldBy.kind === 'pig' && h.heldBy !== this && !(h as { helper?: unknown }).helper)) return false;
+    if (h.mass > PIG.dragMax && !coop) return false;
+    if ((h as Prop).noGrab?.()) return false;
+    return true;
+  }
   findGrabTarget(): Holdable | null {
     let best: Holdable | null = null, bestScore = Infinity;
     const f = this.forward;
     const reachY = this.standing ? 1.3 : 0.9;
     for (const h of G.holdables) {
-      if (h === this || (h as any).held === this) continue;
-      const coop = coopOf(h);
-      // heavy loot another pig is dragging: a second pig can take hold too
-      if (h.heldBy && !(coop && h.heldBy.kind === 'pig' && h.heldBy !== this && !(h as { helper?: unknown }).helper)) continue;
-      if (h.mass > PIG.dragMax && !coop) continue;
+      if (!this.canGrab(h)) continue;
       const p = h.body.translation();
       const dx = p.x - this.pos.x, dz = p.z - this.pos.z, dy = p.y - this.pos.y;
       const d = Math.hypot(dx, dz) - h.radius;
@@ -938,6 +969,8 @@ export class Pig implements Holdable {
 
   grab(h: Holdable) {
     const join = !!h.heldBy && coopOf(h);   // the second pig on a heavy thing
+    if ((h as Prop).dockedIn) HANDS.undock(h as Prop, this);   // out of its socket
+    this.tiltK = 0;
     this.held = h;
     { const hp = h.body.translation(); this.leash = Math.hypot(hp.x - this.pos.x, hp.z - this.pos.z); }
     if (join) (h as { helper?: unknown }).helper = this; else h.heldBy = this;
@@ -948,6 +981,23 @@ export class Pig implements Holdable {
     this.grip.attach(h.body, this.gripTarget(GRIP[this.standing ? 'two' : 'four'].hold, v1), h.kind === 'pig' ? SCRUFF : undefined);
     G.audio.play('bite', { pos: this.pos, vol: 0.7 });
     G.noise(this.pos, 4);
+  }
+
+  /** Take hold of a machine part (a crank, a spoon, a lever…): it follows my hoof along its path. */
+  takeHandle(hd: Handle) {
+    if (hd.heldBy && hd.heldBy !== this) return;
+    this.handle = hd; hd.heldBy = this; this.handleFar = 0;
+    G.audio.play('bite', { pos: this.pos, vol: 0.5, pitch: 1.4 });
+  }
+  letGo() { const hd = this.handle; if (!hd) return; if (hd.heldBy === this) hd.heldBy = null; this.handle = null; }
+  /** Host: the hoof works the handle; let go when it's out of reach (or I'm knocked over). */
+  private handleStep(dt: number) {
+    const hd = this.handle; if (!hd) return;
+    if (this.mode !== 'normal' || hd.heldBy !== this) { this.letGo(); return; }
+    hd.drive(HANDS.aimGoal(this, v1), this, dt);
+    const rr = HANDS.reach(this, v2), kd = hd.knob(v3).distanceTo(v2);
+    this.handleFar = kd > rr + 0.5 ? this.handleFar + dt : 0;
+    if (this.handleFar > 0.3) this.letGo();
   }
 
   release(thrown: boolean) {
@@ -994,11 +1044,18 @@ export class Pig implements Holdable {
     if (this.swingT >= 0) {
       const k = clamp(this.swingT / PIG.swing, 0, 1);
       out.lerpVectors(g.hold, g.wind, this.swingC).lerp(g.rel, k * k * (3 - 2 * k));
-    } else if (this.eatProp && this.eating) {   // bring the food to the mouth, chomp, back down
-      const e = (this.now - this.eatAt) / SNACK.eat, k = clamp(Math.min(e / 0.22, (1 - e) / 0.18), 0, 1);
+    } else if ((this.eatProp && this.eating) || this.now - this.mouthAt < MOUTH_T) {   // bring it to the mouth (eat / lick / light), back down
+      const e = this.eatProp && this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.mouthAt) / MOUTH_T, k = clamp(Math.min(e / 0.22, (1 - e) / 0.18), 0, 1);
       out.lerpVectors(g.hold, MOUTH[this.standing ? 'two' : 'four'], k * k * (3 - 2 * k));
-    } else if (this.punchT > 0) out.lerpVectors(g.hold, g.rel, Math.sin(this.punchT * Math.PI) * 1.2);   // bash / whack with it
-    else out.lerpVectors(g.hold, g.wind, this.held && this.held.mass > this.liftMax ? 0 : this.charge());
+    } else if (!this.held || this.held.mass > this.liftMax) out.copy(g.hold);   // heavy: dragged along in front
+    else {
+      // light: it goes where I aim (the crosshair, within reach); pulled back while winding up; a whack thrusts it out
+      HANDS.aimGoal(this, out);
+      const c = this.charge();
+      if (c > 0) out.lerp(this.gripTarget(v4.copy(g.wind), v4), c);
+      if (this.punchT > 0) out.addScaledVector(this.forward, Math.sin(this.punchT * Math.PI) * 0.45);
+      return out;
+    }
     return this.gripTarget(out, out);
   }
 
@@ -1006,11 +1063,20 @@ export class Pig implements Holdable {
   private holdStep(dt: number) {
     const h = this.held; if (!h) return;
     const swing = this.swingT >= 0, g = 20;
-    this.grip.drive(this.gripGoal(v1), this.body, h.mass, dt, {
+    const goal = this.gripGoal(v1);
+    // light props stay upright, facing where I face (R tips them over: pour); near a socket that takes them, the
+    // magnet pulls them in and turns them to fit
+    let qT: THREE.Quaternion | null = null;
+    if (h.kind === 'prop' && h.mass <= this.liftMax && !swing) {
+      qT = qHold.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw).multiply(qTilt.setFromAxisAngle(XAXIS, this.tiltK * 2.0));
+      if (this.charge() <= 0 && !this.eating && this.tiltK < 0.3) HANDS.magnet(this, h as Prop, goal, qT);
+    }
+    this.grip.drive(goal, this.body, h.mass, dt, {
       up: (this.liftMax * PIG.gripLift + Grip.MASS) * g * (swing ? 2.5 : 1),
       side: this.dragMax * g * PIG.gripDrag * (swing ? 1.6 : 1),
       kp: swing ? 24 : 12, react: this.grounded ? 0.25 : 0.8, g,
     });
+    if (qT) this.grip.orient(qT, h.mass < 8 ? 0.4 : 0.15);
     // lost grip: snagged on something / yanked away
     const coop = coopOf(h), alone = coop && !(h as { helper?: unknown }).helper;
     // heavy loot alone, pulling, and it doesn't budge for a second: you let go
@@ -1064,6 +1130,7 @@ export class Pig implements Holdable {
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000, this.leanZ);
     n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
     n.push(this.jailUntil, this.frozenUntil, this.flying ? 1 : 0, ...this.buzzState());
+    n.push(this.handle ? this.handle.id : -1, this.mouthAt, this.touchAt, Math.round(this.touchP.x * 100) / 100, Math.round(this.touchP.y * 100) / 100, Math.round(this.touchP.z * 100) / 100);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -1112,6 +1179,12 @@ export class Pig implements Holdable {
     if (n[41] !== undefined) { this.eatAt = n[41]; this.cigUntil = n[42]; this.puffAt = n[43]; SNACK_IDS.forEach((k, i) => (this.boostUntil[k] = n[44 + i])); }
     const j = 44 + SNACK_IDS.length;
     if (n[j] !== undefined) { this.jailUntil = n[j]; this.frozenUntil = n[j + 1]; this.netFly = n[j + 2] === 1; this.buzzApply(n, j + 3); }
+    if (n[j + 8] !== undefined) {
+      const hd = n[j + 8] >= 0 ? HANDS.handles[n[j + 8]] ?? null : null;
+      if (hd !== this.handle) { if (this.handle?.heldBy === this) this.handle.heldBy = null; this.handle = hd; if (hd) hd.heldBy = this; }
+      this.mouthAt = n[j + 9];
+      if (n[j + 10] !== undefined) { this.touchAt = n[j + 10]; this.touchP.set(n[j + 11], n[j + 12], n[j + 13]); }
+    }
   }
   /** Player side: the host's pig is flying (admin). */
   netFly = false;
@@ -1223,9 +1296,15 @@ export class Pig implements Holdable {
         hand.copy(ho.position).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
         hand.y += CENTER[this.shape];
       }
+    } else if (this.handle) {   // a machine part: the hoof / snout is on its knob
+      hand = this.handle.knob(this.handM).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
+      hand.y += CENTER[this.shape];
+    } else if (this.now - this.touchAt < 0.55) {   // reaching out to touch something, then back
+      hand = this.handM.copy(this.touchP).sub(r.position).applyQuaternion(this.tq2.copy(r.quaternion).invert());
+      hand.y += CENTER[this.shape];
     }
     this.visual.update({
-      limp, rel: this.relQ, hand, handW: this.held ? this.held.radius : 0,
+      limp, rel: this.relQ, hand, handW: this.held ? this.held.radius : this.handle ? 0.04 : 0,
       act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',
       actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
       cig: this.smoking, strong: this.boosted('spinach'),

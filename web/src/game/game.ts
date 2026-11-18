@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { step, owners, world } from '../core/physics';
+import { step, owners, world, raycast, L as L_ } from '../core/physics';
 import type { Input } from '../core/input';
 import type { Audio } from '../core/audio';
 import { Gfx } from '../render/gfx';
@@ -34,7 +34,7 @@ import { CamRig } from './camera';
 import { Hud } from './hud';
 import { Menu } from './menu';
 import { Lockpick } from './lockpick';
-import { Minigame } from './minigame';
+import { HANDS } from '../world/hands';
 import { FpHands } from './fpHands';
 import { Markers } from './markers';
 import { G, ADMIN } from './ctx';
@@ -81,8 +81,6 @@ export class Game {
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
   onLoadout?: () => void;
-  /** The station the mini-game is open on. */
-  private miniAt: import('../world/chain').Station | null = null;
   /** What the lock-pick puzzle is open on (the cage or a gate's padlock). */
   private pickOn: Gate | null = null;
   private acc = 0;
@@ -97,8 +95,6 @@ export class Game {
   private farmSpawns: THREE.Vector3[] = [];
   round!: Round;
   lockpick!: Lockpick;
-  /** Chain modes: the station mini-game on my screen. */
-  mini!: Minigame;
   /** Admin first-person test: the pig's arms on screen. */
   fpHands!: FpHands;
   markers!: Markers;
@@ -170,26 +166,17 @@ export class Game {
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
+    (window as any).__HANDS = HANDS;
     (window as any).__world = () => world;
     this.local.yaw = Math.PI;
     this.hud = new Hud();
     this.menu = new Menu(this);
     this.lockpick = new Lockpick();
-    this.mini = new Minigame();
+    HANDS.init(scene, this.farm.props);
     if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
     this.fpHands = new FpHands(this.gfx.camera);
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
-      if (this.mini.isOpen) {
-        if (b === 'attack' || b === 'jump') this.mini.press(); else if (b === 'grab') this.mini.close();
-        this.input.clearPresses();
-        return;
-      }
-      // RMB at a chain station (empty hooves): its mini-game on my screen; the result goes to the host as an act code
-      if (b === 'grab' && !this.local.held && G.chain && this.mode === 'play') {
-        const s = G.chain.useAt(this.local), steps = s?.steps(this.local);
-        if (s && steps) { this.mini.open(steps, G.chain.codeOf(s)); this.miniAt = s; this.input.clearPresses(); return; }
-      }
       if (this.lockpick.isOpen) {
         if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
@@ -208,7 +195,6 @@ export class Game {
       if (code === 'KeyH') this.hud.toggleHelp();
       if (code === 'KeyM') this.menu.toggleSound();
       if (code === 'KeyP') this.menu.cyclePreset();
-      if (code === 'KeyR' && this.input.held.size === 0 && G.net !== 'client') this.local.respawn();
     };
     if (new URLSearchParams(location.search).has('fp')) ADMIN.fp = true;   // admin test: first person from the URL
     const h = new URLSearchParams(location.search).get('hour');
@@ -269,10 +255,31 @@ export class Game {
       Object.assign(inp, emptyInput(), { yaw, pitch });
     }
     if (first && (lp.solved || lp.slips)) { inp.pickP = lp.solved; inp.pickFailP = lp.slips > 0; lp.solved = false; lp.slips = 0; }
-    if (this.mini.isOpen) { const yaw = inp.yaw, pitch = inp.pitch; Object.assign(inp, emptyInput(), { yaw, pitch }); }
-    if (first && this.mini.out) { inp.act = this.mini.out; this.mini.out = 0; }
+    this.aimInput(inp);
+    if (s) for (const k of ['ax', 'ay', 'az', 'reach', 'tilt'] as const) if (s[k] !== undefined) (inp as unknown as Record<string, unknown>)[k] = s[k];
     return inp;
   }
+  /**
+   * The crosshair (world/hands.ts: what I hold goes there, what I grab is picked there): from the camera through the
+   * middle of the screen to the first thing it meets (not my own pig / what I hold); the lobby: the mouse pointer.
+   * Sent as an offset from my pig (≤ 2.5 m: the host keeps it within reach).
+   */
+  private aimInput(inp: PigInput) {
+    const L = this.local, cam = this.gfx.camera;
+    if (this.mode === 'lobby') {
+      this.stage.floorAt(cam, this.input.mouseX, this.input.mouseY, this.aimP); this.aimP.y = L.pos.y + 0.3;
+    } else {
+      cam.getWorldDirection(this.aimD);
+      const held = L.held?.body;
+      const hit = raycast(cam.position, this.aimD, 40, L_.STATIC | L_.PROP | L_.PIG | L_.FARMER | L_.CRITTER, L.body, (c) => c.parent() !== held);
+      this.aimP.copy(cam.position).addScaledVector(this.aimD, hit ? hit.dist : this.cam.dist + 3);
+    }
+    const off = tmpV.copy(this.aimP).sub(L.pos);
+    if (off.length() > 2.5) off.setLength(2.5);
+    inp.ax = off.x; inp.ay = off.y; inp.az = off.z;
+    inp.reach = this.input.reach; inp.tilt = this.input.held.has('tilt');
+  }
+  private aimP = new THREE.Vector3(); private aimD = new THREE.Vector3();
 
   private fixed(withInput: boolean, first = false) {
     const host = this.net instanceof NetHost ? this.net : null;
@@ -342,7 +349,8 @@ export class Game {
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
     host?.endStep();
-    if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.act = 0; }
+    if (G.net !== 'client') HANDS.stepHost(FIXED);
+    if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; }
   }
 
   private handleEvents() {
@@ -460,7 +468,8 @@ export class Game {
     if (G.net === 'client') return;
     const cage = this.farm.cage;
     if (!cage.open) cage.setOpen(true, '');
-    for (const p of this.pigs) { if (p.heldBy) p.heldBy.release?.(false); }
+    for (const p of this.pigs) { if (p.heldBy) p.heldBy.release?.(false); p.letGo(); }
+    HANDS.reset();
     this.farmer?.resetRound(this.farm.farmerSpawn);
     for (const p of this.pigs) if (!p.absent) { if (p.out && !p.absent) p.outUntil = G.time; p.respawn(); }
     for (const p of this.pigs) { p.clearSnacks(); p.clearBuzz(); }
@@ -834,19 +843,14 @@ export class Game {
       if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !still || this.menu.blocking) pick.close();
       else pick.update(dt);
     }
-    const mini = this.mini;
-    if (mini.isOpen) {
-      const s = this.miniAt, L = this.local;
-      if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || this.menu.blocking || !s || L.held || Math.hypot(L.pos.x - s.at.x, L.pos.z - s.at.z) > s.r + 0.8) mini.close();
-      else mini.update(dt, this.input.lookX / this.input.sensitivity, this.input.lookY / this.input.sensitivity * (this.input.invertY ? -1 : 1), this.input.held.has('attack'));
-    }
     let alpha: number;
     if (this.net instanceof NetClient) {
       if (this.running) {
         const inp = this.menu.blocking ? emptyInput() : this.buildInput(true);
         this.predict(dt, inp);
         this.net.sendInput(inp, this.local.predicting ? this.local.pose() : null);
-        if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.act = 0; }   // test hook: a press is one frame
+        if (!this.local.predicting) this.local.input = inp;   // (the HUD's crosshair pick reads it)
+        if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; }   // test hook: a press is one frame
       }
       alpha = Math.max(0, this.net.frame(dt));
       this.carryAlong();
@@ -877,17 +881,20 @@ export class Game {
     this.farm.pumpkins?.render(dt);
     this.farm.winter?.render(dt);
     this.farm.chain?.render(dt);
+    HANDS.render(dt);
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;
-    const look = this.running && !this.menu.blocking && !this.mini.isOpen;
+    const look = this.running && !this.menu.blocking;
+    // working with the hooves (a light thing / a machine part): the camera looks a little past the pig, at the work
+    const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
     else if (ADMIN.fp) {
       // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen
       const eye = this.local.visual.rig.head.getWorldPosition(tmpV), f = this.local.forward;
       eye.addScaledVector(f, 0.12); eye.y += 0.08;
       this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
-    } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing);
+    } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing, work);
     const fp = ADMIN.fp && this.mode === 'play';
     this.local.visual.root.visible = !fp && !this.local.out;
     this.fpHands.update(dt, this.local, fp);
@@ -909,6 +916,7 @@ export class Game {
     if (this.fpsT > 0.5) { this.fps = this.frames / this.fpsT; this.frames = 0; this.fpsT = 0; }
     const goal = this.round.targetFor(this.local.held);
     this.hud.update(this.local, SETTINGS.fps ? this.fps : 0, goal ? t(('where.' + goal.where) as Key) : '');
+    this.hud.reticle(this.local, this.gfx.camera, this.mode === 'play' && !ADMIN.fp ? 1 : ADMIN.fp ? 2 : 0);
     if (G.net !== 'solo') this.hud.updateTags(this.pigs, this.local, this.gfx.camera);
     // caged: a lock pulses over the latch (that's where you pick it) instead of a sentence
     if (this.local.cage && !this.farm.cage.canPick(this.local)) this.hud.emote(this.farm.cage.latch, 'lock', 1.1, 0.5);

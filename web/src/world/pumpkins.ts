@@ -9,6 +9,7 @@ import type { DayNight, Lamp } from './daynight';
 import type { Prop } from './props';
 import type { Pig } from '../pig/pig';
 import type { BobJob } from '../farmer/farmer';
+import { lever, type Handle } from './hands';
 
 /**
  * Farm 4 — the pumpkin farm at night (host-authoritative, synced as one entity).
@@ -32,6 +33,7 @@ export const PUMPKIN = {
 
 const UP = new THREE.Vector3(0, 1, 0);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion(), s1 = new THREE.Vector3();
+const v3 = new THREE.Vector3(), q3 = new THREE.Quaternion();
 const c1 = new THREE.Color();
 const LIT = new THREE.Color(2.4, 1.45, 0.42), OUT = new THREE.Color(0.06, 0.03, 0.015);
 const GLOW = new THREE.Color(0.62, 0.32, 0.09);
@@ -260,11 +262,11 @@ export class Pumpkins {
 
   // network: catapult (yaw, last shot) + which lanterns are lit
   netState(n: number[], s: string[]) {
-    n.push(this.cat ? Math.round(this.cat.yaw * 1000) / 1000 : 0, this.cat ? Math.round(this.cat.fireT * 100) / 100 : -10);
+    n.push(this.cat ? Math.round(this.cat.yaw * 1000) / 1000 : 0, this.cat ? Math.round(this.cat.fireT * 100) / 100 : -10, this.cat ? Math.round(this.cat.release.v * 100) / 100 : 0);
     s.push(this.lanterns.map((l) => (l.lit ? '1' : '0')).join(''));
   }
   netApply(n: number[], s: string[]) {
-    if (n.length >= 2 && this.cat) { this.cat.setYaw(n[0]); this.cat.fireT = n[1]; }
+    if (n.length >= 2 && this.cat) { this.cat.setYaw(n[0]); this.cat.fireT = n[1]; if (n[2] !== undefined) this.cat.release.v = n[2]; }
     if (s[0] !== undefined) this.litKey = s[0];
   }
 }
@@ -289,6 +291,8 @@ export class Catapult {
   private payload: Holdable[] = [];
   private by: Pig | null = null;
   private turnT = -10;
+  /** The release lever: pull it back and it lets fly. */
+  release: Handle; private leverG: THREE.Group;
   /** Shots in the air (host): does one come down on Bob? */
   private flying: { o: Holdable; until: number }[] = [];
   readonly y0: number;
@@ -320,10 +324,15 @@ export class Catapult {
     mesh(new THREE.CylinderGeometry(0.62, 0.4, 0.34, 14), wood, 0, 0.12, -ARM, this.arm);                     // the basket (a tub…
     mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.04, 14), dark, 0, 0.27, -ARM, this.arm);                    // …with a dark inside)
     mesh(new THREE.TorusGeometry(0.62, 0.05, 6, 18), iron, 0, 0.29, -ARM, this.arm).rotation.x = Math.PI / 2;
-    // the release lever (red handle) on the right side
-    const lever = mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), dark, 1.02, 1.0, -0.6); lever.rotation.x = 0.35;
-    mesh(new THREE.SphereGeometry(0.11, 10, 8), red, 1.02, 1.38, -0.46);
+    // the release lever (red handle) on the right side: grab it and pull it back (a pivot: it becomes a bone and moves)
+    const lg = new THREE.Group(); lg.position.set(1.02, 0.62, -0.6); g.add(lg);
+    mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), dark, 0, 0.4, 0, lg);
+    mesh(new THREE.SphereGeometry(0.11, 10, 8), red, 0, 0.8, 0, lg);
+    this.leverG = lg;
     rigidSkin(g);
+    this.release = lever({ pivot: new THREE.Vector3(1.02, 0.62, -0.6), axis: new THREE.Vector3(1, 0, 0), arm: new THREE.Vector3(0, 0.8, 0), min: -0.9, max: 0.4, v: 0.35, icon: 'lever', speed: 3.5,
+      frame: () => ({ p: v3.set(this.x, this.y0, this.z), q: q3.setFromAxisAngle(UP, this.yaw) }),
+      moved: (v, p) => { if (v < -0.65 && this.ready) { this.fire(p); p.letGo(); } } });
     this.arm.rotation.x = COCKED;
     // colliders: the frame (the basket is open: things sit in it on the ground)
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, this.y0, z).setRotation(q1.setFromAxisAngle(UP, yaw)));
@@ -389,6 +398,7 @@ export class Catapult {
   /** Host: the release point of the swing: everything in the basket flies (aimed at Bob when he's about where it points). */
   step() {
     this.track();
+    if (!this.release.heldBy) this.release.v += (0.35 - this.release.v) * 0.1;   // springs back
     if (!this.launchAt || G.time < this.launchAt) return;
     this.launchAt = 0;
     G.audio.play('wood', { pos: v1.set(this.x, this.y0 + 2.5, this.z), vol: 1, pitch: 0.6 });

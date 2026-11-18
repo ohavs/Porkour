@@ -6,6 +6,7 @@ import { rigidSkin } from '../render/batch';
 import type { Pig } from '../pig/pig';
 import type { Prop } from './props';
 import type { BobJob } from '../farmer/farmer';
+import { slider, type Handle } from './hands';
 
 /**
  * Bob's outhouse = a breathing window (GDD: coffee, nap, phone call, toilet): a couple of times a round he walks
@@ -25,8 +26,6 @@ export const LOO = {
   ram: 0.62, punch: 0.3, impact: 170, drain: 0.07,
   /** Bob notices it tipped / its door off (m), waits this long first, fixes it in … s. */
   notice: 26, fixAfter: 5, fixTime: 6,
-  /** How close a pig must be to the bolt (m). */
-  boltR: 1.2,
   W: 1.2, H: 2.1,
 };
 
@@ -82,6 +81,12 @@ export class Outhouse {
     this.build();
     this.root.position.copy(this.base); this.root.quaternion.copy(this.q0);
     scene.add(this.root);
+    // the bolt: grab its little handle and slide it across (world/hands.ts) — only from outside, door shut, standing
+    this.root.updateMatrixWorld(true);
+    const ka = this.doorPivot.localToWorld(new THREE.Vector3(0.58, 1.1, 0.08)), kb = this.doorPivot.localToWorld(new THREE.Vector3(0.8, 1.1, 0.08));
+    this.boltH = slider({ a: ka, b: kb, icon: 'lock', speed: 3,
+      ready: (p) => this.boltSide(p),
+      moved: (v, _d, p) => { if (v > 0.75 && !this.bolted) this.setBolt(true, p); else if (v < 0.25 && this.bolted) this.setBolt(false, p); } });
     // physics: fixed while it stands (Bob's nav grid sees it), kinematic once it starts moving
     this.rb = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, y, z).setRotation({ x: this.q0.x, y: this.q0.y, z: this.q0.z, w: this.q0.w }));
     const c = world.createCollider(RAPIER.ColliderDesc.cuboid(LOO.W / 2 + 0.02, LOO.H / 2, LOO.W / 2 + 0.02).setTranslation(0, LOO.H / 2, 0)
@@ -167,11 +172,12 @@ export class Outhouse {
   get markPos() { return v2.copy(this.base).setY(this.base.y + (this.tip > 0 ? 1.5 : LOO.H + 0.4)); }
 
   // ================================================================== pigs (host)
-  /** At the bolt, outside the door (the HUD prompt, RMB = no grab here). */
-  boltNear(p: Pig) {
+  /** The bolt (a slider: grab it and slide it across). */
+  boltH: Handle;
+  /** Outside, in front of the door, the hut standing with its door shut: the bolt can be slid. */
+  private boltSide(p: Pig) {
     if (!this.upright || this.broken || this.door > 0.25 || p.out || p.cage || p.heldBy || p.mode !== 'normal') return false;
-    if ((p.pos.x - this.base.x) * this.front.x + (p.pos.z - this.base.z) * this.front.z < 0.3) return false;
-    return Math.hypot(p.pos.x - this.boltAt.x, p.pos.z - this.boltAt.z) < LOO.boltR && Math.abs(p.pos.y + 0.5 - this.boltAt.y) < 1.6;
+    return (p.pos.x - this.base.x) * this.front.x + (p.pos.z - this.base.z) * this.front.z > 0.3;
   }
   setBolt(on: boolean, by: Pig | null) {
     if (on === this.bolted) return;
@@ -305,12 +311,9 @@ export class Outhouse {
     const k = this.doorGoal > this.door ? 7 : 4.5, was = this.door;
     this.door += clamp(this.doorGoal - this.door, -k * dt, k * dt);
     if (was > 0.05 && this.door <= 0.05 && this.doorGoal === 0) { this.door = 0; G.audio.play('wood', { pos: this.doorstep, vol: 0.8, pitch: 1.3 }); }
-    // pigs at the bolt: RMB slides it (LMB = a headbutt on the door: Bob hears the knock)
-    for (const p of G.pigs as Pig[]) {
-      if (!this.boltNear(p)) continue;
-      const inp = p.input;
-      if (inp.grabP && !p.held) { this.setBolt(!this.bolted, p); break; }
-    }
+    // the bolt's handle follows the state when nobody holds it (Bob slides it back, bursts the door…)
+    if (!this.boltH.heldBy) this.boltH.v = this.bolted ? 1 : 0;
+    else if (!this.upright || this.broken || this.door > 0.25) this.boltH.heldBy.letGo();
   }
 
   /** New round: standing, door on, nobody inside. */
@@ -324,7 +327,8 @@ export class Outhouse {
   // ================================================================== network
   netState(n: number[]) {
     n.push(Math.round(this.tip * 1000) / 1000, this.tipIdx, Math.round(this.door * 100) / 100,
-      (this.bolted ? 1 : 0) | (this.broken ? 2 : 0) | (this.occupied ? 4 : 0), Math.round(this.rock * 100) / 100, this.bangs, Math.round(this.rockDir.x * 100) / 100, Math.round(this.rockDir.z * 100) / 100);
+      (this.bolted ? 1 : 0) | (this.broken ? 2 : 0) | (this.occupied ? 4 : 0), Math.round(this.rock * 100) / 100, this.bangs, Math.round(this.rockDir.x * 100) / 100, Math.round(this.rockDir.z * 100) / 100,
+      Math.round(this.boltH.v * 100) / 100);
   }
   netApply(n: number[]) {
     if (n.length < 6) return;
@@ -333,6 +337,7 @@ export class Outhouse {
     this.bolted = (n[3] & 1) !== 0; this.broken = (n[3] & 2) !== 0; this.occupied = (n[3] & 4) !== 0;
     this.rock = n[4]; this.bangs = n[5];
     if (n[6] !== undefined) this.rockDir.set(n[6], 0, n[7]);
+    if (n[8] !== undefined) this.boltH.v = n[8];
     if (moved) { if (this.tip > 0) this.kinematic(); this.placeBody(); }
   }
 
@@ -362,7 +367,7 @@ export class Outhouse {
       const rattle = this.occupied && this.bolted && this.joltT < 0.35 ? Math.sin(this.joltT * 50) * 0.05 : 0;
       this.doorPivot.rotation.set(0, -this.shownDoor - rattle, 0);
     }
-    this.bolt.position.x = this.bolted ? 0.86 : 0.64;
+    this.bolt.position.x = 0.64 + 0.22 * this.boltH.v;
   }
 }
 

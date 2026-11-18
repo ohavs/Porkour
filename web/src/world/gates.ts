@@ -285,7 +285,7 @@ export class Gate {
       if (this.state === 'locked' && inp.pickP) { this.unlock(p, 'pick'); break; }
       if (this.state === 'locked' && inp.pickFailP) { G.audio.play('metal', { pos: this.latch, vol: 0.9, pitch: 1.5 }); G.noise(this.latch, 12); }
       if (!this.atLatch(p)) continue;
-      if (this.state === 'shut' && ((inp.grabP && !p.held) || inp.attackP)) { this.unlatch(p); break; }
+      if (this.state === 'shut' && ((inp.grabP && !p.held) || inp.attackP)) { p.touch(this.latch); this.unlatch(p); break; }   // the hoof flips the latch
       if (this.state === 'locked') {
         const wpn = (p.held as { def?: { weapon?: number } } | null)?.def?.weapon ?? 0;
         if (inp.attackP && wpn) { this.whack(p); break; }

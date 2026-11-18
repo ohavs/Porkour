@@ -2,52 +2,37 @@ import * as THREE from 'three';
 import { G } from '../game/ctx';
 import { Prop, PROPS } from './props';
 import type { Pig } from '../pig/pig';
-import type { MiniStep } from '../game/minigame';
 import { IC, type IconId } from '../game/icons';
 import { makeVision } from './chainProps';
-import { staticBox } from '../core/physics';
+import { staticBox, staticCylinder } from '../core/physics';
 import { toonMat } from '../render/toon';
 import { V3 } from '../core/util';
 import type { Kit } from './farmKit';
+import { HANDS, lever, type Handle } from './hands';
 
 /**
  * Chain modes (user: "modes where the missions are very specific" — farm 6 = Bob grows cannabis, farm 7 = Bob grows
- * wheat): a production chain where every step is its own little game (Overcooked-style co-op: grow → harvest → haul
- * → process → craft → consume), then challenges that are hard to do high / drunk. The shared parts live here:
- *  - stations: a spot you use with RMB (a mini-game on your screen, game/minigame.ts → an input `act` code), and
- *    that takes ingredients you click at it (LMB with the thing in your hooves);
- *  - pools of item props (hidden until made);
+ * wheat): a production chain made of real actions with the hooves (user: "not mini-games: the pig physically takes the
+ * filter, the paper, puts the filter on the paper, pours the stuff in and rolls it" — world/hands.ts): grow → harvest
+ * → haul → process (crank a machine, stir a pot) → craft (pour, snap things together, roll) → consume; then challenges
+ * that are hard to do high / drunk. The shared parts live here:
+ *  - pools of item props (hidden until made), spawning / using up / swapping them;
+ *  - spots: what a work place still needs (HUD icons when you stand there);
  *  - visions (hallucinations only high / drunk pigs see: catch them), the balance beam over the pond,
  *    the challenges every chain mode shares (hug Bob, munchies, cloud gazing).
- * Host-authoritative like everything else: stations change only on the host; state reaches players in snapshots.
+ * Host-authoritative like everything else: state changes only on the host; players get it in snapshots.
  */
 /** Icons for a station's needs: ✔ when it has it, the icon (dim) + n/need otherwise. */
 export const need = (ic: IconId, have: number, of = 1) => `<span class="nd${have >= of ? ' ok' : ''}">${IC[ic]}${of > 1 ? `<b>${Math.min(have, of)}/${of}</b>` : have >= of ? '<b>✔</b>' : ''}</span>`;
 
-export interface Station {
-  idx: number;
-  at: THREE.Vector3; r: number; icon: IconId;
-  markPos: THREE.Vector3;
-  /** RMB can start it now (empty hooves; players read the synced state). */
-  ready(p: Pig): boolean;
-  /** Mini-game steps; null = instant (done on the RMB press, host). */
-  steps(p: Pig): MiniStep[] | null;
-  /** Host: the result came in (0 failed · 1..3 how well · 4 overdone). */
-  done(p: Pig, q: number): void;
-  /** Ingredients it takes with a click: the prompt's icon, or null. */
-  takes?(item: Prop, p: Pig): IconId | null;
-  /** Host: take the item (or one serving of it). */
-  take?(item: Prop, p: Pig): void;
-  /** HUD (no text): what it still needs / is doing, as icons + numbers. */
-  needs?(): string;
-}
-type StationDef = Omit<Station, 'idx'>;
+/** A work place (HUD: what it still needs, as icons, when you stand there; arrows point at markPos). */
+export interface Spot { at: THREE.Vector3; r: number; markPos: THREE.Vector3; needs(): string }
 
 const v1 = new THREE.Vector3();
 const flat = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export abstract class Chain {
-  stations: Station[] = [];
+  spots: Spot[] = [];
   private pools = new Map<string, Prop[]>();
   visions: Visions;
   beams: Beams;
@@ -63,12 +48,11 @@ export abstract class Chain {
     this.visions = new Visions(scene);
     this.beams = new Beams();
     G.chain = this;
-    G.uses.push({ near: (p: Pig) => !!this.useAt(p), icon: (p: Pig) => this.useAt(p)?.icon ?? 'question' });
     // hug Bob (high / drunk, right next to him)
     G.uses.push({ near: (p: Pig) => this.canHug(p), icon: () => 'heart' });
   }
 
-  station(def: StationDef): Station { const s = def as Station; s.idx = this.stations.length; this.stations.push(s); return s; }
+  spot(s: Spot) { this.spots.push(s); return s; }
 
   // ------------------------------------------------------------------ pools of items
   pool(kind: string, n: number) {
@@ -80,11 +64,11 @@ export abstract class Chain {
     this.pools.set(kind, list);
     return list;
   }
-  /** Host: a fresh item at a spot (null = the pool is used up). */
-  spawn(kind: string, at: THREE.Vector3, yaw = 0, kick?: THREE.Vector3) {
+  /** Host: a fresh item at a spot (null = the pool is used up). `left` = how much is in it (default: its servings). */
+  spawn(kind: string, at: THREE.Vector3, yaw = 0, kick?: THREE.Vector3, left?: number) {
     const pr = this.pools.get(kind)?.find((p) => p.banked) ?? null;
     if (!pr) return null;
-    pr.setLeft(pr.def.servings ?? 0); pr.worth = null;
+    pr.setLeft(left ?? pr.def.servings ?? 0); pr.worth = null;
     pr.unbank(at, yaw);
     if (kick) pr.body.setLinvel(kick, true);
     return pr;
@@ -93,61 +77,40 @@ export abstract class Chain {
   consume(pr: Prop) { if (pr.heldBy) pr.heldBy.release?.(false); if (pr.heldBy) pr.heldBy.release?.(false); pr.bank(); }
   /** Host: one serving of an item (a pinch from the bag, a pour from the can): gone when it was the last. */
   serve(pr: Prop) { pr.setLeft(pr.left - 1); if (pr.left <= 0) this.consume(pr); }
-  /** Host: one pour from a can / bucket (it stays, empty: refill it). */
-  pour(pr: Prop) { pr.setLeft(Math.max(0, pr.left - 1)); }
+  /**
+   * Host: an item turns into another (a tray of dough → cookies in the oven, an empty tray → a tray of dough): same
+   * place, same socket, the same pig keeps holding it.
+   */
+  swap(pr: Prop, kind: string, left?: number) {
+    const s = pr.dockedIn, holder = pr.heldBy?.kind === 'pig' ? pr.heldBy as Pig : null;
+    const t = pr.body.translation(), r = pr.body.rotation();
+    const q = new THREE.Quaternion(r.x, r.y, r.z, r.w), yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+    this.consume(pr);
+    const n = this.spawn(kind, V3(t.x, t.y - pr.half, t.z), yaw, undefined, left);
+    if (!n) return null;
+    if (s) HANDS.dock(s, n);
+    else if (holder && !holder.held) holder.grab(n);
+    return n;
+  }
   item(pr: unknown) { const p = pr as Prop | null; return p?.kind === 'prop' ? p.def.item ?? '' : ''; }
 
-  // ------------------------------------------------------------------ stations: RMB / clicks
-  /** The station this pig would start with RMB right now. */
-  useAt(p: Pig): Station | null {
-    if (p.held || p.out || p.cage || p.heldBy || p.mode !== 'normal') return null;
-    let best: Station | null = null, bd = Infinity;
-    for (const s of this.stations) { const d = flat(p.pos, s.at); if (d < s.r && d < bd && s.ready(p)) { bd = d; best = s; } }
-    return best;
-  }
-  /** HUD: what the nearest station still needs (icons), when there's nothing to do there right now. */
-  needsAt(p: Pig): string {
-    let best: Station | null = null, bd = Infinity;
-    for (const s of this.stations) { if (!s.needs) continue; const d = flat(p.pos, s.at); if (d < s.r + 0.5 && d < bd) { bd = d; best = s; } }
-    return best?.needs?.() ?? '';
-  }
-  /** The station that takes what this pig holds (a click puts it in), and its icon. */
-  takerOf(p: Pig): [Station, IconId] | null {
-    const h = p.held as Prop | null;
-    if (!h || h.kind !== 'prop') return null;
-    let best: [Station, IconId] | null = null, bd = Infinity;
-    for (const s of this.stations) {
-      if (!s.takes) continue;
-      const d = flat(p.pos, s.at); if (d > s.r + 0.8 || d > bd) continue;
-      const ic = s.takes(h, p); if (ic) { bd = d; best = [s, ic]; }
-    }
-    return best;
-  }
-  /** Host: a quick LMB click with an item in the hooves. True = handled (no hit). */
-  useItem(p: Pig, h: Prop): boolean {
-    const t = this.takerOf(p);
-    if (t) { t[0].take!(h, p); return true; }
-    return this.selfUse(p, h);
-  }
+  // ------------------------------------------------------------------ clicks with an item in the hooves
+  /** Host: a quick LMB click with an item in the hooves (eat, puff, lick, strike the lighter…). True = handled (no hit). */
+  useItem(p: Pig, h: Prop): boolean { return this.selfUse(p, h); }
   /** HUD: what a click with this item does here (icon), or ''. */
-  itemIcon(p: Pig): IconId | '' {
-    const t = this.takerOf(p);
-    if (t) return t[1];
-    return p.held ? this.selfIcon(p, p.held as Prop) : '';
-  }
-  /** Using an item on its own (smoke the joint, eat a cookie, water a plant, strike the lighter…). Host. */
+  itemIcon(p: Pig): IconId | '' { return p.held ? this.selfIcon(p, p.held as Prop) : ''; }
   protected abstract selfUse(p: Pig, h: Prop): boolean;
   protected abstract selfIcon(p: Pig, h: Prop): IconId | '';
-
-  /** Host: a player's mini-game result (input act code: 1 + station × 8 + result). */
-  act(p: Pig, code: number) {
-    const s = this.stations[(code - 1) >> 3], q = (code - 1) & 7;
-    if (s && flat(p.pos, s.at) < s.r + 1.5) s.done(p, q);
+  /** HUD: what the work place I stand at still needs (icons). */
+  needsAt(p: Pig): string {
+    let best: Spot | null = null, bd = Infinity;
+    for (const s of this.spots) { const d = flat(p.pos, s.at); if (d < s.r && d < bd) { bd = d; best = s; } }
+    return best?.needs() ?? '';
   }
-  /** Act code base of a station (the mini-game adds the result). */
-  codeOf(s: Station) { return 1 + s.idx * 8; }
+  /** Where a pig's snout is (bong mouthpieces, lighting up). */
+  snout(p: Pig, out: THREE.Vector3) { const f = p.forward; return out.set(p.pos.x + f.x * (p.standing ? 0.36 : 0.62), p.pos.y + (p.standing ? 0.6 : 0.26), p.pos.z + f.z * (p.standing ? 0.36 : 0.62)); }
 
-  // ------------------------------------------------------------------ shared challenges
+// ------------------------------------------------------------------ shared challenges
   private canHug(p: Pig) {
     const b = G.farmer;
     return p.buzz > 0.3 && !p.held && !!b && b.state !== 'off' && b.state !== 'away' && !b.carrying && b.visual.root.visible && flat(p.pos, b.pos) < 1.7;
@@ -156,13 +119,11 @@ export abstract class Chain {
   stepHost(dt: number) {
     for (const p of G.pigs as Pig[]) {
       if (p.absent || p.out) continue;
-      // RMB at a station without a mini-game / at Bob for a hug
-      if (p.input.grabP && !p.held) {
-        const s = this.useAt(p);
-        if (s && !s.steps(p)) s.done(p, 1);
-        else if (!s && this.canHug(p) && G.farmer?.hugged(p)) G.events.push({ type: 'hugBob', who: p });
+      // RMB right next to Bob (buzzed): a big hug (arms around him)
+      if (p.input.grabP && !p.held && !p.handle && this.canHug(p) && G.farmer?.hugged(p)) {
+        p.touch(v1.copy(G.farmer.pos).setY(G.farmer.pos.y + 0.9));
+        G.events.push({ type: 'hugBob', who: p });
       }
-      if (p.input.act) this.act(p, p.input.act);
       // cloud gazing: lie back (play dead) while buzzed for 6 s
       const g = p.buzz > 0.3 && p.mode === 'wallow' ? (this.gaze.get(p) ?? 0) + dt : 0;
       this.gaze.set(p, g);
@@ -176,6 +137,8 @@ export abstract class Chain {
   protected abstract tick(dt: number): void;
   /** New round. */
   reset() { this.visions.clear(); this.gaze.clear(); this.resetMode(); }
+  /** Where the arrows point for a spot (above it). */
+  protected markOf(s: Spot) { return s.markPos; }
   protected abstract resetMode(): void;
   /** Every frame, every browser. */
   abstract render(dt: number): void;
@@ -351,4 +314,67 @@ export function buildShed(kit: Kit, scene: THREE.Scene, cx: number, cz: number, 
   const r = { x0: cx - W / 2 - 1, x1: cx + W / 2 + 1, z0: cz - D / 2 - 1, z1: cz + D / 2 + 1 };
   G.terrain.noGrass(r); kit.blocked.push({ x0: r.x0 - 1.5, x1: r.x1 + 1.5, z0: r.z0 - 1.5, z1: r.z1 + 1.5 });
   return { place, y0: y0 + 0.2, yaw, g };
+}
+
+// ====================================================================== shared hands-on pieces
+/**
+ * Containers that fill up (watering cans / buckets under the pump, mugs under the tap): a receiver on each one, at
+ * its opening, while it stands upright and isn't full. `max` = how much it holds.
+ */
+export function fillable(props: Prop[], item: string, stuff: string, max: number, onFill?: (pr: Prop, amount: number) => void) {
+  for (const pr of props) {
+    if (pr.def.item !== item) continue;
+    HANDS.receiver({
+      r: Math.max(0.12, pr.radius * 0.9),
+      at: (out) => { const t = pr.body.translation(); return out.set(t.x, t.y + pr.half, t.z); },
+      accepts: (s) => s === stuff && !pr.banked && pr.left < max - 0.01 && HANDS.flow(pr) <= 0,
+      fill: (_s, a) => { pr.setLeft(Math.min(max, pr.left + a)); onFill?.(pr, a); },
+    });
+  }
+}
+
+/**
+ * The hand pump (both chain farms): pump the handle up and down (grab it, move the mouse up / down) — every push down
+ * gushes water out of the spout into whatever stands under it (a can / bucket parked on the stone under it, or held
+ * there). Faces +z rotated by `yaw`: the spout in front, the handle at the back (stand behind it).
+ */
+export class Pump {
+  lever: Handle; spout = new THREE.Vector3(); flowUntil = 0; private g: THREE.Group; private arm: THREE.Group;
+  constructor(kit: Kit, scene: THREE.Scene, x: number, z: number, yaw: number) {
+    const y = kit.y(x, z);
+    const g = this.g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = yaw; scene.add(g);
+    const iron = toonMat(0x3f8f5a), dk = toonMat(0x2b2b30), stone = toonMat(0x9a9fa8);
+    const mesh = (geo: THREE.BufferGeometry, m: THREE.Material, px: number, py: number, pz: number, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.rotation.x = rx; o.castShadow = true; g.add(o); return o; };
+    mesh(new THREE.CylinderGeometry(0.14, 0.18, 1.1, 10), iron, 0, 0.55, 0);
+    mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8), iron, 0, 0.85, 0.22, 1.2);
+    mesh(new THREE.CylinderGeometry(0.34, 0.38, 0.08, 12), stone, 0, 0.04, 0.55);   // the stone the can stands on
+    // the handle: a bar hinged on top, pointing back
+    this.arm = new THREE.Group(); this.arm.position.set(0, 1.12, -0.05); g.add(this.arm);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.62), dk); bar.position.z = -0.3; bar.castShadow = true; this.arm.add(bar);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), toonMat(0xc0453a)); knob.position.z = -0.6; this.arm.add(knob);
+    staticCylinder(V3(x, y + 0.55, z), 0.55, 0.2);
+    g.updateMatrixWorld(true);
+    this.spout.copy(g.localToWorld(V3(0, 0.74, 0.4)));
+    const pivot = g.localToWorld(V3(0, 1.12, -0.05)), axis = V3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+    const armV = V3(0, 0, -0.6).applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+    this.lever = lever({ pivot, axis, arm: armV, min: -0.55, max: 0.55, icon: 'water', speed: 6,
+      moved: (v, p) => {
+        // a push down (the handle's end goes down) gushes water
+        const dv = this.lastV - v; this.lastV = v;
+        if (dv <= 0) return;
+        this.flowUntil = G.time + 0.3;
+        HANDS.emit(this.spout, 'water', dv * 1.7, p);
+        G.audio.play('pour', { pos: this.spout, vol: 0.5, pitch: 1.2, minGap: 0.3 });
+      } });
+    // a can / bucket parked on the stone fills while you pump
+    HANDS.socket({ p: g.localToWorld(V3(0, 0.08, 0.5)), q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), on: null, r: 0.4, dock: true, anyYaw: true,
+      accepts: (it) => it.def.item === 'can' });
+    kit.blocked.push({ x0: x - 1, x1: x + 1, z0: z - 1, z1: z + 1 });
+  }
+  private lastV = 0;
+  reset() { this.lever.v = 0; this.lastV = 0; this.flowUntil = 0; }
+  render(dt: number) {
+    this.arm.rotation.x = this.lever.v;
+    if (this.flowUntil > G.time) HANDS.streamFx(this.spout, 0x7fd0ff, dt, 0.06);
+  }
 }

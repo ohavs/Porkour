@@ -229,11 +229,11 @@ export function decorKit(c: Ctx) {
 
   // ---------------------------------------------------------------- Bob's phone on a post by the porch (+ its jack) and the payphone by the road (world/phone.ts)
   const phone = (x: number, z: number, yaw: number, jx: number, jz: number) => {
-    (out.phones ??= new Phones(scene)).setWall(x, y(x, z), z, yaw, jx, y(jx, jz), jz);
+    (out.phones ??= new Phones(scene, out.props)).setWall(x, y(x, z), z, yaw, jx, y(jx, jz), jz);
     block(x, z, 0.5);
   };
   const payphone = (x: number, z: number, yaw: number) => {
-    (out.phones ??= new Phones(scene)).setPay(x, y(x, z), z, yaw);
+    (out.phones ??= new Phones(scene, out.props)).setPay(x, y(x, z), z, yaw);
     block(x, z, 0.7);
   };
 

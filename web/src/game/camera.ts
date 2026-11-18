@@ -10,6 +10,8 @@ export class CamRig {
   private cur = 4.8;
   private focus = new THREE.Vector3();
   private first = true;
+  /** Working with the hooves: the focus slides a little past the pig (0..1, smoothed). */
+  private workK = 0;
   constructor(public camera: THREE.PerspectiveCamera) {}
 
   /** Camera forward / right on the ground plane (for movement input). */
@@ -32,15 +34,18 @@ export class CamRig {
     this.first = true;   // back in third person: snap the orbit focus to the pig
   }
 
-  update(dt: number, lookX: number, lookY: number, target: THREE.Vector3, standing: boolean) {
+  update(dt: number, lookX: number, lookY: number, target: THREE.Vector3, standing: boolean, work = 0) {
     this.yaw -= lookX;
     this.pitch = clamp(this.pitch + lookY, -0.5, 1.25);
-    const fy = target.y + (standing ? 1.05 : 0.85);
-    if (this.first) { this.focus.set(target.x, fy, target.z); this.first = false; }
-    this.focus.x = damp(this.focus.x, target.x, 18, dt);
-    this.focus.z = damp(this.focus.z, target.z, 18, dt);
+    this.workK = damp(this.workK, work, 4, dt);
+    // working (something light in the hooves, a crank…): look a little past the pig so the crosshair is on the work
+    const wk = this.workK, ax = target.x + Math.sin(this.yaw) * 0.55 * wk, az = target.z + Math.cos(this.yaw) * 0.55 * wk;
+    const fy = target.y + (standing ? 1.05 : 0.85) + 0.12 * wk;
+    if (this.first) { this.focus.set(ax, fy, az); this.first = false; }
+    this.focus.x = damp(this.focus.x, ax, 18, dt);
+    this.focus.z = damp(this.focus.z, az, 18, dt);
     this.focus.y = damp(this.focus.y, fy, 9, dt);
-    const want = this.dist + (standing ? 0.4 : 0);
+    const want = (this.dist + (standing ? 0.4 : 0)) * (1 - 0.2 * wk);
     const dir = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
     const hit = raycast(this.focus, dir, want + 0.3, L.STATIC, undefined, (c) => owners.get(c.handle)?.kind !== 'cage');
     const d = hit ? Math.max(0.6, hit.dist - 0.3) : want;

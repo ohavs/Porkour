@@ -5,14 +5,18 @@ import { toonMat } from '../render/toon';
 import { rigidSkin } from '../render/batch';
 import type { Pig } from '../pig/pig';
 import type { BobJob } from '../farmer/farmer';
+import { Prop, PROPS } from './props';
+import { HANDS, slider, type Handle } from './hands';
 
 /**
  * Bob's telephone = another breathing window (GDD: coffee, nap, phone call, toilet). An old crank wall phone on a post
  * by his porch rings a few times a round: he hurries over and chats for a while, facing the box (his back to the farm,
  * a narrow view, glancing around now and then). Its wire runs along the ground to a jack on a stake: a pig that yanks
  * the plug mid-call cuts him off ("Hello? HELLO?!") — he rattles the hook, then storms off along the wire to look for
- * whoever did it. Down by the road gate there's a payphone: a pig drops a coin, Bob's phone rings, he comes running
- * (lured all the way to his porch) — oink into the line when he says "Hello?" and he's furious. Two prank calls and he
+ * whoever did it. Down by the road gate there's a payphone: a pig takes a coin from the cup, drops it in the slot (it
+ * clicks in), Bob's phone rings, he comes running (lured all the way to his porch) — take the handset off its hook,
+ * hold it to your snout and oink into the line when he says "Hello?" and he's furious (all with the hooves:
+ * world/hands.ts — pull the plug out of the jack, the coin into the slot, the handset to your ear). Two prank calls and he
  * stops falling for it: the next ring sends him straight to the payphone. One synced entity per farm (decor kit).
  */
 export const PHONE = {
@@ -30,8 +34,6 @@ export const PHONE = {
   wise: 2, wiseFor: 150,
   /** Cut off: he rattles the hook this long before he storms off. Plugging it back takes … s. Notices an unplugged jack (m). */
   rattle: 2.4, fixTime: 3, notice: 15, fixAfter: 4,
-  /** RMB reach at the jack / the payphone (m). */
-  near: 1.3,
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -95,9 +97,10 @@ export class Phones {
   private pranks = 0; private prankT = -999; private unplugT = -10;
   // ---- render-only
   private shownRings = 0; private shakeT = 9; private crankA = 0;
+  /** The jack's plug (pull it out / push it back in), the payphone's handset (to your snout), its coins. */
+  plugH: Handle | null = null; handset: Handle | null = null; private coins: Prop[] = [];
 
-  constructor(private scene: THREE.Scene) {
-    G.uses.push({ near: (p: Pig) => this.jackNear(p) || this.payNear(p), icon: (p: Pig) => (this.payNear(p) ? 'phone' : 'plug') });
+  constructor(private scene: THREE.Scene, private props: Prop[]) {
     G.jobs.push({ spot: (bob: BobLike) => this.jobFor(bob) });
     this.reset();
   }
@@ -120,6 +123,11 @@ export class Phones {
     const plugOut = jack.clone().addScaledVector(toPost, 0.5); plugOut.y = jy + 0.04;
     this.wall = { base, front, yaw, set, stand: base.clone().addScaledVector(front, 0.95), box: base.clone().add(v1.set(0, H_WALL * S, 0)).addScaledVector(front, 0.2 * S), jack, plugOut };
     staticCylinder(new THREE.Vector3(x, y + 1.1, z), 1.1, 0.12);
+    // the plug: grab it and yank it out of the jack (or push it back in)
+    const pin = jack.clone().add(v1.set(0, 0.56, 0)).addScaledVector(toPost, 0.08);
+    this.plugH = slider({ a: pin, b: plugOut.clone().setY(plugOut.y + 0.06), icon: 'plug', speed: 4,
+      ready: (p) => this.free(p),
+      moved: (v, _d, p) => { if (v > 0.7 && this.plugged) this.setPlug(false, p); else if (v < 0.2 && !this.plugged) this.setPlug(true, p); } });
   }
   /** The payphone by the road gate (a hooded box on a post). */
   setPay(x: number, y: number, z: number, yaw: number) {
@@ -128,6 +136,22 @@ export class Phones {
     const base = new THREE.Vector3(x, y, z);
     this.pay = { base, front, yaw, set, at: base.clone().addScaledVector(front, 0.85), box: base.clone().add(v1.set(0, H_PAY * S, 0)).addScaledVector(front, 0.2 * S) };
     staticBox(new THREE.Vector3(x, y + 1.1, z).addScaledVector(front, 0.08), new THREE.Vector3(0.36 * S, 1.1, 0.24 * S), yaw);
+    const L = (lx: number, ly: number, lz: number) => new THREE.Vector3(lx, ly, lz).multiplyScalar(S).applyAxisAngle(UP, yaw).add(base);
+    // a tin cup of coins on the post: take one (RMB) …
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.08, 12), M(0x9aa3ad)); cup.position.copy(L(0.25, H_PAY - 0.42, 0.22)); this.scene.add(cup);
+    for (let i = 0; i < 2; i++) { const c = new Prop(this.scene, PROPS.coin, new THREE.Vector3(x + i, -70, z), 0); c.pooled = true; c.bank(); this.props.push(c); this.coins.push(c); }
+    HANDS.dispenser({ at: cup.position.clone().setY(cup.position.y + 0.06), r: 0.08, icon: 'coin',
+      ready: () => this.payReady && this.coins.some((c) => c.banked),
+      take: (_p, at) => { const c = this.coins.find((k) => k.banked); if (!c) return null; c.unbank(at, yaw); return c; } });
+    // … and drop it in the slot (it clicks in)
+    HANDS.socket({ p: L(0.09, H_PAY + 0.17, 0.3), q: new THREE.Quaternion().setFromAxisAngle(UP, yaw), on: null, r: 0.22, dock: false,
+      accepts: (it) => it.def.item === 'coin' && this.payReady && !this.ring && !this.dialAt && this.caller < 0,
+      onSnap: (it, by) => { it.bank(); if (by) this.dialFrom(by); } });
+    // the handset: take it off its hook and it's at your snout (oink into it); its cord pulls it back if you walk off
+    const hook = set.hook;
+    this.handset = HANDS.handle<Handle>({ icon: 'phone', v: 0, kind: 'slide', ready: (p) => this.free(p),
+      knob(out) { const h = this.heldBy; if (!h) return out.copy(hook); const f = h.forward; return out.set(h.pos.x + f.x * 0.3, h.pos.y + (h.standing ? 0.55 : 0.3), h.pos.z + f.z * 0.3); },
+      drive() { /* it rides at the snout */ } });
   }
 
   /** An old crank phone: wooden box, two brass bells, a horn mouthpiece, the receiver on its hook (left), a crank (right). */
@@ -188,21 +212,11 @@ export class Phones {
   get jackMark() { return this.wall ? v2.copy(this.wall.jack).setY(this.wall.jack.y + 1.1) : null; }
   get payMark() { return this.pay ? v3.copy(this.pay.base).setY(this.pay.base.y + 2.6) : null; }
   get phoneMark() { return this.wall ? v2.copy(this.wall.base).setY(this.wall.base.y + 2.4) : null; }
-  private free(p: Pig) { return !p.out && !p.cage && !p.heldBy && !p.held && p.mode === 'normal'; }
-  jackNear(p: Pig) {
-    if (!this.wall || !this.free(p)) return false;
-    const j = this.wall.jack;
-    return Math.hypot(p.pos.x - j.x, p.pos.z - j.z) < PHONE.near && Math.abs(p.pos.y - j.y) < 1.4;
-  }
-  payNear(p: Pig) {
-    if (!this.pay || !this.free(p) || !this.payReady || this.ring || this.dialAt || this.caller >= 0) return false;
-    const a = this.pay.at;
-    return Math.hypot(p.pos.x - a.x, p.pos.z - a.z) < PHONE.near && Math.abs(p.pos.y - a.y) < 1.4;
-  }
-  /** HUD: this pig made the prank call and Bob is listening (F = oink into the line). */
+  private free(p: Pig) { return !p.out && !p.cage && !p.heldBy && p.mode === 'normal'; }
+  /** HUD: this pig made the prank call, holds the handset and Bob is listening (F = oink into the line). */
   oinkNow(p: Pig) {
     if (!this.listening || this.caller < 0 || G.pigs[this.caller] !== p || !this.pay) return false;
-    return Math.hypot(p.pos.x - this.pay.base.x, p.pos.z - this.pay.base.z) < PHONE.lineR;
+    return this.handset?.heldBy === p && Math.hypot(p.pos.x - this.pay.base.x, p.pos.z - this.pay.base.z) < PHONE.lineR;
   }
 
   // ================================================================== Bob (farmer.ts)
@@ -297,15 +311,12 @@ export class Phones {
       else { G.audio.play('static', { pos: this.pay!.box, vol: 0.6 }); this.caller = -1; }
     }
     if (!this.payReady && now > this.payAt && !this.ring && !this.off) this.payReady = true;
-    // pigs: RMB at the jack (pull the plug / put it back), at the payphone (drop a coin); F into the line
-    for (const p of G.pigs as Pig[]) {
-      const inp = p.input;
-      if (inp.grabP && !p.held) {
-        if (this.payNear(p)) { this.dialFrom(p); break; }
-        if (this.jackNear(p)) { this.setPlug(!this.plugged, p); break; }
-      }
-      if (inp.oinkP && this.oinkNow(p)) this.oinkThrough(p);
-    }
+    // pigs: F into the handset; the plug follows its state when nobody holds it (Bob plugs it back in);
+    // the handset's cord: walk off and it's yanked back onto its hook
+    for (const p of G.pigs as Pig[]) if (p.input.oinkP && this.oinkNow(p)) this.oinkThrough(p);
+    if (this.plugH && !this.plugH.heldBy) this.plugH.v = this.plugged ? 0 : 1;
+    const hs = this.handset?.heldBy;
+    if (hs && this.pay && Math.hypot(hs.pos.x - this.pay.base.x, hs.pos.z - this.pay.base.z) > PHONE.lineR + 0.6) { hs.letGo(); G.audio.play('clunk', { pos: this.pay.box, vol: 0.5, pitch: 1.4 }); }
   }
   /** Bob notices the jack hanging out (a farm job: he plugs it back in). */
   private jobFor(bob: BobLike): BobJob | null {
@@ -326,17 +337,19 @@ export class Phones {
     this.ring = 0; this.off = false; this.plugged = true; this.dead = false; this.listening = false; this.oinked = false;
     this.caller = -1; this.payReady = true; this.dialAt = 0; this.payAt = 0; this.pranks = 0; this.prankT = -999;
     this.nextCall = G.time + rand(PHONE.first);
+    if (this.plugH) this.plugH.v = 0;
   }
 
   // ================================================================== network
   netState(n: number[]) {
-    n.push(this.ring, (this.off ? 1 : 0) | (this.plugged ? 0 : 2) | (this.dead ? 4 : 0) | (this.listening ? 8 : 0) | (this.payReady ? 16 : 0), this.caller, this.rings);
+    n.push(this.ring, (this.off ? 1 : 0) | (this.plugged ? 0 : 2) | (this.dead ? 4 : 0) | (this.listening ? 8 : 0) | (this.payReady ? 16 : 0), this.caller, this.rings, Math.round((this.plugH?.v ?? 0) * 100) / 100);
   }
   netApply(n: number[]) {
     if (n.length < 4) return;
     this.ring = n[0];
     this.off = (n[1] & 1) !== 0; this.plugged = (n[1] & 2) === 0; this.dead = (n[1] & 4) !== 0; this.listening = (n[1] & 8) !== 0; this.payReady = (n[1] & 16) !== 0;
     this.caller = n[2]; this.rings = n[3];
+    if (n[4] !== undefined && this.plugH) this.plugH.v = n[4];
   }
 
   // ================================================================== render (every browser)
@@ -355,9 +368,10 @@ export class Phones {
       else { r.position.copy(w.set.hook); r.quaternion.setFromAxisAngle(UP, w.yaw); }
       this.stretchCord(w.set);
       // the jack's plug + the wire from the post's foot
-      const pp = this.plugged ? v1.copy(w.jack).add(v2.set(0, 0.56, 0)).addScaledVector(v3.subVectors(w.base, w.jack).setY(0).normalize(), 0.08) : v1.copy(w.plugOut);
+      const pk = this.plugH ? this.plugH.v : this.plugged ? 0 : 1;
+      const pp = this.plugH ? this.plugH.knob(v1) : v1.copy(w.plugOut);
       this.plug.position.copy(pp);
-      this.plug.rotation.set(this.plugged ? 0 : Math.PI / 2, Math.atan2(w.base.x - w.jack.x, w.base.z - w.jack.z), 0);
+      this.plug.rotation.set(Math.min(1, pk * 1.6) * Math.PI / 2, Math.atan2(w.base.x - w.jack.x, w.base.z - w.jack.z), 0);
       const foot = v2.copy(w.base).setY(w.base.y + 0.03);
       this.wire.position.copy(foot).add(pp).multiplyScalar(0.5);
       const len = foot.distanceTo(pp);
@@ -370,11 +384,10 @@ export class Phones {
       const dialing = this.caller >= 0 && !this.ring && !this.off;
       if (dialing) this.crankA -= dt * 14; else this.crankA *= Math.max(0, 1 - dt * 6);
       p.set.crank.rotation.x = this.crankA;
-      const r = p.set.recv, onLine = this.caller >= 0 && (dialing || this.ring === 2 || this.listening);
-      const pig = onLine ? G.pigs[this.caller] as Pig | undefined : undefined;
-      if (pig && Math.hypot(pig.pos.x - p.base.x, pig.pos.z - p.base.z) < PHONE.lineR) {
-        r.position.copy(p.set.hook).addScaledVector(p.front, 0.25).add(v1.set(0, -0.25, 0));
-        q1.setFromAxisAngle(v1.set(1, 0, 0), 0.9); r.quaternion.setFromAxisAngle(UP, p.yaw).multiply(q1);
+      const r = p.set.recv, pig = this.handset?.heldBy ?? null;
+      if (pig) {   // at the snout of the pig that took it off the hook
+        pig.visual.snoutPos(r.position); r.position.y += 0.08;
+        q1.setFromAxisAngle(v1.set(1, 0, 0), 0.6); r.quaternion.setFromAxisAngle(UP, pig.yaw + Math.PI / 2).multiply(q1);
       } else { r.position.copy(p.set.hook); r.quaternion.setFromAxisAngle(UP, p.yaw); }
       this.stretchCord(p.set);
     }

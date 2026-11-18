@@ -30,6 +30,11 @@ export const EN_X = {
   'a.brewFloor': '4 sheaves on the threshing floor', 'a.brewBeer': 'Barrel full of beer', 'a.brewMug': 'Mug of beer in front of me', 'a.brewDrunk': 'Make me drunk',
   'a.shed': 'Shed', 'a.field': 'Field', 'a.beam': 'Log over the pond',
   'e.smokeAlarm': 'Smoke alarm!',
+  // hands (session 18): tip / pour, reach, new items, admin
+  'help.tilt': 'Tip what you hold (pour)', 'help.reach': 'Reach further / back', 'key.wheel': 'Wheel',
+  'item.paper': 'Rolling paper', 'item.filter': 'Filter tip', 'item.cookPot': 'Pot', 'item.mixBowl': 'Mixing bowl', 'item.tray': 'Baking tray',
+  'item.coin': 'Coin', 'item.plug': 'Phone plug', 'item.handset': 'Handset',
+  'a.weedMat': 'Paper + filter + weed on the mat', 'a.weedPot': 'Butter + weed in the pot', 'a.brewWort': 'Wort ready in the kettle',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -58,4 +63,8 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.brewFloor': '4 gavillas en la era', 'a.brewBeer': 'Barril lleno de cerveza', 'a.brewMug': 'Jarra de cerveza delante de mí', 'a.brewDrunk': 'Emborráchame',
   'a.shed': 'Cobertizo', 'a.field': 'Campo', 'a.beam': 'Tronco del estanque',
   'e.smokeAlarm': '¡Alarma de humo!',
+  'help.tilt': 'Inclinar lo que llevas (verter)', 'help.reach': 'Estirarse más / volver', 'key.wheel': 'Rueda',
+  'item.paper': 'Papel de liar', 'item.filter': 'Filtro', 'item.cookPot': 'Olla', 'item.mixBowl': 'Bol de mezclar', 'item.tray': 'Bandeja de horno',
+  'item.coin': 'Moneda', 'item.plug': 'Clavija del teléfono', 'item.handset': 'Auricular',
+  'a.weedMat': 'Papel + filtro + hierba en la esterilla', 'a.weedPot': 'Mantequilla + hierba en la olla', 'a.brewWort': 'Mosto listo en el caldero',
 };

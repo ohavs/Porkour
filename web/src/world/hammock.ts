@@ -172,7 +172,7 @@ export class Hammock {
     }
     // pigs: a muddy hoof on his face
     for (const p of G.pigs as Pig[]) {
-      if (p.input.grabP && this.faceNear(p)) { (G.farmer as { mudFace?(p: Pig): void } | null)?.mudFace?.(p); break; }
+      if (p.input.grabP && this.faceNear(p)) { p.touch(this.headPos(v1)); (G.farmer as { mudFace?(p: Pig): void } | null)?.mudFace?.(p); break; }   // the hoof reaches to his face
     }
   }
   /** New round: still, empty. */

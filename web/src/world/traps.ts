@@ -3,16 +3,18 @@ import { G, ADMIN, ignored, type Carrier } from '../game/ctx';
 import { fitted } from '../core/assets';
 import { Grip } from '../core/grip';
 import type { Pig } from '../pig/pig';
+import { lever, type Handle } from './hands';
 
 /** Where a trap holds a pig: low on its back end (a hind leg), pig body space. */
 const LEG = new THREE.Vector3(0.1, -0.18, -0.32);
-export const TRAP = { slots: 4, r: 0.5, escape: 10, escapeMuddy: 6, sprungFor: 20, freeR: 1.4 };
+export const TRAP = { slots: 4, r: 0.5, escape: 10, escapeMuddy: 6, sprungFor: 20, pry: 1.1 };
 const v1 = new THREE.Vector3();
 
 /**
  * One bear trap (Quaternius Survival, CC0). Armed: the first pig that steps on it is snapped by a hind leg — a joint
  * holds the leg at the trap, the rest of the pig flails (ragdoll). It is a Carrier like Bob's hand or a wolf's jaw:
- * mash Space to wriggle out, or a teammate opens it (RMB / LMB next to it). The SNAP is loud and Bob knows where.
+ * mash Space to wriggle out, or a teammate pries the jaws open (grab the top jaw, pull it up: world/hands.ts). The SNAP
+ * is loud and Bob knows where.
  * A sprung trap lies there for a while, then Bob has collected it (gone). Throwing things on a trap sets it off.
  */
 export class BearTrap implements Carrier {
@@ -24,6 +26,8 @@ export class BearTrap implements Carrier {
   root = new THREE.Group();
   private open: THREE.Object3D; private shut: THREE.Object3D;
   private grip: Grip | null = null;
+  /** The top jaw: a teammate grabs it and pulls it up (≥ `TRAP.pry`) — the jaws spring open. */
+  jaw: Handle;
 
   constructor(scene: THREE.Scene, public index: number) {
     this.open = fitted('cover/BearTrap_Open', { width: 0.78 });
@@ -31,6 +35,13 @@ export class BearTrap implements Carrier {
     this.root.add(this.open, this.shut);
     this.root.visible = false;
     scene.add(this.root);
+    const frame = () => ({ p: this.pos, q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.yaw) });
+    this.jaw = lever({ pivot: new THREE.Vector3(0, 0.05, 0), axis: new THREE.Vector3(1, 0, 0), arm: new THREE.Vector3(0, 0.02, 0.2), min: 0, max: 1.4, icon: 'trap', speed: 2.2, frame,
+      ready: (q) => !!this.holding && q !== this.holding,
+      moved: (v, q) => {
+        G.audio.play('metal', { pos: this.pos, vol: 0.35, pitch: 1.6 + v * 0.3, minGap: 0.2 });
+        if (v >= TRAP.pry && this.holding) { const p = this.holding; this.release(false); q.letGo(); G.events.push({ type: 'trapFreed', who: p }); }
+      } });
   }
 
   escapeNeed(p: Pig) { return ADMIN.easyEscape && p === G.localPig ? 1 : p.muddy > 0 ? TRAP.escapeMuddy : TRAP.escape; }
@@ -67,7 +78,7 @@ export class BearTrap implements Carrier {
   /** The pig wriggled out / a teammate opened it / Bob took the pig. */
   release(_thrown: boolean) {
     const p = this.holding; if (!p) return;
-    this.holding = null;
+    this.holding = null; this.jaw.v = 0; this.jaw.heldBy?.letGo();
     this.grip?.detach();
     if (p.heldBy === this) {
       p.heldBy = null;
@@ -104,15 +115,8 @@ export class BearTrap implements Carrier {
       // the leg stays in the jaws; the pig flails around it (it can't get far, it can't be lifted away)
       this.grip!.drive(v1.copy(this.pos).setY(this.pos.y + 0.12), p.body, p.mass + 4, dt, { up: 260, side: 3000, kp: 20, react: 0, g: 20 });
       if (this.grip!.strain > 1.6) { p.body.setTranslation({ x: this.pos.x, y: this.pos.y + 0.5, z: this.pos.z }, true); this.grip!.attach(p.body, p.pos, LEG); }
-      // a teammate next to it opens the jaws (RMB or LMB)
-      for (const q of G.pigs as Pig[]) {
-        if (q === p || q.out || q.cage || q.heldBy) continue;
-        if ((q.input.grabP || q.input.attackP) && Math.hypot(q.pos.x - this.pos.x, q.pos.z - this.pos.z) < TRAP.freeR) {
-          this.release(false);
-          G.events.push({ type: 'trapFreed', who: p });
-          break;
-        }
-      }
+      // a teammate pries the jaws open (the jaw handle); let go and they spring shut again
+      if (!this.jaw.heldBy) this.jaw.v = Math.max(0, this.jaw.v - dt * 4);
       return;
     }
     if (G.time - this.sprungAt > TRAP.sprungFor) this.clear();   // Bob collected it
