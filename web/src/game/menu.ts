@@ -7,6 +7,7 @@ import { SVG } from './hud';
 import { online } from '../net/online';
 import { inviteLink } from '../net/lobby';
 import { level, xpForLevel, ownedOnly } from './shop';
+import { isOwner } from '../net/auth';
 import { FARM_IDS, farmId, reloadOnFarm, type FarmId } from '../world/farms';
 import { isFull, setFull, toggleFull, fullIcon, onFull } from './fullscreen';
 import { FLAGS } from './flags';
@@ -212,7 +213,10 @@ export class Menu {
 
   /** Admin tab (user: "simplify the admin menu"): one short page at a time. */
   private jailSecs = 60;
-  private aTab: 'me' | 'players' | 'bob' | 'world' | 'farm' | 'items' = 'me';
+  private aTab: 'me' | 'players' | 'bob' | 'world' | 'farm' | 'items' | 'owner' = 'me';
+  /** Owner tab: who's online (from the server). */
+  private users: { id: number; name: string; google: boolean; room: string; me: boolean }[] = [];
+  private usersHooked = false;
   private renderAdmin() {
     const g = this.game, f = g.farm;
     const tog = (k: keyof typeof ADMIN, label: Key) =>
@@ -225,7 +229,10 @@ export class Menu {
     const hasTp = (k: string) => f.places.tp.some((x) => x[0] === k);
     let crash = '';
     try { const c = JSON.parse(localStorage.getItem('porkour.crash') ?? 'null'); if (c) crash = `<div class="hint" style="color:#ffb38a">${t('a.crash')}<br>${new Date(c.at).toLocaleString()} · ${c.mins} min · heap ${c.heap} MB · geo ${c.geo} · tex ${c.tex} · ${c.fps} fps · ${c.preset} · ${c.net}${c.lost ? ' · GL lost' : ''}</div>`; } catch { /* */ }
-    const TABS: [typeof this.aTab, string, Key][] = [['me', '🐷', 'at.me'], ['players', '👥', 'at.players'], ['bob', '👨‍🌾', 'at.bob'], ['world', '🌦', 'at.world'], ['farm', '🏡', 'at.farm'], ['items', '🎁', 'at.items']];
+    const owner = isOwner() || !!online.me?.owner;
+    const TABS: [typeof this.aTab, string, Key][] = [['me', '🐷', 'at.me'], ['players', '👥', 'at.players'], ['bob', '👨‍🌾', 'at.bob'], ['world', '🌦', 'at.world'], ['farm', '🏡', 'at.farm'], ['items', '🎁', 'at.items'],
+      ...(owner ? [['owner', '👑', 'at.owner']] as [typeof this.aTab, string, Key][] : [])];
+    if (this.aTab === 'owner' && !owner) this.aTab = 'me';
     let body = '';
     switch (this.aTab) {
       case 'me':
@@ -273,6 +280,15 @@ export class Menu {
           (f.winter ? sec('a.farm5') + grid(btn('snowman:down', 'a.snowmanDown'), btn('snowman:bob', 'a.snowmanBob'), btn('bringSnowball', 'a.bringSnowball'), btn('bigball:me', 'a.bigBall'), btn('bob:ice', 'a.bobIce'), btn('snowcoat', 'a.snowCoat')) : '') +
           sec('a.pranks') + grid(btn('pick', 'a.pick'), hasTp('garden') ? `<button data-tp="garden">${t('a.tpGarden')}</button>` : '');
         break;
+      case 'owner': {
+        // the owner (the user's account): coins / a level for anyone online (they get it in their own wallet)
+        if (!this.usersHooked) { this.usersHooked = true; online.on('users', (m) => { this.users = m.users ?? []; if (ADMIN.open && this.aTab === 'owner') this.renderAdmin(); }); }
+        const rows = this.users.filter((u) => !u.me).map((u) => `<div class="prow"><span>${u.google ? '🟢 ' : ''}${u.name.replace(/[<>&]/g, '')}${u.room ? ` · <b>${u.room}</b>` : ''}</span>` +
+          `<div class="grid g3"><button data-gift="${u.id}:1000:0">+1 000 🪙</button><button data-gift="${u.id}:10000:0">+10 000 🪙</button><button data-gift="${u.id}:100000:0">+100 000 🪙</button><button data-gift="${u.id}:0:1">${t('a.giveLevel')}</button><button data-gift="${u.id}:0:10">+10 ⭐</button></div></div>`).join('');
+        body = `<div class="hint">${t('a.ownerHint')}</div>` + sec('a.users') + (online.connected ? rows || `<div class="hint">—</div>` : `<div class="hint">${t('net.noRooms')}</div>`) +
+          grid(`<button data-users="1">${t('a.refresh')}</button>`);
+        break;
+      }
       case 'items':
         body = sec('a.shop') + `<div class="grid"><button data-shop="coins">${t('a.coins')}</button><button data-shop="xp">${t('a.xp')}</button><button data-shop="reset">${t('a.shopReset')}</button></div>` +
           grid(btn('gadget:cherryBomb', 'a.giveBomb'), btn('gadget:stinkBomb', 'a.giveStink'), btn('gadget:bone', 'a.giveBone')) +
@@ -308,6 +324,9 @@ export class Menu {
       if (/^(mod:|alert:|jail:)/.test(b.dataset.a!)) this.renderAdmin();   // show what's on now
     }));
     this.admin.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) => b.addEventListener('click', () => g.adminAction('tp:' + b.dataset.tp)));
+    this.admin.querySelectorAll<HTMLElement>('[data-users]').forEach((b) => b.addEventListener('click', () => online.users()));
+    this.admin.querySelectorAll<HTMLElement>('[data-gift]').forEach((b) => b.addEventListener('click', () => { const [id, c, l] = b.dataset.gift!.split(':').map(Number); online.gift(id, c, l); }));
+    if (this.aTab === 'owner' && online.connected && !this.users.length) online.users();
     this.admin.querySelectorAll<HTMLElement>('[data-farm]').forEach((b) => b.addEventListener('click', () => {
       const f = b.dataset.farm as FarmId;
       if (f !== farmId()) { SETTINGS.farm = f; saveSettings(); reloadOnFarm(f, { admin: '1' }); }

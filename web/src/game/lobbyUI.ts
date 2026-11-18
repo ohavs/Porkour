@@ -6,6 +6,9 @@ import { IC, kc } from './icons';
 import { ICONS, SVG } from './hud';
 import { fullIcon, toggleFull, onFull } from './fullscreen';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from '../world/farms';
+import { online } from '../net/online';
+/** "Random" in a room: one of the regular farms (not the chain modes). */
+const RANDOM_FARMS = FARM_IDS.filter((f) => f !== 'farm6' && f !== 'farm7');
 import { profile } from '../net/auth';
 import { PLAYER_COLORS } from './game';
 
@@ -38,6 +41,8 @@ export class LobbyUI {
   el = document.getElementById('lobbyUI')!;
   private party = document.getElementById('lParty')!;
   private farmPick = false;
+  /** In a room as its host, still in the lobby: I choose the room's farm. */
+  private roomHost() { return online.isHost && online.room?.state === 'lobby'; }
 
   constructor(private h: LobbyHooks) {
     this.el.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => b.addEventListener('click', (e) => {
@@ -52,7 +57,15 @@ export class LobbyUI {
     document.getElementById('lFarm')!.addEventListener('click', (e) => {
       e.stopPropagation();
       const f = (e.target as HTMLElement).closest<HTMLElement>('[data-f]')?.dataset.f as FarmId | 'random' | undefined;
-      if (this.h.party() !== null) return;   // in a room: the room plays the host's farm
+      // in a room: the host picks the room's farm (every page reloads onto it, the room waits); players can't
+      if (this.h.party() !== null) {
+        if (!this.roomHost()) return;
+        if (!f) { this.farmPick = !this.farmPick; this.render(); return; }
+        const pick = f === 'random' ? RANDOM_FARMS[Math.floor(Math.random() * RANDOM_FARMS.length)] : f;
+        this.farmPick = false;
+        if (pick !== farmId()) online.setRoom({ farm: pick }); else this.render();
+        return;
+      }
       if (!f) { this.farmPick = !this.farmPick; this.render(); return; }
       SETTINGS.farm = f; saveSettings();
       if (f === 'random') { const q = new URLSearchParams(location.search); q.delete('farm'); location.href = location.pathname + (q.size ? '?' + q : ''); }
@@ -79,9 +92,9 @@ export class LobbyUI {
     this.icons();
     document.getElementById('tWallet')!.innerHTML = walletHtml();
     // farm card (click: pick another farm)
-    const cur = SETTINGS.farm === 'random' ? 'random' : farmId(), inRoom = this.h.party() !== null;
-    if (inRoom) this.farmPick = false;
-    document.getElementById('lFarm')!.classList.toggle('locked', inRoom);
+    const cur = SETTINGS.farm === 'random' ? 'random' : farmId(), inRoom = this.h.party() !== null, locked = inRoom && !this.roomHost();
+    if (locked) this.farmPick = false;
+    document.getElementById('lFarm')!.classList.toggle('locked', locked);
     document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${t('title.farm')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
       (this.farmPick ? `<div class="fpick">${[...FARM_IDS, 'random' as const].map((k) => `<button data-f="${k}" class="${k === cur ? 'on' : ''}">${FARM_ICON[k]}${t(('farm.' + k) as Key)}</button>`).join('')}</div>` : '');
     // the big button

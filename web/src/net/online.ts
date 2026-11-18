@@ -9,13 +9,25 @@ export interface RoomInfo { code: string; name: string; public: boolean; state: 
 type Handler = (m: any) => void;
 
 /**
+ * This browser tab's id (survives a reload of the tab, not shared with other tabs): when the page reloads onto the
+ * room's farm, the server swaps the tab's old connection out instead of seating a "clone" of the player.
+ */
+export function tabId() {
+  try {
+    let id = sessionStorage.getItem('porkour.tab');
+    if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('porkour.tab', id); }
+    return id;
+  } catch { return ''; }
+}
+
+/**
  * Connection to the Porkour server: identity, rooms, chat, and game data.
  * Game data goes peer-to-peer (WebRTC data channel, host ↔ each player) when the browsers can reach each other,
  * otherwise through the server (relay). Both paths are ordered + reliable, so the sync layer doesn't care which.
  */
 export class Online {
   ws: WebSocket | null = null;
-  me: { uid: string; name: string; picture: string; google: boolean } | null = null;
+  me: { uid: string; name: string; picture: string; google: boolean; owner?: boolean } | null = null;
   googleOnServer = false;
   room: RoomInfo | null = null;
   myId = 0; hostId = 0;
@@ -52,7 +64,7 @@ export class Online {
       this.ws = ws;
       const timer = setTimeout(() => { reject(new Error('timeout')); ws.close(); }, 75_000);   // free hosting wakes up slowly
       ws.onopen = () => {
-        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit });
+        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit, tab: tabId() });
       };
       ws.onmessage = (ev) => {
         if (typeof ev.data !== 'string') {
@@ -89,7 +101,11 @@ export class Online {
         this.room = m.room; this.myId = m.you; this.hostId = m.host;
         this.peers.clear(); for (const p of m.peers) this.peers.set(p.id, p);
         this.closeAllRtc();
-        if (!this.isHost) this.startRtc(this.hostId);
+        if (!this.isHost && this.hostId) this.startRtc(this.hostId);   // (0 = the host is reloading onto a new farm: wait for it)
+        break;
+      case 'host':   // the host is back (it switched farms)
+        this.hostId = m.id;
+        if (!this.isHost) { this.closeRtc(m.id); this.startRtc(m.id); }
         break;
       case 'room': this.room = m.room; break;
       case 'peer_join': this.peers.set(m.peer.id, m.peer); break;
@@ -107,12 +123,17 @@ export class Online {
   join(code: string) { this.send({ op: 'join', code }); }
   quick() { this.send({ op: 'quick', farm: farmId() }); }
   leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); }
-  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string }) { this.send({ op: 'room', ...m }); }
+  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string }) { this.send({ op: 'room', ...m }); }
   kick(id: number) { this.send({ op: 'kick', id }); }
   chat(text: string) { this.send({ op: 'chat', text }); }
   setOutfit(outfit: string) { this.send({ op: 'outfit', outfit }); }
   setName(name: string) { this.send({ op: 'name', name }); }
   close() { this.ws?.close(); }
+  /** Leaving this page (a reload onto another farm, closing the tab): out of the room at once, no lingering clone. */
+  bye() { if (this.room) this.send({ op: 'leave' }); this.ws?.close(); }
+  /** Owner: who's online / give coins + levels. */
+  users() { this.send({ op: 'users' }); }
+  gift(to: number, coins: number, levels = 0) { this.send({ op: 'gift', to, coins, levels }); }
 
   // ---------------------------------------------------------------- game data
   /** Send to one peer (or 0 = everyone else). Direct when possible, else through the server. */

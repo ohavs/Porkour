@@ -33,7 +33,11 @@ export function farmId(): FarmId {
 export function asFarm(x: unknown): FarmId | null { return isFarm(x) ? x : x === undefined || x === '' ? null : 'farm1'; }
 
 /** Reload the page on another farm (keeps an invite / lobby in the URL). */
+/** Called just before a reload (the online layer leaves its room cleanly). */
+let beforeReload: (() => void) | null = null;
+export const onBeforeReload = (f: () => void) => { beforeReload = f; };
 export function reloadOnFarm(id: FarmId, extra: Record<string, string> = {}) {
+  beforeReload?.();
   const q = new URLSearchParams(location.search);
   q.set('farm', id);
   for (const [k, v] of Object.entries(extra)) q.set(k, v);

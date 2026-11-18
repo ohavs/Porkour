@@ -61,23 +61,39 @@ Random farm + random modifier. Missions: **loot quota** (value carried to the hi
 1. Bob's family farm (the current world: barn, sty, house, garage, windmill, pasture) ← first.
 2. Orchard & beehives · 3. Dairy & cheese (bull!) · 4. Pumpkin farm at night · 5. Winter farm (ice).
 
+## Active hands (2026-11-18, user: "not mini-games — the pig physically takes the filter, the paper, puts the filter on the paper, pours the stuff in and rolls it; like Burglin' Gnomes / Grr Grr Gnomes: the hands reach out, the thing sticks to them, you move it and it snaps where it goes — everywhere in the game")
+- **Aim**: what you hold goes where your crosshair is (within reach); it stays upright and faces where you face.
+  **Mouse wheel** = reach further (arms stretch when standing, the neck stretches on four legs), back = normal.
+  **R** = tip what you hold (pour). RMB takes what the crosshair is on (a thing, a machine part, a dispenser).
+- **Snap points**: a ghost shows where the thing you hold goes (paper → the rolling mat, filter → the paper's end,
+  tray → the oven, coin → the payphone slot, bucket → under the pump…); close by the magnet pulls it in, click.
+- **Pouring**: containers tipped over an opening pour a stream into it (weed bag → paper / bong bowl / pot, watering
+  can → plants / bong, flour → bowl, pot of magic butter → bowl, bowl of dough → tray, bucket / malt → kettle).
+- **Machine parts** you take with your hoof and move: crank wheels (grinder, mill, cider press), stirring spoons /
+  paddle, levers (pump, oven door, kettle spigot, barrel tap, catapult release), sliders (outhouse bolt, phone plug,
+  rolling a paper). Lock-picking stays a mini-game (user: fine for doors).
+
 ## Chain modes (2026-11-18: user "modes where the missions are very specific")
 Built on Bob's family farm (his garden = the crop field, the greenhouse = the shed with a kitchen + machines, a pump by
-the field, a balance log over the duck pond). Overcooked-style co-op production chain where every step is its own
-little hands-on game (station mini-games on your own screen: crank, timing, hold, sprinkle, swipe, stir), then
-challenges that are hard to do high / drunk. Points for everything made fill the round's quota line.
-- **Cannabis farm (farm 6)**: water the plants (watering can, refill at the pump / pond; too much water = puddle, growth
-  stalls; Bob waters them too on his garden round) · plant seeds · harvest ripe ones (sickle = 3 buds, a headbutt = 2)
-  → wheelbarrow (drop buds in, push it to the shed — tip it and they spill) → grinder (crank: circle the mouse at the
-  right speed; too fast jams, loud) → bag of weed (3–4 pinches) → **joint**: fold the filter, sprinkle evenly, roll,
-  lick → light it with the lighter (strike it, bring the flame close; a friend can hold it) → puff ·
-  **bong**: water + a pinch, light, hold the breath in the band (too long = a coughing fit Bob hears) ·
-  **cookies**: butter + a pinch on the stove (stir, don't burn: smoke alarm) → magic butter + flour in the bowl (knead)
-  → tray in the oven → take it out golden (early = gooey + weak, late = burnt + smoke alarm) → cookies kick in late.
+the field, a balance log over the duck pond). Overcooked-style co-op production chain made of real actions with the
+hooves (see Active hands), then challenges that are hard to do high / drunk. Points for everything made fill the
+round's quota line.
+- **Cannabis farm (farm 6)**: water the plants (tip the watering can over them; fill it under the pump — pump the
+  handle — or dip it in the pond; too much water = puddle, growth stalls; Bob waters them too) · tip the seed bag over
+  an empty mound · harvest ripe ones (sickle = 3 buds, a headbutt = 2) → wheelbarrow → grinder (drop buds in the
+  hopper, turn the crank — too fast for too long jams, loud) → the bag under the chute fills (4 pinches) → **joint**:
+  a paper from the booklet onto the mat, a filter onto its end, tip the bag over it (not too little / much), take the
+  edge and push it away to roll, click = lick it shut → light it (strike the lighter, flame to its tip — a friend can
+  hold the flame, or lay it in the ashtray) → click = puff · **bong**: pour water in the top, tip a pinch into the
+  bowl, light the bowl, snout on the mouthpiece — the chamber fills, pull away in time (too long = coughing fit Bob
+  hears) · **cookies**: butter into the pot, tip weed in, stir with the spoon (stop and it burns: smoke alarm) → tip
+  the pot over the bowl + pour flour, stir → tip the bowl of dough over a tray → pull the oven door down, tray in, shut
+  it → golden (late = burnt + alarm) → cookies kick in late.
 - **Wheat & beer (farm 7)**: scythe the wheat → sheaves on the threshing floor → JUMP on them (a drum beats: stomps on
-  the beat count double; all pigs together = fast) → grain → malt mill (crank) → kettle over the fire pit: 2 water,
-  malt, logs on the fire → stir the mash (heat in the band) → 2 hops (shake the hop poles) → boils → roll the barrel
-  over, pour → ferments ~30 s → tap a mug (fill to the line, too much = foam) → drink (burps are loud).
+  the beat count double; all pigs together = fast) → grain sack → tip it into the mill's hopper, crank → malt sack →
+  kettle over the fire pit: 2 water (bucket from the pump), tip the malt in, throw logs on the fire, stir with the
+  paddle → drop 2 hops in (shake the hop poles) → boils → roll the barrel under the spigot (bung up), pull the lever
+  → ferments ~30 s → hold a mug under the tap, pull its lever (a full mug foams over) → drink (burps are loud).
 - **Buzzed**: high = colours shift / breathe, controls lag + drift, worse balance, giggly oinks; drunk = double vision,
   camera rolls, the pig lists to one side, left/right swap for a moment now and then. Cookies kick in after ~10 s.
 - **Challenges** (one required, more as bonus): walk the log over the pond on two legs (counter-steer: it leans

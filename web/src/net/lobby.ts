@@ -5,7 +5,9 @@ import { t, lang, onLang, type Key } from '../i18n';
 import { G } from '../game/ctx';
 import { SETTINGS, saveSettings } from '../game/settings';
 import type { Game } from '../game/game';
-import { asFarm, farmId, reloadOnFarm } from '../world/farms';
+import { asFarm, farmId, reloadOnFarm, onBeforeReload } from '../world/farms';
+import { receiveGift, ownerPerks } from '../game/shop';
+import { isOwner } from './auth';
 import { PLAYER_COLORS } from '../game/game';
 
 const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -34,6 +36,9 @@ export class Lobby {
   constructor(private game: Game, private opts: { start: () => void; wardrobe: () => void; outfit: () => string; onRoom: () => void }) {
     this.el = document.getElementById('lobby')!;
     online.on('*', (m) => this.onMsg(m));
+    // leaving this page (a reload onto the room's farm): out of the room first, so the server doesn't seat a clone
+    onBeforeReload(() => online.bye());
+    addEventListener('pagehide', () => online.bye());
     onProfile(() => this.onProfileChange());
     onLang(() => { if (this.isOpen) this.render(); });
   }
@@ -93,10 +98,23 @@ export class Lobby {
         else this.enterRoom();
         break;
       }
-      case 'room':
+      case 'room': {
+        // the host picked another farm: every page (the host's too) reloads onto it, straight back into the room
+        const rf = asFarm(online.room?.farm ?? '');
+        if (rf && rf !== farmId() && (this.preGame || this.inGame)) { g.hud.toast(t('net.switching'), 3); setTimeout(() => reloadOnFarm(rf, { room: online.room!.code }), 600); break; }
         if (online.room?.state === 'playing' && !this.inGame && !online.isHost) this.enterGame();
         else if (this.inRoom) this.opts.onRoom();
         break;
+      }
+      case 'welcome': if (m.you?.owner && ownerPerks()) this.opts.onRoom(); break;
+      case 'gift': {   // the owner gave me coins / levels
+        receiveGift(Number(m.coins) || 0, Number(m.levels) || 0);
+        g.hud.toast(`🎁 ${esc(String(m.from ?? ''))}: +${Number(m.coins) || 0} <i class="coin"></i>${m.levels ? ` · +${m.levels} ⭐` : ''}`, 4);
+        this.opts.onRoom();
+        break;
+      }
+      case 'gifted': g.hud.toast(`🎁 → ${esc(String(m.name ?? ''))}: +${m.coins} <i class="coin"></i>${m.levels ? ` · +${m.levels} ⭐` : ''}`, 2.5); break;
+      case 'host': if (online.isHost && this.preGame && g.net && 'needKey' in g.net) for (const id of online.peers.keys()) if (id !== online.myId) (g.net as { needKey: Set<number> }).needKey.add(id); break;
       case 'peer_join':
         if (this.inGame || this.preGame) { g.syncPeers(); if (online.isHost && g.net && 'needKey' in g.net) g.net.needKey.add(m.peer.id); }
         if (this.inGame) g.hud.toast(t('net.joined', { name: esc(m.peer.name) }), 1.6);

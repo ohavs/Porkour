@@ -177,10 +177,10 @@ class Hands {
     for (const h of G.holdables) {
       if (h === (p as unknown) || !p.canGrab(h)) continue;
       const t = h.body.translation();
-      consider({ h }, v1.set(t.x, t.y, t.z), h.radius * 0.8);
+      // (a thing sitting in its place counts as a little further: the spoon in the bowl wins over the bowl)
+      consider({ h }, v1.set(t.x, t.y, t.z), h.radius * 0.8 - ((h as Prop).dockedIn ? 0.15 : 0));
     }
-    // (a ready machine part wins over the pot / bowl it sits in: the spoon, not the bowl)
-    for (const hd of this.handles) if (!hd.heldBy && hd.ready(p)) consider({ handle: hd }, hd.knob(v1), 0.22);
+    for (const hd of this.handles) if (!hd.heldBy && hd.ready(p)) consider({ handle: hd }, hd.knob(v1), 0.05);
     for (const ds of this.dispensers) if (ds.ready(p)) consider({ disp: ds }, v1.copy(ds.at), ds.r);
     if (best) return best;
     // the crosshair is on something out of reach: nothing (the HUD shows the wheel: reach further) — else, nothing

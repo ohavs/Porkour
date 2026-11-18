@@ -738,7 +738,8 @@ export class Game {
     this.local.yaw = Math.PI;
     this.local.visual.setOutfit(SETTINGS.outfit ?? defaultOutfit());   // my seat's pig wears my outfit (a seat other than 1 had a random one)
     if (role === 'host') {
-      this.net = new NetHost(this, online);
+      const host = this.net = new NetHost(this, online);
+      for (const id of online.peers.keys()) if (id !== online.myId) host.needKey.add(id);   // (back from a farm switch: players already in the room)
       this.startBackgroundTicks();
     } else {
       this.wolves.clear();
@@ -825,7 +826,20 @@ export class Game {
     }
   }
 
+  /**
+   * One rendered frame. An exception in it must not stop the loop (the game would freeze — "it crashed"): it's
+   * logged (and counted in the crash heartbeat) and the next frame runs anyway.
+   */
   frame = () => {
+    try { this.frameInner(); } catch (e) {
+      this.frameErrors++;
+      if (this.frameErrors < 5) console.error('frame', e);
+      try { localStorage.setItem('porkour.lastError', String((e as Error)?.stack ?? e).slice(0, 600)); } catch { /* */ }
+      requestAnimationFrame(this.frame);
+    }
+  };
+  private frameErrors = 0;
+  private frameInner() {
     const nowMs = performance.now();
     // frame-rate limit (battery / hot laptops): skip screen refreshes until the next frame is due
     const cap = SETTINGS.gfx.fpsCap;
@@ -931,7 +945,7 @@ export class Game {
     if (this.running) this.gfx.updateDynRes(dt);
     if (this.gfx.slowFor >= 8 && !this.slowTip && SETTINGS.preset !== 'low') { this.slowTip = true; this.hud.toast(t('toast.slowTip'), 5); }
     requestAnimationFrame(this.frame);
-  };
+  }
 }
 
 export { THREE };

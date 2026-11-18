@@ -161,7 +161,7 @@ export class Brew extends Chain {
     HANDS.socket({ p: this.fireC.clone().setY(fy + 0.35), q: new THREE.Quaternion(), on: null, r: 1.15, dock: false, bin: true, ghost: false,
       accepts: (it) => it.def.item === 'log' && this.fuel < 200,
       onSnap: (it) => { this.fuel = Math.min(240, this.fuel + BREW.fuelLog); this.consume(it); G.audio.play('crackle', { pos: this.fireC, vol: 0.8 }); } });
-    this.paddle = crank({ c: this.kettleTop.clone().setY(this.kettleTop.y + 0.12), axis: V3(0, 1, 0), r: 0.24, icon: 'stir', max: 7,
+    this.paddle = crank({ c: this.kettleTop.clone().setY(this.kettleTop.y + 0.12), axis: V3(0, 1, 0), r: 0.18, icon: 'stir', max: 7,
       ready: () => this.stage === 0 && this.water >= 1.9 && this.malt >= 0.9 && this.fuel > 0,
       turn: (d) => {
         this.mash = Math.min(1, this.mash + Math.abs(d) / (Math.PI * 2) / BREW.mashTurns);

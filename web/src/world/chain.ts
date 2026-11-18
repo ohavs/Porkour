@@ -374,7 +374,7 @@ export class Pump {
         G.audio.play('pour', { pos: this.spout, vol: 0.5, pitch: 1.2, minGap: 0.3 });
       } });
     // a can / bucket parked on the stone fills while you pump
-    HANDS.socket({ p: g.localToWorld(V3(0, 0.08, 0.5)), q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), on: null, r: 0.4, dock: true, anyYaw: true,
+    HANDS.socket({ p: g.localToWorld(V3(0, 0.3, 0.5)), q: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw), on: null, r: 0.45, dock: true, anyYaw: true,
       accepts: (it) => it.def.item === 'can' });
     kit.blocked.push({ x0: x - 1, x1: x + 1, z0: z - 1, z1: z + 1 });
   }
