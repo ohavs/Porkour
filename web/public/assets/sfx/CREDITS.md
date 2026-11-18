@@ -17,15 +17,32 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | bird4.ogg | Veloren (DaforLynx), CC BY 4.0 |
 | bird5.ogg | Veloren (DaforLynx), CC BY 4.0 |
 | bite.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_down1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_down2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_down3.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | bob_huh.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_laugh.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_oof1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_oof2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_oof3.ogg | Battle for Wesnoth, GPL-2.0-or-later |
-| bob_oof4.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| bobv_byebye.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_comeonthen.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_coward.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_cutitout.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_hello.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_illgetyou.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_laugh.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_leavemealone.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_nooo.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_nutter.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ooff1.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ooff2.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ooff3.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_oops.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ow1.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ow2.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ow3.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_ow4.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_poisoncough.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_stupid.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_uh_oh.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_victory.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_watchit.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_yessir.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
+| bobv_youllregretthat.ogg | Hedgewars HillBilly voice pack v2 (sloan2189), GNU FDL 1.2 |
 | body1.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | body2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | body3.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |

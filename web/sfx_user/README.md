@@ -7,10 +7,9 @@ A file here with the name of an existing sound (e.g. `oink1.wav`) replaces it.
 | Name | What | Notes |
 |---|---|---|
 | `mower` | ride-on lawn mower engine | loopable, 5–10 s, steady idle/running |
-| `cough` | a man coughing (2–3 coughs) | Bob in a fart cloud |
+| `cough` | a pig-ish coughing fit (2–3 coughs) | a pig after a cigarette (Bob has his own cough now) |
 | `snore` | a man snoring (one breath) | Bob asleep |
 | `yawn` | a man yawning | Bob waking up / out of breath |
-| `bob_hey` | an angry farmer shouting "Hey!" / "Oi!" | Bob spots a pig |
 | `wolf_howl` | a wolf howling | night wolves |
 | `banjo` | a short cheerful banjo / fiddle jig | Bob's dance, 4–8 s |
 

@@ -94,7 +94,9 @@ Dead by Daylight, Party Animals.
   interior, weapons, buildings… — check it first for new content; `chibifire-stages/quaternius-stage` has every pack as .usda), repo art (Quaternius Farm Buildings FBX → GLB via `fbx2gltf`, Medieval kit) via `gltf-transform`.
   KayKit hats / capes are cut out of the character GLBs by `tools/extract_nodes.mjs`. Sounds: VoxeLibre (CC0 / MIT; rustle = mcl_sounds grass, CC BY 3.0), 0 A.D.
   (CC BY-SA 3.0), horse / donkey / sheep (VoxeLibre, CC BY 3.0 / CC0), Battle for Wesnoth (GPL-2+, replace before a commercial release), Veloren crickets/birds (CC BY 4.0), Minetest Game tnt fuse / bang (CC0), user's own
-  farts + music (`Assets/Audio`). Credits: `public/assets/sfx/CREDITS.md`. User drop-ins: `web/sfx_user/` → `fetch_sounds.sh`.
+  farts + music (`Assets/Audio`), CDDA CC-Sounds + AntumMT sounds (phone, clock, glass; CC0 / CC BY), **Bob's voice = Hedgewars "HillBilly"
+  voice pack (GNU FDL 1.2)**: `bob_hey` / `bob_grr` / `bob_insult` / `bob_win` / `bob_bye` / `bob_oops` / `bob_hello` / `bob_cough` + grunts / laugh;
+  `Farmer.voice()` plays one spoken line at a time (`LINES`, `lineUntil`; angry lines fall back to a grunt). Credits: `public/assets/sfx/CREDITS.md`. User drop-ins: `web/sfx_user/` → `fetch_sounds.sh`.
 
 ## Structure (`web/src`)
 | Path | What |
@@ -104,6 +106,7 @@ Dead by Daylight, Party Animals.
 | `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
 | `world/outhouse.ts` | **Bob's outhouse (s14)** — one per farm (decor kit `outhouse()` → `FarmBuild.loos`, `G.loos`, synced entity after the gates). Bob's toilet breaks (`LOO`): first ~70–120 s into the round, then every 150–210 s, taken between two chores (`nextChore`, not at night / market) → state `loo` (walks over) → `inLoo` (hidden like sleep, sees nothing ~18 s; a noise ≤14 m / a knock on the hut = he comes out within 5 s and looks there). Pigs: RMB at the **bolt** (outside, door side) slides it (LMB = headbutt = a knock) → he bangs (hut jolts, noise) then bursts the door off after 20 s and searches angrily (prank `looLock`). **Rocking** (`rock` 0..1: ram 0.62, headbutt / punch 0.3 × strength, thrown things by momentum) → at 1 it **tips** (kinematic body turns about a bottom edge, snapped to the hut's 4 sides): with Bob inside = prank `looTip` — door up / sideways: he's flung out (knock-down), onto its door: stuck banging 10 s, then heaves it back up. Bob fixes a tipped hut / missing door when he sees it (`G.jobs`, `bob.fixLoo`). Admin → "Outhouse & safe". |
 | `world/phone.ts`, `world/heavyLoot.ts` | **Bob's phone (s15)** = breathing window #2, one synced entity per farm (decor kit `phone(x, z, yaw, jx, jz)` + `payphone(x, z, yaw)` → `FarmBuild.phones`, `G.phones`). Old crank wall phone on a post by the porch: real calls (`PHONE.first` 110–160 s, then every 170–230 s, when `Farmer.phoneFree()`) ring (2 bursts / 3 s, ≤30 s) → Bob state `phone` (hurries over) → `onPhone` (16–24 s facing the box, view `phone` = narrow 12 m, glances over his shoulder every 6–10 s, hears only noises ≤9 m, `onPhoneHand` puts the receiver at his ear; coiled cord). Its wire runs to a **jack** on a stake: RMB there (`G.uses`) pulls the plug → mid-call = line dead (static) → he rattles the hook 2.4 s, then searches from the jack (prank `hangUp`); he plugs it back when he sees it (`G.jobs`). **Payphone** by the road gate: RMB = coin → after 1.6 s Bob's phone rings (prank call) → he answers "Hello?" for 7 s; the caller (≤3 m from the payphone) presses F = oink down the line (`phoneoink`) → furious (prank `prankCall`); 2 prank calls within 150 s = `wise`: the next prank ring sends him to the payphone. Payphone cooldown 40 s. **Heavy loot (s15)**: Bob's old TV (`tv`, 85 kg, 220 → 30 once the screen cracks: `PropDef.screen` 5.2 m/s or a punch, `Prop.crack()` / `broken`, synced) + the grandfather clock (`clock`, 110 kg, tall: topples when dragged hard (clang + noise); `HeavyLoot`: hands show `G.hour`, pendulum, ticking loop, BONG on every full hour (3 on 6 / 12) = noise 22 m wherever it is). Missions `hangUp` (bonus), `prankCall`, `tvSteal`, `clockSteal` (bonus) added per farm in `Round.start`. Admin → "Phone, TV & clock". |
+| `world/hammock.ts` | **Bob's siesta (s16)** = breathing window #3, farms 1–3 (decor kit `hammock(x, z, yaw)` → `FarmBuild.hammock`, `G.hammock`, synced entity after the phones). Once a round by day after `NAP.hour` 12.5–13.5 (between two chores) Bob walks over (`toHammock`) and naps ~28 s (`hammock`: body off, lies in the bed via `bobPose` + anim `hammock`, straw hat over his face, Zzz): blind, a noise ≤8 m wakes him after a groggy 1.2 s, noises made by shoving the hammock itself don't (`pushT`). Swing physics (`swing`/`omega`, k 9, damp 0.35): a ram on a post +3.6 rad/s, hits (`G.hittables`) +2.4 × strength (headbutt 0.6, punch 1) → past 1.05 rad he's flung out (`Farmer.hammockFlipped` = knock-down, then `afterStun` = angry search; prank `hammockFlip`): one ram, 2 punches or ~4–5 headbutts timed with the swing; swinging > 0.7 rad for 3 s rouses him. A muddy pig RMB at his head (`G.uses`, icon mud) = `Farmer.mudFace` → `mudMarks` 1–3 (mud spectacles, pig snout, whiskers on `FarmerVisual.setMud`; synced in Bob's numbers; 20 % he stirs and gets up 3 s later; prank `mudFace`). Admin → "Siesta (hammock)". |
 | `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
 | `i18n.ts` | `t(key, vars)`, `en` + `es` dictionaries (all UI text), `setLang`, `data-i18n` DOM attributes. |
@@ -191,7 +194,9 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    inside; 2 pranks), ✅ **heavy loot: Bob's safe** (two pigs drag it together, or one pig on spinach; bonus prank).
    Session 15: ✅ **Bob's phone** (calls = breathing window; unplug the jack mid-call; prank-call him from the payphone
    and oink), ✅ **more heavy loot**: old TV (screen cracks if dropped / hit) + grandfather clock (bongs every hour).
-   Next: user feedback; more breathing windows (coffee break / nap by day?), Bob voice lines (recordings needed).
+   Session 16: ✅ **Bob speaks** (hillbilly voice lines: chase, anger, insults, "Yessir" on a catch, "Bye bye" at the cage,
+   "Hello?" on the phone, his cough), ✅ **Bob's siesta** (hammock nap: flip him out, paint his face with mud).
+   Next: user feedback; ideas: Bob's coffee break / newspaper on the porch as a pranks spot, more heavy loot, a snoring recording.
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -320,9 +325,18 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   a spinach pig drags the clock ≈1.3 m/s (it topples) / the TV ≈1.2 m/s (no crack); 2 browsers online (player sees
   Bob on the phone, the player's RMB unplugs the jack on the host; the player's coin → prank ring → oink prompt → the
   player's F makes Bob furious; a cracked TV shows cracked on the player).
+- 2026-11-18 (session 16, "continue"): **Bob's voice** (Hedgewars HillBilly pack, GNU FDL 1.2; the Wesnoth old-man grunts
+  were replaced except the "huh" groan; no speech-to-text here, lines were picked by their Hedgewars event names) +
+  **Bob's siesta** (`hammock.ts`). Checked headless: Bob walks over and naps (lying in the striped hammock), 2 mud
+  smears from a muddy pig → marks on his face (seen on him once up), a sprint-ram into a post flips him out (down,
+  prank ticks), 5 headbutts timed with the swing flip him too, voice throttle (1 line, then grunts).
+  2 browsers online: the player sees Bob napping, the player's RMB mud smear lands (marks synced), the flip shows.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
+- Bob's new voice (hillbilly lines: "Come on then!", "Yessir!", "Bye bye!", insults): does it fit Bob? Too chatty?
+- Bob's siesta (hammock, once a round after lunch): fun? Flipping him out (one ram, or ~4 headbutts timed with the swing)
+  too easy / hard? Mud face-paint (wallow, then RMB at his head while he sleeps) fun / visible enough?
 - Bob's phone: does a call give a good breathing window (~every 3–4 min, 16–24 s, he glances back now and then)?
   Unplugging the jack mid-call fun? Prank call from the payphone + oink (F) fun? Is "after 2 prank calls he comes to the
   payphone" fair?
@@ -362,6 +376,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- Siesta: no hammock on farm 4 (night round) or farm 5 (winter); Bob's straw hat covers his face while he naps (the mud
+  marks show once he's up); Bob's mumbled phone chatter is a different (recorded) voice than his hillbilly lines.
 - Phone: a pig can stand at the jack while Bob is on the phone without him noticing if it's out of his narrow cone (by
   design); the payphone has no booth to hide in; Bob always knows where a prank call came from after the 2nd one.
   The tall clock topples as soon as it's dragged (then it's dragged lying down, silent: it ticks / swings only upright).

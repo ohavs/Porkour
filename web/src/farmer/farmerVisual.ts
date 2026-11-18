@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { rigidSkin } from '../render/batch';
 import { damp, clamp, dampAngle, wrapAngle } from '../core/util';
 import { G } from '../game/ctx';
+import { toonMat } from '../render/toon';
 import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
 
 export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
   | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
-  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone';
+  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone' | 'hammock';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
@@ -23,7 +24,7 @@ export interface FarmerPose {
 const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
 const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a);
 /** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
-const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone']);
+const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
@@ -49,10 +50,33 @@ export class FarmerVisual {
   private fxT = 0;
   private limpT = 0;
 
+  /** Mud on his face (a pig smeared it while he napped): spectacles, a pig snout, whiskers. Hidden until then. */
+  private mud: THREE.Object3D[] = [];
   constructor() {
     this.rig = buildFarmer(this.root);
+    this.buildMud();
     rigidSkin(this.root, new Set([this.rig.browL, this.rig.browR, this.rig.mouth]), new Set(this.rig.face.map((f) => f.mat)));   // one draw call instead of ~60
   }
+
+  private buildMud() {
+    const m = toonMat(0x5e3d22), dark = toonMat(0x3a2414), h = this.rig.head;
+    const part = () => { const g = new THREE.Group(); g.visible = false; h.add(g); this.mud.push(g); return g; };
+    const add = (g: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, p: [number, number, number], r: [number, number, number] = [0, 0, 0]) => {
+      const o = new THREE.Mesh(geo, mat); o.name = 'mud'; o.position.set(...p); o.rotation.set(...r); g.add(o); return o;
+    };
+    // 1) mud spectacles round his eyes + a bridge
+    const specs = part();
+    for (const s of [-1, 1]) add(specs, new THREE.TorusGeometry(0.068, 0.013, 6, 18), m, [s * 0.088, 0.235, 0.232]);
+    add(specs, new THREE.BoxGeometry(0.05, 0.016, 0.016), m, [0, 0.245, 0.262]);
+    // 2) a pig snout on his big nose (a mud disc + two nostrils)
+    const snout = part();
+    add(snout, new THREE.CylinderGeometry(0.065, 0.065, 0.02, 16), m, [0, 0.15, 0.33], [Math.PI / 2, 0, 0]);
+    for (const s of [-1, 1]) add(snout, new THREE.SphereGeometry(0.016, 8, 6), dark, [s * 0.024, 0.15, 0.342]);
+    // 3) cat whiskers on his cheeks
+    const wh = part();
+    for (const s of [-1, 1]) for (const k of [-1, 0, 1]) add(wh, new THREE.BoxGeometry(0.11, 0.011, 0.011), m, [s * 0.19, 0.12 + k * 0.025, 0.17], [0, -s * 0.5, s * k * 0.25]);
+  }
+  setMud(n: number) { this.mud.forEach((g, i) => { g.visible = i < n; }); }
 
   /** World position of the right hand (for particles). */
   hand(out: THREE.Vector3) { return this.rig.handR.getWorldPosition(out); }
@@ -159,6 +183,17 @@ export class FarmerVisual {
         T.rsx = -1.25; T.rsz = -0.75; T.rex = -2.35;
         T.lsz = 0.55 + Math.max(0, k) * 0.35; T.lsx = 0.15 - Math.max(0, k) * 0.6; T.lex = -1.5 + Math.max(0, k) * 0.7;
         T.headY = 0.12; T.lean = 0.02; T.roll = 0.06; T.hipY = Math.sin(t * 2.2) * 0.01;
+        break;
+      }
+      case 'hammock': {   // flat on his back (the root lies along the hammock), hands folded on his belly, snoring
+        const b = Math.sin(t * 1.6);
+        T.lsx = T.rsx = -0.75; T.lex = T.rex = -1.7; T.lsz = 0.45; T.rsz = -0.45;
+        T.ltx = T.rtx = 0.12; T.lkx = T.rkx = 0.12; T.headX = -0.2; T.headY = 0.25; T.lean = 0;
+        R.belly.scale.y += b * 0.05;
+        if (Math.random() < dt * 0.6) {
+          this.headPos(v1); v1.y += 0.35;
+          G.fx.bits(v1, { count: 1, color: 0xffffff, spread: 0.05, speed: 0.3, up: 0.6, life: 2, size: 0.14, grow: 0.12, drag: 0.5, alpha: 0.8 });
+        }
         break;
       }
       case 'lean':
@@ -333,7 +368,7 @@ export class FarmerVisual {
     R.browL.position.y = R.browR.position.y = 0.3 - ang * 0.02 + (p.anim === 'suspect' || p.anim === 'look' ? 0.025 : 0);
     R.mouth.scale.y = damp(R.mouth.scale.y, 0.012 + clamp(p.yell, 0, 1) * 0.05 + (p.anim === 'pant' || p.anim === 'cough' ? 0.035 : 0), 20, dt);
     if (t > this.blinkAt) this.blinkAt = t + 2 + Math.random() * 3;
-    const shut = p.anim === 'nap' || p.anim === 'down' || p.anim === 'cough' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
+    const shut = p.anim === 'nap' || p.anim === 'hammock' || p.anim === 'down' || p.anim === 'cough' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = damp(e.scale.y, shut, 30, dt);
     const green = p.anim === 'cough' ? 0.55 : 0, red = (p.fury ?? 0) * 0.42 * (0.85 + Math.sin(t * 5) * 0.15 * (p.fury ?? 0));
     for (const f of R.face) f.mat.color.copy(f.base).lerp(RED, red).lerp(GREEN, green);

@@ -16,7 +16,11 @@ export const SOUND_SETS: Record<string, string[]> = {
   punch: n('punch', 2), body: n('body', 3), slap: n('slap', 2), thud: n('thud', 3),
   wood: n('wood', 6), metal: n('metal', 4), squish: ['squish'],
   // Bob
-  bob_oof: n('bob_oof', 4), bob_down: n('bob_down', 3), bob_laugh: ['bob_laugh'], bob_huh: ['bob_huh'],
+  // Bob = a hillbilly farmer (Hedgewars HillBilly voice pack): grunts, lines (chase / anger / insults / caught you / bye-bye…)
+  bob_oof: ['bobv_ooff1', 'bobv_ooff2', 'bobv_ooff3', 'bobv_ow1', 'bobv_ow3', 'bobv_ow4'], bob_down: ['bobv_nooo', 'bobv_ow2'], bob_laugh: ['bobv_laugh'], bob_huh: ['bob_huh'],
+  bob_hey: ['bobv_comeonthen', 'bobv_watchit', 'bobv_illgetyou', 'bobv_cutitout'], bob_grr: ['bobv_youllregretthat', 'bobv_leavemealone', 'bobv_cutitout'],
+  bob_insult: ['bobv_stupid', 'bobv_coward', 'bobv_nutter'], bob_hello: ['bobv_hello'], bob_win: ['bobv_yessir', 'bobv_victory'], bob_bye: ['bobv_byebye'],
+  bob_oops: ['bobv_oops', 'bobv_uh_oh'], bob_cough: ['bobv_poisoncough'],
   // cage / grill / misc
   unlock: ['unlock'], creak: ['creak'], sizzle: ['sizzle'], crackle: ['crackle'], fanfare: ['fanfare'], coins: ['coins'],
   shot: n('shot', 2), snap: ['snap'], fuse: ['fuse'], bang: ['bang'],
@@ -39,7 +43,7 @@ export const SOUND_SETS: Record<string, string[]> = {
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */
-export const OPTIONAL = ['cough', 'snore', 'yawn', 'mower', 'bob_hey', 'bob_insult', 'wolf_howl', 'banjo'];
+export const OPTIONAL = ['cough', 'snore', 'yawn', 'mower', 'wolf_howl', 'banjo'];
 
 export function allFiles(): string[] {
   const s = new Set<string>();

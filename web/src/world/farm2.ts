@@ -186,6 +186,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     d.outhouse(-34, -26, Math.PI / 2);
     d.phone(6.4, -75.6, 0, 9.0, -72.6);
     d.payphone(-4.6, 9.0, Math.PI / 2);
+    d.hammock(-12.5, -67.9, Math.PI / 2);
     d.mailbox(5.2, 14.2);
     d.rocker(-10.2, -76.6, -8, -68);
     d.scarecrow(-24, -92, 0.2);
