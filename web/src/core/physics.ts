@@ -14,6 +14,9 @@ export const groups = (member: number, filter = ALL) => (member << 16) | filter;
 /** Colliders Bob's eyes ignore (rail fences: you can see through them). */
 export const SEE_THROUGH = new Set<number>();
 
+/** Colliders you walk ON (bridges, boardwalks, stepping stones): Bob's nav grid doesn't treat them as walls. */
+export const WALKABLE = new Set<number>();
+
 /** Anything a collider belongs to (pig, prop, critter…). */
 export const owners = new Map<number, any>();
 

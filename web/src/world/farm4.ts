@@ -8,6 +8,7 @@ import { decorKit } from './decor';
 import { coverKit } from './hideouts';
 import { farmKit, type FarmBuild, type FarmDef } from './farmKit';
 import { Pumpkins } from './pumpkins';
+import { swamp } from './swamp';
 import { G } from '../game/ctx';
 import type { MissionId } from '../game/round';
 
@@ -37,6 +38,11 @@ const GRAVES: Rect = { x0: 30, x1: 54, z0: -102, z1: -84 };
 const GIANT = { x: -12.5, z: -40 };
 const CATAPULT = { x: 14, z: -46 };
 const PORCH = { x: -6, z: -79.6 };   // the carving table
+/**
+ * The bog (east half, user: "the maps should differ more"): murky pools joined by channels, a boardwalk over them,
+ * stepping stones, dead trees, will-o'-wisps and mist at night, frogs and an owl.
+ */
+const BOG = [{ x: 36, z: -56, r: 4.5 }, { x: 42, z: -68, r: 4 }, { x: 46, z: -46, r: 3 }];
 
 const CHORES: Chore[] = [
   // dusk
@@ -95,6 +101,12 @@ function maze(cols: number, rows: number, rng: Rng) {
 export function buildFarm4(scene: THREE.Scene): FarmDef {
   const F = FARM4;
   const terrain = new Terrain(F);
+  terrain.waterTint = 0x4a6b45;
+  for (const b of BOG) terrain.river([[b.x, b.z]], b.r * 2, 0.75);
+  terrain.river([[36, -56], [39, -62], [42, -68]], 3, 0.6);
+  terrain.river([[42, -68], [49, -69.5], [56, -66], [68, -66]], 3, 0.6);
+  terrain.river([[36, -56], [41, -51], [46, -46]], 2.6, 0.6);
+  terrain.outside = { base: 1.2, amp: 6, freq: 0.02 };   // low, flat marshland all round
   // ---- ground paint (before terrain.build)
   const P = (pts: [number, number][], w = 3) => terrain.path(pts, w);
   P([[0, 22], [0, 2]], 4.5);                                        // road in from the south gate
@@ -132,7 +144,7 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
         coop: { x0: -34, x1: -22, z0: -8, z1: 4 }, sheepPen: null, pasture: null,
         stash: V3(41.5, t.height(41.5, 1), 1), roadGate: V3(0, t.height(0, 12.5), 12.5), dogPatrol: { x: 0, z: -44, r: 46 },
         tp: [['sty', 40, 1], ['cage', 14, -75], ['house', 0, -78], ['patch', -30, -36], ['giant', GIANT.x + 3, GIANT.z + 2], ['catapult', CATAPULT.x - 3, CATAPULT.z + 4],
-          ['maze', -56, -68], ['graves', 42, -80], ['pond', -40, -10], ['garden', 12, -96]],
+          ['maze', -56, -68], ['graves', 42, -80], ['bog', 30, -62], ['pond', -40, -10], ['garden', 12, -96]],
       },
       missions: MISSIONS,
       featured: FEATURED,
@@ -164,6 +176,14 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
     pen(garden, 'w', 2.4, undefined, 'garden');
     pen(GRAVES, 's', 2.6, 'halloween/fence');                             // the old family plot (iron railings)
     kit.outerFence();
+
+    // ---------------------------------------------------------------- the bog: a boardwalk over it, stepping stones, dead trees
+    kit.water.walkway([[25.6, -61], [32.4, -61.4], [38, -63.2], [42.4, -66.6], [46.4, -72.4], [51.6, -74.6]], { w: 1.7 });
+    kit.water.steppingStones([38.6, -48.6], [43.6, -53.6], 4);
+    for (const [m, x, z, h] of [['tree_dead_large', 31, -51, 6.5], ['tree_dead_medium', 48.6, -63, 4.6], ['tree_dead_small', 38, -73.6, 3.4],
+      ['tree_dead_medium', 52, -46.5, 4.4], ['tree_dead_large', 44.6, -58.4, 6]] as const) decor('halloween/' + m, x, z, { height: h, yaw: rng.range(0, 6.28), collide: 'trunk' });
+    blocked.push({ x0: 28, x1: 58, z0: -76, z1: -42 });
+    swamp(scene, t, out, { x0: 30, x1: 54, z0: -72, z1: -44 }, BOG, V3(31, y(31, -51) + 5, -51));
 
     // ---------------------------------------------------------------- the porch: Bob's carving table, pumpkins, lanterns
     const d = decorKit({ scene, t, rng, out, daynight, blocked, decor, prop, POND, F });
@@ -274,7 +294,7 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
 
     // ---------------------------------------------------------------- hiding spots
     const ck = coverKit({ scene, t, rng, out, blocked, forest, decor });
-    for (const [x, z] of [[-56, 10], [-53, 12.4], [56, -60], [57.6, -63], [10, -101.5], [56, -2], [57, 1], [-10, -30], [-12.4, -32], [24, -54],
+    for (const [x, z] of [[-56, 10], [-53, 12.4], [48, -78], [50, -80.4], [10, -101.5], [56, -2], [57, 1], [-10, -30], [-12.4, -32], [24, -54],
       [26, -56.4], [-56, -40], [-57, -43], [8, -26], [30, -44], [-2, -98], [-14, -84], [54, -76]] as [number, number][]) ck.bush(x, z);
     ck.baleStack(-8, -14, 0.2);
     ck.baleStack(26, -60, 1.1, 2);
@@ -283,7 +303,7 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
     ck.hard('cover/Logs', 46, 12, 1.2, 0.2);
     ck.hard('cover/Crate_Big_Stack2', 28, -20, 1.8, 0.3);
     ck.hard('cover/Bags', -18, -18, 0.95, 1);
-    ck.hard('cover/WoodLog', 34, -60, 0.9, 0.6);
+    ck.hard('cover/WoodLog', 26, -50, 0.9, 0.6);
     ck.hard('cover/Crate_Stack2', 10, 3, 1.5, -0.3);
     ck.hard('cover/MarketStand_2', 8, 12, 2.6, Math.PI);                    // pumpkin stand by the gate
     ck.hard('cover/Hay', -16, -48, 1.2, 0.4);

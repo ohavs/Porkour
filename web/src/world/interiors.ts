@@ -89,6 +89,13 @@ export class Interiors {
   lamps: Lamp[] = []; fridges: Fridge[] = []; washers: Washer[] = [];
   /** The toilets' seat numbers (getting up off one flushes it). */
   private toiletSeats = new Set<number>(); private sat = new Map<Pig, number>();
+  /** Seats on beds / bunks (mission: nap in Bob's bed). */
+  bedSeats = new Set<number>();
+  private cansOut = 0;
+  get hasToilet() { return this.toiletSeats.size > 0; }
+  /** Every piece + the building it came from (missions: drag furniture out, furniture in the water). */
+  pieces: { pr: Prop; home: { x: number; z: number; r: number }; x0: number; z0: number }[] = [];
+  private cur = { x: 0, z: 0, r: 0 };
   /** Furnished rooms (for the admin teleports / tests): centre + kind. */
   rooms: { x: number; z: number; model: string; pieces: number }[] = [];
 
@@ -122,6 +129,7 @@ export class Interiors {
   private furnish(N: Nav, reach: Uint8Array, b: { model: string; x: number; z: number; yaw: number; sx: number; sz: number }) {
     const cs = N.cell, cos = Math.cos(b.yaw), sin = Math.sin(b.yaw);
     const hx = b.sx / 2 - 0.2, hz = b.sz / 2 - 0.2;
+    this.cur = { x: b.x, z: b.z, r: Math.max(b.sx, b.sz) / 2 + 1.5 };
     const local = (x: number, z: number) => { const dx = x - b.x, dz = z - b.z; return [dx * cos - dz * sin, dx * sin + dz * cos]; };
     const inside = (x: number, z: number) => { const [lx, lz] = local(x, z); return Math.abs(lx) < hx && Math.abs(lz) < hz; };
     /** The wall band: between the room and just outside the footprint (walkable there = an opening, a door). */
@@ -254,6 +262,7 @@ export class Interiors {
     }
     const pr = new Prop(this.scene, def, v1.set(x, y, z), yaw);
     this.props.push(pr);
+    this.pieces.push({ pr, home: this.cur, x0: x, z0: z });
     // the pack's colours read too dark in a barn's shade: lighten / warm them a little (once per shared material)
     pr.obj.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.MeshToonMaterial | undefined;
@@ -262,8 +271,10 @@ export class Interiors {
     });
     const sz = pr.size;
     for (const [fx, h, fz, ly] of kd.seats ?? []) {
-      const sid = SEATS.onProp(pr, new THREE.Vector3(fx * sz.x, h - sz.y / 2, fz * sz.z), ly, h);
+      const bed = id === 'bed' || id === 'bedKing' || id === 'bunk';
+      const sid = SEATS.onProp(pr, new THREE.Vector3(fx * sz.x, h - sz.y / 2, fz * sz.z), ly, h, bed ? 1.75 : undefined);
       if (id === 'toilet') this.toiletSeats.add(sid);
+      if (bed) this.bedSeats.add(sid);
     }
     if (kd.use === 'lamp') {
       const mat = new THREE.MeshBasicMaterial({ color: 0x6b5a3a });
@@ -279,7 +290,7 @@ export class Interiors {
       this.fridges.push(fr);
       HANDS.dispenser({ at: new THREE.Vector3(), r: 0.5, icon: 'eat',
         ready: (p) => !fr.pr.banked && fr.cans.some((c) => c.banked) && this.frontOf(fr.pr, 0.5, p.pos) < 1.2,
-        take: (_p, at) => { const c = fr.cans.find((k) => k.banked); if (!c) return null; c.unbank(at, 0); G.audio.play('clunk', { pos: at, vol: 0.5, pitch: 1.3 }); return c; } });
+        take: (p, at) => { const c = fr.cans.find((k) => k.banked); if (!c) return null; c.unbank(at, 0); G.audio.play('clunk', { pos: at, vol: 0.5, pitch: 1.3 }); return c; } });
       // (the dispenser's spot follows the fridge: updated every step)
       (fr as Fridge & { disp?: unknown }).disp = HANDS.dispensers[HANDS.dispensers.length - 1];
     }
@@ -331,6 +342,10 @@ export class Interiors {
   step() {
     if (G.net === 'client') return;
     this.fridgeSpots();
+    // cans taken out of the fridges since the last step (the dispenser runs after the round reads this step's events)
+    let out = 0; for (const fr of this.fridges) for (const c of fr.cans) if (!c.banked) out++;
+    for (; this.cansOut < out; this.cansOut++) G.events.push({ type: 'fridge' });
+    this.cansOut = out;
     // RMB at a washing machine: a 6 s spin (it rattles about, loud)
     for (const p of G.pigs as Pig[]) {
       if (!p.input.grabP || p.held) continue;

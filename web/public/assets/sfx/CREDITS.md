@@ -79,6 +79,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | fill.ogg | VoxeLibre mcl_potions, CC0 |
 | fire.ogg | Dynamicell (freesound 17548) via VoxeLibre mcl_fire, CC BY 3.0 |
 | flint.ogg | Benboncan (freesound 66457) via VoxeLibre mcl_fire, CC BY 3.0 |
+| frog.ogg | Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown) |
 | fuse.ogg | TumeniNodes / theneedle.tv (freesound 316682) via Minetest Game, CC0 |
 | glass1.ogg | chewiesmissus (freesound 244238) via CDDA CC-Sounds, CC0 |
 | glass2.ogg | logant547 (freesound 677734) via CDDA CC-Sounds, CC0 |
@@ -116,6 +117,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | oink1.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT |
 | oink2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | oink3.ogg | VoxeLibre mobs_mc, CC0 |
+| owl.ogg | Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown) |
 | phoneoink.ogg | VoxeLibre (TenPlus1 mobs_animal), MIT (telephone-filtered) |
 | phonetalk1.ogg | sickfin (freesound 711358) via CDDA CC-Sounds, CC0 |
 | phonetalk2.ogg | SilentStrikeZ (freesound 389642) via CDDA CC-Sounds, CC0 |
@@ -130,6 +132,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | punch2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rain.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | ring.ogg | jorickhoofd (freesound 177875) via AntumMT sounds, CC BY 3.0 |
+| river.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | rooster.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | rustle1.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
 | rustle2.ogg | VoxeLibre mcl_sounds, CC BY 3.0 |
@@ -167,6 +170,7 @@ GPL-2.0-or-later (Battle for Wesnoth). Replace the GPL files before any closed-s
 | thunder2.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | tick.ogg | AntumDeluge (opengameart 16323) via AntumMT sounds, CC0 |
 | unlock.ogg | Battle for Wesnoth, GPL-2.0-or-later |
+| waterfall.ogg | 0 A.D. by Wildfire Games, CC BY-SA 3.0 |
 | whoosh1.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh2.ogg | Battle for Wesnoth, GPL-2.0-or-later |
 | whoosh3.ogg | Battle for Wesnoth, GPL-2.0-or-later |

@@ -45,8 +45,8 @@ import { HANDS } from '../world/hands';
 import { FpHands } from './fpHands';
 import { Markers } from './markers';
 import { G, ADMIN } from './ctx';
-import { SETTINGS } from './settings';
-import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST } from '../render/quality';
+import { SETTINGS, setPreset, saveSettings } from './settings';
+import { GRASS_LEVEL, LAMP_LIGHTS, DETAIL_DIST, PRESET_ORDER, presetOf, setTuned } from '../render/quality';
 import { cullDetail } from '../render/batch';
 import { t, type Key } from '../i18n';
 import type { IconId } from './icons';
@@ -60,7 +60,7 @@ const PRESSES = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'gra
 const tmpV = new THREE.Vector3();
 const NO_PRESSES = Object.fromEntries(PRESSES.map((k) => [k, false])) as Record<(typeof PRESSES)[number], false>;
 /** Events the round counts (each one = +1): only seen inside the fixed step, never again in handleEvents. */
-const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled', 'lanternOut', 'made', 'vision', 'munch']);
+const COUNTED = new Set(['smashed', 'splatBob', 'treeShaken', 'pressed', 'cowTipped', 'milkSpilled', 'lanternOut', 'made', 'vision', 'munch', 'fridge', 'flush']);
 
 export class Game {
   pigs: Pig[] = [];
@@ -107,6 +107,34 @@ export class Game {
   private frames = 0; private fpsT = 0; fps = 0;
   /** Frame-rate limit bookkeeping, small-detail draw distance, "lower the graphics" tip shown. */
   private nextDraw = 0; private detailDist = Infinity; private slowTip = false;
+  /** Auto graphics: frame-rate windows measured while playing (autoTune). */
+  private tune = { t: 0, n: 0, time: 0, low: 0, last: 0 };
+  /** Start measuring afresh (settings → "Test my PC"). */
+  retune() { this.tune = { t: 0, n: 0, time: 0, low: 0, last: 0 }; }
+  /**
+   * "Auto" graphics measured on this machine (user: "it has to run smooth and never get stuck — recommended
+   * settings?"): while playing on Auto, every 6 s window's real frame rate is checked (after 5 s for the shaders to
+   * settle); two slow windows in a row (or dynamic resolution stuck low) → one preset lower, kept for this device.
+   * Never steps up on its own (settings → "Test my PC" starts again from the graphics card's guess).
+   */
+  private autoTune() {
+    const s = this.tune, now = performance.now() / 1000, dt = s.last ? now - s.last : 0;   // real time (the frame's dt is capped)
+    s.last = now;
+    if (SETTINGS.preset !== 'auto' || this.mode !== 'play' || !this.running || document.hidden || dt <= 0 || dt > 1.5) return;   // (very slow frames count: that's the point)
+    s.t += dt;
+    if (s.t < 5) return;
+    s.n++; s.time += dt;
+    if (s.time < 6) return;
+    const fps = s.n / s.time; s.n = 0; s.time = 0;
+    const cur = presetOf('auto')!, i = PRESET_ORDER.indexOf(cur), cap = SETTINGS.gfx.fpsCap === 30 ? 30 : 60;
+    const slow = fps < cap * 0.7 || (this.gfx.dyn <= 0.65 && fps < cap * 0.9);
+    s.low = slow ? s.low + 1 : 0;
+    if (s.low >= 2 && i > 0) {
+      SETTINGS.tuned = PRESET_ORDER[i - 1]; setTuned(SETTINGS.tuned); setPreset('auto'); saveSettings(); this.applyGfx();
+      this.hud.toast(t('toast.tuned', { p: t(('g.' + SETTINGS.tuned) as Key) }), 2.4, '', 'gear');
+      this.retune();
+    } else if (SETTINGS.tuned !== cur && !slow) { SETTINGS.tuned = cur; setTuned(cur); saveSettings(); }   // runs fine: remember it
+  }
   running = false;
   /** 'lobby' = the menu stage (fixed camera, pigs play around), 'play' = the round on the farm. */
   mode: 'lobby' | 'play' = 'play';
@@ -140,6 +168,10 @@ export class Game {
     G.terrain = terrain;
     terrain.build(scene);
     this.farm = build(terrain, this.daynight);
+    {   // rivers / streams count as water everywhere a pond does (washes mud, pranks "into the water", no mines there)
+      const pond = this.farm.inWater;
+      if (terrain.waters.length) this.farm.inWater = (x, z) => pond(x, z) || terrain.waterAt(x, z) > 0.15;
+    }
     G.places = this.farm.places;
     // farm 4 plays at night: its own clock (dusk → dawn over a round)
     if (this.farm.clock) { G.secsPerHour = this.farm.clock.secsPerHour; this.daynight.setHour(this.farm.clock.start); }
@@ -1101,7 +1133,8 @@ export class Game {
     this.handleEvents();
     this.gfx.render(dt);
     if (this.running) this.gfx.updateDynRes(dt);
-    if (this.gfx.slowFor >= 8 && !this.slowTip && SETTINGS.preset !== 'low') { this.slowTip = true; this.hud.toast(t('toast.slowTip'), 5); }
+    this.autoTune();
+    if (this.gfx.slowFor >= 8 && !this.slowTip && SETTINGS.preset !== 'low' && SETTINGS.preset !== 'auto') { this.slowTip = true; this.hud.toast(t('toast.slowTip'), 5); }
     requestAnimationFrame(this.frame);
   }
 }

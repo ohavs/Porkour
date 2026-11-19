@@ -24,11 +24,14 @@ export const FARM3_MODELS = [
  * (east: tip the cows!) · the bull's paddock (north-east, a sturdy fence and a gate he can burst) · cheese hill
  * (north-west: a flat top where the cheese wheels dry in the sun + the prize cheese; push a wheel off the edge and it
  * rolls down the slope) · cheese house + creamery (south of the hill) · farmhouse (north, cage + BBQ by the porch) ·
- * garden behind the house · duck pond + windmill (west) · chicken pen · sheep pen (north-west corner).
+ * garden behind the house · duck pond + windmill (west) · chicken pen · sheep pen (north-west corner) · a river from the
+ * north fence past the farmhouse, then east between the bull's paddock and the pasture (a cart bridge, stepping stones).
  */
 export const FARM3: Rect = { x0: -60, x1: 60, z0: -104, z1: 16 };
 /** The bull's paddock. */
-const BULL_PEN: Rect = { x0: 28, x1: 56, z0: -98, z1: -68 };
+const BULL_PEN: Rect = { x0: 31, x1: 56, z0: -98, z1: -68 };
+/** The river: in from the north fence, down past the farmhouse, east between the bull's paddock and the pasture. */
+const RIVER: [number, number][] = [[19, -112], [19.5, -92], [21.5, -78], [24, -68.5], [32, -63.5], [46, -63], [70, -64]];
 const HILL = { x: -30, z: -62, r: 22, h: 6.5, flat: 5.5 };
 
 const CHORES: Chore[] = [
@@ -37,7 +40,7 @@ const CHORES: Chore[] = [
   { id: 'chickens', at: [-8, -17.6], look: [-8, -22], anim: 'feed', dur: 16, view: 'busy' },
   { id: 'mow', at: [0, 0], look: [0, 0], anim: 'ride', dur: 50, view: 'busy' },
   { id: 'cheese', at: [-27.6, -60.2], look: [-30, -63], anim: 'fix', dur: 18, view: 'busy' },
-  { id: 'bull', at: [25.8, -76], look: [30, -76], anim: 'pour', dur: 14, view: 'normal' },
+  { id: 'bull', at: [29, -77], look: [33, -77], anim: 'pour', dur: 14, view: 'normal' },
   { id: 'cows', at: [21.6, -30], look: [28, -30], anim: 'lean', dur: 14, view: 'normal' },
   { id: 'nap', at: [-24, -3.4], look: [-24, -8], anim: 'nap', dur: 26, view: 'nap' },
   { id: 'garden', at: [-9.4, -95], look: [-14, -95], anim: 'water', dur: 18, view: 'busy' },
@@ -50,7 +53,7 @@ const CHORES: Chore[] = [
   // evening: flashlight round
   { id: 'patrol', at: [-34, 2], look: [-42, 4], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
   { id: 'patrol', at: [20, -28], look: [34, -36], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
-  { id: 'patrol', at: [24, -70], look: [36, -82], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
+  { id: 'patrol', at: [28.5, -72.5], look: [38, -82], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
   { id: 'patrol', at: [-12, -52], look: [-26, -60], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
   { id: 'patrol', at: [-24, -24], look: [-34, -34], anim: 'look', dur: 5, view: 'flashlight', phase: 'evening' },
   // night
@@ -58,7 +61,7 @@ const CHORES: Chore[] = [
 ];
 
 /** Pranks that work here: the shared ones whose places / things exist + the dairy's own (featured). */
-const FEATURED: MissionId[] = ['bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip'];
+const FEATURED: MissionId[] = ['bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip', 'cheeseRiver'];
 const MISSIONS: MissionId[] = [...FEATURED, 'knockBob', 'staggerBob', 'fartBob', 'mugPond', 'catBath', 'lambStash', 'hensOut', 'wolfScare',
   'pumpkinWell', 'sheepOut', 'hayPond', 'loseBob', 'whackBob', 'henPond', 'smashPots', 'melonSmash', 'eggBob', 'gnomePond', 'undiesWell',
   'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak'];
@@ -67,6 +70,8 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
   const F = FARM3;
   const terrain = new Terrain(F);
   terrain.hill(HILL.x, HILL.z, HILL.r, HILL.h, HILL.flat);
+  terrain.river(RIVER, 5.5, 0.85);
+  terrain.outside = { base: 6, amp: 20, freq: 0.014 };   // a valley: steeper hills all round
   // ---- ground paint (before terrain.build)
   const P = (pts: [number, number][], w = 3) => terrain.path(pts, w);
   P([[0, 22], [0, 2]], 4.5);                                        // road in from the south gate
@@ -75,7 +80,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
   P([[2, -8], [8, -12], [12, -12]], 3);                             // yard → dairy barn
   P([[-2, -24], [-20, -28], [-34, -28]], 2.4);                      // lane → cheese house / creamery
   P([[3, -36], [20, -36], [24, -36]], 2.4);                         // lane → pasture gate
-  P([[2, -60], [16, -66], [26, -80]], 2.2);                         // lane → bull paddock
+  P([[2, -60], [12, -70], [16, -74.5]], 2.2); P([[28.5, -74], [29, -80]], 2);   // lane → the bridge → bull paddock
   P([[-14, -40], [-22, -50], [-26, -58]], 2);                       // the track up cheese hill
   P([[-4, -86], [-9, -95]], 2.2);                                   // house → garden
   terrain.dirt({ x0: -10, x1: 12, z0: -12, z1: 6 }, 3);             // yard
@@ -88,7 +93,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
   terrain.dirt({ x0: HILL.x - 4.5, x1: HILL.x + 4.5, z0: HILL.z - 4.5, z1: HILL.z + 4.5 }, 2);   // hilltop
   terrain.mud(-45, 4.5, 3, 2.2);                                    // the sty wallow
   terrain.mud(18, -42, 2.2, 1.6); terrain.mud(-6, -60, 2, 1.5); terrain.mud(48, -12, 2.4, 1.8);
-  terrain.mud(40, -60, 2.2, 1.6); terrain.mud(-50, -62, 1.8, 1.5); terrain.mud(36, -36, 2.5, 2);
+  terrain.mud(40, -48, 2.2, 1.6); terrain.mud(-50, -62, 1.8, 1.5); terrain.mud(36, -36, 2.5, 2);
   const POND = { x: -47, z: -22, r: 6 };
 
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
@@ -106,8 +111,8 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
         pond: POND, well: { x: 6, z: -40 },
         coop: { x0: -14, x1: -2, z0: -30, z1: -20 }, sheepPen: { x0: -58, x1: -46, z0: -100, z1: -88 }, pasture,
         stash: V3(-40.5, t.height(-40.5, 1), 1), roadGate: V3(0, t.height(0, 12.5), 12.5), dogPatrol: { x: 0, z: -44, r: 46 },
-        tp: [['sty', -42, 1], ['cage', 12, -76], ['house', -2, -80], ['dairy', 6, -12], ['pasture', 21, -34], ['bull', 25, -84],
-          ['hill', HILL.x, HILL.z + 3], ['cheese', -22, -27], ['pond', -40, -18], ['garden', -8, -94], ['mill', -52, -40]],
+        tp: [['sty', -42, 1], ['cage', 12, -76], ['house', -2, -80], ['dairy', 6, -12], ['pasture', 21, -34], ['bull', 29.5, -86],
+          ['hill', HILL.x, HILL.z + 3], ['river', 17, -82], ['cheese', -22, -27], ['pond', -40, -18], ['garden', -8, -94], ['mill', -52, -40]],
       },
       missions: MISSIONS,
       featured: FEATURED,
@@ -141,6 +146,12 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
     pen({ x0: -58, x1: -46, z0: -100, z1: -88 }, 'e', 2.6, 'kenney/fence_planks', 'sheep');
     kit.outerFence();
 
+    // ---------------------------------------------------------------- the river: Bob's cart bridge over to the bull's side,
+    // stepping stones up by the garden
+    kit.water.walkway([[15.6, -74.6], [28.4, -73.2]], { w: 2.8, arch: 0.7, rails: true });
+    kit.water.steppingStones([15.4, -97.4], [24.2, -96.4], 6);
+    blocked.push({ x0: 14, x1: 30, z0: -77, z1: -71 });
+
     // ---------------------------------------------------------------- the dairy: milking stand, churns, the creamery
     const d = decorKit({ scene, t, rng, out, daynight, blocked, decor, prop, POND, F });
     out.decor.push(new DecorAnimal(scene, 'cow', V3(8.6, y(8.6, -15.2), -15.2), Math.PI / 2, 1));   // the cow being milked
@@ -173,7 +184,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
     void hy;
 
     // ---------------------------------------------------------------- the bull's paddock
-    d.trough(31, -74, Math.PI / 2);
+    d.trough(34, -74, Math.PI / 2);
     decor('kenney/sign', 26.6, -88, { height: 1.1, yaw: Math.PI / 2 });                              // "beware of the bull"
     prop('redRag', 26.4, -89.2, 0.3);                                                                // hanging by the sign
     for (const [x, z] of [[46, -94], [52, -74]] as const) decor('kenney/rock_largeA', x, z, { height: 1.3, yaw: rng.range(0, 6), collide: 'box' });
@@ -187,7 +198,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
       G.cover.rect('crop', x0, x1, z0, z1, y((x0 + x1) / 2, (z0 + z1) / 2) - 0.3, 1.3);
       blocked.push({ x0, x1, z0, z1 });
     };
-    strip(30, 52, -66, -60); strip(10, 18, -54, -44); strip(-8, -2, -50, -38); strip(30, 38, -16, -8); strip(-56, -50, -86, -70);
+    strip(10, 18, -54, -44); strip(-8, -2, -50, -38); strip(30, 38, -16, -8); strip(-56, -50, -86, -70);
 
     // ---------------------------------------------------------------- garden rows (beds of crops)
     for (let i = 0; i < 4; i++) {
@@ -200,7 +211,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
     }
 
     // ---------------------------------------------------------------- dressing: lamps, pond, laundry, picnic table, outhouse…
-    d.lamps([[-8, -80], [4, 9], [-34.4, -2], [-6, -18], [8, -58], [-28, -24], [22, -36.6], [24, -80.6], [-4, 14.5], [12, -18]]);
+    d.lamps([[-8, -80], [4, 9], [-34.4, -2], [-6, -18], [8, -58], [-28, -24], [22, -36.6], [29, -71], [-4, 14.5], [12, -18], [14.6, -71.6]]);
     d.pond(POND);
     d.laundry(-18, -6, -78);
     d.picnic(17, -66, 0.3);
@@ -222,13 +233,13 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
 
     // ---------------------------------------------------------------- hiding spots
     const ck = coverKit({ scene, t, rng, out, blocked, forest, decor });
-    for (const cl of [[[-56, 10], [-53.4, 12]], [[56, -60], [57.6, -63]], [[-8, -100.5], [-5, -101.5]], [[-44, -82], [-42, -85]],
+    for (const cl of [[[-56, 10], [-53.4, 12]], [[-20, -44], [-22.4, -46]], [[-8, -100.5], [-5, -101.5]], [[-44, -82], [-42, -85]],
       [[18, 12], [21, 13.4]], [[-12, -46], [-14.6, -48]], [[22, -56], [20, -58.6]], [[56, -2], [57, 1]], [[-30, -88], [-33, -90]]] as [number, number][][])
       for (const [x, z] of cl) ck.bush(x, z);
     ck.baleStack(-22, -5.5, 0.1);              // in the hay shed
     ck.baleStack(-44, -40, 1.2, 2);
     ck.baleStack(14, -26, -0.4, 2);
-    ck.baleStack(44, -66.4, 0);
+    ck.baleStack(-48, -78, 0.4);
     ck.baleStack(-14, -60, 1.3, 2);            // at the foot of cheese hill
     ck.hard('cover/Logs', 46, 10.5, 1.2, 0.2);
     ck.hard('cover/Crate_Big_Stack2', 20.5, -18, 1.8, 0.3);
@@ -267,7 +278,7 @@ export function buildFarm3(scene: THREE.Scene): FarmDef {
     for (const [x, z] of [[-18.4, -91.4], [-15.8, -91.6]] as const) prop('melon', x, z);
     for (const [x, z] of [[-19, -97.6], [-12.4, -97.4], [-10.6, -86]] as const) prop('pumpkin', x, z);
     prop('bigPumpkin', -19.2, -93.4);
-    for (const [x, z] of [[-21.2, -10.6], [-26.4, -11.4], [-23.2, -12.2], [8.6, -24], [26.6, -60], [-40, -12]] as const) prop('hay', x, z);
+    for (const [x, z] of [[-21.2, -10.6], [-26.4, -11.4], [-23.2, -12.2], [8.6, -24], [22, -52], [-40, -12]] as const) prop('hay', x, z);
 
     // ---------------------------------------------------------------- animals
     const coop = V3(-11, y(-11, -27), -27);

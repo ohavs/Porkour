@@ -1,12 +1,14 @@
 import type { Outfit } from '../pig/cosmetics';
 import type { Save } from './saves';
-import { PRESETS, presetOf, type GfxOpts, type PresetChoice } from '../render/quality';
+import { PRESETS, presetOf, setTuned, type GfxOpts, type PresetChoice, type Preset } from '../render/quality';
 
 /** Player settings, saved in localStorage. */
 export const SETTINGS = {
   /** Graphics preset ("auto" = picked from the graphics card) and the options in use (edited → "custom"). */
   preset: 'auto' as PresetChoice,
   gfx: { ...PRESETS.high } as GfxOpts,
+  /** What "Auto" settled on after measuring this machine's frame rate (null = not measured yet: the GPU guess). */
+  tuned: null as Preset | null,
   sfx: 1, music: 0.6, ambience: 0.8,
   sens: 1, invertY: false, muted: false, fps: false,
   outfit: null as Outfit | null,
@@ -34,6 +36,7 @@ export function loadSettings() {
   } catch { /* private mode / bad json */ }
   const q = new URLSearchParams(location.search).get('q');
   if (q === 'low' || q === 'medium' || q === 'high' || q === 'ultra') SETTINGS.preset = q;
+  setTuned(SETTINGS.tuned);
   setPreset(SETTINGS.preset);
   return SETTINGS;
 }

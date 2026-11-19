@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RAPIER, world, L } from '../core/physics';
+import { RAPIER, world, L, WALKABLE } from '../core/physics';
 import type { Terrain, Rect } from '../world/terrain';
 
 /**
@@ -10,6 +10,8 @@ export class Nav {
   readonly cell = 0.5;
   x0: number; z0: number; w: number; h: number;
   blocked: Uint8Array;
+  /** Cells in a river / stream with no bridge deck over them: walkable, but Bob would rather cross on a bridge. */
+  wet: Uint8Array;
   private g: Float32Array; private f: Float32Array; private from: Int32Array; private stamp: Uint32Array; private closed: Uint32Array;
   private gen = 1;
 
@@ -18,6 +20,7 @@ export class Nav {
     this.w = Math.ceil((area.x1 - area.x0) / this.cell); this.h = Math.ceil((area.z1 - area.z0) / this.cell);
     const n = this.w * this.h;
     this.blocked = new Uint8Array(n);
+    this.wet = new Uint8Array(n);
     this.g = new Float32Array(n); this.f = new Float32Array(n); this.from = new Int32Array(n);
     this.stamp = new Uint32Array(n); this.closed = new Uint32Array(n);
     this.rasterize(radius);
@@ -41,9 +44,11 @@ export class Nav {
       }
     };
     const local = (lx: number, ly: number, lz: number) => { p.set(lx, ly, lz).applyQuaternion(q).add(t); mark(p.x, p.y, p.z); };
+    const decks: RAPIER.Collider[] = [];
     const steps = (len: number) => Math.max(1, Math.ceil(len / 0.2));
     world.forEachCollider((c) => {
       if (c.handle === ground.handle || !c.parent()?.isFixed() || !c.isEnabled()) return;
+      if (WALKABLE.has(c.handle)) { decks.push(c); return; }
       if (((c.collisionGroups() >>> 16) & L.STATIC) === 0) return;
       const ct = c.translation(), cr = c.rotation();
       t.set(ct.x, ct.y, ct.z); q.set(cr.x, cr.y, cr.z, cr.w);
@@ -80,6 +85,37 @@ export class Nav {
         }
       }
     });
+    // water you'd wade through (rivers, streams, marsh) — minus where a bridge / boardwalk / stone stands over it
+    const T = this.terrain, e = 0.3;
+    if (T.waters.length) {
+      const deck = new Uint8Array(W * H);
+      const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+      const put = (x: number, z: number) => { const k = this.idx(x, z); if (k >= 0) deck[k] = 1; };
+      for (const c of decks) {
+        const ct = c.translation();
+        if (c.shapeType() === RAPIER.ShapeType.TriMesh) {
+          const v = c.vertices(), idx = c.indices(); if (!idx) continue;
+          for (let k = 0; k < idx.length; k += 3) {
+            A.fromArray(v, idx[k] * 3); B.fromArray(v, idx[k + 1] * 3); C.fromArray(v, idx[k + 2] * 3);
+            const n = steps(Math.max(A.distanceTo(B), B.distanceTo(C), C.distanceTo(A)));
+            for (let a = 0; a <= n; a++) for (let b = 0; b <= n - a; b++) { const u = a / n, w = b / n, z = 1 - u - w; put(ct.x + A.x * u + B.x * w + C.x * z, ct.z + A.z * u + B.z * w + C.z * z); }
+          }
+        } else {
+          const r = c.radius?.() ?? 0.5;
+          for (let dz = -r; dz <= r; dz += 0.25) for (let dx = -r; dx <= r; dx += 0.25) if (dx * dx + dz * dz <= r * r) put(ct.x + dx, ct.z + dz);
+        }
+      }
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const k = j * W + i;
+        if (!deck[k] && T.waterAt(this.x0 + (i + 0.5) * cs, this.z0 + (j + 0.5) * cs) > 0.12) this.wet[k] = 1;
+      }
+    }
+    // ground too steep to walk (terrace walls, the sides of ramps, steep hills)
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const x = this.x0 + (i + 0.5) * cs, z = this.z0 + (j + 0.5) * cs;
+      const gx = (T.height(x + e, z) - T.height(x - e, z)) / (2 * e), gz = (T.height(x, z + e) - T.height(x, z - e)) / (2 * e);
+      if (gx * gx + gz * gz > 0.95 * 0.95) this.blocked[j * W + i] = 1;
+    }
   }
 
   idx(x: number, z: number) {
@@ -116,9 +152,11 @@ export class Nav {
   /** Straight walkable line between two points (samples every quarter cell). */
   los(ax: number, az: number, bx: number, bz: number) {
     const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / (this.cell * 0.5));
+    const k0 = this.idx(ax, az), dry = k0 < 0 || !this.wet[k0];   // (already in the water: wading on is fine)
     for (let s = 0; s <= n; s++) {
       const t = n ? s / n : 0;
-      if (!this.free(ax + (bx - ax) * t, az + (bz - az) * t)) return false;
+      const k = this.idx(ax + (bx - ax) * t, az + (bz - az) * t);
+      if (k < 0 || this.blocked[k] || (dry && this.wet[k])) return false;
     }
     return true;
   }
@@ -168,7 +206,7 @@ export class Nav {
         const nk = nj * W + ni;
         if (this.blocked[nk] || this.closed[nk] === gen) continue;
         if (di && dj && (this.blocked[j * W + ni] || this.blocked[nj * W + i])) continue;
-        const ng = this.g[k] + (di && dj ? Math.SQRT2 : 1);
+        const ng = this.g[k] + (di && dj ? Math.SQRT2 : 1) * (this.wet[nk] ? 6 : 1);   // wading: only if no bridge is near
         if (this.stamp[nk] === gen && ng >= this.g[nk]) continue;
         this.stamp[nk] = gen; this.g[nk] = ng; this.f[nk] = ng + hfn(nk) * 1.05; this.from[nk] = k; push(nk);
       }

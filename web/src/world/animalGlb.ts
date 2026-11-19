@@ -188,6 +188,7 @@ export class GlbAnimalVisual {
         headBone.add(ring);
         ring.position.copy(headBone.worldToLocal(best.clone().add(new THREE.Vector3(0, -r * 0.7, -r * 0.2))));
         ring.quaternion.copy(headBone.getWorldQuaternion(new THREE.Quaternion()).invert());   // upright, facing forward
+        ring.scale.divideScalar(headBone.getWorldScale(new THREE.Vector3()).x || 1);   // (the rig's bones are scaled: a 7 m ring once)
       }
     }
     for (const n of ['Head', 'Ear1.L', 'Ear1.R']) { const b = bone(n); if (b) { b.scale.setScalar(spec.head); this.big.push(b); } }

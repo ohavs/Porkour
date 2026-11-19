@@ -28,6 +28,15 @@ export const FARM2_MODELS = [
  * chicken pen + barn + yard (south-centre).
  */
 export const FARM2: Rect = { x0: -60, x1: 60, z0: -104, z1: 16 };
+/**
+ * The hillside: three levels held up by dry-stone walls (user: "the maps should differ more than colours") — the yard
+ * + sty at the bottom, the orchard / hens / pond in the middle, Bob's house, the mill, the apiary and the paddock on
+ * top. Ramps at the lane, the orchard aisle and the west paths; everywhere else a pig needs a fart-jump (or a crate).
+ * A spring by the mill feeds a stream that drops over both walls (into the pond, then out past the cider house).
+ */
+const STEP_A = { z: -13, rise: 1.6, ramps: [[-5, 1, 7], [28.5, 31, 7], [-31, -28, 7]] as [number, number, number][] };
+const STEP_B = { z: -48, rise: 1.8, ramps: [[-6.5, -1.5, 6], [28.5, 31, 6], [-24, -21, 6]] as [number, number, number][] };
+const SPRING = { x: -39, z: -58.5 };
 
 const CHORES: Chore[] = [
   { id: 'pigs', at: [28.4, 1.2], look: [31, 1.2], anim: 'pour', dur: 12, view: 'busy' },
@@ -55,7 +64,7 @@ const CHORES: Chore[] = [
 ];
 
 /** Pranks that work here: the shared ones whose places / things exist + the orchard's own (featured). */
-const FEATURED: MissionId[] = ['shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple'];
+const FEATURED: MissionId[] = ['shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple', 'wallJump'];
 const MISSIONS: MissionId[] = [...FEATURED, 'knockBob', 'staggerBob', 'fartBob', 'mugPond', 'catBath', 'lambStash', 'hensOut', 'wolfScare',
   'pumpkinWell', 'sheepOut', 'hayPond', 'loseBob', 'whackBob', 'henPond', 'smashPots', 'melonSmash', 'eggBob', 'gnomePond', 'undiesWell',
   'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak'];
@@ -63,17 +72,24 @@ const MISSIONS: MissionId[] = [...FEATURED, 'knockBob', 'staggerBob', 'fartBob',
 export function buildFarm2(scene: THREE.Scene): FarmDef {
   const F = FARM2;
   const terrain = new Terrain(F);
+  for (const st of [STEP_A, STEP_B]) terrain.terrace(st.z, st.rise, st.ramps);
+  terrain.river([[SPRING.x, SPRING.z]], 5, 0.75);                                                      // the spring
+  terrain.river([[SPRING.x, SPRING.z], [-40.5, -52], [-42, -46], [-42, -43.5]], 2.8, 0.6);             // → over the top wall → the pond
+  terrain.river([[-45, -37], [-48, -30], [-50.5, -22], [-52.6, -13], [-55, -7], [-68, -9]], 2.8, 0.6);  // pond → over the lower wall → out
+  terrain.outside = { base: 4, amp: 17, freq: 0.018 };   // rolling hills all round
   // ---- ground paint (before terrain.build)
   const P = (pts: [number, number][], w = 3) => terrain.path(pts, w);
   P([[0, 22], [0, 4]], 4.5);                                        // road in from the south gate
   P([[0, 4], [-2, -16], [-4, -40], [-4, -60], [-4, -76]], 3.5);     // the main lane up to the farmhouse
   P([[0, 2], [16, 2], [28, 3]], 2.6);                               // yard → sty
   P([[-2, -8], [-16, -8], [-26, -8]], 3);                           // yard → cider house
-  P([[-4, -46], [-22, -46], [-34, -44]], 2.4);                      // lane → pond
+  P([[-4, -43], [-22, -42], [-34, -40]], 2.4);                      // lane → pond
   P([[-4, -66], [-26, -78], [-40, -90]], 2.4);                      // house → apiary
   P([[-4, -40], [10, -38], [52, -38]], 2.6);                        // the orchard's middle aisle
   P([[4, -76], [33, -79]], 2.2);                                    // house → paddock gate
   P([[-8, -88], [-14, -92]], 2.2);                                  // house → garden
+  P([[29.75, -9], [29.75, -22]], 2.4); P([[29.75, -45], [29.75, -56]], 2.4);   // the orchard aisle's ramps
+  P([[-29.5, -9], [-29.5, -22]], 2.2); P([[-22.5, -45], [-22.5, -57], [-26, -70]], 2.2);   // the west ramps
   terrain.dirt({ x0: -12, x1: 12, z0: -12, z1: 8 }, 3);             // yard
   terrain.dirt({ x0: 30, x1: 43, z0: -2, z1: 10 }, 1.5);            // sty floor
   terrain.dirt({ x0: -14, x1: 0, z0: -34, z1: -22 }, 2);            // chicken pen
@@ -82,9 +98,9 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
   terrain.dirt({ x0: -58, x1: -46, z0: 0, z1: 13 }, 1.5);           // sheep pen
   terrain.dirt({ x0: 20, x1: 56, z0: -100, z1: -82 }, 0.8);         // paddock (worn grass)
   terrain.mud(38, 6.5, 3, 2.2);                                     // the sty wallow
-  terrain.mud(-20, -40, 2.2, 1.6); terrain.mud(30, -28, 2, 1.5); terrain.mud(-50, -24, 2.4, 1.8);
-  terrain.mud(46, -60, 2.2, 1.6); terrain.mud(-36, -60, 1.8, 1.5); terrain.mud(24, -94, 2.5, 2);
-  const POND = { x: -42, z: -44, r: 6 };
+  terrain.mud(-20, -40, 2.2, 1.6); terrain.mud(30, -28, 2, 1.5); terrain.mud(-44, -22, 2.4, 1.8);
+  terrain.mud(46, -60, 2.2, 1.6); terrain.mud(-30, -62, 1.8, 1.5); terrain.mud(24, -94, 2.5, 2);
+  const POND = { x: -42, z: -40, r: 6 };
 
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: -32, x1: -16, z0: -98, z1: -86 };
@@ -97,11 +113,11 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
       inWater: (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r - 0.3,
       gates: [],
       places: {
-        pond: POND, well: { x: 6, z: -46 },
+        pond: POND, well: { x: 6, z: -44 },
         coop: { x0: -14, x1: 0, z0: -34, z1: -22 }, sheepPen: { x0: -58, x1: -46, z0: 0, z1: 13 }, pasture: { x0: 20, x1: 56, z0: -100, z1: -82 },
         stash: V3(35.5, t.height(35.5, 3), 3), roadGate: V3(0, t.height(0, 12.5), 12.5), dogPatrol: { x: 0, z: -44, r: 46 },
         tp: [['sty', 36, 1], ['cage', 10, -72], ['house', -4, -74], ['orchard', 30, -38], ['apiary', -40, -92], ['press', -26, -6],
-          ['pasture', 33, -78], ['garden', -12, -90], ['pond', -34, -40], ['mill', -44, -58], ['wheat', 17, -55]],
+          ['pasture', 33, -78], ['garden', -12, -90], ['pond', -34, -36], ['spring', -35, -58], ['ramp', -2, -10], ['mill', -44, -58], ['wheat', 17, -55]],
       },
       missions: MISSIONS,
       featured: FEATURED,
@@ -117,7 +133,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     spinner(building('village/Mill', -48, -66, 15, 0.6), 'Mill_Blades', 0.7);
     building('village/Stable', 47, -94, 6.5, Math.PI);
     building('farm/ChickenCoop', -11, -29, 3.4, Math.PI / 2);
-    building('farm/Well', 6, -46, 3.2);
+    building('farm/Well', 6, -44, 3.2);
     building('farm/OpenBarn', -24, -30, 6, 0);                           // hay shed
     building('farm/WaterTower', 52, 8, 11);
     building('farm/ChickenCoop', 40.5, 7.4, 2.8, Math.PI);                // the pigs' hut
@@ -152,7 +168,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
       t.noGrass({ x0, x1, z0, z1 });
       G.cover.rect('crop', x0, x1, z0, z1, y((x0 + x1) / 2, (z0 + z1) / 2) - 0.3, 1.3);
     };
-    strip(15.9, 18.4, -71, -44); strip(35, 37.5, -64, -42); strip(47.6, 50.1, -74, -48); strip(22.2, 24.7, -34, -18); strip(41.2, 43.7, -28, -16);
+    strip(15.9, 18.4, -71, -51); strip(35, 37.5, -64, -51); strip(35, 37.5, -46, -42); strip(47.6, 50.1, -74, -51); strip(22.2, 24.7, -34, -18); strip(41.2, 43.7, -28, -16);
     // ladder + apple crates in the rows
     for (const [x, z, yaw] of [[20.6, -60.5, 0.3], [39.5, -25.5, 1.2], [45.6, -67.4, -0.4]] as const) decor('cover/Crate_Stack1', x, z, { height: 1.2, yaw, collide: 'box' });
 
@@ -179,7 +195,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     }
 
     // ---------------------------------------------------------------- dressing: lamps, pond, laundry, picnic table, outhouse…
-    d.lamps([[-12, -77], [4, 9], [27.6, -3], [-6, -18], [8, -60], [-26, -13], [-40, -88], [30, -80.6], [-4, 14.5], [26, -40]]);
+    d.lamps([[-12, -77], [4, 9], [27.6, -3], [-8, -17], [8, -60], [-26, -10.6], [-40, -88], [30, -80.6], [-4, 14.5], [26, -40]]);
     d.pond(POND);
     d.laundry(-30, -22, -72);
     d.picnic(17, -66, 0.3);
@@ -193,7 +209,10 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     d.trough(28, -86);
     d.trough(-52, 4, Math.PI / 2);
     d.finish();
-    decor('nature/Willow_1', -49.5, -37, { height: 8, collide: 'trunk' }); decor('nature/Willow_2', -33, -51, { height: 7.5, collide: 'trunk' });
+    // the spring by the mill: stepping stones over its stream, a little footbridge where the lower stream meets the lane
+    kit.water.steppingStones([-44.6, -55], [-36.6, -54], 4);
+    kit.water.walkway([[-57.3, -11.4], [-50.3, -8.6]], { w: 1.8, arch: 0.45 });
+    decor('nature/Willow_1', -52, -41, { height: 8, collide: 'trunk' }); decor('nature/Willow_2', -33, -51, { height: 7.5, collide: 'trunk' });
     decor('nature/Willow_1', -50, -51.5, { height: 7, collide: 'trunk' });
     blocked.push({ x0: -53, x1: -30, z0: -55, z1: -33 });
     decor('village/Cart', 6, 4, { height: 2.2, yaw: -0.6, collide: 'box' });
@@ -205,11 +224,11 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
 
     // ---------------------------------------------------------------- hiding spots
     const ck = coverKit({ scene, t, rng, out, blocked, forest, decor });
-    for (const cl of [[[-56, -14], [-53.4, -16.4], [-57, -18.6]], [[56, -20], [57.6, -23]], [[56, -76], [57.4, -73]], [[-8, -100], [-5, -101]],
-      [[-36, -76], [-38.6, -74]], [[22, 12], [25, 13.4]], [[-12, -48], [-14.6, -50]], [[-56, -78], [-57, -72]], [[18, -84.6]]] as [number, number][][])
+    for (const cl of [[[-58, -20], [-57, -23.4]], [[56, -20], [57.6, -23]], [[56, -76], [57.4, -73]], [[-8, -100], [-5, -101]],
+      [[-36, -76], [-38.6, -74]], [[22, 12], [25, 13.4]], [[-12, -44], [-14.6, -42]], [[-56, -78], [-57, -72]], [[18, -84.6]]] as [number, number][][])
       for (const [x, z] of cl) ck.bush(x, z);
     ck.baleStack(-22, -26.5, 0.1);             // in the hay shed
-    ck.baleStack(-46, -30, 1.2, 2);
+    ck.baleStack(-40, -27, 1.2, 2);
     ck.baleStack(4, -24, -0.4, 2);
     ck.baleStack(54, -42, 1.57);
     ck.hard('cover/Logs', -36.5, 12, 1.2, 0.2);
@@ -238,7 +257,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     prop('cheese', -2, -79); prop('ham', 2.2, -78.8, 0, 0); prop('mug', 12.2, -70.6);
     prop('veggieCrate', -14.8, -88); prop('tomatoCrate', -14.6, -86.6); prop('trashcan', 2.6, -72.6, 0);
     // bones for the dog
-    prop('bone', 3.4, -72); prop('bone', -20, 4); prop('bone', 26, -20); prop('bone', -40, -36);
+    prop('bone', 3.4, -72); prop('bone', -20, 4); prop('bone', 27.6, -22); prop('bone', -34, -30);
     // pranks: the pie on the picnic table, Bob's undies under the laundry line, a gnome in the garden, eggs by the coop,
     // flower pots on the porch, melons + pumpkins in the garden, hay bales to roll into the pond
     prop('pie', 17.3, -66.3, 0, 0.84);

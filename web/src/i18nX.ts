@@ -56,6 +56,14 @@ export const EN_X = {
   'key.emote': 'Dances (hold)', 'key.pass': 'Pass it',
   'm.couchSesh': 'Get high on the lounge couch', 'a.tpLounge': 'Teleport: lounge',
   'item.furniture': 'Furniture',
+  // s22: new missions + places
+  'm.wallJump': 'Fart-jump up a stone wall (no ramp)', 'm.cheeseRiver': 'Roll a cheese wheel into the river', 'm.peakClimb': 'Climb to the top of the mountain',
+  'm.bobSoak': 'Knock Bob down into the water', 'm.danceBob': 'Dance right in front of Bob', 'm.highUp': 'Get up high (a roof, a stack…)',
+  'm.bedNap': 'Nap in a bed', 'm.fridgeRaid': 'Raid the fridges ({n} cans)', 'm.yardSale': 'Drag {n} pieces of furniture outside',
+  'm.sofaSwim': 'Throw a piece of furniture into the water', 'm.toiletFlush': 'Flush Bob\'s toilet {n} times',
+  'g.tune': 'Test my PC', 'g.tuneD': 'Auto graphics: the game measures how smoothly it runs while you play and picks the best preset for this computer',
+  'toast.tuned': 'Graphics → {p} (smoother)', 'toast.tuneStart': 'Measuring while you play…',
+  'a.river': 'River', 'a.spring': 'Spring & stream', 'a.ramp': 'Terrace ramp', 'a.bog': 'The bog', 'a.peak': 'Mountain top',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -106,4 +114,11 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'key.emote': 'Bailes (mantén)', 'key.pass': 'Pásalo',
   'm.couchSesh': 'Colócate en el sofá del salón', 'a.tpLounge': 'Teletransporte: salón',
   'item.furniture': 'Mueble',
+  'm.wallJump': 'Sube un muro de piedra de un pedo-salto (sin rampa)', 'm.cheeseRiver': 'Echa una rueda de queso al río', 'm.peakClimb': 'Sube a la cima de la montaña',
+  'm.bobSoak': 'Tumba a Bob dentro del agua', 'm.danceBob': 'Baila justo delante de Bob', 'm.highUp': 'Súbete a lo alto (un tejado, una pila…)',
+  'm.bedNap': 'Échate una siesta en una cama', 'm.fridgeRaid': 'Asalta las neveras ({n} latas)', 'm.yardSale': 'Saca {n} muebles a la calle',
+  'm.sofaSwim': 'Tira un mueble al agua', 'm.toiletFlush': 'Tira de la cadena del váter de Bob {n} veces',
+  'g.tune': 'Probar mi PC', 'g.tuneD': 'Gráficos automáticos: el juego mide lo fluido que va mientras juegas y elige la mejor calidad para este ordenador',
+  'toast.tuned': 'Gráficos → {p} (más fluido)', 'toast.tuneStart': 'Midiendo mientras juegas…',
+  'a.river': 'Río', 'a.spring': 'Manantial y arroyo', 'a.ramp': 'Rampa de la terraza', 'a.bog': 'La ciénaga', 'a.peak': 'Cima de la montaña',
 };

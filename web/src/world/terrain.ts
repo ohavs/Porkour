@@ -9,6 +9,16 @@ const HALF = WORLD / 2;
 const SPLAT = 1024;                // splat map resolution over the whole ground
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
+/**
+ * A water course (river / stream / marsh channel / round pool): a channel carved along a dense polyline. The water
+ * surface lies `LEVEL` under the banks, the bed `depth` under them.
+ */
+export interface Water { pts: [number, number][]; w: number; depth: number; bb: Rect }
+/** A terrace step (farm 2's hillside): the ground north of z (−z side) is `rise` higher; the 1 m wall band is between
+ * z − 1 and z; `ramps` = [x0, x1, len]: there the step is spread over len metres (cut into the upper level). */
+export interface Step { z: number; rise: number; ramps: [number, number, number][] }
+/** Water surface: this far under the bank. */
+export const LEVEL = 0.25;
 
 /**
  * Ground: height field (gentle inside the farm, hills outside), splat map (grass / dirt / mud) painted on a canvas,
@@ -25,6 +35,14 @@ export class Terrain {
   collider!: RAPIER.Collider;
   /** Farm 5: snow instead of grass (paths = shovelled gravel, the farmland outside = snowy fields). Set before build(). */
   snow = false;
+  /** The land outside the fence: base height + noise amplitude of its hills (farm 5: mountains, farm 4: flat swamp). */
+  outside = { base: 3, amp: 12, freq: 0.016 };
+  /** 1 m ground grid instead of 2 m (terrace walls need it; set before build()). */
+  fine = false;
+  waters: Water[] = [];
+  /** Water colour (farm 4's bog: murky green). */
+  waterTint = 0x4fb2e3;
+  steps: Step[] = [];
 
   constructor(farm: Rect) {
     this.farm = farm;
@@ -69,6 +87,88 @@ export class Terrain {
   flatten(x: number, z: number, r: number, edge = 3) { this.flats.push({ x, z, r, edge, h: this.noiseH(x, z) }); }
   private flats: { x: number; z: number; r: number; edge: number; h: number }[] = [];
   private noiseH(x: number, z: number) { return (fbm(x * 0.035 + 3, z * 0.035 - 7, 3) - 0.5) * 0.7; }
+  /**
+   * A river / stream through the points (smoothed, w = water width, depth = bank → bed). Before build().
+   * One point = a round pool of diameter w.
+   */
+  river(pts: [number, number][], w = 5, depth = 0.75) {
+    let dense: [number, number][] = pts;
+    if (pts.length > 2) {
+      const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+      const n = Math.max(8, Math.ceil(curve.getLength() / 1.5));
+      dense = curve.getSpacedPoints(n).map((v) => [v.x, v.z] as [number, number]);
+    }
+    const m = w / 2 + 3;
+    const xs = dense.map((p) => p[0]), zs = dense.map((p) => p[1]);
+    this.wg = null;   // (the lookup grid is rebuilt on the next query)
+    this.waters.push({ pts: dense, w, depth, bb: { x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, z0: Math.min(...zs) - m, z1: Math.max(...zs) + m } });
+    return this.waters[this.waters.length - 1];
+  }
+  /** A terrace step across the whole map at z (see Step). Before build(); needs `fine`. */
+  terrace(z: number, rise: number, ramps: [number, number, number][] = []) { this.steps.push({ z, rise, ramps }); this.fine = true; }
+  /** Nearest point of a water's centre line: distance + the point. */
+  private near(wt: Water, x: number, z: number, out: { d: number; x: number; z: number }) {
+    out.d = Infinity;
+    const P = wt.pts;
+    if (P.length === 1) { out.d = Math.hypot(x - P[0][0], z - P[0][1]); out.x = P[0][0]; out.z = P[0][1]; return out; }
+    for (let i = 0; i < P.length - 1; i++) {
+      const ax = P[i][0], az = P[i][1], bx = P[i + 1][0], bz = P[i + 1][1];
+      const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+      const t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1);
+      const px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
+      if (d < out.d) { out.d = d; out.x = px; out.z = pz; }
+    }
+    return out;
+  }
+  /**
+   * Water lookup grid (0.5 m, over all the water courses): how deep the channel cuts, the water surface, the distance
+   * to the water's edge — so height() / waterAt() cost the same near a river as anywhere else (they're called
+   * thousands of times a frame: feet, props, critters, Bob, the nav grid).
+   */
+  private wg: { x0: number; z0: number; w: number; h: number; carve: Float32Array; surf: Float32Array; edge: Float32Array } | null = null;
+  private wgrid() {
+    if (this.wg) return this.wg;
+    const C = 0.5, M = 7;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const wt of this.waters) { x0 = Math.min(x0, wt.bb.x0 - M); x1 = Math.max(x1, wt.bb.x1 + M); z0 = Math.min(z0, wt.bb.z0 - M); z1 = Math.max(z1, wt.bb.z1 + M); }
+    const w = Math.ceil((x1 - x0) / C) + 1, h = Math.ceil((z1 - z0) / C) + 1;
+    const carve = new Float32Array(w * h), surf = new Float32Array(w * h), edge = new Float32Array(w * h).fill(99);
+    const n = { d: 0, x: 0, z: 0 };
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const x = x0 + i * C, z = z0 + j * C, k = j * w + i;
+      for (const wt of this.waters) {
+        if (x < wt.bb.x0 - M || x > wt.bb.x1 + M || z < wt.bb.z0 - M || z > wt.bb.z1 + M) continue;
+        this.near(wt, x, z, n);
+        edge[k] = Math.min(edge[k], n.d - wt.w / 2);
+        const c = n.d < wt.w / 2 + 1.6 ? this.carve(wt, n.d) : 0;
+        if (c > carve[k]) { carve[k] = c; surf[k] = this.base(n.x, n.z) - LEVEL; }
+      }
+    }
+    this.wg = { x0, z0, w, h, carve, surf, edge };
+    return this.wg;
+  }
+  /** Bilinear sample of a water grid layer (outside the grid: `out`). */
+  private wsample(a: Float32Array, x: number, z: number, out: number) {
+    const g = this.wgrid()!, fx = (x - g.x0) / 0.5, fz = (z - g.z0) / 0.5;
+    const i = Math.floor(fx), j = Math.floor(fz);
+    if (i < 0 || j < 0 || i >= g.w - 1 || j >= g.h - 1) return out;
+    const tx = fx - i, tz = fz - j, k = j * g.w + i;
+    return (a[k] * (1 - tx) + a[k + 1] * tx) * (1 - tz) + (a[k + g.w] * (1 - tx) + a[k + g.w + 1] * tx) * tz;
+  }
+  /** How much a water course lowers the ground here (0 away from it). */
+  private carve(wt: Water, d: number) {
+    const half = wt.w / 2;
+    return wt.depth * (1 - smoothstep(half * 0.55, half + 1.6, d));
+  }
+  /** Water depth here (0 = dry). */
+  waterAt(x: number, z: number) {
+    if (!this.waters.length) return 0;
+    const g = this.wgrid()!;
+    if (this.wsample(g.carve, x, z, 0) < LEVEL) return 0;
+    return Math.max(0, this.wsample(g.surf, x, z, 0) - this.height(x, z));
+  }
+  /** The water surface height at a point of a water course's centre line. */
+  surfaceAt(x: number, z: number) { return this.base(x, z) - LEVEL; }
 
   private sample(x: number, z: number, ch: number) {
     const i = clamp(Math.floor(this.px(x)), 0, SPLAT - 1), j = clamp(Math.floor(this.px(z)), 0, SPLAT - 1);
@@ -76,8 +176,14 @@ export class Terrain {
   }
   mudAt(x: number, z: number) { return this.sample(x, z, 1); }
   dirtAt(x: number, z: number) { return this.sample(x, z, 0); }
+  /** Within `pad` m of a water course's water (no grass, no scattered decor there). */
+  nearWater(x: number, z: number, pad = 0.4) {
+    if (!this.waters.length) return false;
+    return this.wsample(this.wgrid()!.edge, x, z, 99) < pad;
+  }
   isBare(x: number, z: number) {
     if (this.dirtAt(x, z) > 0.25 || this.mudAt(x, z) > 0.05) return true;
+    if (this.waters.length && this.nearWater(x, z)) return true;
     return this.noGrassRects.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
   }
   inFarm(x: number, z: number, m = 0) {
@@ -85,6 +191,13 @@ export class Terrain {
   }
 
   height(x: number, z: number): number {
+    let h = this.base(x, z);
+    if (this.waters.length) h -= this.wsample(this.wgrid()!.carve, x, z, 0);
+    if (this.data) h -= this.mudAt(x, z) * 0.18;
+    return h;
+  }
+  /** The ground without water channels / mud dips (terraces, hills, flats, the land outside). */
+  base(x: number, z: number): number {
     const f = this.farm;
     const dx = Math.max(f.x0 - x, 0, x - f.x1), dz = Math.max(f.z0 - z, 0, z - f.z1);
     const out = Math.hypot(dx, dz);
@@ -93,13 +206,28 @@ export class Terrain {
       const d = Math.hypot(x - fl.x, z - fl.z);
       if (d < fl.r + fl.edge) h += (fl.h - h) * (1 - smoothstep(fl.r, fl.r + fl.edge, d));
     }
-    h += smoothstep(8, 90, out) * (3 + 12 * fbm(x * 0.016, z * 0.016, 4));
+    const O = this.outside;
+    h += smoothstep(8, 90, out) * (O.base + O.amp * fbm(x * O.freq, z * O.freq, 4));
     for (const hl of this.hills) {
       const d = Math.hypot(x - hl.x, z - hl.z);
       if (d < hl.r) h += d <= hl.flat ? hl.h : hl.h * 0.5 * (1 + Math.cos((Math.PI * (d - hl.flat)) / (hl.r - hl.flat)));
     }
-    if (this.data) h -= this.mudAt(x, z) * 0.18;
+    for (const st of this.steps) h += st.rise * this.stepK(st, x, z);
     return h;
+  }
+  /** 0 (below) … 1 (above) a terrace step: a 1 m wall band, or a ramp cut into the upper level. */
+  stepK(st: Step, x: number, z: number) {
+    const dz = st.z - z;
+    if (dz <= 0) return 0;
+    const f = this.farm, ox = Math.max(f.x0 - x, 0, x - f.x1);
+    const band = 1 + 14 * smoothstep(10, 45, ox);   // a 1 m wall in the farm, a gentle bank far outside
+    const wall = Math.min(1, dz / band);
+    let k = wall;
+    for (const [r0, r1, len] of st.ramps) {
+      const f = clamp(Math.min(x - (r0 - 1), r1 + 1 - x), 0, 1);
+      if (f > 0) k = wall + (Math.min(1, dz / len) - wall) * f;
+    }
+    return k;
   }
 
   build(scene: THREE.Scene) {
@@ -108,15 +236,38 @@ export class Terrain {
     splatTex.colorSpace = THREE.NoColorSpace;
     splatTex.flipY = false;
 
-    const seg = 190;
-    const geo = new THREE.PlaneGeometry(WORLD, WORLD, seg, seg).rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) pos.setY(i, this.height(pos.getX(i), pos.getZ(i)));
+    // grid lines: fine where you play (1 m with terrace walls, else 2 m; on whole / even metres), 2 m just outside the
+    // fence, 4 m out on the hills — about half the triangles of a uniform 2 m grid (a third of a 1 m one)
+    const F = this.farm, step = this.fine ? 1 : 2;
+    const axis = (a0: number, a1: number) => {
+      const out: number[] = [];
+      for (let v = -HALF; v <= HALF + 1e-6;) {
+        out.push(v);
+        const d = Math.max(a0 - v, v - a1, 0);
+        v += d < 14 ? step : d < 44 ? 2 : 4;
+        if (v > HALF) { if (out[out.length - 1] < HALF) out.push(HALF); break; }
+      }
+      return out;
+    };
+    const xs = axis(F.x0, F.x1), zs = axis(F.z0, F.z1), nx = xs.length, nz = zs.length;
+    const P = new Float32Array(nx * nz * 3);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const k = (j * nx + i) * 3; P[k] = xs[i]; P[k + 1] = this.height(xs[i], zs[j]); P[k + 2] = zs[j];
+    }
+    const I = new Uint32Array((nx - 1) * (nz - 1) * 6);
+    let n = 0;
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+      I[n++] = a; I[n++] = c; I[n++] = b; I[n++] = b; I[n++] = c; I[n++] = d;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setIndex(new THREE.BufferAttribute(I, 1));
     geo.computeVertexNormals();
+    const pos = geo.attributes.position as THREE.BufferAttribute;
 
     const mat = new THREE.MeshToonMaterial({ map: this.snow ? snowTexture() : grassTexture(), gradientMap: RAMP });
     const SNOW = this.snow ? 1 : 0;
-    const F = this.farm;
     const dirt = dirtTexture(), mudT = mudTexture();
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.dirtMap = { value: dirt }; sh.uniforms.mudMap = { value: mudT }; sh.uniforms.splatMap = { value: splatTex };

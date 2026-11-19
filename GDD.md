@@ -60,6 +60,10 @@ Random farm + random modifier. Missions: **loot quota** (value carried to the hi
 ## Farms (levels) — each: own layout, routine, mission pool
 1. Bob's family farm (the current world: barn, sty, house, garage, windmill, pasture) ← first.
 2. Orchard & beehives · 3. Dairy & cheese (bull!) · 4. Pumpkin farm at night · 5. Winter farm (ice).
+Each farm has its own **shape of land** (2026-11-19, user: "not the same map in other colours"): farm 2 a terraced
+hillside (3 levels, stone walls, ramps — or fart-jump up a wall; a stream falls over both walls), farm 3 a river
+valley (the bull's corner across the river: a cart bridge, stepping stones), farm 4 a bog (murky pools, a boardwalk,
+will-o'-wisps, frogs), farm 5 a big frozen lake + a snowy mountain (the crown near the top, snowballs to send down).
 
 ## Session 20 additions (2026-11-19)
 - **Bob's coffee break** (breathing window #4): he reads the paper on his porch rocker (blind to the front) and sips
