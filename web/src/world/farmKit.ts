@@ -24,6 +24,7 @@ import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
 import { Waterworks } from './waterworks';
+import { Farmhouse, HOUSE, type FarmhouseOpts } from './farmhouse';
 
 /** Named spots of a farm the game logic needs (pranks, Bob's trips, the dog's patrol, admin teleports). */
 export interface Places {
@@ -74,6 +75,8 @@ export interface FarmBuild {
   phones?: Phones;
   /** Bob's hammock (his siesta; synced entity, decor kit). */
   hammock?: Hammock;
+  /** Bob's walk-in farmhouse (built from code: rooms, his bed, the roof hides while my pig is inside). */
+  house?: Farmhouse;
   /** Every building placed by the kit (model, centre, turn, its model size before turning): interiors.ts looks inside. */
   buildings?: { model: string; x: number; z: number; yaw: number; sx: number; sz: number; sy: number }[];
   /** Water troughs (Bob cools his mouth in one after a spiked coffee). */
@@ -281,6 +284,23 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
       }
     }
   };
+  /**
+   * Bob's walk-in farmhouse (s26): replaces the closed house models. The farm flattened a pad for it first
+   * (`Terrain.pad` before the ground was built). Its door becomes Bob's door zone, his bed chore goes to his bed.
+   */
+  const farmhouse = (o: FarmhouseOpts, daynight: DayNight | null) => {
+    const h = new Farmhouse(scene, o, y, daynight);
+    out.house = h;
+    const c = Math.abs(Math.cos(o.yaw)), s = Math.abs(Math.sin(o.yaw)), W = h.w + 1.6, D = h.d + 4;
+    const hx = (c * W + s * D) / 2, hz = (s * W + c * D) / 2;
+    const r = { x0: o.x - hx, x1: o.x + hx, z0: o.z - hz, z1: o.z + hz };
+    t.noGrass(r); blocked.push({ x0: r.x0 - 1.5, x1: r.x1 + 1.5, z0: r.z0 - 1.5, z1: r.z1 + 1.5 });
+    out.zones.door.copy(h.door);
+    const bed = h.toWorld(-2.4, -1.5, new THREE.Vector3()); out.places.tp.push(['bedroom', bed.x, bed.z]);
+    // (furnished by interiors.ts from its fixed layout: it isn't one of the barns' random fills)
+    (out.buildings ??= []).push({ model: 'farmhouse', x: o.x, z: o.z, yaw: o.yaw, sx: h.w, sz: h.d, sy: HOUSE.H });
+    return h;
+  };
   /** Last step: one draw call per repeated static part instead of hundreds (same look). */
   const finish = () => {
     water.finish();
@@ -290,6 +310,6 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
     console.log(`static meshes instanced: ${n}`);
     return out;
   };
-  return { rng, blocked, y, forest, water, building, decor, fence, pen, prop, critter, spinner, free, tree, outerFence, hedgeRing, surroundings, scatter, finish };
+  return { rng, blocked, y, forest, water, building, decor, fence, pen, prop, critter, spinner, free, tree, outerFence, hedgeRing, surroundings, scatter, farmhouse, finish };
 }
 export type Kit = ReturnType<typeof farmKit>;

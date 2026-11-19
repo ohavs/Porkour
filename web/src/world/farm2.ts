@@ -15,7 +15,7 @@ import type { MissionId } from '../game/round';
 
 /** Models only farm 2 uses (preloaded when farm 2 is played). Quaternius Medieval Village + Nature (CC0). */
 export const FARM2_MODELS = [
-  ...['Mill', 'Stable', 'Inn', 'Sawmill', 'Gazebo', 'Bell_Tower', 'Cart', 'Bench_1', 'Cauldron'].map((n) => 'village/' + n),
+  ...['Mill', 'Stable', 'Sawmill', 'Gazebo', 'Bell_Tower', 'Cart', 'Bench_1', 'Cauldron'].map((n) => 'village/' + n),
   ...['Willow_1', 'Willow_2', 'TreeStump', 'Grass_Wispy_Tall', 'Grass_Common_Tall', 'Bush_Common_Flowers'].map((n) => 'nature/' + n),
 ];
 
@@ -102,6 +102,10 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
   terrain.mud(46, -60, 2.2, 1.6); terrain.mud(-30, -62, 1.8, 1.5); terrain.mud(24, -94, 2.5, 2);
   const POND = { x: -42, z: -40, r: 6 };
 
+  // Bob's walk-in farmhouse (s26; was a closed village house): the ground under it is flattened first
+  const HOUSE = { x: -4, z: -85.5, yaw: 0, style: 'orchard' as const };
+  terrain.pad(HOUSE.x, HOUSE.z, HOUSE.yaw, 14, 17, 3);
+
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: -32, x1: -16, z0: -98, z1: -86 };
     const out: FarmBuild = {
@@ -127,7 +131,7 @@ export function buildFarm2(scene: THREE.Scene): FarmDef {
     const { rng, blocked, y, building, decor, pen, prop, critter, spinner, forest } = kit;
 
     // ---------------------------------------------------------------- buildings
-    building('village/Inn', -4, -85, 10.5, 0);                          // the farmhouse (an old inn)
+    kit.farmhouse(HOUSE, daynight);                                       // Bob's walk-in farmhouse (s26)
     building('farm/Barn', -18, 0, 8.5, Math.PI / 2);
     building('village/Sawmill', -40, -9, 7.5, Math.PI / 2);              // the cider house
     spinner(building('village/Mill', -48, -66, 15, 0.6), 'Mill_Blades', 0.7);

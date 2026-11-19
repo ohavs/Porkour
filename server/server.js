@@ -165,10 +165,12 @@ async function control(ws, m) {
       if (m.state === 'lobby' || m.state === 'playing') r.state = m.state;
       // another farm: every page (the host's too) reloads onto it; the room waits for the host to come back
       if (typeof m.farm === 'string' && /^farm\d{1,2}$/.test(m.farm) && m.farm !== r.farm) { r.farm = m.farm; r.state = 'lobby'; r.hostTab = ws.tab; r.switchUntil = Date.now() + SWITCH_GRACE; }
+      // the game is over: everyone back to the room's lobby together (every page reloads; the room waits for the host)
+      if (m.regroup === true) { r.state = 'lobby'; r.hostTab = ws.tab; r.switchUntil = Date.now() + SWITCH_GRACE; }
       if (typeof m.public === 'boolean') r.public = m.public;
       if (m.name) r.name = clean(m.name, 28) || r.name;
       if (typeof m.save === 'string') r.save = clean(m.save, 40);   // the host's story save ("💾 2 · ★★☆☆☆"), shown to the players
-      return broadcast(r, { op: 'room', room: roomInfo(r) });
+      return broadcast(r, { op: 'room', room: roomInfo(r), regroup: m.regroup === true || undefined });
     }
     case 'kick': {
       if (!r || r.hostId !== ws.pid) return;

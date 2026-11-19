@@ -21,6 +21,7 @@ import { GATE, type Gate, type Gates } from '../world/gates';
 import { LOO, looFirst, looEvery, type Outhouse } from '../world/outhouse';
 import { PHONE, type Phones } from '../world/phone';
 import { NAP, type Hammock } from '../world/hammock';
+import { BED, type Farmhouse } from '../world/farmhouse';
 import { COFFEE, type Porch } from '../world/porch';
 
 /** Tuning. */
@@ -108,6 +109,8 @@ export interface BobJob {
   near?: number;
 }
 
+/** In his bed: how far he hears (m), how long he lies groggy after a noise (s), the bed moved this far = he tumbles out. */
+const BED_HEAR = 16, BED_GROGGY = 1.1, BED_SHOVE = 0.8;
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const UP = THREE.Object3D.DEFAULT_UP;
 /** Bob's spoken lines (the rest are grunts / groans). */
@@ -230,6 +233,13 @@ export class Farmer {
    */
   private napHour = NAP.hour + Math.random() * NAP.spread; private napped = false; private napUntil = 0; private napWake = 0;
   private napHeard: THREE.Vector3 | null = null; private afterStun: (() => void) | null = null; mudMarks = 0;
+  /**
+   * s26: asleep in his own bed in the farmhouse (seen lying there, not hidden indoors): where the bed was when he lay
+   * down (shoved / tipped = he wakes up), a noise he heard (he gets up groggy a moment later and goes to look).
+   */
+  private bedRest = false; private bedAt = new THREE.Vector3(); private bedWake = 0; private bedHeard: THREE.Vector3 | null = null;
+  /** Lying in his bed right now (host and players). */
+  get inBed() { return this.state === 'sleep' && this.bedRest; }
   private phoneCall = -1; private phoneUntil = 0; private phoneDeadT = 0; private phoneChat = 0; private phoneGlance = 0; private glanceT = -10; private glanceDir = 1;
   /**
    * The coffee break (world/porch.ts): his next sip, whether this sip reached his lips yet; after a spiked cup: what
@@ -356,6 +366,8 @@ export class Farmer {
     this.marketDone = false; this.awayTip = null; this.awayTipPig = null;
     this.gateJob = null; this.lockNext = 0;
     if (this.gone) { this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true; }
+    if (this.bedRest) this.bedWeight(false);
+    this.bedRest = false; this.bedWake = 0; this.bedHeard = null;
     this.loo = null; this.looNext = this.now + looFirst(); this.looHeard = null;
     this.phoneCall = -1;
     if (this.state === 'hammock') { (G.hammock as Hammock | null)?.climbOut(); this.body.setEnabled(true); this.parts.setEnabled(true); }
@@ -618,10 +630,26 @@ export class Farmer {
 
   // ================================================================== sleeping in the house
   private sleep() {
-    this.stopRiding();
+    this.stopRiding(); this.dropProp();
+    const h = G.house as Farmhouse | null;
+    this.bedRest = !!h?.bedOk && h.bedSide(v1).distanceTo(this.pos) < 2.6;
     this.go('sleep'); this.activity = 'bob.sleep';
-    this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = false;
+    this.body.setEnabled(false); this.parts.setEnabled(false); this.visual.root.visible = this.bedRest;
+    if (this.bedRest) { this.bedAt.copy(h!.bed!.synced.currP); this.bedWake = 0; this.bedHeard = null; this.bedWeight(true); G.audio.play('creak', { pos: this.bedAt, vol: 0.7, pitch: 0.8 }); }
     this.sleepT = 0;
+  }
+  /** His weight in the bed (a pig brushing past doesn't shift it; a ram / two pigs pushing do). */
+  private bedWeight(on: boolean) { (G.house as Farmhouse | null)?.bed?.body.setAdditionalMass(on ? BED.bobKg : 0, true); }
+  /** Admin: straight into his bed now. */
+  bedNow() {
+    const h = G.house as Farmhouse | null;
+    if (!h?.bedOk || this.state === 'off' || this.state === 'down') return;
+    if (this.gone) this.wake();
+    if (this.carrying) this.release(false);
+    const at = h.bedSide(v1);
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.05, z: at.z }, true); this.pos.copy(at);
+    this.doing = false; this.path = []; this.target = null; this.hunt = null;
+    this.sleep();
   }
   private wake(at?: THREE.Vector3) {
     if (!this.gone) return;
@@ -631,7 +659,10 @@ export class Farmer {
       return;
     }
     const back = this.state === 'away';
-    const d = back ? this.gate.clone() : this.zones.door;
+    const h = G.house as Farmhouse | null, fromBed = this.bedRest && !!h?.bed;
+    const d = back ? this.gate.clone() : fromBed ? h!.bedSide(new THREE.Vector3()) : this.zones.door;
+    if (this.bedRest) this.bedWeight(false);
+    this.bedRest = false;
     this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
     this.body.setTranslation({ x: d.x, y: d.y + CENTER + 0.1, z: d.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -652,6 +683,7 @@ export class Farmer {
   private sleepStep(dt: number) {
     this.sleepT += dt;
     if (this.phaseNow() === 'day') { this.wake(); return; }
+    if (this.bedRest) { this.bedStep(dt); return; }
     if (Math.random() < dt * 0.3) G.audio.play('snore', { pos: this.zones.door, vol: 0.6, minGap: 2 });
     for (const n of G.noises) {
       if (n.t <= this.noiseT) continue;
@@ -660,6 +692,41 @@ export class Farmer {
       const d = Math.hypot(n.x - this.zones.door.x, n.z - this.zones.door.z);
       if (d < Math.min(30, n.radius * 0.9) * ALERT.hear[this.level] * modHear()) { this.wake(new THREE.Vector3(n.x, n.y, n.z)); return; }
     }
+  }
+
+  /**
+   * In his bed: blind; a noise close enough (sneaking in is quiet, a sprint / a crash / an oink isn't) wakes him
+   * groggy a moment later, then he goes to look. The bed shoved hard / tipped / dragged off: he tumbles out (down).
+   */
+  private bedStep(dt: number) {
+    const h = G.house as Farmhouse | null, bed = h?.bed;
+    if (!h || !bed) { this.wake(); return; }
+    const head = h.headPos(v1);
+    if (Math.random() < dt * 0.35) G.audio.play('snore', { pos: head, vol: 0.75, minGap: 2.2 });
+    if (h.bedUpset || bed.synced.currP.distanceTo(this.bedAt) > BED_SHOVE) { this.bedTumble(h); return; }
+    for (const n of G.noises) {
+      if (n.t <= this.noiseT) continue;
+      this.noiseT = n.t;
+      if (this.sleepT < 3) continue;
+      const d = Math.hypot(n.x - head.x, n.z - head.z);
+      if (d < Math.min(BED_HEAR, n.radius * 0.9) * ALERT.hear[this.level] * modHear()) {
+        if (!this.bedWake) { this.bedWake = this.now + BED_GROGGY; this.voice('huh', 0.6); }
+        this.bedHeard = new THREE.Vector3(n.x, n.y, n.z);
+      }
+    }
+    if (this.bedWake && this.now > this.bedWake) { const at = this.bedHeard; this.bedHeard = null; this.wake(at ?? undefined); }
+  }
+  /** His bed was shoved / tipped / dragged off with him in it: he rolls out onto the floor, then he's after whoever did it. */
+  private bedTumble(h: Farmhouse) {
+    const at = h.bed ? h.bedSide(new THREE.Vector3()) : this.zones.door.clone();
+    this.bedWeight(false); this.bedRest = false;
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.visual.root.visible = true;
+    this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.4, z: at.z }, true); this.body.setLinvel({ x: 0, y: 1, z: 0 }, true);
+    this.pos.copy(at); this.state = 'routine'; this.parts.snap();
+    this.voice('oops'); this.stun('down', BOB.downTime); this.raise('prank');
+    G.events.push({ type: 'bedTumble' });
+    const look = at.clone();
+    this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
   }
 
   // ================================================================== perception
@@ -1052,7 +1119,8 @@ export class Farmer {
     this.activity = 'chore.' + c.id;
     if (c.id === 'mow') return this.mowChore(c, dt);
     if (!this.doing) {
-      const goal = v2.set(c.at[0], 0, c.at[1]);
+      const house = c.id === 'bed' ? G.house as Farmhouse | null : null;
+      const goal = house?.bedOk ? house.bedSide(v2) : v2.set(c.at[0], 0, c.at[1]);
       const d = this.moveTo(goal, BOB.walk, dt);
       if (d < 0.5 || (d < 2.2 && this.stuck >= 2)) {
         this.stuck = 0;
@@ -1432,14 +1500,18 @@ export class Farmer {
   }
   /** A muddy pig smeared his face while he napped: spectacles, a pig snout, whiskers (he wears them all round). */
   mudFace(p: Pig) {
-    if (this.state !== 'hammock' || this.mudMarks >= NAP.marks) return;
+    const bed = this.inBed;
+    if ((this.state !== 'hammock' && !bed) || this.mudMarks >= (bed ? BED.marks : NAP.marks)) return;
     this.setMud(this.mudMarks + 1);
     p.muddyUntil = p.now;   // the mud is on Bob now
-    const h = (G.hammock as Hammock).headPos(v1);
+    const h = bed ? (G.house as Farmhouse).headPos(v1) : (G.hammock as Hammock).headPos(v1);
     G.audio.play('splat', { pos: h, vol: 0.8, pitch: 1.2 });
     G.fx.bits(h, { count: 10, color: 0x6b4a2b, speed: 1.6, up: 1.2, life: 0.5, size: 0.08, grow: 0, alpha: 1 });
     G.events.push({ type: 'mudFace', who: p });
-    if (Math.random() < 0.2 && !this.napWake) { this.voice('huh', 0.5); this.napUntil = Math.min(this.napUntil, this.now + 3); }   // he stirs…
+    if (Math.random() < 0.2) {   // he stirs…
+      if (bed) { if (!this.bedWake) { this.bedWake = this.now + 3; this.voice('huh', 0.5); } }
+      else if (!this.napWake) { this.voice('huh', 0.5); this.napUntil = Math.min(this.napUntil, this.now + 3); }
+    }
   }
   setMud(n: number) { this.mudMarks = n; this.visual.setMud(n); }
 
@@ -2251,7 +2323,7 @@ export class Farmer {
     const hp = this.grip.pos, bp = this.body.translation();
     const hl = this.carrying || this.heldProp ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyAxisAngle(UP, -this.yaw) : v1.set(0, 0, 0);
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000);
-    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level, this.mudMarks, Math.max(0, Math.round((this.sootUntil - this.now) * 10) / 10));
+    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level, this.mudMarks, Math.max(0, Math.round((this.sootUntil - this.now) * 10) / 10), this.bedRest ? 1 : 0);
     s.push(this.state, this.activity, this.debugAnim ?? '');
   }
   netApply(n: number[], s: string[], nb: number[] = n, alpha = 0) {
@@ -2273,13 +2345,14 @@ export class Farmer {
     this.level = n[at + 21] ?? 0;   // the 'alert' event itself comes with the host's recorded events
     if ((n[at + 22] ?? 0) !== this.mudMarks) this.setMud(n[at + 22] ?? 0);
     this.sootUntil = this.now + (n[at + 23] ?? 0);
-    this.visual.root.visible = !this.asleep;
+    this.bedRest = (n[at + 24] ?? 0) === 1;
+    this.visual.root.visible = !this.asleep || this.inBed;
   }
   netPose(p: THREE.Vector3) { this.pos.copy(p).setY(p.y - CENTER); }
 
   // ================================================================== render
   render(alpha: number, dt: number) {
-    if (this.asleep) { this.flash.intensity = 0; return; }
+    if (this.asleep && !this.inBed) { this.flash.intensity = 0; return; }
     this.updateMoodCloud(dt);
     const r = this.visual.root;
     // knocked down: the whole body follows the physics torso; otherwise upright, facing his heading
@@ -2291,6 +2364,7 @@ export class Farmer {
     r.position.sub(v1.set(0, CENTER, 0).applyQuaternion(this.vq));
     r.quaternion.copy(this.vq);
     if (this.state === 'hammock' && G.hammock) { (G.hammock as Hammock).bobPose(r.position, r.quaternion); this.vq.copy(r.quaternion); }
+    if (this.inBed && (G.house as Farmhouse | null)?.bed) { (G.house as Farmhouse).bedPose(r.position, r.quaternion); this.vq.copy(r.quaternion); }
     let hand: THREE.Vector3 | null = null;
     const holding = !!this.carrying || (G.net === 'client' ? this.netHolding : !!this.heldProp);
     if (holding) {
@@ -2370,7 +2444,7 @@ export class Farmer {
       case 'shoot': return 'shoot';
       case 'setTrap': case 'gate': case 'job': return this.doing ? 'fix' : 'idle';
       case 'onPhone': return 'phone';
-      case 'hammock': return 'hammock';
+      case 'hammock': case 'sleep': return 'hammock';
       case 'hot': case 'cool': return 'hot';
       case 'dunk': return 'dunk';
       default: return 'idle';

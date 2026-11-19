@@ -19,7 +19,7 @@ const SNOWY = ['PineTree_Snow_1', 'PineTree_Snow_2', 'PineTree_Snow_3', 'PineTre
 export const FARM5_MODELS = [
   ...SNOWY.map((n) => 'winter/' + n),
   ...['sled', 'snowFort', 'treeDecorated', 'candyCane', 'wreath', 'lightpost'].map((n) => 'winter/' + n),
-  'animals/Husky', 'animals/Stag', 'animals/Deer', 'village/House_2', 'village/Bench_2', 'kaykit/jar_A_large', 'crops/Lettuce_4', 'crops/Beet_4',
+  'animals/Husky', 'animals/Stag', 'animals/Deer', 'village/Bench_2', 'kaykit/jar_A_large', 'crops/Lettuce_4', 'crops/Beet_4',
 ];
 
 /**
@@ -97,6 +97,10 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
   terrain.hill(MOUNT.x, MOUNT.z, MOUNT.r, MOUNT.h, MOUNT.flat);
   terrain.outside = { base: 9, amp: 44, freq: 0.011 };   // snowy mountains all round
 
+  // Bob's walk-in farmhouse (s26; was a closed village house): the ground under it is flattened first
+  const HOUSE = { x: 0, z: -94, yaw: 0, style: 'winter' as const };
+  terrain.pad(HOUSE.x, HOUSE.z, HOUSE.yaw, 14, 17, 3);
+
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     snowyForest(true);
     BOB_STYLE.winter = true;
@@ -129,7 +133,7 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
     out.winter = winter;
 
     // ---------------------------------------------------------------- buildings
-    building('village/House_2', 0, -94, 9.5, 0);                         // the farmhouse
+    kit.farmhouse(HOUSE, daynight);                                       // Bob's walk-in farmhouse (s26)
     building('farm/BigBarn', 22, -14, 8.5, -Math.PI / 2);
     building('farm/Silo', 53, -12, 11);
     building('farm/ChickenCoop', -31, -3, 3.4, Math.PI / 2);

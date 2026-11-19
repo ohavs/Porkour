@@ -31,7 +31,8 @@ const UP = new THREE.Vector3(0, 1, 0);
 export class Mines {
   kind = 'mines' as const;
   list: Mine[] = [];
-  private body: THREE.InstancedMesh;
+  /** (not `body`: synced entities' `body` is their physics body — the online code read this mesh as one and threw) */
+  private mesh: THREE.InstancedMesh;
   private led: THREE.InstancedMesh;
   private beepT = 0;
 
@@ -50,11 +51,11 @@ export class Mines {
     ].map((g) => g.index ? g.toNonIndexed() : g);
     for (const g of parts) { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k); }
     const geo = mergeGeometries(parts)!;
-    this.body = new THREE.InstancedMesh(geo, toonMat(0xffffff, { vertexColors: true }), MINE.max);
-    this.body.castShadow = true; this.body.receiveShadow = true; this.body.count = 0; this.body.frustumCulled = false;
+    this.mesh = new THREE.InstancedMesh(geo, toonMat(0xffffff, { vertexColors: true }), MINE.max);
+    this.mesh.castShadow = true; this.mesh.receiveShadow = true; this.mesh.count = 0; this.mesh.frustumCulled = false;
     this.led = new THREE.InstancedMesh(new THREE.SphereGeometry(0.025, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff2a1a }), MINE.max);
     this.led.count = 0; this.led.frustumCulled = false;
-    scene.add(this.body, this.led);
+    scene.add(this.mesh, this.led);
   }
 
   /** New round (host): fresh mines at random open spots. */
@@ -175,14 +176,14 @@ export class Mines {
       if (!m.live) continue;
       q1.setFromAxisAngle(UP, (m.p.x * 7.13 + m.p.z * 3.7) % 6.28);
       // half sunk, tilted to the ground a little
-      this.body.setMatrixAt(i, m4.compose(v1.copy(m.p).setY(m.p.y - 0.03), q1, s1.set(1, 1, 1)));
+      this.mesh.setMatrixAt(i, m4.compose(v1.copy(m.p).setY(m.p.y - 0.03), q1, s1.set(1, 1, 1)));
       i++;
     }
-    this.body.count = i; this.body.instanceMatrix.needsUpdate = true;
+    this.mesh.count = i; this.mesh.instanceMatrix.needsUpdate = true;
     this.led.count = i;
   }
   render(dt: number) {
-    if (!this.body.count) return;
+    if (!this.mesh.count) return;
     // blinking lights (on a moment every 1.4 s, each its own phase)
     let i = 0;
     for (const m of this.list) {

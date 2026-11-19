@@ -82,11 +82,24 @@ try {
   const jh2 = await h2.next('joined');
   assert.equal(jh2.host, jh2.you, 'host again'); assert.equal(jh2.peers.find((x) => x.id === jh2.you).slot, 0);
   assert.equal((await p2.next('host')).id, jh2.you);
+  // the game is over: the host regroups the room — every page reloads, the room waits, all back in its lobby together
+  h2.send({ op: 'room', state: 'playing' }); await p2.next('room');
+  h2.send({ op: 'room', regroup: true });
+  let rg = await p2.next('room'); for (let k = 0; k < 4 && !rg.regroup; k++) rg = await p2.next('room');
+  assert.equal(rg.regroup, true); assert.equal(rg.room.state, 'lobby');
+  h2.ws.close(); p2.ws.close();
+  await new Promise((r) => setTimeout(r, 200));
+  const p3 = client(), h3 = client(); await Promise.all([p3.open, h3.open]);
+  p3.send({ op: 'hello', v: 1, name: 'Pl', tab: 'tabP' }); await p3.next('welcome');
+  p3.send({ op: 'join', code: jh.room.code }); assert.equal((await p3.next('joined')).room.state, 'lobby', 'the player is back in the room first');
+  h3.send({ op: 'hello', v: 1, name: 'Host', tab: 'tabH' }); await h3.next('welcome');
+  h3.send({ op: 'join', code: jh.room.code });
+  const jh3 = await h3.next('joined'); assert.equal(jh3.host, jh3.you, 'host again after the regroup');
   // only the owner may give coins
-  p2.send({ op: 'users' }); p2.send({ op: 'gift', to: 1, coins: 100 });
+  p3.send({ op: 'users' }); p3.send({ op: 'gift', to: 1, coins: 100 });
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(h2.ws.readyState, 1);
-  h2.ws.close(); p2.ws.close(); p1.ws.close();
+  assert.equal(h3.ws.readyState, 1);
+  h3.ws.close(); p3.ws.close(); p1.ws.close();
   console.log('server test: OK');
 } catch (e) {
   console.error('server test FAILED', e); process.exitCode = 1;

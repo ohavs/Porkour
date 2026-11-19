@@ -73,7 +73,8 @@ export class Markers {
       }
       const held = new Set(g.pigs.map((p) => p.held));
       for (const pr of g.farm.props) {
-        if (pr.banked || pr.heldBy || pr.value < 25 || mission.has(pr) || held.has(pr)) continue;
+        // (furniture is loot too, but a house full of arrows was noise: only the real valuables get one)
+        if (pr.banked || pr.heldBy || pr.value < 25 || mission.has(pr) || held.has(pr) || pr.def.id?.startsWith('f_')) continue;
         const big = pr.value >= 60;
         put(pr.obj.position, pr.half, GOLD, big ? 34 : 25, big ? 48 : 28, pr.obj.position.x);
       }

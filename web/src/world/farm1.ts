@@ -84,6 +84,10 @@ export function buildFarm1(scene: THREE.Scene, mode?: FarmMode): FarmDef {
   terrain.dirt({ x0: -36, x1: -26, z0: -29, z1: -26 }, 1);          // under the laundry line
   terrain.dirt({ x0: -64, x1: -50, z0: -52, z1: -34 }, 1.5);       // sheep pen
   const POND = { x: 50, z: -2, r: 5.2 };
+  // Bob's walk-in farmhouse (s26; was the closed Silo_House): the ground under it is flattened first
+  const HOUSE = { x: -23, z: -42, yaw: 0.25, style: 'classic' as const };
+  terrain.pad(HOUSE.x, HOUSE.z, HOUSE.yaw, 14, 17, 3);
+  P([[-22, -30], [-21.4, -35]], 3);                            // the path up to the stoop
 
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: -50, x1: -30, z0: -66, z1: -52 };
@@ -111,8 +115,7 @@ export function buildFarm1(scene: THREE.Scene, mode?: FarmMode): FarmDef {
 
     // ---------------------------------------------------------------- buildings
     building('farm/BigBarn', 0, -2, 13);
-    const house = building('farm/Silo_House', -24, -40, 11, 0.25);
-    void house;
+    kit.farmhouse(HOUSE, daynight);
     building('farm/SmallBarn', -40, -6, 7.5, Math.PI / 2);
     building('farm/Silo', 14, -9, 15);
     building('farm/Barn', -16, -86, 9, Math.PI);

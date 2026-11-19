@@ -100,6 +100,8 @@ export class Lobby {
         break;
       }
       case 'room': {
+        // the host ended the game: every page (the host's too) reloads straight back into the room's lobby, together
+        if (m.regroup && online.room && (this.inGame || this.preGame)) { g.hud.toast(t('net.regroup'), 3); const code = online.room.code; setTimeout(() => reloadOnFarm(farmId(), { room: code }), 700); break; }
         // the host picked another farm: every page (the host's too) reloads onto it, straight back into the room
         const rf = asFarm(online.room?.farm ?? '');
         if (rf && rf !== farmId() && (this.preGame || this.inGame)) { g.hud.toast(t('net.switching'), 3); setTimeout(() => reloadOnFarm(rf, { room: online.room!.code }), 600); break; }

@@ -57,7 +57,7 @@
   #lTop .lRight { margin-left:auto; display:flex; align-items:center; gap: 10px; }
   #lParty { position:absolute; left:14px; top:74px; width: 230px; display:flex; flex-direction:column; gap: 7px; }
   #lParty .ptitle { font-family: Title; font-size: 18px; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; display:flex; align-items:center; gap: 8px; }
-  #lParty .ptitle b { color:#fff; letter-spacing: 6px; font-size: 34px; line-height: 1; padding: 2px 10px 4px; background: rgba(0,0,0,.35); border-radius: 10px; text-shadow: 0 2px 0 #3b2412; }
+  #lParty .ptitle b { color:#fff; letter-spacing: 3px; font-size: 28px; line-height: 1.15; padding: 3px 8px 3px; background: rgba(0,0,0,.35); border-radius: 10px; text-shadow: 0 2px 0 #3b2412; white-space: nowrap; }
   .pslot { display:flex; align-items:center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: linear-gradient(180deg, #5a3820, #3e2614); border: 3px solid #2a170b; box-shadow: 0 3px 0 #2a170b;
     font-size: 16px; text-align:left; color: var(--cream); min-height: 22px; }
   .pslot.me { border-color: rgba(255,209,102,.6); }
@@ -89,7 +89,12 @@
   .playBtn:hover { filter: brightness(1.08); } .playBtn:active { transform: skewX(-6deg) translateY(4px); box-shadow: 0 2px 0 #b77d12; }
   .playBtn.wait { font-size: 20px; background: linear-gradient(180deg, #9a8a72, #7a6a52); box-shadow: 0 6px 0 #4a3a22; color: #fff6e6; cursor: default; }
   body.inLobby #hud > :not(.emote):not(.tag):not(#toast) { display:none !important; }
-  #lParty { max-height: calc(100vh - 150px); overflow: auto; }
+  /* (no sideways scrolling: nothing in the panel may be wider than it; a little padding so the tall room code and the
+     cards' shadows aren't clipped by the scroll box — they were: the code's top was cut, a grey scrollbar showed) */
+  #lParty { max-height: calc(100vh - 150px); overflow-x: hidden; overflow-y: auto; padding: 6px 6px 8px 2px; box-sizing: border-box;
+    scrollbar-width: thin; scrollbar-color: rgba(255,209,102,.45) transparent; }
+  #lParty > * { min-width: 0; max-width: 100%; }
+  #lParty .ptitle { min-width: 0; }
   #lParty .ptitle .chip { margin-left: auto; font-size: 12px; padding: 3px 8px; }
   /* story saves: the chip above the farm card + the saves card (s19) */
   .saveChip { display:flex; align-items:center; gap: 8px; background: linear-gradient(180deg, #fffaf0, #f2dcae); color: var(--ink); border: 3px solid #2a170b; border-radius: 14px;
@@ -126,9 +131,9 @@
   .ab .key { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); font-family: Title; font-size:13px; color: var(--gold);
     background: rgba(40,22,8,.85); padding: 1px 7px 0; border-radius: 8px; white-space:nowrap; }
   body.padOn #topbtns .k { display:none; }
-  /* user: "as many of the top-right icons as possible into the settings" — sound / controls / full screen live there
-     now (M / H keys still work); kept: first person + settings */
-  #bSound, #bHelp, #bFull, #lSound, #lFull { display:none !important; }
+  /* user: "as many of the top-right icons as possible into the settings" — sound / controls live there (M / H keys still
+     work); kept: first person + full screen (user s26: "bring the full screen button back top-right") + settings */
+  #bSound, #bHelp, #lSound { display:none !important; }   /* (full screen is back top-right: user s26) */
   .ab .key.pad { background: none; padding: 0; bottom: -14px; } .ab .key.pad svg { width: 24px; height: 24px; display:block; }
   #help .row kbd.pads { display:flex; gap: 3px; align-items:center; } #help .row kbd.pads svg { width: 22px; height: 22px; }
   .playBtn .pgs { display:none; } body.padOn .playBtn .pgs { display:inline-block; vertical-align: middle; margin-left: 8px; } .playBtn .pgs svg { width: 30px; height: 30px; }
@@ -215,7 +220,10 @@
   .panel .srow input[type=range] { width: 200px; }
   .panel .langPick { background: transparent; border: 0; padding: 0; }
   .panel .rv { display:flex; align-items:center; gap: 8px; } .panel .rv b { min-width: 38px; text-align:right; }
-  /* pause menu: a rail of icon tiles + the page */
+  /* every scrolling panel: a thin game-coloured scrollbar (user s26: "that slider isn't styled") */
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,209,102,.55) rgba(20,10,3,.25); }
+  /* pause menu: a rail of icon tiles + the page (the rail scrolls with the wheel / pad, no bar) */
+  .prail { scrollbar-width: none; } .prail::-webkit-scrollbar { display: none; }
   #menuPanel.pause { display:flex; padding:0; width: min(920px, 95vw); height: min(640px, 90vh); max-height: 90vh; overflow:hidden; }
   .prail { flex:none; width: 112px; display:flex; flex-direction:column; gap: 9px; padding: 16px 12px; overflow-y:auto; background: rgba(20,10,3,.28); border-right: 3px solid #2a170b; border-radius: 20px 0 0 20px; }
   .ptile { display:flex; flex-direction:column; align-items:center; gap: 2px; padding: 8px 4px 6px; border: 3px solid #2a170b; border-radius: 16px; cursor:pointer;
@@ -260,6 +268,7 @@
   .pexit { height: 100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap: 6px; }
   .pexit h2 { margin: 6px 0 0; } .pexit p { margin: 0; opacity: .75; }
   .pexit .btns { justify-content:center; margin-top: 18px; gap: 16px; }
+  @media (max-height: 860px) and (min-height: 641px) { .prail { gap: 7px; padding: 12px 11px; } .ptile svg.ui { width: 34px; height: 34px; } .ptile { padding: 6px 3px 5px; } }
   @media (max-height: 640px) { .ptile svg.ui { width: 30px; height: 30px; } .ptile { font-size: 12px; padding: 5px 3px 4px; } .prail { gap: 6px; padding: 10px 9px; width: 96px; } }
   @media (max-width: 620px) {
     #menuPanel.pause { flex-direction: column; }

@@ -352,6 +352,8 @@ export class Pig implements Holdable {
   escapeNeed() { return G.net === 'client' ? this.netNeed : this.heldBy?.escapeNeed?.(this) ?? 5; }
   get sprinting() { return this.now < this.sprintUntil; }
   get muddy() { return clamp((this.muddyUntil - this.now) / 10, 0, 1); }
+  /** How much of the mud coat is left (1 = fresh, wet → 0 = all flaked off): the mud splotches on the pig dry and fall off. */
+  get mudLeft() { return clamp((this.muddyUntil - this.now) / PIG.mudTime, 0, 1); }
   get forward() { return v3.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
   /** How hard the hooves can drag (heavy loot); spinach helps. */
   get dragMax() { return PIG.dragMax * (this.boosted('spinach') ? SNACK.lift : 1); }
@@ -778,13 +780,18 @@ export class Pig implements Holdable {
       G.fx.bits(v1.copy(this.pos), { count: 20, color: 0xf4f8ff, speed: 3, up: 3, grav: 10, life: 0.7, size: 0.1, grow: 0, alpha: 1 });
       G.audio.play('snowstep', { pos: this.pos, vol: 1, pitch: 0.8 });
       G.events.push({ type: 'snowCoat', who: this });
-    } else if (mud > 0.3) {
-      this.muddyUntil = this.now + PIG.mudTime;
-      G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: 26, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });
-      G.audio.play('splat', { pos: this.pos, vol: 0.9 });
-    } else {
-      G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 8, color: 0xcbb48c, speed: 1.2, up: 0.5, life: 0.9, size: 0.7, alpha: 0.5 });
+    } else if (G.iceAt?.(this.pos.x, this.pos.z)) {
+      // (a roll on the ice: nothing sticks)
+      G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 8, color: 0xe8f4ff, speed: 1.2, up: 0.5, life: 0.9, size: 0.7, alpha: 0.5 });
       G.audio.play('thud', { pos: this.pos, vol: 0.5 });
+    } else {
+      // s26 (user: "C has to really make me muddy, with real mud on me until it's gone"): a roll anywhere = a mud coat;
+      // a real mud puddle = the full coat (dries for longer), dry ground = a bit less
+      const full = mud > 0.3;
+      this.muddyUntil = Math.max(this.muddyUntil, this.now + PIG.mudTime * (full ? 1 : 0.65));
+      G.fx.bits(v1.copy(this.pos).setY(this.pos.y - 0.1), { count: full ? 26 : 16, color: 0x5a3a1e, speed: 3, up: 3, grav: 14, life: 0.8, size: 0.16, grow: 0, drag: 0.5, alpha: 1 });
+      if (!full) G.fx.puff(v1.copy(this.pos).setY(this.pos.y - 0.3), { count: 6, color: 0xb59a6e, speed: 1.2, up: 0.5, life: 0.9, size: 0.7, alpha: 0.5 });
+      G.audio.play('splat', { pos: this.pos, vol: full ? 0.9 : 0.6 });
     }
   }
 
@@ -1586,7 +1593,7 @@ export class Pig implements Holdable {
       lookAt: this.danceId ? null : this.glance(), red: this.smoking ? 1 : clamp(this.high * 1.6, 0, 1), bacon: this.bacon,
       dance: this.danceId && this.mode === 'normal' ? this.danceId : 0, danceT: this.now - this.danceAt, sit: this.seat >= 0 && this.mode === 'normal',
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
-      sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
+      sprinting: this.sprinting, muddy: this.muddy, mudLeft: this.mudLeft, holding: !!this.held, charging: this.charge(), dt, t: this.now,
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,
       leanF: this.leanX * Math.sin(this.yaw) + this.leanZ * Math.cos(this.yaw), leanS: this.leanX * Math.cos(this.yaw) - this.leanZ * Math.sin(this.yaw),
     });

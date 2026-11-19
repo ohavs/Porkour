@@ -124,6 +124,8 @@ export class Online {
   quick() { this.send({ op: 'quick', farm: farmId() }); }
   leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); }
   setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string; save?: string }) { this.send({ op: 'room', ...m }); }
+  /** Host: the game's over — the whole room back to its lobby together (s26, user: "keep us together"). */
+  regroup() { this.send({ op: 'room', regroup: true }); }
   kick(id: number) { this.send({ op: 'kick', id }); }
   chat(text: string) { this.send({ op: 'chat', text }); }
   setOutfit(outfit: string) { this.send({ op: 'outfit', outfit }); }
