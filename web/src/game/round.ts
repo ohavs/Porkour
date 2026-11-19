@@ -66,7 +66,9 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // s25: a sink left running floods the floor (Bob slips), fart + fire = fireball
   | 'floodSlip' | 'fireball' | 'fireballBob'
   // s26: Bob's walk-in farmhouse (his piggy bank on the nightstand, tip him out of his bed at night)
-  | 'piggyBank' | 'bedTumble';
+  | 'piggyBank' | 'bedTumble'
+  // s27: Bob's lunch in his kitchen (pull his chair, steal his plate, spike his food)
+  | 'chairPull' | 'lunchSteal' | 'lunchSpike';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -78,7 +80,7 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
   'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob', 'floodSlip', 'fireballBob', 'piggyBank'];
 const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
-  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', 'fireball', 'bedTumble', ...REQ_POOL];
+  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', 'fireball', 'bedTumble', 'chairPull', 'lunchSteal', 'lunchSpike', ...REQ_POOL];
 /** Bonus pranks per round (user: "add more missions"; was 2). */
 const BONUS_N = 3;
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
@@ -258,7 +260,9 @@ export class Round {
       ...(this.game.interiors?.sinks.length ? ['floodSlip'] as MissionId[] : []), ...FIRE_MISSIONS,
       // s26: the farmhouse — his piggy bank, his bed (tip him out; mud on his face works in bed too)
       ...(this.game.farm.props.some((p) => p.def === PROPS.piggyBank) ? ['piggyBank'] as MissionId[] : []),
-      ...(this.game.farm.house?.bed && this.game.farm.chores.some((c) => c.id === 'bed') ? ['bedTumble', 'mudFace'] as MissionId[] : [])];
+      ...(this.game.farm.house?.bed && this.game.farm.chores.some((c) => c.id === 'bed') ? ['bedTumble', 'mudFace'] as MissionId[] : []),
+      // s27: his lunch in the kitchen (once a round: bonus only)
+      ...(this.game.lunch ? ['chairPull', 'lunchSteal', 'lunchSpike'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
@@ -320,6 +324,9 @@ export class Round {
     if (type === 'radioOff') this.done('radioLure');
     if (type === 'bobDisco') this.done('discoBob');
     if (type === 'bedTumble') this.done('bedTumble');
+    if (type === 'chairPull') this.done('chairPull');
+    if (type === 'lunchGone') this.done('lunchSteal');
+    if (type === 'lunchSpit') this.done('lunchSpike');
     if (type === 'bath') this.done('bubbleBath');
     if (type === 'treeShaken') this.count('shakeTrees');
     if (type === 'pressed') this.count('ciderPress');
@@ -598,6 +605,13 @@ export class Round {
     if (x.id === 'bobSoak') return IC.fist + IC.bob + IC.water;
     if (x.id === 'cheeseRiver') return IC.grab + IC.water;
     if (x.id === 'peakClimb') return IC.feet + IC.stars;
+    if (x.id === 'chairPull') return IC.rmb + IC.chair + IC.bob;
+    if (x.id === 'lunchSteal') return IC.rmb + IC.plate;
+    if (x.id === 'lunchSpike') {
+      const lu = this.game.lunch;
+      if (lu && L.held === lu.sauce) return kc('R') + IC.pour + IC.plate;
+      return IC.rmb + (L.muddy > 0 ? IC.mud : IC.chili) + IC.plate;
+    }
     if (x.id === 'coffeeSpike') {
       const pc = this.game.porch;
       if (pc?.sauce && L.held === pc.sauce) return kc('R') + IC.pour + IC.mug;
@@ -691,6 +705,15 @@ export class Round {
         case 'wallJump': {   // the nearest bit of terrace wall (not a ramp)
           const st = G.terrain.steps.slice().sort((a, b) => Math.abs(a.z - L.pos.z) - Math.abs(b.z - L.pos.z))[0];
           if (st) { let x = L.pos.x; for (const [r0, r1] of st.ramps) if (x > r0 - 3 && x < r1 + 3) x = r1 + 6; mark(i, new THREE.Vector3(x, G.terrain.base(x, st.z - 2), st.z - 0.5)); }
+          return;
+        }
+        case 'chairPull': { const lu = g.lunch; if (lu && !lu.chair.banked) mark(i, lu.chair.obj.position, lu.chair.half); return; }
+        case 'lunchSteal': { const lu = g.lunch; if (lu && !lu.plate.banked) mark(i, lu.plate.obj.position, 0.4); return; }
+        case 'lunchSpike': {   // hot sauce in hand (or a muddy pig): his plate; else the bottle on his table
+          const lu = g.lunch; if (!lu) return;
+          const sauce = !lu.sauce.banked && lu.sauce.left > 0.01 ? lu.sauce : null;
+          if (L.held === sauce || L.muddy > 0 || !sauce) { if (!lu.plate.banked) mark(i, lu.plate.obj.position, 0.4); return; }
+          mark(i, sauce.obj.position, sauce.half);
           return;
         }
         case 'coffeeSpike': {   // hot sauce in hand (or a muddy pig): his mug; else the bottle by the grill

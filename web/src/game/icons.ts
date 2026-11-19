@@ -158,6 +158,10 @@ export const IC = {
   /** Bob's coffee mug (steaming). */
   mug: svg(`<path d="M5 9h11v9a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z" fill="#fff6e6" ${O}/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" ${O}/><path d="M5 9h11" stroke="#4f8fd8" stroke-width="2.4"/><path d="M8.5 6.5c-1-1.4 1-2 0-3.5M12.5 6.5c-1-1.4 1-2 0-3.5" fill="none" stroke="#fff6e6" stroke-width="1.6" stroke-linecap="round"/>`),
   /** A bottle of hot sauce (a chili on the label). */
+  /** A kitchen chair (Bob's seat at lunch). */
+  chair: svg(`<path d="M7 3h10v9H7z" fill="#c8813f" ${O}/><path d="M9.5 5.5h5M9.5 8h5" stroke="#8a5428" stroke-width="1.4" stroke-linecap="round"/><path d="M5 12h14v3H5z" fill="#e0a05a" ${O}/><path d="M6.5 15v6.5M17.5 15v6.5M9 15v4M15 15v4" ${O}/>`),
+  /** Bob's lunch: a plate with sausages and a fried egg. */
+  plate: svg(`<ellipse cx="12" cy="14" rx="10" ry="6.5" fill="#fff6e6" ${O}/><ellipse cx="12" cy="14" rx="7" ry="4.2" fill="none" stroke="#7fb3e0" stroke-width="1.2"/><circle cx="15" cy="13.2" r="2.8" fill="#ffffff" ${O}/><circle cx="15" cy="13.2" r="1.2" fill="#ffc21a"/><rect x="5.5" y="11.2" width="7" height="2.4" rx="1.2" fill="#b5532c" ${O}/><rect x="6.5" y="14.4" width="7" height="2.4" rx="1.2" fill="#b5532c" ${O}/>`),
   chili: svg(`<path d="M10 2h4v4l2 3v11a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9l2-3z" fill="#e2352b" ${O}/><rect x="9.6" y="1.5" width="4.8" height="3" rx=".8" fill="#3f9a3a" ${O}/><path d="M9.5 13.5c1.2 2.4 4 2.8 5 .5" fill="none" stroke="#ffd166" stroke-width="2.2" stroke-linecap="round"/>`),
 };
 export type IconId = keyof typeof IC;

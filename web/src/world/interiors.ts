@@ -75,7 +75,7 @@ const K: Record<string, Kind> = {
   standLamp: { m: 'Light_Stand1', h: 1.6, mass: 5, value: 15, use: 'lamp', shape: 'cyl' },
   deskLamp: { m: 'Light_Desk', h: 0.5, mass: 1.5, value: 10, use: 'lamp' },
   nightstand: { m: 'NightStand_1', h: 0.6, mass: 10, value: 15, wall: true },
-  tableL: { m: 'Table_RoundLarge', h: 0.8, mass: 25, value: 20, shape: 'cyl' },
+  tableL: { m: 'Table_RoundLarge', h: 0.8, mass: 25, value: 20 },   // (a 2.65 × 1.38 m oval: a box collider — its old cylinder was 2.65 m across and shoved the chairs away)
   tableS: { m: 'Table_RoundSmall', h: 0.7, mass: 10, value: 12, shape: 'cyl' },
   trash: { m: 'Trashcan_Small1', h: 0.55, mass: 3, value: 2, shape: 'cyl' },
   plant2: { m: 'Houseplant_2', h: 1.0, mass: 6, value: 8, shape: 'cyl' },
@@ -340,6 +340,8 @@ export class Interiors {
       n++;
       tags.set(tag ?? id, { pr, top: sz.y, lx, lz, ly });
       if (tag === 'bobBed') h.bed = pr;
+      if (id === 'oven' && !h.oven) h.oven = pr;
+      if (id === 'fridge' && !h.fridge) h.fridge = pr;
       if (kd.use === 'hearth') { const hh = this.hearths[this.hearths.length - 1], t = pr.body.translation(); hh.chimney = h.chimneyTop.clone(); hh.home = new THREE.Vector3(t.x, t.y, t.z); }
       return pr;
     };
@@ -358,14 +360,15 @@ export class Interiors {
         rug.position.set(p.x, y + 0.012, p.z); rug.rotation.y = h.yaw + it.yaw;
         rug.traverse((o) => { o.castShadow = false; }); this.scene.add(rug);
       } else if ('table' in it) {
-        put(it.table, it.x, it.z, it.yaw);
-        it.chairs.forEach((c, i) => {
-          const a = it.yaw + (i / it.chairs.length) * Math.PI * 2 + Math.PI / 4, d = 0.95;
-          put(c, it.x + Math.sin(a) * d, it.z + Math.cos(a) * d, a + Math.PI);   // facing the table
+        h.table = put(it.table, it.x, it.z, it.yaw);
+        const cs = Math.cos(it.yaw), sn = Math.sin(it.yaw);
+        this.chairSpots(it.table, it.chairs.length).forEach(([cx, cz, cy], i) => {
+          const ch = put(it.chairs[i], it.x + cx * cs + cz * sn, it.z - cx * sn + cz * cs, it.yaw + cy);   // facing the table
+          if (ch) h.chairs.push(ch);
         });
+        // (Bob's own plate + the hot sauce go on it with his lunch: world/lunch.ts)
         const top = this.sizeOf(K[it.table]).y;
-        put('plate', it.x + 0.2, it.z - 0.1, 0, false, undefined, top + 0.01);
-        put('plate', it.x - 0.25, it.z + 0.15, 0, false, undefined, top + 0.01);
+        put('plate', it.x + 0.25, it.z - 0.25, 0, false, undefined, top + 0.01);
       } else if ('top' in it) {
         const t = tags.get(it.top); if (!t) continue;
         const dx = it.dx ?? 0, lx = t.lx + Math.cos(t.ly) * dx, lz = t.lz - Math.sin(t.ly) * dx;
@@ -385,22 +388,40 @@ export class Interiors {
     const seat = id === '@table' ? ['chair1', 'chair2', 'chair1'] : ['stool', 'stool'];
     for (let tries = 0; tries < 80; tries++) {
       const k = cells[Math.floor(rng() * cells.length)], x = N.x0 + ((k % N.w) + 0.5) * N.cell, z = N.z0 + (((k / N.w) | 0) + 0.5) * N.cell;
-      if (!fits(x, z, 2.6, 2.6, 0)) continue;
-      const tk = id === '@table' ? 'tableL' : 'tableS';
-      this.place(tk, K[tk], x, y0, z, rng() * 6.28);
-      seat.forEach((s, i) => {
-        const a = (i / seat.length) * Math.PI * 2 + rng() * 0.3, d = 0.95;
-        this.place(s, K[s], x + Math.sin(a) * d, y0, z + Math.cos(a) * d, a + Math.PI);   // facing the table
+      const tk = id === '@table' ? 'tableL' : 'tableS', ts = this.sizeOf(K[tk]);
+      const yaw = Math.floor(rng() * 4) * Math.PI / 2, w = ts.x + 0.6, d = ts.z + 1.4;
+      if (!fits(x, z, Math.max(w, d), Math.max(w, d), 0)) continue;
+      this.place(tk, K[tk], x, y0, z, yaw);
+      const cs = Math.cos(yaw), sn = Math.sin(yaw);
+      this.chairSpots(tk, seat.length).forEach(([cx, cz, cy], i) => {
+        this.place(seat[i], K[seat[i]], x + cx * cs + cz * sn, y0, z - cx * sn + cz * cs, yaw + cy);   // facing the table
       });
       // something on the table
       const top = this.sizeOf(K[tk]).y;
       const small = SMALL_ON_TABLE[Math.floor(rng() * SMALL_ON_TABLE.length)];
       this.place(small, K[small], x + 0.15, y0 + top + 0.02, z - 0.1, rng() * 6.28);
-      mark(x, z, 2.6, 2.6, 0, 0);
+      mark(x, z, Math.max(w, d), Math.max(w, d), 0, 0);
       void free;
       return true;
     }
     return false;
+  }
+
+  /**
+   * Where `n` chairs go round a table (table space: x, z, yaw facing the table): a long table (the 2.65 m oval) gets
+   * them along its two long sides, a round one in a ring just clear of its edge.
+   */
+  private chairSpots(tk: string, n: number): [number, number, number][] {
+    const s = this.sizeOf(K[tk]), out: [number, number, number][] = [];
+    if (s.x > s.z * 1.4) {
+      const fz = s.z / 2 + 0.32, front = Math.ceil(n / 2), back = n - front;
+      for (let i = 0; i < front; i++) out.push([front === 1 ? 0 : (i / (front - 1) - 0.5) * s.x * 0.5, fz, Math.PI]);
+      for (let i = 0; i < back; i++) out.push([back === 1 ? 0 : (i / (back - 1) - 0.5) * s.x * 0.5, -fz, 0]);
+    } else {
+      const r = Math.max(s.x, s.z) / 2 + 0.32;
+      for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + Math.PI / 4; out.push([Math.sin(a) * r, Math.cos(a) * r, a + Math.PI]); }
+    }
+    return out;
   }
 
   private defs = new Map<string, PropDef>();

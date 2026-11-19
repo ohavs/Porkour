@@ -59,7 +59,7 @@ export class HeavyLoot {
       const t = c.prop.body.translation(), at = v1.set(t.x, t.y + 0.6, t.z);
       G.audio.play('bong', { pos: at, vol: 1, rand: 0.03, minGap: 0.2 });
       G.fx.puff(v1.set(t.x, t.y + 1.1, t.z), { count: 3, color: 0xffe08a, speed: 0.8, up: 0.6, life: 0.6, size: 0.35, alpha: 0.35 });
-      G.noise(at, CLOCK.hear);
+      G.noise(at, CLOCK.hear, c.prop.homeDist() < 2.5);   // his clock striking where it always stands: nothing to look into
       G.events.push({ type: 'clockBong', why: String(this.clocks.indexOf(c)) });
     }
   }

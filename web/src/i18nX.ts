@@ -42,7 +42,7 @@ export const EN_X = {
   'a.weedMat': 'Paper + filter + weed on the mat', 'a.weedPot': 'Butter + weed in the pot', 'a.brewWort': 'Wort ready in the kettle',
   // Bob's coffee break on the porch (world/porch.ts)
   'm.coffeeSpike': 'Spike Bob\'s coffee (hot sauce or mud)', 'bob.coffee': 'Bob is reading the paper over a coffee',
-  'bob.hot': 'Bob\'s mouth is on fire!', 'bob.yuck': 'Bob spits out his coffee', 'bob.cool': 'Bob is cooling his head in the pond',
+  'bob.hot': 'Bob\'s mouth is on fire!', 'bob.yuck': 'Bob spits it out — yuck!', 'bob.cool': 'Bob is cooling his head in the pond',
   'item.coffeeMug': 'Bob\'s coffee mug', 'item.hotSauce': 'Hot sauce',
   'a.coffee': 'Coffee break (porch)', 'a.coffeeGo': 'Bob: coffee break now', 'a.coffeeSip': 'Bob: a sip now', 'a.coffeeHot': 'Hot sauce in his coffee',
   'a.coffeeMud': 'Mud in his coffee', 'a.coffeeSauce': 'Hot sauce in front of me', 'a.tpPorch': 'Teleport: porch',
@@ -81,6 +81,10 @@ export const EN_X = {
   'a.fire': 'Fire', 'a.fireballMe': 'Fireball on me', 'a.fireballBob': 'Fireball on Bob', 'a.tpGrill': 'Teleport: the BBQ grill',
   'net.regroup': 'Back to the room — all together', 'a.bobBedNow': 'Bob: into his bed now', 'a.bedroom': "Bob's bedroom", 'item.piggyBank': 'Piggy bank',
   'm.piggyBank': "Steal Bob's piggy bank from his nightstand", 'm.bedTumble': 'Tip Bob out of his bed while he sleeps',
+  'item.bobLunch': "Bob's lunch", 'm.chairPull': "Pull Bob's chair away as he sits down", 'm.lunchSteal': "Steal Bob's lunch from under his nose",
+  'm.lunchSpike': "Spike Bob's lunch (hot sauce or mud)", 'bob.lunch': 'Bob is having lunch in his kitchen', 'bob.cook': 'Bob is frying sausages',
+  'a.lunch': 'Lunch (kitchen)', 'a.lunchGo': 'Bob: lunch now', 'a.lunchHot': 'Hot sauce on his lunch', 'a.lunchMud': 'Mud on his lunch',
+  'a.lunchChair': "Pull Bob's chair away", 'a.tpKitchen': 'Teleport: the kitchen',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -119,7 +123,7 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'net.switching': 'Cambiando de granja…', 'at.owner': 'Dueño', 'a.users': 'Jugadores conectados', 'a.refresh': 'Actualizar', 'a.giveCoins': 'Dar monedas', 'a.giveLevel': '+1 nivel', 'a.ownerHint': 'Tu cuenta: todas las monedas y el nivel máximo.',
   'a.weedMat': 'Papel + filtro + hierba en la esterilla', 'a.weedPot': 'Mantequilla + hierba en la olla', 'a.brewWort': 'Mosto listo en el caldero',
   'm.coffeeSpike': 'Échale algo al café de Bob (salsa picante o barro)', 'bob.coffee': 'Bob lee el periódico con un café',
-  'bob.hot': '¡A Bob le arde la boca!', 'bob.yuck': 'Bob escupe el café', 'bob.cool': 'Bob se refresca la cabeza en el estanque',
+  'bob.hot': '¡A Bob le arde la boca!', 'bob.yuck': 'Bob lo escupe todo — ¡puaj!', 'bob.cool': 'Bob se refresca la cabeza en el estanque',
   'item.coffeeMug': 'La taza de café de Bob', 'item.hotSauce': 'Salsa picante',
   'a.coffee': 'Café (porche)', 'a.coffeeGo': 'Bob: a tomar café ya', 'a.coffeeSip': 'Bob: un sorbo ya', 'a.coffeeHot': 'Picante en su café',
   'a.coffeeMud': 'Barro en su café', 'a.coffeeSauce': 'Salsa picante delante de mí', 'a.tpPorch': 'Teletransporte: porche',
@@ -155,4 +159,8 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.fire': 'Fuego', 'a.fireballMe': 'Bola de fuego en mí', 'a.fireballBob': 'Bola de fuego en Bob', 'a.tpGrill': 'Teletransporte: la barbacoa',
   'net.regroup': 'Volvemos a la sala — todos juntos', 'a.bobBedNow': 'Bob: a su cama ya', 'a.bedroom': 'Dormitorio de Bob', 'item.piggyBank': 'Hucha de cerdito',
   'm.piggyBank': 'Roba la hucha de cerdito de la mesita de Bob', 'm.bedTumble': 'Tira a Bob de la cama mientras duerme',
+  'item.bobLunch': 'El almuerzo de Bob', 'm.chairPull': 'Quítale la silla a Bob cuando vaya a sentarse', 'm.lunchSteal': 'Róbale el almuerzo a Bob en sus narices',
+  'm.lunchSpike': 'Échale algo al almuerzo de Bob (salsa picante o barro)', 'bob.lunch': 'Bob está almorzando en su cocina', 'bob.cook': 'Bob está friendo salchichas',
+  'a.lunch': 'Almuerzo (cocina)', 'a.lunchGo': 'Bob: a almorzar ya', 'a.lunchHot': 'Picante en su almuerzo', 'a.lunchMud': 'Barro en su almuerzo',
+  'a.lunchChair': 'Quitarle la silla a Bob', 'a.tpKitchen': 'Teletransporte: la cocina',
 };

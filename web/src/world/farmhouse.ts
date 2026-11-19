@@ -290,6 +290,8 @@ export class Farmhouse {
   layout: HouseItem[] = [];
   /** Bob's bed (set by interiors.ts once it's placed) — he sleeps in it at night. */
   bed: Prop | null = null;
+  /** The kitchen (set by interiors.ts): stove, fridge, table + its chairs — his lunch (world/lunch.ts). */
+  oven: Prop | null = null; fridge: Prop | null = null; table: Prop | null = null; chairs: Prop[] = [];
   /** Outside the front door (Bob's door zone), just inside it. */
   door: THREE.Vector3; doorIn: THREE.Vector3;
   /** Where the smoke leaves the chimney (world). */
@@ -643,7 +645,7 @@ export class Farmhouse {
       // kitchen: a counter run along the right wall, a table with chairs, a trash can
       { row: ['fridge', 'oven', 'kSink', 'kDrawers', 'kCab'], x: iR, z: pa + 0.05, yaw: -E, dir: [0, 1] },
       { table: 'tableL', x: 2.35, z: 2.3, yaw: 0, chairs: ['chair1', 'chair2', 'chair1', 'chair3'] },
-      { id: 'trash', x: 1.5, z: iF - 0.35, yaw: 0 },
+      { id: 'trash', x: 0.95, z: iF - 0.3, yaw: 0 },
       { top: 'kDrawers', id: 'radio' },
       // Bob's bedroom: the king bed against the back wall, nightstands, a dresser, a shelf, a rug at the foot of the bed
       { id: 'bedKing', x: -2.45, z: iB, yaw: 0, wall: true, tag: 'bobBed' },

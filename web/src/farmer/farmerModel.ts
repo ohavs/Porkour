@@ -188,6 +188,24 @@ export function buildFarmer(root: THREE.Group): FarmerRig {
     for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.12, 0.08, 0.02), toonMat(0x6fb3e0), [s * 0.2, 0.2, 0.12], g, undefined, [0, 0, -s * 0.4]);
   });
 
+  // lunch (world/lunch.ts): a frying pan held out by its handle (its open side faces the hand's +z = up with the arm
+  // straight out), sausages + an egg in it; a fork for eating
+  tool('pan', (g) => {
+    const iron = toonMat(0x3a3a40);
+    mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.22, 8), toonMat(0x6e4524), [0, -0.1, 0], g);
+    const body = mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.05, 20), iron, [0, -0.36, 0], g); body.rotation.x = Math.PI / 2;
+    const food = new THREE.Group(); food.name = 'panFood'; food.position.set(0, -0.36, 0.03); g.add(food);
+    const sausage = new THREE.CapsuleGeometry(0.022, 0.1, 4, 8);
+    for (const [x, y, r] of [[-0.04, 0.03, 0.3], [-0.02, -0.04, -0.2]]) { const m = new THREE.Mesh(sausage, toonMat(0xa8502a)); m.name = 'panFood'; m.position.set(x, y, 0.01); m.rotation.set(0, Math.PI / 2, r); food.add(m); }
+    const egg = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.01, 14), toonMat(0xffffff)); egg.name = 'panFood'; egg.position.set(0.05, 0.01, 0.005); egg.rotation.x = Math.PI / 2; food.add(egg);
+    const yolk = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), toonMat(0xffbf1a)); yolk.name = 'panFood'; yolk.position.set(0.05, 0.01, 0.014); yolk.scale.set(1, 1, 0.6); food.add(yolk);
+  });
+  tool('cutlery', (g) => {
+    mesh(new THREE.BoxGeometry(0.012, 0.13, 0.006), metal, [0, -0.08, 0.02], g);
+    for (const x of [-0.009, 0, 0.009]) mesh(new THREE.BoxGeometry(0.003, 0.05, 0.004), metal, [x, -0.165, 0.02], g);
+    const bite = new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.03, 3, 6), toonMat(0xa8502a)); bite.position.set(0, -0.17, 0.03); g.add(bite);
+  });
+
   // alert 2: a pitchfork, held low with the tines forward (the visual tilts it per pose)
   tool('fork', (g) => {
     const h = new THREE.Group(); h.name = 'forkTilt'; h.rotation.x = Math.PI - 0.12; g.add(h);
