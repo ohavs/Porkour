@@ -212,10 +212,12 @@ export class Game {
     if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
     this.fpHands = new FpHands(this.gfx.camera);
     this.wheel.onPick = (id) => { if (id) this.pendingEmote = id; };
+    // the wheel's pictures (my pig in each dance pose): drawn when the game is idle, not on the first B press
+    setTimeout(() => { const cb = () => this.wheel.icons(this.local.visual.color, this.local.visual.outfit); ('requestIdleCallback' in window) ? requestIdleCallback(cb, { timeout: 4000 }) : cb(); }, 6000);
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
       if (b === 'view') { if (this.mode === 'play' && !this.lockpick.isOpen) this.toggleView(); return; }
-      if (b === 'emote') { if (!this.lockpick.isOpen && !this.local.out) this.wheel.open(); return; }
+      if (b === 'emote') { if (!this.lockpick.isOpen && !this.local.out) { this.wheel.icons(this.local.visual.color, this.local.visual.outfit); this.wheel.open(); } return; }
       if (this.wheel.isOpen && b === 'attack') { this.pendingEmote = this.wheel.close(); this.input.clearPresses(); return; }   // click = pick
       if (this.lockpick.isOpen) {
         if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();

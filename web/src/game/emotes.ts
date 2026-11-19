@@ -1,4 +1,22 @@
+import * as THREE from 'three';
 import { t, type Key } from '../i18n';
+import { PigVisual } from '../pig/pigVisual';
+import type { Outfit } from '../pig/cosmetics';
+import { G } from './ctx';
+import { DANCE_SPIN } from '../pig/pig';
+
+/**
+ * Each dance's picture moment (s into it) and camera (direction from the pig, frame centre height, distance): the
+ * wheel's tiles show your own pig in that pose (user: "like Fortnite: the icon is the pig doing the dance").
+ */
+const SNAP: Record<number, { t: number; dir: [number, number, number]; y: number; d: number }> = {
+  1: { t: 0.55, dir: [0.35, 0.18, 1], y: 0.74, d: 3.0 },
+  2: { t: 1.62, dir: [0.4, 0.15, 1], y: 0.8, d: 3.1 },
+  3: { t: 2.4, dir: [-0.35, 0.15, 1], y: 0.84, d: 3.1 },
+  4: { t: 2.35, dir: [0.3, 1.5, 0.7], y: 0.5, d: 2.7 },
+  5: { t: 1.04, dir: [0.45, 0.15, 1], y: 0.72, d: 3.0 },
+  6: { t: 1.0, dir: [0.9, 0.25, 1], y: 0.64, d: 2.9 },
+};
 
 /**
  * The emote wheel (user: "a dance wheel like Fortnite, a few dances to start — few, but each one well made and funny").
@@ -24,6 +42,7 @@ const CSS = `
 #emoteWheel .ew { position: absolute; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center;
   background: linear-gradient(#fff6e6, #f0dcb8); box-shadow: 0 0 0 3px #3b2412, 0 4px 0 #3b2412; cursor: pointer; transition: transform .08s; font: 13px Title, sans-serif; color: #3b2412; }
 #emoteWheel .ew.on { background: linear-gradient(#ffe7a3, #ffc94a); transform: scale(1.16); box-shadow: 0 0 0 3px #3b2412, 0 4px 0 #3b2412, 0 0 18px rgba(255,209,102,.9); }
+#emoteWheel .ew img { width: 80px; height: 80px; pointer-events: none; }
 #emoteWheel .mid { position: absolute; left: 50%; top: 50%; width: 120px; margin-left: -60px; transform: translateY(-50%); text-align: center; font: 18px Title, sans-serif; color: #ffd166; text-shadow: 0 2px 0 #3b2412; pointer-events: none; }
 #emoteWheel .mid small { display: block; font-size: 12px; color: #fff6e6; opacity: .8; }
 `;
@@ -34,6 +53,44 @@ export class EmoteWheel {
   private tiles: HTMLDivElement[] = [];
   private mid: HTMLDivElement;
   private ax = 0; private ay = 0; private sel = -1;
+  private iconKey = '';
+  /**
+   * The tiles' pictures: my own pig (colour + outfit) posed at each dance's key moment, drawn once by a little
+   * offscreen renderer (a WebGL context of its own, given back right after). Redrawn when the outfit changes.
+   */
+  icons(color: number, outfit: Outfit) {
+    const key = color + JSON.stringify(outfit);
+    if (key === this.iconKey) return;
+    this.iconKey = key;
+    let R: THREE.WebGLRenderer | null = null;
+    const play = G.audio.play;
+    try {
+      R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      R.setPixelRatio(1); R.setSize(160, 160, false); R.outputColorSpace = THREE.SRGBColorSpace;
+      const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(26, 1, 0.05, 30);
+      scene.add(new THREE.HemisphereLight(0xfff4e6, 0x9a7a5a, 1.8));
+      const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(2, 4, 3); scene.add(sun);
+      const pig = new PigVisual(color, outfit);
+      pig.centerHeight = 0; scene.add(pig.root);
+      G.audio.play = (() => -1) as typeof play;   // (the beats' sounds: not while posing)
+      DANCES.forEach((d, i) => {
+        const S = SNAP[d.id];
+        // run the dance up to its moment (the joints are damped: they need a second to get there)
+        for (let k = 0; k <= 45; k++) {
+          const tt = Math.max(0, S.t - 1.5 + k / 30);
+          pig.update({ speed: 0, grounded: true, vy: 0, standing: d.id !== DANCE_SPIN, mode: 'normal', sprinting: false, muddy: 0, holding: false, charging: 0,
+            dt: 1 / 30, t: 10 + tt, dance: d.id, danceT: tt });
+        }
+        pig.root.updateMatrixWorld(true);
+        const c = new THREE.Vector3(0, S.y, 0);
+        cam.position.copy(c).addScaledVector(new THREE.Vector3(...S.dir).normalize(), S.d); cam.lookAt(c);
+        R!.render(scene, cam);
+        const img = document.createElement('img'); img.src = R!.domElement.toDataURL('image/png'); img.alt = '';
+        const tile = this.tiles[i]; tile.innerHTML = ''; tile.appendChild(img);
+      });
+    } catch { this.iconKey = ''; /* no WebGL to spare: the drawn icons stay */ }
+    finally { G.audio.play = play; if (R) { R.dispose(); R.forceContextLoss(); } }
+  }
   /** A tile was clicked (lobby / free pointer): this dance, picked at once. */
   onPick?: (id: number) => void;
 
