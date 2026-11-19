@@ -346,7 +346,8 @@ export class Hud {
     const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
     const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
     const gl = pig.gulag ? (G.gulag as { jobs(p: Pig): { job: string; n: number; of: number }[] } | null) : null;
-    if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
+    if (p) { /* (a snack in the hooves, above) */ }
+    else if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
     else if (gl && !pig.held && !pig.handle) p = row(P(IC.lock), ...gl.jobs(pig).map((j) => P(IC.rmb, j.job === 'wheel' ? IC.circle : IC.grab, `<b>${j.n}/${j.of}</b>`)));
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())), P(kc('Q'), ICONS.fart));
     else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
@@ -355,8 +356,9 @@ export class Hud {
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
     else if (G.phones?.oinkNow(pig)) p = row(P(kc('F'), IC.pig, IC.phone));
     else if (pig.handle) p = row(P(IC.rmb, IC.drop), P(IC.mouse, pig.handle.kind === 'crank' ? IC.circle : IC[pig.handle.icon]));
-    else if (pig.held && useIc && !chainIc && snack?.left) p = row(`<span class="pp go">${IC.lmb}${useIc}</span>`, P(IC.rmb, IC.drop), P(IC.lmb, IC.hold, IC.throw));   // a snack: the click comes first
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    const passIc = pig.held && pig.held.kind !== 'pig' && (G.pigs as Pig[]).some((o) => o !== pig && !o.out && !o.absent && !o.held && o.pos.distanceTo(pig.pos) < 2.6) ? P(kc('G'), IC.pass) : '';
+    if (pig.held && useIc && !chainIc && snack?.left && !pig.out) p = row(`<span class="pp go">${IC.lmb}${useIc}</span>`, P(IC.rmb, IC.drop), passIc, P(IC.lmb, IC.hold, IC.throw));   // a snack: the click comes first
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), passIc, pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));

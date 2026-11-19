@@ -29,6 +29,7 @@ import type { Porch } from '../world/porch';
 import { Mines } from '../world/mines';
 import { Gulag } from '../world/gulag';
 import { EmoteWheel } from './emotes';
+import { Lounge } from '../world/lounge';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -89,6 +90,8 @@ export class Game {
   gulag: Gulag | null = null;
   /** The emote wheel (hold B) and the dance it picked (sent with the next controls). */
   wheel = new EmoteWheel(); private pendingEmote = 0;
+  /** Cannabis mode: the smoking lounge (the couch); my seat last frame (the camera swings round when I sit). */
+  lounge: Lounge | null = null; private seatWas = -1;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -168,6 +171,14 @@ export class Game {
       const gs = Gulag.findSpot(this.nav, bounds, f.places.stash, avoid, f.inWater);
       if (gs && !f.chain) { this.gulag = new Gulag(scene, f.props, gs.at, gs.yaw); }
       G.gulag = this.gulag;
+      // cannabis mode: the smoking lounge near the shed (its open front faces the shed)
+      const shed = f.places.tp.find((x) => x[0] === 'shed');
+      if (f.chain?.kind === 1 && shed) {
+        const sp = new THREE.Vector3(shed[1], 0, shed[2]);
+        const ls = Gulag.findSpot(this.nav, bounds, sp, avoid, f.inWater, { min: 9, max: 34, pref: 15, half: 4.5 });
+        if (ls) { this.lounge = new Lounge(scene, f.props, ls.at, ls.yaw); f.places.tp.push(['lounge', ls.at.x + Math.sin(ls.yaw) * 4, ls.at.z + Math.cos(ls.yaw) * 4]); }
+      }
+      G.lounge = this.lounge;
     }
     G.chain = this.farm.chain ?? null;
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
@@ -298,7 +309,7 @@ export class Game {
   /** First person right now (knocked over, carried or out of the round: the camera steps back to third person). */
   fpNow() {
     const L = this.local;
-    return ADMIN.fp && this.mode === 'play' && !L.out && L.mode !== 'ragdoll' && L.mode !== 'held';
+    return ADMIN.fp && this.mode === 'play' && !L.out && L.mode !== 'ragdoll' && L.mode !== 'held' && L.seat < 0 && !L.danceId;   // (sitting on the couch / dancing: you see your pig)
   }
   /** V / the eye button / the gamepad's View: first ↔ third person. */
   toggleView() {
@@ -404,6 +415,7 @@ export class Game {
     }
     host?.endStep();
     if (G.net !== 'client') HANDS.stepHost(FIXED);
+    if (G.net !== 'client' && (++this.nanT & 15) === 0) this.nanWatch();
     if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.emote = 0; this.scripted.passP = false; }
   }
 
@@ -906,6 +918,34 @@ export class Game {
   }
 
   /** Fixed simulation steps for the time that passed (solo / host). */
+  /**
+   * Physics watchdog (host / solo, a few times a second): a body that went NaN (a bad joint, an impossible overlap)
+   * would poison the whole world — every body, the camera, the frame — and the game looks frozen. Put it back.
+   */
+  private nanT = 0;
+  private nanWatch() {
+    const bad = (b: { translation(): { x: number; y: number; z: number }; linvel(): { x: number; y: number; z: number } }) => { const t = b.translation(), v = b.linvel(); return !Number.isFinite(t.x + t.y + t.z + v.x + v.y + v.z); };
+    for (const p of this.pigs) {
+      if (p.out || !p.body.isEnabled()) continue;
+      if (bad(p.body) || bad(p.grip.hand)) {
+        console.warn('physics: pig went NaN — reset');
+        if (p.held) p.release(false);
+        p.grip.detach(); p.seat = -1;
+        p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        if (p.mode === 'ragdoll') p.getUp();
+        p.respawn();
+      }
+    }
+    for (const pr of this.farm.props) {
+      if (pr.banked || !pr.body.isEnabled() || !bad(pr.body)) continue;
+      console.warn('physics: prop went NaN — reset', pr.def.id);
+      if (pr.heldBy) pr.heldBy.release?.(false);
+      pr.body.setLinvel({ x: 0, y: 0, z: 0 }, true); pr.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      pr.reset();
+    }
+    const f = this.farmer;
+    if (f && f.body.isEnabled() && bad(f.body)) { console.warn('physics: Bob went NaN — reset'); f.body.setLinvel({ x: 0, y: 0, z: 0 }, true); f.resetRound(this.farm.farmerSpawn); }
+  }
   private simulate(dt: number) {
     // settings menu / wardrobe pause the game (the admin panel doesn't: you test things live). Online never pauses.
     const paused = G.net === 'solo' && (this.menu.menuOpen || this.wardrobeEl.classList.contains('show'));
@@ -989,6 +1029,7 @@ export class Game {
     this.porch?.render(dt);
     if (this.mode === 'play') this.mines.render(dt);
     this.gulag?.render();
+    this.lounge?.render(dt);
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);
@@ -1002,6 +1043,12 @@ export class Game {
     const look = this.running && !this.menu.blocking && !this.wheel.isOpen;
     // working with the hooves (a light thing / a machine part): the camera looks a little past the pig, at the work
     const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
+    // sitting down on the couch: the camera swings round in front of me (I see my pig's face); up again: back behind
+    if (L0.seat !== this.seatWas) {
+      if (L0.seat >= 0 && this.lounge) { this.cam.yaw = this.lounge.seatYaw() + Math.PI; this.cam.pitch = 0.1; this.cam.dist = 3.4; }
+      else if (this.seatWas >= 0) { this.cam.yaw = L0.yaw; this.cam.dist = 4.8; }
+      this.seatWas = L0.seat;
+    }
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);
     else if (this.fpNow()) {
       // first person: eyes in the pig's head (a little in front of the neck pivot), my own pig hidden, its arms on screen

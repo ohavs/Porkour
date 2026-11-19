@@ -106,6 +106,8 @@ export const G = {
   porch: null as any,
   /** Land mines (world/mines.ts) and the pigs' gulag (world/gulag.ts: dead pigs work their way out). */
   mines: null as any, gulag: null as any,
+  /** Cannabis mode's smoking lounge (world/lounge.ts: the couch). */
+  lounge: null as any,
   /** Spots where RMB does something instead of a grab (the phone jack, the payphone): `icon` = the HUD prompt's icon. */
   uses: [] as { near(p: any): boolean; icon(p: any): string }[],
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */

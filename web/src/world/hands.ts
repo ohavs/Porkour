@@ -144,7 +144,13 @@ class Hands {
     return R.r + REACH.ext * this.ext(p);
   }
   /** The crosshair point (world) this pig aims at (sent by its player). */
-  aimAt(p: Pig, out: THREE.Vector3) { const i = p.input; return out.set(p.pos.x + (i.ax ?? 0), p.pos.y + (i.ay ?? 0.3), p.pos.z + (i.az ?? 1)); }
+  aimAt(p: Pig, out: THREE.Vector3) {
+    const i = p.input;
+    // no crosshair (an idle pig, a seat nobody plays, the aim not set yet): just in front of the snout — never NaN
+    // (a NaN goal sends the grip hand to NaN and that poisons the whole physics world)
+    if (!Number.isFinite(i.ax) || !Number.isFinite(i.ay) || !Number.isFinite(i.az)) return out.set(p.pos.x + Math.sin(p.yaw) * 0.6, p.pos.y + 0.3, p.pos.z + Math.cos(p.yaw) * 0.6);
+    return out.set(p.pos.x + i.ax, p.pos.y + i.ay, p.pos.z + i.az);
+  }
   /**
    * Where the pig wants its hoof / snout: the crosshair, kept within reach and in front of it. `loose` (a machine part
    * in the hoof): anywhere within reach — pulling a door / a lever toward yourself is fine. `lean`: a hoof already on a

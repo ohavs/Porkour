@@ -63,21 +63,21 @@ export class Gulag {
    * A flat open spot for the cabin (deterministic: every machine builds the same): free on the nav grid, no water /
    * bushes / dirt paths, not near Bob's work places, 14–40 m from the pigs' stash (nearer 22 m is better).
    */
-  static findSpot(nav: Nav, F: Rect, stash: THREE.Vector3, avoid: THREE.Vector3[], inWater: (x: number, z: number) => boolean) {
+  static findSpot(nav: Nav, F: Rect, stash: THREE.Vector3, avoid: THREE.Vector3[], inWater: (x: number, z: number) => boolean, o = { min: 14, max: 40, pref: 22, half: 3.5 }) {
     let best: { x: number; z: number } | null = null, bs = Infinity;
     const T = G.terrain;
     for (let x = F.x0 + 10; x <= F.x1 - 10; x += 2) for (let z = F.z0 + 10; z <= F.z1 - 10; z += 2) {
       const ds = Math.hypot(x - stash.x, z - stash.z);
-      if (ds < 14 || ds > 40) continue;
+      if (ds < o.min || ds > o.max) continue;
       if (avoid.some((a) => Math.hypot(a.x - x, a.z - z) < 9)) continue;
       let ok = true, lo = Infinity, hi = -Infinity;
-      for (let dx = -3.5; dx <= 3.5 && ok; dx += 1) for (let dz = -3.5; dz <= 3.5 && ok; dz += 1) {
+      for (let dx = -o.half; dx <= o.half && ok; dx += 1) for (let dz = -o.half; dz <= o.half && ok; dz += 1) {
         const px = x + dx, pz = z + dz;
         if (!nav.free(px, pz) || inWater(px, pz) || T.dirtAt(px, pz) > 0.4 || G.cover?.at(v1.set(px, T.height(px, pz) + 0.5, pz))) ok = false;
         const h = T.height(px, pz); lo = Math.min(lo, h); hi = Math.max(hi, h);
       }
       if (!ok || hi - lo > 0.6) continue;
-      const sc = Math.abs(ds - 22) + (hi - lo) * 4;
+      const sc = Math.abs(ds - o.pref) + (hi - lo) * 4;
       if (sc < bs) { bs = sc; best = { x, z }; }
     }
     if (!best) return null;

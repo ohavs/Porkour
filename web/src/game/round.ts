@@ -48,11 +48,13 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   | 'coffeeSpike'
   // every farm: land mines
   | 'mineBob'
+  // cannabis mode: the smoking lounge
+  | 'couchSesh'
   // chain modes: farm 6 (cannabis), farm 7 (beer), and the challenges you do high / drunk
   | 'rollJoint' | 'bongRip' | 'bakeCookies' | 'everyoneHigh' | 'brewBeer' | 'drinkUp'
   | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
-const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze'];
+const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
 const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pumpkinWell', 'lambStash', 'sheepOut', 'hayPond', 'loseBob', 'whackBob',
   'smashPots', 'eggBob', 'gnomePond', 'undiesWell', 'pieSteal', 'mudPorch', 'cowsOut', 'gateBreak',
@@ -201,7 +203,9 @@ export class Round {
 
   // ================================================================== host
   /** New round: fresh mission list (2 required pranks + 2 bonus), clock + loot back to zero. */
+  private couchT = 0;
   start() {
+    this.couchT = 0;
     this.no++;
     this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false;
     this.secs = ADMIN.roundMins * 60;
@@ -218,7 +222,7 @@ export class Round {
       ...(ADMIN.mines ? ['mineBob'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
-      const c3 = pick(ch.kind === 1 ? HIGH_POOL : DRUNK_POOL, 3);
+      const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
       const way = pick(['bongRip', 'bakeCookies'] as MissionId[], 2);
       const req: MissionId[] = ch.kind === 1 ? ['rollJoint', way[0], c3[0]] : ['brewBeer', 'drinkUp', c3[0]];
       const bonus: MissionId[] = ch.kind === 1 ? [way[1], c3[1]] : [c3[1], c3[2]];
@@ -317,6 +321,8 @@ export class Round {
     const st = stageOf(farmId());   // story stages get harder
     this.quota = this.game.farm.chain ? ROUND.madeBase + ROUND.madePer * Math.max(0, pigs.length - 1)
       : Math.round((ROUND.quotaBase + ROUND.quotaPer * Math.max(0, pigs.length - 1) + (this.mod === 'market' ? MOD.market.quota : 0)) * (st ? STAGE.quota[st - 1] : 1) / 10) * 10;
+    // the lounge: high on the couch for a while (anyone)
+    if (this.wants('couchSesh')) { if (pigs.some((p) => p.seat >= 0 && p.high > 0.35)) this.couchT += dt; this.check('couchSesh', this.couchT >= 8); }
     // chain modes: everyone buzzed at once / everyone finished a mug
     if (this.wants('everyoneHigh')) this.check('everyoneHigh', pigs.every((p) => !p.out && p.high > 0.4));
     if (this.wants('drinkUp')) { const dm = (this.game.farm.chain as { drunkMugs?: Map<unknown, number> } | undefined)?.drunkMugs; this.check('drinkUp', !!dm && pigs.every((p) => (dm.get(p) ?? 0) > 0)); }
@@ -474,6 +480,7 @@ export class Round {
     const L = this.game.local, ch = this.game.farm.chain;
     if (ch) { const h = ch.stepIcons(x.id, L); if (h) return h; }
     if (x.id === 'mudPorch') return L.muddy > 0 ? IC.house : kc('C') + IC.mud;
+    if (x.id === 'couchSesh') return IC.leaf + IC.rmb + IC.couch;
     if (x.id === 'coffeeSpike') {
       const pc = this.game.porch;
       if (pc?.sauce && L.held === pc.sauce) return kc('R') + IC.pour + IC.mug;
@@ -541,6 +548,7 @@ export class Round {
         case 'hangUp': { const ph = g.phones; mark(i, ph?.off && ph.ring === 1 ? ph.jackMark : ph?.phoneMark); return; }
         case 'prankCall': mark(i, g.phones?.payMark); return;
         case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
+        case 'couchSesh': mark(i, g.lounge?.markPos); return;
         case 'coffeeSpike': {   // hot sauce in hand (or a muddy pig): his mug; else the bottle by the grill
           const pc = g.porch; if (!pc) return;
           const sauce = pc.sauce && !pc.sauce.banked && pc.sauce.left > 0.01 ? pc.sauce : null;

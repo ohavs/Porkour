@@ -46,6 +46,8 @@ export interface PigPose {
   bacon?: boolean;
   /** Dancing (the emote wheel: game/emotes.ts ids) and for how long (s). */
   dance?: number; danceT?: number;
+  /** Sitting on the lounge couch: upright, leaning back into it, hind legs sticking out over the cushion. */
+  sit?: boolean;
 }
 
 /** One frame of a dance: body offsets / turns, head, hind legs, each hoof's target (from its shoulder, pig model space:
@@ -183,7 +185,7 @@ export class PigVisual {
   private lastGrounded = true; private blinkAt = 2;
   /** Eyes: the current idle dart (yaw / pitch, rad) and when the next one starts / this one ends; eyes' smoothed angles. */
   private baconG: THREE.Group | null = null;
-  private backT = 0; private danceBeat = -1; private danceWas = 0;
+  private backT = 0; private danceBeat = -1; private danceWas = 0; private sitT = 0;
   private dartAt = 1; private dartEnd = 0; private dartY = 0; private dartX = 0; private eyeY = 0; private eyeX = 0; private redOn = false;
   private limpT = 0; private lf = 0; private ls = 0;
   centerHeight = 0.36;
@@ -354,12 +356,14 @@ export class PigVisual {
     this.danceSounds(p);
     this.sway.rotation.y = dz ? dz.swayY : damp(this.sway.rotation.y, 0, 12, dt);
     if (dz) { this.sway.rotation.z += dz.swayZ; this.base.position.x = dz.hipX; } else this.base.position.x = damp(this.base.position.x, 0, 12, dt);
+    this.sitT = damp(this.sitT, p.sit ? 1 : 0, 10, dt);
+    if (this.sitT > 0.01) { this.sway.rotation.x -= 0.32 * this.sitT; if (dz) this.sway.rotation.y *= 0.15; }   // lean back into the couch (seated dances stay seated)
 
     // hinge
     R.upper.position.lerpVectors(PIVOT, STAND_POS, sT);
     R.upper.rotation.x = -STAND_ANGLE * sT + (moving ? Math.sin(this.phase * 2) * 0.04 * amp : 0) + (p.punch ? Math.sin(p.punch * Math.PI) * 0.15 * sT : 0);
     R.upper.rotation.z = moving ? Math.sin(this.phase) * 0.06 * amp * (sT * 2 + 0.6) : 0;
-    this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0) + (dz ? dz.hipY : 0);
+    this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0) + (dz ? dz.hipY : 0) - this.sitT * 0.16;
     R.upper.rotation.y = dz ? dz.upperY : 0;
     if (dz) { R.upper.rotation.z += dz.upperZ; R.upper.rotation.x += dz.upperX; }
     // headbutt (four legs): the body lunges, the head ducks and rams
@@ -397,7 +401,9 @@ export class PigVisual {
         A[1].elbow.rotation.x = damp(A[1].elbow.rotation.x, Math.max(0, Math.cos(this.phase)) * 0.85 * amp, 20, dt);
       }
     }
-    if (dz && !flail) {
+    if (this.sitT > 0.5 && !flail) {   // sitting: legs straight out over the cushion (a little kick when dancing)
+      set(R.hindL, -1.35 + (dz ? dz.legL * 0.6 : 0), 0.12, 18); set(R.hindR, -1.35 + (dz ? dz.legR * 0.6 : 0), -0.12, 18);
+    } else if (dz && !flail) {
       set(R.hindL, dz.legL, dz.legLz, 26); set(R.hindR, dz.legR, dz.legRz, 26);
       if (dz.back) { set(R.frontL, dz.frontL, 0.3, 26); set(R.frontR, dz.frontR, -0.3, 26); }
     }

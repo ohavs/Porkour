@@ -187,6 +187,53 @@ export class Pig implements Holdable {
   /** 1 = high, 2 = drunk, 0 = sober. Level (0..1.3) kicks in over 5 s from buzzFrom, fades over 25 s after buzzUntil. */
   buzzKind = 0; buzzLvl = 0; buzzFrom = 0; buzzUntil = 0;
   private lagX = 0; private lagZ = 0;
+  // ---- the lounge couch (world/lounge.ts): the seat I sit on (-1 = none); synced
+  seat = -1;
+  /** RMB at a free seat: sit down (with whatever I hold), facing out of the room. */
+  private sitDown(i: number) {
+    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(): number } | null;
+    if (!lg) return;
+    this.seat = i; this.danceId = 0;
+    if (!this.standing) this.setStanding(true);
+    this.yaw = lg.seatYaw();
+    G.audio.play('thud', { pos: lg.seats[i], vol: 0.6, pitch: 0.7 });
+    G.events.push({ type: 'sat', who: this });
+  }
+  /** Sitting: held on the cushion (host and my own prediction); WASD / jump / sprint / C = up again. */
+  private seatStep(inp: PigInput): boolean {
+    if (this.seat < 0) return false;
+    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(): number; standSpot(i: number, o: THREE.Vector3): THREE.Vector3 } | null;
+    const s = lg?.seats[this.seat];
+    if (!lg || !s || this.mode !== 'normal' || this.heldBy || this.out || Math.hypot(inp.mx, inp.mz) > 0.3 || inp.jumpP || inp.sprintP || inp.wallowP || inp.standP) {
+      const i = this.seat; this.seat = -1;
+      if (lg && i >= 0 && this.mode === 'normal' && !this.heldBy) { const o = lg.standSpot(i, v1); this.vel.set((o.x - this.pos.x) * 4, 2.5, (o.z - this.pos.z) * 4); }   // hop off the cushion
+      return false;
+    }
+    if (!this.standing) this.setStanding(true);
+    // a soft spring onto the cushion (velocity, not teleports: a body yanked about every step upsets the solver)
+    const ty = s.y + CENTER[this.shape] - 0.12;
+    this.vel.set(clamp((s.x - this.pos.x) * 12, -4, 4), clamp((ty - this.pos.y) * 12, -4, 4), clamp((s.z - this.pos.z) * 12, -4, 4));
+    this.yaw = lg.seatYaw(); this.grounded = true;
+    this.wobble = 0; this.leanX = this.leanZ = 0;
+    return true;
+  }
+  /** G: hand what I hold to the pig next to me (the joint goes round the couch). Host. */
+  private passHeld() {
+    const it = this.held;
+    if (!it || G.net === 'client' || coopOf(it) || it.kind === 'pig') return;
+    let best: Pig | null = null, bd = 2.6;
+    for (const o of G.pigs as Pig[]) {
+      if (o === this || o.out || o.absent || o.held || o.heldBy || o.mode !== 'normal' || o.gulag) continue;
+      const d = o.pos.distanceTo(this.pos) - (o.seat >= 0 ? 0.6 : 0);   // a pig on the couch first
+      if (d < bd) { bd = d; best = o; }
+    }
+    if (!best) return;
+    this.release(false);
+    const ip = best.pos; it.body.setTranslation({ x: ip.x, y: ip.y + 0.5, z: ip.z }, true);
+    best.grab(it);
+    G.audio.play('whoosh', { pos: this.pos, vol: 0.4, pitch: 1.5 });
+    G.events.push({ type: 'passed', who: best });
+  }
   // ---- dancing (the emote wheel: game/emotes.ts); synced
   danceId = 0; danceAt = 0;
   /** Start a dance (host): free hooves, on two legs (the spin is on its back) — any move / action stops it. */
@@ -356,8 +403,14 @@ export class Pig implements Holdable {
     this.stepT += dt;
     if (this.thrown && this.now > this.thrown.until) { if (this.thrown.h !== this.held) ignorePair(this.body, this.thrown.h.body, false); this.thrown = null; }
     const inp = this.input;
-    const p = this.body.translation(); this.pos.set(p.x, p.y, p.z);
+    let p = this.body.translation();
+    if (!Number.isFinite(p.x + p.y + p.z)) {   // (a physics blow-up: never leave a pig — and the camera — at NaN)
+      if (this.mode === 'ragdoll') this.getUp();
+      this.seat = -1; this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true); this.respawn(); p = this.body.translation();
+    }
+    this.pos.set(p.x, p.y, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
+    if (!Number.isFinite(lv.x + lv.y + lv.z)) this.vel.set(0, 0, 0);
     this.synced.beforeStep();
 
     if (this.out) {
@@ -419,6 +472,8 @@ export class Pig implements Holdable {
       return;
     }
 
+    if (inp.passP) this.passHeld();
+    if (this.seatStep(inp)) { this.finishStep(dt); return; }   // on the couch: held on the cushion
     this.moveStep(inp, dt);
     this.follow(dt);
 
@@ -951,7 +1006,9 @@ export class Pig implements Holdable {
    * and throw it on release.
    */
   private grabStep(inp: PigInput) {
-    if (inp.grabP && this.mode === 'normal') {
+    const sitI = inp.grabP && this.mode === 'normal' && this.seat < 0 ? ((G.lounge as { seatFor(p: Pig): number } | null)?.seatFor(this) ?? -1) : -1;
+    if (sitI >= 0) this.sitDown(sitI);   // RMB at a free seat: sit (keep what I hold)
+    else if (inp.grabP && this.mode === 'normal') {
       if (this.handle) this.letGo();
       else if (this.held) this.release(false);
       else if (!this.cageLatchNear()) {
@@ -1330,7 +1387,7 @@ export class Pig implements Holdable {
     n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
     n.push(this.jailUntil, this.frozenUntil, this.flying ? 1 : 0, ...this.buzzState());
     n.push(this.handle ? this.handle.id : -1, this.mouthAt, this.touchAt, Math.round(this.touchP.x * 100) / 100, Math.round(this.touchP.y * 100) / 100, Math.round(this.touchP.z * 100) / 100);
-    n.push(Math.round(this.hp * 10) / 10, this.baconUntil, this.gulag ? 1 : 0, this.danceId, this.danceAt);
+    n.push(Math.round(this.hp * 10) / 10, this.baconUntil, this.gulag ? 1 : 0, this.danceId, this.danceAt, this.seat);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -1385,7 +1442,7 @@ export class Pig implements Holdable {
       this.mouthAt = n[j + 9];
       if (n[j + 10] !== undefined) { this.touchAt = n[j + 10]; this.touchP.set(n[j + 11], n[j + 12], n[j + 13]); }
     }
-    if (n[j + 14] !== undefined) { this.hp = n[j + 14]; this.baconUntil = n[j + 15]; this.gulag = n[j + 16] === 1; this.danceId = n[j + 17] ?? 0; this.danceAt = n[j + 18] ?? 0; }
+    if (n[j + 14] !== undefined) { this.hp = n[j + 14]; this.baconUntil = n[j + 15]; this.gulag = n[j + 16] === 1; this.danceId = n[j + 17] ?? 0; this.danceAt = n[j + 18] ?? 0; if (!this.predicting || n[j + 19] < 0) this.seat = n[j + 19] ?? -1; }
   }
   /** Player side: the host's pig is flying (admin). */
   netFly = false;
@@ -1453,7 +1510,10 @@ export class Pig implements Holdable {
       this.ownJump = false;
     }
     if (inp.wallowP && normal && this.grounded) { this.predWallow = this.now + PIG.wallowDur; this.setStanding(false); }
-    if (this.mode === 'wallow' || this.now < this.predWallow) {
+    // the couch: sit at once on my side (the host does the same with my RMB), held on the cushion
+    if (inp.grabP && normal && this.seat < 0) { const i = (G.lounge as { seatFor(p: Pig): number } | null)?.seatFor(this) ?? -1; if (i >= 0) this.sitDown(i); }
+    if (this.seatStep(inp)) { /* on the couch */ }
+    else if (this.mode === 'wallow' || this.now < this.predWallow) {
       if (inp.wallow) this.predWallow = Math.max(this.predWallow, this.now + 0.15);
       this.vel.x *= 0.8; this.vel.z *= 0.8;
     } else this.moveStep(inp, dt);
@@ -1522,7 +1582,7 @@ export class Pig implements Holdable {
       actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
       cig: this.smoking, strong: this.boosted('spinach'),
       lookAt: this.danceId ? null : this.glance(), red: this.smoking ? 1 : clamp(this.high * 1.6, 0, 1), bacon: this.bacon,
-      dance: this.danceId && this.mode === 'normal' ? this.danceId : 0, danceT: this.now - this.danceAt,
+      dance: this.danceId && this.mode === 'normal' ? this.danceId : 0, danceT: this.now - this.danceAt, sit: this.seat >= 0 && this.mode === 'normal',
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,
