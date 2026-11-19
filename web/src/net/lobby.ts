@@ -1,4 +1,5 @@
 import { online, type Peer, type RoomInfo } from './online';
+import { ui } from '../game/uiIcons';
 import { profile, onProfile, googleEnabled, renderGoogleButton, refreshToken, setGuestName, signOut } from './auth';
 import { serverUrl } from './config';
 import { t, lang, onLang, type Key } from '../i18n';
@@ -183,7 +184,7 @@ export class Lobby {
   private render() {
     if (!this.isOpen) return;
     let body = '';
-    const back = `<button class="chip" data-a="back">${t('net.back')}</button>`;
+    const back = `<button class="chip icn" data-a="back">${ui('back', 22)}${t('net.back')}</button>`;
     if (this.view === 'connecting') {
       body = `<h2>${t('net.title')}</h2><p class="lw">${t('net.connecting')}</p><p class="lw small">${t('net.wakeup')}</p><div class="btns">${back}</div>`;
     } else if (this.view === 'joining') {
@@ -194,7 +195,7 @@ export class Lobby {
       const msg = this.err === 'noserver' ? t('net.noServer') : this.err === 'version' ? t('net.version') : t('net.unreachable');
       body = `<h2>${t('net.title')}</h2><p class="lw">${msg}</p>
         <div class="field"><span>${t('net.serverAddr')}</span><input class="tin" id="lServer" placeholder="wss://….onrender.com" value="${esc(SETTINGS.server)}"></div>
-        <div class="btns"><button class="chip" data-a="retry">${t('net.retry')}</button>${back}</div>`;
+        <div class="btns"><button class="chip icn" data-a="retry">${ui('retry', 22)}${t('net.retry')}</button>${back}</div>`;
     } else if (this.view === 'browse') {
       body = `<h2>${t('net.title')}</h2>${this.profileHtml()}
         ${this.err ? `<div class="lerr">${t('net.err.' + this.err)}</div>` : ''}
@@ -203,9 +204,9 @@ export class Lobby {
           <div class="lbox"><b>${t('net.create')}</b>
             <input class="tin" id="lName" maxlength="28" placeholder="${esc(t('net.roomName', { name: profile.name }))}">
             <label class="lchk"><input type="checkbox" id="lPublic" checked> ${t('net.public')}</label>
-            <button class="chip" data-a="create">${t('net.createBtn')}</button></div>
+            <button class="chip icn" data-a="create">${ui('plus', 22)}${t('net.createBtn')}</button></div>
           <div class="lbox"><b>${t('net.joinCode')}</b>
-            <div class="lrow"><input class="tin code" id="lCode" maxlength="4" placeholder="ABCD"><button class="chip" data-a="join">${t('net.joinBtn')}</button></div></div>
+            <div class="lrow"><input class="tin code" id="lCode" maxlength="4" placeholder="ABCD"><button class="chip icn" data-a="join">${ui('enter', 22)}${t('net.joinBtn')}</button></div></div>
         </div><div class="lcol wide"><div class="lhead"><b>${t('net.rooms')}</b><button class="chip small" data-a="refresh">↻</button></div><div id="lRooms"></div></div></div>
         <div class="btns">${back}</div>`;
     } else if (this.view === 'room' && online.room) {
@@ -215,12 +216,12 @@ export class Lobby {
         return `<div class="lslot ${p ? '' : 'empty'}"><i class="dot" style="background:${hex(PLAYER_COLORS[i])}"></i>${p ? this.peerHtml(p, host) : `<span class="dim">${t('net.freeSlot')}</span>`}</div>`;
       }).join('');
       body = `<h2>${esc(r.name)}</h2><div class="dim">${t('lobby.farm', { name: t(('farm.' + (asFarm(r.farm) ?? farmId())) as Key) })}</div>
-        <div class="lcode">${t('net.code')} <b>${r.code}</b> <button class="chip small" data-a="invite">${t('net.copyInvite')}</button>
+        <div class="lcode">${t('net.code')} <b>${r.code}</b> <button class="chip small icn" data-a="invite">${ui('link', 20)}${t('net.copyInvite')}</button>
           ${host ? `<label class="lchk"><input type="checkbox" id="lPub" ${r.public ? 'checked' : ''}> ${t('net.public')}</label>` : `<span class="dim">${r.public ? t('net.public') : t('net.private')}</span>`}</div>
         <div class="lcols"><div class="lcol">${slots}</div>
         <div class="lcol wide"><div id="lChat"></div><div class="lrow"><input class="tin" id="lMsg" maxlength="160" placeholder="${esc(t('net.say'))}"><button class="chip" data-a="say">↵</button></div></div></div>
-        <div class="btns">${host ? `<button class="chip big go2" data-a="start">${t('net.start')}</button>` : `<span class="lw">${t('net.waitHost')}</span>`}
-          <button class="chip" data-a="wardrobe">${t('title.wardrobe')}</button><button class="chip" data-a="leave">${t('net.leave')}</button></div>`;
+        <div class="btns">${host ? `<button class="chip big go2 icn" data-a="start">${ui('play', 28)}${t('net.start')}</button>` : `<span class="lw">${t('net.waitHost')}</span>`}
+          <button class="chip icn" data-a="wardrobe">${ui('shirt', 22)}${t('title.wardrobe')}</button><button class="chip icn" data-a="leave">${ui('exit', 22)}${t('net.leave')}</button></div>`;
     }
     this.el.innerHTML = `<div class="panel txt lpanel">${body}</div>`;
     if (this.view === 'browse') { this.renderRooms(); this.mountGoogle(); }
@@ -236,7 +237,7 @@ export class Lobby {
     return `<div class="lprof">${avatar}
       <div class="lpname"><input class="tin" id="lMe" maxlength="16" value="${esc(profile.name)}" title="${esc(t('net.yourName'))}">
       <span class="dim small">${verified ? '✔ ' + t('net.google') : profile.google ? t('net.googleOffline') : t('net.guest')}</span></div>
-      ${googleEnabled() ? (profile.google ? `<button class="chip small" data-a="signout">${t('net.signOut')}</button>` : `<div id="lGoogle"></div>`) : ''}
+      ${googleEnabled() ? (profile.google ? `<button class="chip small icn" data-a="signout">${ui('exit', 18)}${t('net.signOut')}</button>` : `<div id="lGoogle"></div>`) : ''}
       </div>`;
   }
   private peerHtml(p: Peer, host: boolean) {
@@ -260,10 +261,10 @@ export class Lobby {
       const p = [...online.peers.values()].find((x) => x.slot === i);
       return `<div class="pslot ${p ? (p.id === online.myId ? 'me' : '') : 'add'}"><i class="dot" style="background:${hex(PLAYER_COLORS[i])}"></i>${p ? this.peerHtml(p, host) : `<span class="dim">+</span>`}</div>`;
     }).join('');
-    return `<div class="ptitle">${t('lobby.room')} <b>${r.code}</b><button class="chip small" data-a="invite">${t('net.copyInvite')}</button></div>${slots}` +
+    return `<div class="ptitle">${t('lobby.room')} <b>${r.code}</b><button class="chip small icn" data-a="invite" title="${esc(t('net.copyInvite'))}">${ui('link', 20)}</button></div>${slots}` +
       `<div id="lChat" class="pchat"></div><div class="prow"><input class="tin" id="lMsg" maxlength="160" placeholder="${esc(t('net.say'))}"><button class="chip small" data-a="say">↵</button></div>` +
       (host ? `<label class="lchk"><input type="checkbox" id="lPub" ${r.public ? 'checked' : ''}> ${t('net.public')}</label>` : '') +
-      `<button class="chip small" data-a="leave">${t('lobby.leave')}</button>`;
+      `<button class="chip small icn" data-a="leave">${ui('exit', 18)}${t('lobby.leave')}</button>`;
   }
   wireParty(el: HTMLElement) {
     const val = (id: string) => (el.querySelector<HTMLInputElement>('#' + id)?.value ?? '').trim();
@@ -328,7 +329,7 @@ export class Lobby {
   }
   private flash(text: string) {
     const b = this.el.querySelector('[data-a="invite"]'); if (!b) return;
-    const old = b.textContent; b.textContent = text; setTimeout(() => (b.textContent = old), 1500);
+    const old = b.innerHTML; b.innerHTML = ui('check', 20) + text; setTimeout(() => (b.innerHTML = old), 1500);
   }
 }
 

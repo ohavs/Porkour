@@ -8,6 +8,7 @@ import { ICONS, SVG } from './hud';
 import { fullIcon, toggleFull, onFull } from './fullscreen';
 import { farmId, FARM_IDS, reloadOnFarm, STORY, MODES, stageOf, type FarmId } from '../world/farms';
 import { canAdmin } from '../net/auth';
+import { ui, type UiIcon } from './uiIcons';
 import { saves, slot, storyWon, newGame, loadGame, deleteSave, saveLabel, SLOTS } from './saves';
 /** A story stage is open once the one before is won in the save in use (the owner / admins: all). */
 const unlocked = (f: FarmId) => canAdmin() || stageOf(f) <= storyWon() + 1;
@@ -50,6 +51,9 @@ export class LobbyUI {
   private roomHost() { return online.isHost && online.room?.state === 'lobby'; }
 
   constructor(private h: LobbyHooks) {
+    // tabs: a universal icon before each word (▶ play · 👕 wardrobe · 🛒 shop · 👥 online)
+    const TAB: Record<string, UiIcon> = { play: 'play', wardrobe: 'shirt', shop: 'cart', online: 'people' };
+    this.el.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => { if (TAB[b.dataset.t!]) b.insertAdjacentHTML('afterbegin', ui(TAB[b.dataset.t!], 26)); });
     this.el.querySelectorAll<HTMLElement>('[data-t]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation();
       const k = b.dataset.t;

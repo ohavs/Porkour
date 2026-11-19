@@ -28,7 +28,7 @@ import type { Loop } from '../core/audio';
  * throw it in Bob's face), the bathtub (sit in it: the taps fill it, a bubble bath washes the mud off).
  * Deterministic (seeded by the building's spot): every machine furnishes the same; lamps / the spin are synced.
  */
-type Use = 'lamp' | 'fridge' | 'wash' | 'tv' | 'radio' | 'oven' | 'bath';
+type Use = 'lamp' | 'fridge' | 'wash' | 'tv' | 'radio' | 'oven' | 'bath' | 'gramo';
 interface Kind {
   /** Quaternius model name (or `make` = built in code), its height (m), mass (kg), loot value; against a wall (`wall`) or free-standing. */
   m: string; h: number; mass: number; value: number; wall?: boolean; make?: () => THREE.Object3D;
@@ -60,6 +60,7 @@ const K: Record<string, Kind> = {
   oven: { m: 'Kitchen_Oven', h: 1.0, mass: 70, value: 40, wall: true, use: 'oven' },
   tvSet: { m: '', h: 0.85, mass: 30, value: 40, wall: true, make: makeTV, use: 'tv' },
   radio: { m: '', h: 0.3, mass: 2.5, value: 25, make: makeRadio, use: 'radio' },
+  gramo: { m: '', h: 1.35, mass: 18, value: 45, wall: true, make: makeGramo, use: 'gramo' },
   kSink: { m: 'Kitchen_Sink', h: 1.0, mass: 50, value: 25, wall: true },
   kDrawers: { m: 'Kitchen_2Drawers', h: 1.0, mass: 45, value: 20, wall: true },
   kCab: { m: 'Kitchen_Cabinet1', h: 1.0, mass: 45, value: 20, wall: true },
@@ -79,9 +80,9 @@ const K: Record<string, Kind> = {
 export const INTERIOR_MODELS = [...new Set(Object.values(K).filter((k) => k.m).map((k) => 'interior/' + k.m)), 'interior/Carpet_1', 'interior/Carpet_Round'];
 
 /** What goes in a building, by kind, in order (the first ones get the best wall spots). Groups: a table + seats round it. */
-const HOUSE = ['couchL', 'tvSet', 'fireplace', 'shelf', 'fridge', 'oven', 'kSink', 'kDrawers', 'bedKing', 'nightstand', 'washer', 'toilet', 'bathtub', 'drawer1', 'kCab',
+const HOUSE = ['couchL', 'tvSet', 'fireplace', 'gramo', 'shelf', 'fridge', 'oven', 'kSink', 'kDrawers', 'bedKing', 'nightstand', 'washer', 'toilet', 'bathtub', 'drawer1', 'kCab',
   'shelf2', 'bSink', 'couchS', 'bed', '@table', 'floorLamp', 'plant4', 'plant2', 'standLamp', 'trash', 'plant7', 'radio'];
-const BARN = ['couchS', 'tvSet', 'shelf2', 'fridge', 'radio', 'oven', 'bathtub', 'bunk', 'drawer3', 'couchM', 'shelf', 'kCab', '@stools', 'standLamp', 'trash', 'plant7', 'bed'];
+const BARN = ['couchS', 'tvSet', 'gramo', 'shelf2', 'fridge', 'radio', 'oven', 'bathtub', 'bunk', 'drawer3', 'couchM', 'shelf', 'kCab', '@stools', 'standLamp', 'trash', 'plant7', 'bed'];
 const isHouse = (m: string) => /Inn|House|Silo_House/.test(m);
 /** Small things put on tables / shelves / by the toilet afterwards. */
 const SMALL_ON_TABLE = ['plate', 'radio', 'deskLamp'];
@@ -103,6 +104,30 @@ function makeRadio() {
   const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.36, 5), toonMat(0xc9ced8)); ant.position.set(0.14, 0.42, -0.04); ant.rotation.z = -0.35; g.add(ant);
   return g;
 }
+/**
+ * A wind-up gramophone on a little cabinet (s24): the record spins (named meshes: they turn), a tone arm, a big brass
+ * horn. RMB = needle down / up. Bob hears it from far, walks over to stop it — and can't help dancing first (blind).
+ */
+function makeGramo() {
+  const g = new THREE.Group();
+  const box = (w: number, h: number, d: number, c: number, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(c)); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  box(0.52, 0.6, 0.42, 0x8a5a32, 0, 0.3, 0);                 // cabinet
+  box(0.56, 0.04, 0.46, 0x6e4524, 0, 0.62, 0);               // its top
+  box(0.012, 0.46, 0.006, 0x5a3820, 0, 0.3, 0.212);          // the doors' gap
+  for (const x of [-0.05, 0.05]) { const k = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), toonMat(0xd9a93a)); k.position.set(x, 0.34, 0.22); g.add(k); }
+  box(0.42, 0.13, 0.36, 0x9a5b2e, 0, 0.705, 0);              // the player box
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 24), toonMat(0x1d1a1e)); disc.name = 'disc'; disc.position.set(-0.02, 0.778, 0.02); g.add(disc);
+  const lab = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.016, 14), toonMat(0xd8402e)); lab.name = 'discLabel'; disc.add(lab);
+  const dot = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.018, 0.014), toonMat(0xfff1d0)); dot.name = 'discDot'; dot.position.set(0.032, 0, 0); disc.add(dot);
+  const arm = box(0.025, 0.025, 0.2, 0xc9ced8, 0.14, 0.8, -0.02); arm.rotation.y = 0.55;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 10), toonMat(0xd9a93a)); neck.position.set(0.15, 0.86, -0.13); g.add(neck);
+  const brass = toonMat(0xe0b040).clone(); brass.side = THREE.DoubleSide;
+  const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.03, 0.46, 22, 1, true), brass); horn.name = 'horn';
+  horn.position.set(0.1, 1.1, -0.02); horn.rotation.set(0.75, 0, 0.3); horn.castShadow = true; g.add(horn);
+  const crank = box(0.02, 0.02, 0.12, 0x3b2412, 0.23, 0.7, 0.04); crank.rotation.x = 0.4;
+  return g;
+}
+const GRAMO = { lure: 24, dance: 8 };
 /** A pie fresh out of the oven: throw it in Bob's face (a cream splat). */
 PROPS.ovenPie = { make: makePie, mass: 1.2, shape: 'cyl', sound: 'squish', label: 'item.pie', value: 15, fragile: 6, bits: 0xf4e3b0, id: 'ovenPie' };
 const BAKE = { secs: 16, pies: 2 };
@@ -112,6 +137,8 @@ const LURE = { radio: 22, tv: 12 };
 
 interface Tv { pr: Prop; ch: number; canvas: HTMLCanvasElement; tex: THREE.CanvasTexture; screen: THREE.Mesh | null; on: THREE.Material; off: THREE.Material; loop: Loop | null; drawT: number; noiseT: number }
 interface Radio { pr: Prop; on: boolean; hitT: number; dial: THREE.Mesh | null; loop: Loop | null; noiseT: number }
+/** `danced`: Bob already danced to this record (the next visit he switches it off). */
+interface Gramo { pr: Prop; on: boolean; danced: boolean; ignoreUntil: number; disc: THREE.Object3D | null; loop: Loop | null; crackle: Loop | null; noiseT: number }
 interface Oven { pr: Prop; until: number; pies: Prop[]; glow: THREE.Mesh; loop: Loop | null }
 interface Bath { pr: Prop; seat: number; fill: number; water: THREE.Mesh; idleT: number; washed: Set<Pig>; loop: Loop | null }
 interface Lamp { pr: Prop; bulb: THREE.Mesh; mat: THREE.MeshBasicMaterial; on: boolean; hitT: number }
@@ -121,7 +148,7 @@ interface Washer { pr: Prop; until: number }
 export class Interiors {
   kind = 'interiors' as const;
   lamps: Lamp[] = []; fridges: Fridge[] = []; washers: Washer[] = [];
-  tvs: Tv[] = []; radios: Radio[] = []; ovens: Oven[] = []; baths: Bath[] = [];
+  tvs: Tv[] = []; radios: Radio[] = []; ovens: Oven[] = []; baths: Bath[] = []; gramos: Gramo[] = [];
   /** The toilets' seat numbers (getting up off one flushes it). */
   private toiletSeats = new Set<number>(); private sat = new Map<Pig, number>();
   /** Seats on beds / bunks (mission: nap in Bob's bed). */
@@ -142,9 +169,9 @@ export class Interiors {
       this.furnish(nav, reach, b);
     }
     G.hittables.push({ hit: (x, y, z, r) => this.hitLamp(x, y, z, r) || this.hitRadio(x, y, z, r) });
-    G.uses.push({ near: (p: Pig) => !p.held && !!this.useNear(p), icon: (p: Pig) => { const k = this.useNear(p)?.kind; return k === 'fridge' ? 'eat' : k === 'tv' ? 'tv' : k === 'oven' ? 'oven' : 'gear'; } });
+    G.uses.push({ near: (p: Pig) => !p.held && !!this.useNear(p), icon: (p: Pig) => { const k = this.useNear(p)?.kind; return k === 'fridge' ? 'eat' : k === 'tv' ? 'tv' : k === 'oven' ? 'oven' : k === 'gramo' ? 'note' : 'gear'; } });
     // Bob hears a radio / TV left on: he walks over and switches it off (a lure)
-    if (this.radios.length || this.tvs.length) G.jobs.push({ spot: (bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean }) => this.jobFor(bob) });
+    if (this.radios.length || this.tvs.length || this.gramos.length) G.jobs.push({ spot: (bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean }) => this.jobFor(bob) });
   }
 
   /** Every nav cell the yard reaches (from the pigs' sty). */
@@ -346,6 +373,7 @@ export class Interiors {
       if (screen) screen.material = off;
       this.tvs.push({ pr, ch: 0, canvas, tex, screen, on: new THREE.MeshBasicMaterial({ map: tex }), off, loop: null, drawT: 0, noiseT: 0 });
     }
+    if (kd.use === 'gramo') this.gramos.push({ pr, on: false, danced: false, ignoreUntil: 0, disc: pr.obj.getObjectByName('disc') ?? null, loop: null, crackle: null, noiseT: 0 });
     if (kd.use === 'radio') this.radios.push({ pr, on: false, hitT: -10, dial: pr.obj.getObjectByName('dial') as THREE.Mesh | null, loop: null, noiseT: 0 });
     if (kd.use === 'oven') {
       // the oven window glows while it bakes; its pies wait (hidden) until they're done
@@ -363,6 +391,13 @@ export class Interiors {
       this.baths.push({ pr, seat: lastSeat, fill: 0, water, idleT: 0, washed: new Set(), loop: null });
     }
     return pr;
+  }
+  /** The spot `d` m in front of a prop (its +z side, on the ground at its height). */
+  private front(pr: Prop, d: number) {
+    const t = pr.body.translation(), r = pr.body.rotation();
+    const f = v1.set(0, 0, 1).applyQuaternion(q1.set(r.x, r.y, r.z, r.w));
+    const k = d + pr.size.z / 2;
+    return new THREE.Vector3(t.x + f.x * k, t.y, t.z + f.z * k);
   }
   /** How far a point is from the spot `d` m in front of a prop (along the ground). */
   private frontOf(pr: Prop, d: number, p: THREE.Vector3) {
@@ -391,11 +426,12 @@ export class Interiors {
     return false;
   }
   /** RMB things next to a pig: the washing machine (a fridge's can is a dispenser). */
-  useNear(p: Pig): { kind: 'wash'; w: Washer } | { kind: 'tv'; tv: Tv } | { kind: 'oven'; o: Oven } | { kind: 'fridge' } | null {
+  useNear(p: Pig): { kind: 'wash'; w: Washer } | { kind: 'tv'; tv: Tv } | { kind: 'oven'; o: Oven } | { kind: 'gramo'; gr: Gramo } | { kind: 'fridge' } | null {
     if (p.seat >= 0 || p.out || p.heldBy) return null;
     const ok = (pr: Prop) => !pr.banked && !pr.heldBy && this.upright(pr);
     for (const w of this.washers) if (ok(w.pr) && w.until < G.time && this.frontOf(w.pr, 0.6, p.pos) < 1.0) return { kind: 'wash', w };
     for (const tv of this.tvs) if (ok(tv.pr) && this.frontOf(tv.pr, 0.7, p.pos) < 0.9) return { kind: 'tv', tv };
+    for (const gr of this.gramos) if (ok(gr.pr) && this.frontOf(gr.pr, 0.6, p.pos) < 1.0) return { kind: 'gramo', gr };
     for (const o of this.ovens) if (ok(o.pr) && o.until <= 0 && o.pies.some((k) => k.banked) && this.frontOf(o.pr, 0.6, p.pos) < 1.0) return { kind: 'oven', o };
     return null;
   }
@@ -419,20 +455,40 @@ export class Interiors {
   admin(what: string, at: THREE.Vector3) {
     const near = <T extends { pr: Prop }>(l: T[]) => l.filter((x) => !x.pr.banked).sort((a, b) => a.pr.synced.currP.distanceTo(at) - b.pr.synced.currP.distanceTo(at))[0];
     if (what === 'radio') { const r = near(this.radios); if (r) { r.on = !r.on; r.noiseT = G.time + 1; } }
+    if (what === 'gramo') { const gr = near(this.gramos); if (gr) { gr.on = !gr.on; gr.danced = false; gr.noiseT = G.time + 1; } }
     if (what === 'tv') { const tv = near(this.tvs); if (tv) { tv.ch = (tv.ch + 1) % 5; tv.noiseT = G.time + 2; } }
     if (what === 'bake') { const o = near(this.ovens); if (o) o.until = G.time + 1; }
     if (what === 'bath') { const b = near(this.baths); if (b) { b.fill = 1; b.idleT = 0; } }
   }
   /** Admin: Bob's job for the nearest playing radio / TV (switched on first if none is). */
-  lureJob(at: THREE.Vector3, bob?: THREE.Vector3) {
+  lureJob(at: THREE.Vector3, bob?: { pos: THREE.Vector3; danceFor?(secs: number, at?: THREE.Vector3): void }, gramo = false) {
     if (!bob) return null;
-    if (!this.radios.some((r) => r.on) && !this.tvs.some((tv) => tv.ch)) this.admin(this.radios.length ? 'radio' : 'tv', at);
-    return this.jobFor({ pos: bob, looksAt: () => true });
+    if (gramo) { if (!this.gramos.some((g) => g.on)) this.admin('gramo', at); }
+    else if (!this.radios.some((r) => r.on) && !this.tvs.some((tv) => tv.ch)) this.admin(this.radios.length ? 'radio' : 'tv', at);
+    return this.jobFor({ pos: bob.pos, looksAt: () => true, danceFor: bob.danceFor?.bind(bob) });
   }
   /** Bob: a radio / TV playing that he hears (or sees) → he walks over and switches it off. */
-  jobFor(bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean }): BobJob | null {
+  jobFor(bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean; danceFor?(secs: number, at?: THREE.Vector3): void }): BobJob | null {
     let best: { pr: Prop; off: () => void; still: () => boolean } | null = null, bd = Infinity;
     const at = (pr: Prop) => pr.synced.currP;
+    // a record playing: the first time he gets there he can't help himself — he dances (blind) before he stops it
+    let gb: Gramo | null = null, gd = Infinity;
+    for (const gr of this.gramos) {
+      if (!gr.on || gr.pr.banked || gr.pr.heldBy || G.time < gr.ignoreUntil) continue;
+      const d = at(gr.pr).distanceTo(bob.pos);
+      if (d < gd && (d < GRAMO.lure || bob.looksAt(at(gr.pr), 30))) { gd = d; gb = gr; }
+    }
+    if (gb) {
+      const gr = gb, p = at(gr.pr), spot = this.front(gr.pr, 1.1);   // in front of it (it stands against a wall)
+      if (!gr.danced) return {
+        at: spot, look: p.clone(), dur: 0.5, near: 6, activity: 'bob.radioOff', still: () => gr.on && !gr.pr.banked,
+        done: () => { gr.danced = true; G.events.push({ type: 'bobDisco' }); },
+        then: () => { if (gr.on) bob.danceFor?.(GRAMO.dance, p); },
+      };
+      // can't get to it (a tight doorway) within 25 s: he gives up on it for a while
+      const t0 = G.time;
+      best = { pr: gr.pr, off: () => { gr.on = false; }, still: () => { if (G.time - t0 > 25) { gr.ignoreUntil = G.time + 40; return false; } return gr.on && !gr.pr.heldBy && !gr.pr.banked; } }; bd = gd;
+    }
     for (const r of this.radios) {
       if (!r.on || r.pr.banked || r.pr.heldBy) continue;
       const d = at(r.pr).distanceTo(bob.pos);
@@ -445,8 +501,10 @@ export class Interiors {
     }
     if (!best) return null;
     const b = best, p = at(b.pr), dx = bob.pos.x - p.x, dz = bob.pos.z - p.z, d = Math.hypot(dx, dz) || 1;
+    // wall pieces (TV, record player): he stands in front of it, not on his side (that can be behind the wall)
+    const wall = this.tvs.some((tv) => tv.pr === b.pr) || this.gramos.some((g) => g.pr === b.pr);
     return {
-      at: new THREE.Vector3(p.x + (dx / d) * 0.9, p.y, p.z + (dz / d) * 0.9), look: p.clone(), dur: 1.6, activity: 'bob.radioOff',
+      at: wall ? this.front(b.pr, 1.0) : new THREE.Vector3(p.x + (dx / d) * 0.9, p.y, p.z + (dz / d) * 0.9), look: p.clone(), dur: 1.6, activity: 'bob.radioOff',
       still: b.still,
       done: () => { b.off(); G.audio.play('clunk', { pos: at(b.pr), vol: 0.6, pitch: 1.2 }); G.events.push({ type: 'radioOff' }); },
     };
@@ -478,6 +536,11 @@ export class Interiors {
         G.audio.play('clunk', { pos: u.tv.pr.synced.currP, vol: 0.6, pitch: 1.4 }); G.audio.play('static', { pos: u.tv.pr.synced.currP, vol: 0.3, minGap: 0.2 });
         p.touch(v1.copy(u.tv.pr.synced.currP).setY(u.tv.pr.synced.currP.y + 0.2));
       }
+      if (u.kind === 'gramo') {
+        const gr = u.gr; gr.on = !gr.on; gr.noiseT = G.time + 1.5; if (gr.on) gr.danced = false;
+        G.audio.play('clunk', { pos: gr.pr.synced.currP, vol: 0.5, pitch: gr.on ? 1.7 : 1.3 });
+        p.touch(v1.copy(gr.pr.synced.currP).setY(gr.pr.synced.currP.y + 0.3));
+      }
       if (u.kind === 'oven') {
         u.o.until = G.time + BAKE.secs;
         G.audio.play('flint', { pos: u.o.pr.synced.currP, vol: 0.7 }); G.audio.play('fire', { pos: u.o.pr.synced.currP, vol: 0.5 });
@@ -498,6 +561,10 @@ export class Interiors {
     }
     // radios / TVs that play: Bob hears them (a noise every few seconds)
     for (const r of this.radios) if (r.on && !r.pr.banked && G.time > r.noiseT) { r.noiseT = G.time + 4; G.noise(r.pr.synced.currP, LURE.radio); }
+    for (const gr of this.gramos) {
+      if (gr.on && (!this.upright(gr.pr) || gr.pr.banked)) gr.on = false;   // knocked over: the needle skips off
+      // (no G.noise: a noise would make him investigate — and cut his dance short; he hears it through his job check)
+    }
     for (const tv of this.tvs) if (tv.ch && !tv.pr.banked && G.time > tv.noiseT) { tv.noiseT = G.time + 5; G.noise(tv.pr.synced.currP, LURE.tv); }
     // the bathtub: someone in it = the taps fill it (4 s); full = a bubble bath (the mud washes off); empty drains slowly
     for (const b of this.baths) {
@@ -541,6 +608,7 @@ export class Interiors {
     for (const l of this.lamps) this.setLamp(l, true);
     for (const tv of this.tvs) tv.ch = 0;
     for (const r of this.radios) r.on = false;
+    for (const gr of this.gramos) { gr.on = false; gr.danced = false; }
     for (const o of this.ovens) { o.until = 0; for (const k of o.pies) k.bank(); }
     for (const b of this.baths) b.fill = 0;
     for (const f of this.fridges) for (const c of f.cans) { c.bank(); }
@@ -555,6 +623,7 @@ export class Interiors {
     n.push(rb); for (const tv of this.tvs) n.push(tv.ch);
     for (const o of this.ovens) n.push(o.until > 0 ? Math.round(o.until * 10) / 10 : 0);
     for (const b of this.baths) n.push(Math.round(b.fill * 100) / 100);
+    let gb = 0; this.gramos.forEach((g, i) => { if (g.on && i < 30) gb |= 1 << i; }); n.push(gb);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -565,6 +634,7 @@ export class Interiors {
     for (const tv of this.tvs) tv.ch = n[k++] ?? 0;
     for (const o of this.ovens) o.until = n[k++] ?? 0;
     for (const b of this.baths) b.fill = n[k++] ?? 0;
+    const gb = n[k++] ?? 0; this.gramos.forEach((g, i) => { g.on = i < 30 && !!(gb & (1 << i)); });
   }
   /** A positional loop that runs while `on` (started / stopped / moved here). */
   private sound(l: Loop | null, on: boolean, name: string, at: THREE.Vector3, vol: number, ref: number) {
@@ -592,6 +662,14 @@ export class Interiors {
       const on = r.on && !r.pr.banked;
       (r.dial?.material as THREE.MeshBasicMaterial | undefined)?.color.setHex(on ? 0xffd166 : 0x5c4a2a);
       r.loop = this.sound(r.loop, on && near(r.pr, 45), 'music_theme', r.pr.obj.position, 0.6, 3);
+    }
+    // gramophones: the record spins, the theme song a little slow and old (+ the needle's crackle)
+    for (const gr of this.gramos) {
+      const on = gr.on && !gr.pr.banked;
+      if (on && gr.disc) gr.disc.rotation.y -= dt * 3.4;
+      gr.loop = this.sound(gr.loop, on && near(gr.pr, 45), 'music_theme', gr.pr.obj.position, 0.65, 3);
+      if (gr.loop && on) gr.loop.setRate(0.9);
+      gr.crackle = this.sound(gr.crackle, on && near(gr.pr, 14), 'crackle', gr.pr.obj.position, 0.25, 1.5);
     }
     // ovens: the window glows, a fire crackles; baths: the water rises, the bubbles wobble, the taps run while filling
     for (const o of this.ovens) {

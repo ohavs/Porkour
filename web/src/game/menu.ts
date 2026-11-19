@@ -3,7 +3,7 @@ import { G, ADMIN } from './ctx';
 import { SETTINGS, saveSettings, setPreset } from './settings';
 import { PRESETS, PRESET_ORDER, detectPreset, presetOf, setTuned, type GfxOpts, type PresetChoice } from '../render/quality';
 import { t, setLang, lang, LANGS, onLang, type Lang, type Key } from '../i18n';
-import { SVG } from './hud';
+import { SVG, ICONS } from './hud';
 import { online } from '../net/online';
 import { inviteLink } from '../net/lobby';
 import { level, xpForLevel, ownedOnly } from './shop';
@@ -19,7 +19,7 @@ const AICON: Record<string, string> = {
   wolves: '🐺', nowolves: '🚫', gameSpeed: '🏃', 'mod:none': '🌤️', 'mod:rain': '🌧️', 'mod:fog': '🌫️', 'mod:grumpy': '😠', 'mod:market': '🛒', 'mod:random': '🎲',
   roundMins: '⏳', roundWin: '🏆', loot100: '💰', roundEnd: '🏁', roundNew: '🔄', pick: '🔐', smoke: '🚬', boosts: '💪', clock: '🕰️', snowcoat: '❄️',
   weed: '🌿', brew: '🍺', tree: '🍎', bees: '🐝', bull: '🐂', cow: '🐄', milk: '🥛', lantern: '🎃', lanterns: '🎃', catapult: '🏹', giant: '🎃', snowman: '⛄',
-  'int:room': '🏚️', 'int:radio': '📻', 'int:tv': '📺', 'int:bake': '🥧', 'int:bath': '🛁', 'int:lure': '👨‍🌾',
+  'int:room': '🏚️', 'int:radio': '📻', 'int:tv': '📺', 'int:bake': '🥧', 'int:bath': '🛁', 'int:lure': '👨‍🌾', 'int:gramo': '🎶', 'int:disco': '🕺',
   bigball: '⚪', gadget: '🎁', snack: '🥫', bring: '📦', gate: '🚪', gates: '🚪', loo: '🚽', phone: '☎️', nap: '🛌', tp: '📍', alert: '🚨',
 };
 function adminIcon(k: string) {
@@ -43,16 +43,23 @@ const FARM_EMOJI: Record<string, string> = { farm1: '🏡', farm2: '🍎', farm3
 import { FARM_IDS, farmId, reloadOnFarm, type FarmId } from '../world/farms';
 import { isFull, setFull, toggleFull, fullIcon, onFull } from './fullscreen';
 import { FLAGS } from './flags';
+import { ui, bars, type UiIcon } from './uiIcons';
+import { IC, type IconId } from './icons';
+import { PADDEV, pg, type PadG } from './padGlyph';
 
-/** Settings row icons. */
-const ic = (b: string) => `<svg viewBox="0 0 24 24" width="22" height="22">${b}</svg>`;
-const ROW = {
-  lang: ic('<circle cx="12" cy="12" r="9" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" fill="none" stroke="#fff6e6" stroke-width="1.6"/>'),
-  gfx: ic('<rect x="2.5" y="4" width="19" height="12" rx="2" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="#fff6e6" stroke-width="2" stroke-linecap="round"/><path d="m6 13 4-4 3 3 2-2 3 3" fill="none" stroke="#ffd166" stroke-width="1.8" stroke-linejoin="round"/>'),
-  sound: '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="#fff6e6" d="M4 9h4l5-4v14l-5-4H4z"/><path fill="none" stroke="#fff6e6" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
-  music: ic('<path d="M9 18V5l11-2v13" fill="none" stroke="#ff9ad2" stroke-width="2.4"/><circle cx="6.5" cy="18" r="3" fill="#ff9ad2"/><circle cx="17.5" cy="16" r="3" fill="#ff9ad2"/>'),
-  mouse: ic('<rect x="6" y="3" width="12" height="18" rx="6" fill="none" stroke="#fff6e6" stroke-width="2"/><path d="M12 3v6" stroke="#fff6e6" stroke-width="2"/><path d="M2 12h2M20 12h2" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>'),
-};
+/** Settings rows: an icon + a short word + one control (simple rows big, "More" rows small). */
+const row = (icon: string, label: string, ctl: string) => `<div class="field srow"><span class="sl">${icon}${label}</span>${ctl}</div>`;
+const f = (icon: string, label: string, ctl: string) => `<div class="field"><span class="sl">${icon}${label}</span>${ctl}</div>`;
+const seg = (name: string, opts: [string, string][], cur: string) =>
+  `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+/** A segment row whose buttons carry an icon over the word (graphics presets: quality bars). */
+const segI = (name: string, opts: [string, string, string][], cur: string) =>
+  `<div class="seg segi" data-seg="${name}">${opts.map(([v, l, i]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${i}<span>${l}</span></button>`).join('')}</div>`;
+const slider = (name: string, v: number, max = 1, step = 0.05) => `<input type="range" data-s="${name}" min="0" max="${max}" step="${step}" value="${v}">`;
+/** An on / off switch (a pill with a knob: green = on). */
+const sw = (name: string, on: boolean) => `<button class="sw${on ? ' on' : ''}" data-sw="${name}" role="switch" aria-checked="${on}"><i></i></button>`;
+/** A pig jumping (an up arrow with a little hop line). */
+const JUMP = '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 3 5.5 10H9.6v6h4.8v-6h4.1z" fill="#fff6e6" stroke="#2a170b" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 20.5h14" stroke="#ffd166" stroke-width="2.6" stroke-linecap="round"/></svg>';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -63,6 +70,7 @@ const $ = (id: string) => document.getElementById(id)!;
 export class Menu {
   menuOpen = false;
   private advanced = false;
+  private page: 'settings' | 'controls' | 'exit' = 'settings';
   private menu = $('menu');
   private panel = $('menuPanel');
   private admin = $('admin');
@@ -129,6 +137,7 @@ export class Menu {
   open() {
     if (ADMIN.open) return;
     this.menuOpen = true;
+    if (this.page === 'exit') this.page = 'settings';
     document.exitPointerLock?.();
     document.getElementById('clickHint')?.classList.remove('show');
     this.renderMenu();
@@ -140,69 +149,123 @@ export class Menu {
     if (lock && this.game.mode === 'play') this.game.input.lock();
   }
 
+  /**
+   * The pause menu (user 2026-11-19: "there's no exit to the main menu, only back to the game"; "universal, familiar
+   * icons"): a rail of big icon tiles on the left — ▶ resume · ⚙ settings · 🎮 controls · 👕 wardrobe · 🔧 admin ·
+   * 🔗 invite · 🏠 main menu (asks first) — and the chosen page on the right.
+   */
   private renderMenu() {
-    const seg = (name: string, opts: [string, string][], cur: string) =>
-      `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button data-v="${v}" class="${v === cur ? 'on' : ''}">${l}</button>`).join('')}</div>`;
-    const slider = (name: string, v: number, max = 1, step = 0.05) => `<input type="range" data-s="${name}" min="0" max="${max}" step="${step}" value="${v}">`;
-    const f = (label: Key, ctl: string) => `<div class="field"><span>${t(label)}</span>${ctl}</div>`;
-    /** Simple rows (user: "simplify the settings"): an icon + a short word + one control. Everything else under "More". */
-    const row = (ic: string, label: Key, ctl: string) => `<div class="field srow"><span class="sl">${ic}${t(label)}</span>${ctl}</div>`;
+    const play = this.game.mode === 'play', room = online.room;
+    const exitKind: 'exit' | 'leave' | 'end' | null = room ? (online.isHost && play ? 'end' : 'leave') : play ? 'exit' : null;
+    if (!exitKind && this.page === 'exit') this.page = 'settings';
+    const tile = (b: string, icon: UiIcon, label: string, cls = '', tip = label) =>
+      `<button class="ptile ${cls}" data-b="${b}" title="${tip.replace(/"/g, '&quot;')}">${ui(icon, 40)}<span>${label}</span></button>`;
+    const pageTile = (p: typeof this.page, icon: UiIcon, label: Key) => tile('page:' + p, icon, t(label), this.page === p ? 'on' : '');
+    const rail = `<nav class="prail">` +
+      (play ? tile('resume', 'play', t('pm.resume'), 'go', t('menu.resume')) : tile('resume', 'close', t('pm.close'))) +
+      pageTile('settings', 'gear', 'menu.settings') + pageTile('controls', 'pad', 'help.title') +
+      tile('wardrobe', 'shirt', t('pm.wardrobe'), '', t('menu.wardrobe')) +
+      (canAdmin() ? tile('admin', 'wrench', t('pm.admin'), '', t('menu.admin')) : '') +
+      `<div class="pspace"></div>` +
+      (room ? tile('invite', 'link', `${t('pm.invite')}<b>${room.code}</b>`, '', t('net.copyInvite')) : '') +
+      (exitKind ? tile('page:exit', exitKind === 'exit' ? 'home' : 'exit', t(exitKind === 'exit' ? 'pm.exit' : exitKind === 'end' ? 'pm.end' : 'pm.leave'),
+        'exit' + (this.page === 'exit' ? ' on' : ''), t(exitKind === 'exit' ? 'menu.toLobby' : exitKind === 'end' ? 'net.endGame' : 'net.leave')) : '') +
+      `</nav>`;
+    const body = this.page === 'controls' ? this.controlsPage() : this.page === 'exit' ? this.exitPage(exitKind!, play) : this.settingsPage();
+    this.panel.classList.add('pause');
+    this.panel.innerHTML = rail + `<section class="ppage">${body}</section>`;
+    this.wireMenu();
+  }
+
+  /** Settings: one icon + one word + one control per row; everything else under "More". Switches, not On / Off words. */
+  private settingsPage() {
     const G0 = SETTINGS.preset;
-    const presets: [string, string][] = [['auto', t('g.autoS')], ...PRESET_ORDER.map((p) => [p, t(('g.' + p) as Key)] as [string, string])];
-    if (G0 === 'custom') presets.push(['custom', t('g.custom')]);
+    const presets: [string, string, string][] = [['auto', t('g.autoS'), bars(0, 22)], ...PRESET_ORDER.map((p, i) => [p, t(('g.' + p) as Key), bars(i + 1, 28)] as [string, string, string])];
+    if (G0 === 'custom') presets.push(['custom', t('g.custom'), ui('sliders', 18)]);
     const langs = `<div class="langPick">${Object.entries(LANGS).map(([k, v]) => `<button data-lang="${k}" class="${k === lang() ? 'on' : ''}">${FLAGS[k] ?? ''}${v}</button>`).join('')}</div>`;
-    this.panel.innerHTML = `<h2>${t('menu.settings')}</h2>` +
-      row(ROW.lang, 'menu.language', langs) +
-      row(ROW.gfx, 'menu.quality', seg('preset', presets, G0)) +
-      `<div class="btns"><button class="chip small" data-b="tune" title="${t('g.tuneD').replace(/"/g, '&quot;')}">⚡ ${t('g.tune')}${G0 === 'auto' ? ` · ${t(('g.' + presetOf('auto')) as Key)}` : ''}</button></div>` +
-      row(ROW.sound, 'menu.soundOn', seg('mute', [['0', t('menu.on')], ['1', t('menu.off')]], this.game.audio.muted ? '1' : '0')) +
-      row(ROW.sound, 'menu.sound', slider('sound', SETTINGS.sfx)) +
-      row(ROW.music, 'menu.musicS', slider('music', SETTINGS.music)) +
-      row(ROW.mouse, 'menu.mouse', slider('sens', SETTINGS.sens, 3, 0.1)) +
-      row(fullIcon(false), 'menu.full', seg('full', [['1', t('menu.on')], ['0', t('menu.off')]], isFull() ? '1' : '0')) +
-      `<div class="btns"><button class="chip small" data-b="advanced">${this.advanced ? '▾' : '▸'} ${t('menu.more')}</button></div>` +
-      (this.advanced ? `<div class="adv">` + f('menu.sfx', slider('sfx', SETTINGS.sfx)) + f('menu.ambience', slider('ambience', SETTINGS.ambience)) +
-        f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) +
-        f('menu.rumble', seg('rumble', [['1', t('menu.on')], ['0', t('menu.off')]], SETTINGS.rumble !== false ? '1' : '0')) + this.graphics(seg, slider, f) + '</div>' : '') +
-      `<div class="btns"><button class="chip big" data-b="resume">${t('menu.resume')}</button><button class="chip" data-b="wardrobe">${t('menu.wardrobe')}</button>` +
-      `<button class="chip small" data-b="help">🎮 ${t('help.title')}</button>` +
-      (canAdmin() ? `<button class="chip small" data-b="admin">🛠️ ${t('menu.admin')}</button>` : '') + `</div>` +
-      (online.room ? `<div class="btns"><span class="lw">${t('net.code')} <b>${online.room.code}</b></span><button class="chip" data-b="invite">${t('net.copyInvite')}</button>` +
-        `<button class="chip" data-b="leave">🏠 ${t(online.isHost ? 'net.endGame' : 'net.leave')}</button></div>`
-        : this.game.mode === 'play' ? `<div class="btns"><button class="chip" data-b="lobby">🏠 ${t('menu.toLobby')}</button></div>` : '');
-    this.panel.querySelectorAll<HTMLElement>('[data-seg]').forEach((s) => s.addEventListener('click', (e) => {
+    const muted = this.game.audio.muted;
+    const muteBtn = `<button class="mute${muted ? ' off' : ''}" data-b="mute" title="${t(muted ? 'toast.soundOff' : 'toast.soundOn')}" role="switch" aria-checked="${!muted}">${ui(muted ? 'muted' : 'speaker', 26)}</button>`;
+    const tuneName = G0 === 'auto' ? ` · ${t(('g.' + presetOf('auto')) as Key)}` : '';
+    return `<h2>${t('menu.settings')}</h2>` +
+      row(ui('globe', 26), t('menu.language'), langs) +
+      row(ui('monitor', 26), t('menu.quality'), segI('preset', presets, G0)) +
+      `<div class="field srow sub"><span></span><button class="chip small icn" data-b="tune" title="${t('g.tuneD').replace(/"/g, '&quot;')}">${ui('gauge', 20)}${t('g.tune')}${tuneName}</button></div>` +
+      `<div class="field srow"><span class="sl">${muteBtn}${t('menu.sound')}</span>${slider('sound', muted ? 0 : SETTINGS.sfx)}</div>` +
+      row(ui('music', 26), t('menu.musicS'), slider('music', SETTINGS.music)) +
+      row(ui('mouse', 26), t('menu.mouse'), slider('sens', SETTINGS.sens, 3, 0.1)) +
+      row(ui('full', 26), t('menu.full'), sw('full', isFull())) +
+      `<div class="btns"><button class="chip small icn" data-b="advanced">${ui('sliders', 20)}${t('menu.more')} ${this.advanced ? '▾' : '▸'}</button></div>` +
+      (this.advanced ? `<div class="adv">` +
+        f(ui('speaker', 20), t('menu.sfx'), slider('sfx', SETTINGS.sfx)) + f(ui('tree', 20), t('menu.ambience'), slider('ambience', SETTINGS.ambience)) +
+        f(ui('updown', 20), t('menu.invert'), sw('invert', SETTINGS.invertY)) +
+        f(ui('rumble', 20), t('menu.rumble'), sw('rumble', SETTINGS.rumble !== false)) + this.graphics() + '</div>' : '');
+  }
+
+  /** Controls: a tile per action = its icon + the key / pad button, one word under it (the full sentence in the tooltip). */
+  private controlsPage() {
+    const pad = PADDEV.on;
+    const cap = (k: string, g: PadG | PadG[]) => pad ? ([] as PadG[]).concat(g).map(pg).join('') : `<kbd class="kc">${k}</kbd>`;
+    const A: [string, string, Key, string, PadG | PadG[], Key][] = [
+      ['walk', '', 'cx.move', 'WASD', 'LS', 'help.move'], ['eye', '', 'cx.look', t('key.mouse'), 'RS', 'help.look'],
+      ['', JUMP, 'cx.jump', t('key.space'), 'A', 'help.jump'], ['', ICONS.grab, 'ab.grab', t('key.rmb'), 'LT', 'help.grab'],
+      ['fist', '', 'cx.hit', t('key.lmb'), 'RT', 'help.punch'], ['', ICONS.sprint, 'ab.sprint', t('key.shift'), 'LB', 'help.sprint'],
+      ['', ICONS.fart, 'ab.fart', 'Q', 'B', 'help.fart'], ['', ICONS.wallow, 'ab.wallow', 'C', 'X', 'help.wallow'],
+      ['', ICONS.stand, 'ab.stand', 'E', 'Y', 'help.stand'], ['note', '', 'cx.oink', 'F', 'R3', 'help.oink'],
+      ['pour', '', 'cx.tilt', 'R', 'RB', 'help.tilt' as Key], ['reach', '', 'cx.reach', t('key.wheel' as Key), 'DUD', 'help.reach' as Key],
+      ['', SVG.view, 'cx.view', 'V', 'VIEW', 'help.view' as Key], ['swirl', '', 'cx.dance', 'B', 'DL', 'key.emote' as Key],
+      ['pass', '', 'cx.pass', 'G', 'DR', 'key.pass' as Key], ['', ui('gear', 30), 'menu.settings', 'Esc', 'MENU', 'menu.settings'],
+    ];
+    return `<h2>${t('help.title')}</h2><div class="ctiles">` + A.map(([ic, raw, lbl, key, g, tip]) =>
+      `<div class="ctile" title="${t(tip).replace(/"/g, '&quot;')}"><div class="ci">${raw || IC[ic as IconId]}</div><div class="ck">${cap(key, g)}</div><span>${t(lbl)}</span></div>`).join('') +
+      `</div><div class="btns"><button class="chip small icn" data-b="help">${ui('keys', 20)}${t('pm.onScreen')} <kbd class="kc">H</kbd></button></div>`;
+  }
+
+  /** "Main menu?" — a big icon, one line, ✔ / ✕. */
+  private exitPage(kind: 'exit' | 'leave' | 'end', play: boolean) {
+    const q = t(kind === 'exit' ? 'pm.exitQ' : kind === 'end' ? 'pm.endQ' : 'pm.leaveQ');
+    return `<div class="pexit">${ui(kind === 'exit' ? 'home' : 'exit', 96)}<h2>${q}</h2>` + (play ? `<p>${t('pm.roundLost')}</p>` : '') +
+      `<div class="btns"><button class="chip big warn icn" data-b="exitYes">${ui('yes', 30)}${t('pm.yes')}</button>` +
+      `<button class="chip big plain icn" data-b="exitNo">${ui('close', 30)}${t('pm.no')}</button></div></div>`;
+  }
+
+  private wireMenu() {
+    const P = this.panel;
+    P.querySelectorAll<HTMLElement>('[data-seg]').forEach((s) => s.addEventListener('click', (e) => {
       const v = (e.target as HTMLElement).closest<HTMLElement>('[data-v]')?.dataset.v; if (v === undefined) return;
       const name = s.dataset.seg;
       if (name === 'preset' && v !== SETTINGS.preset) this.choosePreset(v as PresetChoice);
-      if (name?.startsWith('g:')) {
-        const k = name.slice(2) as keyof GfxOpts;
-        this.setGfx(k, (typeof PRESETS.high[k] === 'boolean' ? v === '1' : parseFloat(v)) as never);
-      }
-      if (name === 'showFps') { SETTINGS.fps = v === '1'; saveSettings(); }
-      if (name === 'mute') { if ((v === '1') !== this.game.audio.muted) this.toggleSound(); }
-      if (name === 'rumble') { SETTINGS.rumble = v === '1'; saveSettings(); }
-      if (name === 'invert') { SETTINGS.invertY = v === '1'; saveSettings(); this.game.applySettings(); }
-      if (name === 'full') { setFull(v === '1').then(() => this.renderMenu()); return; }
+      if (name?.startsWith('g:')) this.setGfx(name.slice(2) as keyof GfxOpts, parseFloat(v) as never);
       this.renderMenu();
     }));
-    this.panel.querySelector('.langPick')?.addEventListener('click', (e) => {
+    P.querySelectorAll<HTMLElement>('[data-sw]').forEach((b) => b.addEventListener('click', () => {
+      const name = b.dataset.sw!, on = !b.classList.contains('on');
+      if (name.startsWith('g:')) this.setGfx(name.slice(2) as keyof GfxOpts, on as never);
+      if (name === 'showFps') { SETTINGS.fps = on; saveSettings(); }
+      if (name === 'rumble') { SETTINGS.rumble = on; saveSettings(); }
+      if (name === 'invert') { SETTINGS.invertY = on; saveSettings(); this.game.applySettings(); }
+      if (name === 'full') { setFull(on).then(() => this.renderMenu()); return; }
+      this.renderMenu();
+    }));
+    P.querySelector('.langPick')?.addEventListener('click', (e) => {
       const l = (e.target as HTMLElement).closest<HTMLElement>('[data-lang]')?.dataset.lang;
       if (l && l !== lang()) setLang(l as Lang);
     });
-    this.panel.querySelectorAll<HTMLInputElement>('input[data-s]').forEach((el) => el.addEventListener('input', () => {
+    P.querySelectorAll<HTMLInputElement>('input[data-s]').forEach((el) => el.addEventListener('input', () => {
       const k = el.dataset.s!, v = parseFloat(el.value);
-      if (k === 'sound') { SETTINGS.sfx = v; SETTINGS.ambience = Math.min(1, v * 0.8); } else (SETTINGS as any)[k] = v;
+      if (k === 'sound') {
+        SETTINGS.sfx = v; SETTINGS.ambience = Math.min(1, v * 0.8);
+        if (this.game.audio.muted && v > 0) { this.toggleSound(); P.querySelector('[data-b=mute]')?.replaceWith(...this.muteBtnNow()); }
+      } else (SETTINGS as any)[k] = v;
       saveSettings(); this.game.applySettings();
     }));
-    this.panel.querySelector<HTMLInputElement>('input[data-g=res]')?.addEventListener('change', (e) => {
-      this.setGfx('res', parseFloat((e.target as HTMLInputElement).value)); this.renderMenu();
-    });
-    this.panel.querySelector<HTMLInputElement>('input[data-g=res]')?.addEventListener('input', (e) => {
-      (this.panel.querySelector('[data-val=res]') as HTMLElement).textContent = `${Math.round(parseFloat((e.target as HTMLInputElement).value) * 100)}%`;
-    });
-    this.panel.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
-      const k = b.dataset.b;
+    const res = P.querySelector<HTMLInputElement>('input[data-g=res]');
+    res?.addEventListener('change', () => { this.setGfx('res', parseFloat(res.value)); this.renderMenu(); });
+    res?.addEventListener('input', () => { (P.querySelector('[data-val=res]') as HTMLElement).textContent = `${Math.round(parseFloat(res.value) * 100)}%`; });
+    P.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.b!;
+      if (k.startsWith('page:')) { this.page = k.slice(5) as typeof this.page; this.renderMenu(); return; }
       if (k === 'resume') this.close();
+      if (k === 'mute') { this.toggleSound(); this.renderMenu(); }
       if (k === 'help') { this.close(); this.game.hud.flashHelp(20); }
       if (k === 'advanced') { this.advanced = !this.advanced; this.renderMenu(); }
       if (k === 'tune') {   // measure again from the graphics card's guess (while playing)
@@ -211,37 +274,40 @@ export class Menu {
       }
       if (k === 'wardrobe') { this.close(false); this.onWardrobe?.(); }
       if (k === 'admin') { this.close(false); this.toggleAdmin(); }
-      if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2));
-      if (k === 'leave') this.onLeave?.();
-      if (k === 'lobby') location.href = location.pathname;   // solo: back to the lobby (the world is rebuilt fresh)
+      if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2, '', 'check'));
+      if (k === 'exitNo') { this.page = 'settings'; this.renderMenu(); }
+      if (k === 'exitYes') {
+        if (online.room) this.onLeave?.();
+        else location.href = location.pathname;   // solo: back to the lobby (the world is rebuilt fresh)
+      }
     }));
   }
+  private muteBtnNow() {
+    const d = document.createElement('div'); const m = this.game.audio.muted;
+    d.innerHTML = `<button class="mute${m ? ' off' : ''}" data-b="mute" role="switch" aria-checked="${!m}">${ui(m ? 'muted' : 'speaker', 26)}</button>`;
+    const b = d.firstElementChild as HTMLElement;
+    b.addEventListener('click', () => { this.toggleSound(); this.renderMenu(); });
+    return [b];
+  }
 
-  /** Graphics: a preset row (Auto / Low / Medium / High / Ultra) + every option on its own under "Advanced". */
-  private graphics(seg: (name: string, opts: [string, string][], cur: string) => string, _slider: unknown, f: (label: Key, ctl: string) => string) {
-    const G0 = SETTINGS.gfx, cur = SETTINGS.preset;
-    const presets: [string, string][] = [['auto', this.presetName('auto')], ...PRESET_ORDER.map((p) => [p, t(('g.' + p) as Key)] as [string, string])];
-    if (cur === 'custom') presets.push(['custom', t('g.custom')]);
-    const onOff = (k: keyof GfxOpts) => seg('g:' + k, [['1', t('menu.on')], ['0', t('menu.off')]], G0[k] ? '1' : '0');
+  /** Graphics, every option on its own (under "More"): an icon per row, switches for on / off, bars for levels. */
+  private graphics() {
+    const G0 = SETTINGS.gfx;
     const lv = (k: keyof GfxOpts, labels: [number, Key | string][]) =>
       seg('g:' + k, labels.map(([v, l]) => [String(v), l.includes('.') ? t(l as Key) : l]), String(G0[k]));
-    let html = '';
-    {
-      const gpu = detectPreset().gpu;
-      html += `<div><div class="hint">${t('g.hint')}${gpu ? '<br>' + t('g.gpu', { g: gpu.replace(/[<>&]/g, '') }) : ''}</div>` +
-        f('g.res', `<span class="rv"><b data-val="res">${Math.round(G0.res * 100)}%</b><input type="range" data-g="res" min="0.5" max="1" step="0.05" value="${G0.res}"></span>`) +
-        f('g.dynRes', onOff('dynRes')) +
-        f('g.shadows', lv('shadows', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high'], [4, 'g.ultra']])) +
-        f('g.grass', lv('grass', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high']])) +
-        f('g.lamps', lv('lamps', [[0, '2'], [1, '4'], [2, '6'], [3, 'g.all']])) +
-        f('g.detail', lv('detail', [[0, 'g.near'], [1, 'g.medium'], [2, 'g.far'], [3, 'g.max']])) +
-        f('g.outline', onOff('outline')) + f('g.bloom', onOff('bloom')) +
-        f('g.aa', lv('aa', [[0, 'menu.off'], [1, 'FXAA'], [2, 'SMAA']])) +
-        f('g.dpr', lv('dpr', [[1, '1×'], [1.5, '1.5×'], [2, '2×']])) +
-        f('g.fpsCap', lv('fpsCap', [[0, 'g.max'], [60, '60'], [30, '30']])) +
-        f('g.showFps', seg('showFps', [['1', t('menu.on')], ['0', t('menu.off')]], SETTINGS.fps ? '1' : '0')) + '</div>';
-    }
-    return html;
+    const gpu = detectPreset().gpu;
+    return `<div><div class="hint">${t('g.hint')}${gpu ? '<br>' + t('g.gpu', { g: gpu.replace(/[<>&]/g, '') }) : ''}</div>` +
+      f(ui('res', 20), t('g.res'), `<span class="rv"><b data-val="res">${Math.round(G0.res * 100)}%</b><input type="range" data-g="res" min="0.5" max="1" step="0.05" value="${G0.res}"></span>`) +
+      f(ui('auto', 20), t('g.dynRes'), sw('g:dynRes', !!G0.dynRes)) +
+      f(ui('shadow', 20), t('g.shadows'), lv('shadows', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high'], [4, 'g.ultra']])) +
+      f(ui('grass', 20), t('g.grass'), lv('grass', [[0, 'menu.off'], [1, 'g.low'], [2, 'g.medium'], [3, 'g.high']])) +
+      f(ui('bulb', 20), t('g.lamps'), lv('lamps', [[0, '2'], [1, '4'], [2, '6'], [3, 'g.all']])) +
+      f(ui('far', 20), t('g.detail'), lv('detail', [[0, 'g.near'], [1, 'g.medium'], [2, 'g.far'], [3, 'g.max']])) +
+      f(ui('pencil', 20), t('g.outline'), sw('g:outline', !!G0.outline)) + f(ui('sparkle', 20), t('g.bloom'), sw('g:bloom', !!G0.bloom)) +
+      f(ui('smooth', 20), t('g.aa'), lv('aa', [[0, 'menu.off'], [1, 'FXAA'], [2, 'SMAA']])) +
+      f(ui('pixels', 20), t('g.dpr'), lv('dpr', [[1, '1×'], [1.5, '1.5×'], [2, '2×']])) +
+      f(ui('gauge', 20), t('g.fpsCap'), lv('fpsCap', [[0, 'g.max'], [60, '60'], [30, '30']])) +
+      f(ui('fps', 20), t('g.showFps'), sw('showFps', !!SETTINGS.fps)) + '</div>';
   }
 
   // ---------------------------------------------------------------- admin panel
@@ -333,7 +399,8 @@ export class Menu {
           (f.pumpkins ? sec('a.farm4') + grid(btn('lantern:out', 'a.lanternOut'), btn('lanterns:out', 'a.lanternsOut'), btn('lanterns:on', 'a.lanternsOn'), btn('bob:relight', 'a.bobRelight'), btn('catapult:me', 'a.catapultMe'), btn('catapult:fire', 'a.catapultFire'), btn('catapult:bob', 'a.catapultBob'), btn('bringPumpkin', 'a.bringPumpkin'), btn('giant:me', 'a.giantMe')) : '') +
           (f.winter ? sec('a.farm5') + grid(btn('snowman:down', 'a.snowmanDown'), btn('snowman:bob', 'a.snowmanBob'), btn('bringSnowball', 'a.bringSnowball'), btn('bigball:me', 'a.bigBall'), btn('bob:ice', 'a.bobIce'), btn('snowcoat', 'a.snowCoat')) : '') +
           (g.interiors?.rooms.length ? sec('a.interiors') + grid(btn('int:room', 'a.intRoom'), g.interiors.radios.length ? btn('int:radio', 'a.intRadio') : '', g.interiors.tvs.length ? btn('int:tv', 'a.intTv') : '',
-            g.interiors.ovens.length ? btn('int:bake', 'a.intBake') : '', g.interiors.baths.length ? btn('int:bath', 'a.intBath') : '', btn('int:lure', 'a.intLure')) : '') +
+            g.interiors.ovens.length ? btn('int:bake', 'a.intBake') : '', g.interiors.baths.length ? btn('int:bath', 'a.intBath') : '', btn('int:lure', 'a.intLure'),
+            g.interiors.gramos.length ? btn('int:gramo', 'a.intGramo') : '', g.interiors.gramos.length ? btn('int:disco', 'a.intDisco') : '') : '') +
           sec('a.pranks') + grid(btn('pick', 'a.pick'), hasTp('garden') ? `<button data-tp="garden" class="tile"><b>📍</b>${short(t('a.tpGarden'))}</button>` : '');
         break;
       case 'owner': {

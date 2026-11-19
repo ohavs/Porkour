@@ -157,7 +157,7 @@ async function boot() {
       if (game.lockpick.isOpen || game.wheel.isOpen) return null;   // the game's own buttons drive these
       if (wardrobe.isOpen) return { el: document.getElementById('wardrobe')!, def: '#wItems .on, #wItems button, #wItems .gd' };
       if (ADMIN.open) return { el: document.getElementById('admin')! };
-      if (game.menu.menuOpen) return { el: document.getElementById('menu')! };
+      if (game.menu.menuOpen) return { el: document.getElementById('menu')!, def: '[data-b=resume]' };
       const sv = shown('saves'); if (sv) return { el: sv, def: '.sslot.on .chip, .sslot .chip.go, .sslot .chip' };
       if (lobby.isOpen) return { el: document.getElementById('lobby')!, def: '[data-a=quick], [data-a=start], .chip.big, [data-a=retry], [data-a=back]' };
       const res = document.getElementById('results');

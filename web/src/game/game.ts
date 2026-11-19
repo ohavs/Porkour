@@ -727,8 +727,9 @@ export class Game {
       case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
       // s23: furnished buildings (next room · nearest radio on / off, TV channel, bake now, fill the bath · Bob comes to switch it off)
       case 'int:room': { const it = this.interiors, rs = it.rooms; if (!rs.length) break; this.intRoom = (this.intRoom + 1) % rs.length; tp(rs[this.intRoom].x, rs[this.intRoom].z); this.menu.toggleAdmin(); break; }
-      case 'int:radio': case 'int:tv': case 'int:bake': case 'int:bath': this.interiors.admin(a.slice(4), L.pos); break;
-      case 'int:lure': { const j = this.interiors.lureJob(L.pos, f?.pos); if (f && j) f.jobNow(j); break; }
+      case 'int:radio': case 'int:tv': case 'int:bake': case 'int:bath': case 'int:gramo': this.interiors.admin(a.slice(4), L.pos); break;
+      case 'int:disco': { const j = this.interiors.lureJob(L.pos, f ?? undefined, true); if (f && j) f.jobNow(j); break; }
+      case 'int:lure': { const j = this.interiors.lureJob(L.pos, f ?? undefined); if (f && j) f.jobNow(j); break; }
       case 'gates:lock': this.gates.all('locked'); break;
       case 'gates:shut': this.gates.all('shut'); break;
       case 'gates:open': this.gates.all('free'); break;
