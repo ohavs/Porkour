@@ -104,6 +104,8 @@ export interface BobJob {
   done(): void;
   /** What he does right after (default: back to work). */
   then?: () => void;
+  /** How close counts as there (m, default 0.7): music he can dance to from the doorway. */
+  near?: number;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
@@ -191,7 +193,7 @@ export class Farmer {
   private slapDone = false; private slapped: Pig[] = []; forceSlap = false;
   private danceUntil = 0;
   /** Dancing next to this pig (faces it); back to the chase afterwards. Per-pig "rolled the dice" times. */
-  private danceFace: Pig | null = null; private danceChase = false; private danceRoll = new WeakMap<Pig, number>();
+  private danceFace: { pos: THREE.Vector3; out?: boolean } | null = null; private danceChase = false; private danceRoll = new WeakMap<Pig, number>();
   private shooWolf: Wolf | null = null;
   /** Wolves he already chased off (he doesn't keep shooing the same one). */
   private shooed = new WeakMap<Wolf, number>();
@@ -1008,6 +1010,12 @@ export class Farmer {
   }
   /** Admin: the next pig he meets up close gets a dance for sure. */
   forceDanceNear = false;
+  /** A record playing (interiors' gramophone): he dances `secs` facing it, blind, then back to work. */
+  danceFor(secs: number, at?: THREE.Vector3) {
+    if (G.mod === 'grumpy') { this.backToWork(); return; }
+    this.dance(secs);
+    if (at) this.danceFace = { pos: at.clone() };
+  }
   danceSoon() { this.forceDanceNear = true; this.danceRoll = new WeakMap(); }
 
   // ================================================================== routine (clock-driven)
@@ -1297,7 +1305,7 @@ export class Farmer {
     this.activity = j.activity;
     if (!this.doing) {
       const d = this.moveTo(j.at, BOB.walk * 1.1, dt);
-      if (d < 0.7 || (d < 2.4 && this.stuck >= 2)) { this.stuck = 0; this.doing = true; this.choreUntil = this.now + j.dur; }
+      if (d < (j.near ?? 0.7) || (d < 2.4 && this.stuck >= 2)) { this.stuck = 0; this.doing = true; this.choreUntil = this.now + j.dur; }
       return BOB.walk * 1.1;
     }
     this.face(j.look, dt, 6);

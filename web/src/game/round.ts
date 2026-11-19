@@ -18,6 +18,7 @@ import { profile } from '../net/auth';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 import type { Spot } from '../world/pumpkins';
 import { IC, kc, type IconId } from './icons';
+import { ui } from './uiIcons';
 import type { Pig } from '../pig/pig';
 import { wrapAngle } from '../core/util';
 
@@ -59,7 +60,9 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   | 'wallJump' | 'cheeseRiver' | 'peakClimb' | 'bobSoak' | 'danceBob' | 'highUp'
   | 'bedNap' | 'fridgeRaid' | 'yardSale' | 'sofaSwim' | 'toiletFlush'
   // s23: the TV / radio lure, oven pies, the bubble bath
-  | 'radioLure' | 'pieBob' | 'bubbleBath';
+  | 'radioLure' | 'pieBob' | 'bubbleBath'
+  // s24: the record player (Bob can't help dancing to it)
+  | 'discoBob';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -69,7 +72,7 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
-  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob'];
+  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob'];
 const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
   'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', ...REQ_POOL];
 /** Bonus pranks per round (user: "add more missions"; was 2). */
@@ -243,6 +246,7 @@ export class Round {
       ...(this.game.interiors?.hasToilet ? ['toiletFlush'] as MissionId[] : []),
       ...(this.game.interiors?.radios.length || this.game.interiors?.tvs.length ? ['radioLure'] as MissionId[] : []),
       ...(this.game.interiors?.ovens.length ? ['pieBob'] as MissionId[] : []),
+      ...(this.game.interiors?.gramos.length ? ['discoBob'] as MissionId[] : []),
       ...(this.game.interiors?.baths.length ? ['bubbleBath'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
@@ -303,6 +307,7 @@ export class Round {
     if (type === 'smashed' && text === 'melon') this.count('melonSmash');
     if (type === 'splatBob') { if (text === 'ovenPie') this.done('pieBob'); else this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob'); }
     if (type === 'radioOff') this.done('radioLure');
+    if (type === 'bobDisco') this.done('discoBob');
     if (type === 'bath') this.done('bubbleBath');
     if (type === 'treeShaken') this.count('shakeTrees');
     if (type === 'pressed') this.count('ciderPress');
@@ -567,6 +572,7 @@ export class Round {
     if (x.id === 'sofaSwim') return IC.couch + IC.water;
     if (x.id === 'toiletFlush') return IC.rmb + IC.loo;
     if (x.id === 'radioLure') return IC.fist + IC.note + IC.bob;
+    if (x.id === 'discoBob') return IC.rmb + IC.note + IC.bob;
     if (x.id === 'pieBob') return L.held?.kind === 'prop' && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie' ? IC.lmb + IC.throw + IC.bob : IC.rmb + IC.oven;
     if (x.id === 'bubbleBath') return IC.rmb + IC.water;
     if (x.id === 'highUp') return kc('Q') + IC.cloud + IC.house;
@@ -644,10 +650,10 @@ export class Round {
         // s22: the furnished buildings (nearest bed / fridge / toilet / piece), the peak, the terrace walls
         case 'pieBob': if (L.held && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie') { atBob(i); return; }   // falls through: the nearest oven
         // eslint-disable-next-line no-fallthrough
-        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': case 'radioLure': case 'bubbleBath': {
+        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': case 'radioLure': case 'bubbleBath': case 'discoBob': {
           const it = g.interiors; if (!it) return;
           const want = m.id === 'bedNap' ? ['f_bed', 'f_bedKing', 'f_bunk'] : m.id === 'toiletFlush' ? ['f_toilet'] : m.id === 'fridgeRaid' ? ['f_fridge']
-            : m.id === 'radioLure' ? ['f_radio', 'f_tvSet'] : m.id === 'pieBob' ? ['f_oven'] : m.id === 'bubbleBath' ? ['f_bathtub'] : null;
+            : m.id === 'radioLure' ? ['f_radio', 'f_tvSet'] : m.id === 'discoBob' ? ['f_gramo'] : m.id === 'pieBob' ? ['f_oven'] : m.id === 'bubbleBath' ? ['f_bathtub'] : null;
           const list = it.pieces.filter(({ pr, home }) => !pr.banked && !pr.heldBy && (!want || want.includes(pr.def.id ?? ''))
             && (m.id !== 'yardSale' || Math.hypot(pr.synced.currP.x - home.x, pr.synced.currP.z - home.z) <= home.r));
           const pc = near(list, (x) => x.pr.obj.position);
@@ -831,7 +837,7 @@ export class Round {
       (shoe ? `<div class="tot shoe">${t('r.horseshoe')}</div>` : '') +
       `<div class="tot">${t('r.total', { n: SETTINGS.coins })}</div>` +
       `<div class="lvl${this.lvUp ? ' up' : ''}"><b>${this.lvUp ? t('r.levelUp', { n: lv }) : t('shop.level', { n: lv })}</b><div class="xp"><div style="width:${Math.round(levelProgress() * 100)}%"></div></div></div>` +
-      `<div class="btns">${can && next ? `<button class="chip big" data-r="next">${t('r.next')} ▶</button>` : ''}${can ? `<button class="chip" data-r="again">${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip" data-r="menu">${t('r.menu')}</button></div></div>`;
+      `<div class="btns">${can && next ? `<button class="chip big icn" data-r="next">${t('r.next')}${ui('play', 28)}</button>` : ''}${can ? `<button class="chip icn" data-r="again">${ui('retry', 22)}${t('r.again')}</button>` : `<span class="tot">${t('r.wait')}</span>`}<button class="chip icn" data-r="menu">${ui('home', 22)}${t('r.menu')}</button></div></div>`;
     this.res.style.display = 'flex';
     document.exitPointerLock?.();
     this.res.querySelector('[data-r=again]')?.addEventListener('click', () => this.game.restartRound());

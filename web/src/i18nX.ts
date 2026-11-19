@@ -69,6 +69,12 @@ export const EN_X = {
   'g.tune': 'Test my PC', 'g.tuneD': 'Auto graphics: the game measures how smoothly it runs while you play and picks the best preset for this computer',
   'toast.tuned': 'Graphics → {p} (smoother)', 'toast.tuneStart': 'Measuring while you play…',
   'a.river': 'River', 'a.spring': 'Spring & stream', 'a.ramp': 'Terrace ramp', 'a.bog': 'The bog', 'a.peak': 'Mountain top',
+  'pm.resume': 'Resume', 'pm.close': 'Close', 'pm.wardrobe': 'Wardrobe', 'pm.admin': 'Admin', 'pm.invite': 'Invite',
+  'pm.exit': 'Main menu', 'pm.leave': 'Leave', 'pm.end': 'End game', 'pm.exitQ': 'Back to the main menu?', 'pm.leaveQ': 'Leave the room?',
+  'pm.endQ': 'End the game for everyone?', 'pm.roundLost': 'This round will be lost', 'pm.yes': 'Yes', 'pm.no': 'No', 'pm.onScreen': 'Show on screen',
+  'cx.move': 'Move', 'cx.look': 'Look', 'cx.jump': 'Jump', 'cx.hit': 'Hit · throw', 'cx.oink': 'Oink', 'cx.tilt': 'Pour', 'cx.reach': 'Reach',
+  'cx.view': 'View', 'cx.dance': 'Dance', 'cx.pass': 'Pass',
+  'm.discoBob': 'Put a record on and make Bob dance to it', 'a.intGramo': 'Record player on / off', 'a.intDisco': 'Bob: dance to the record',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -131,4 +137,10 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'g.tune': 'Probar mi PC', 'g.tuneD': 'Gráficos automáticos: el juego mide lo fluido que va mientras juegas y elige la mejor calidad para este ordenador',
   'toast.tuned': 'Gráficos → {p} (más fluido)', 'toast.tuneStart': 'Midiendo mientras juegas…',
   'a.river': 'Río', 'a.spring': 'Manantial y arroyo', 'a.ramp': 'Rampa de la terraza', 'a.bog': 'La ciénaga', 'a.peak': 'Cima de la montaña',
+  'pm.resume': 'Seguir', 'pm.close': 'Cerrar', 'pm.wardrobe': 'Vestuario', 'pm.admin': 'Admin', 'pm.invite': 'Invitar',
+  'pm.exit': 'Menú principal', 'pm.leave': 'Salir', 'pm.end': 'Terminar', 'pm.exitQ': '¿Volver al menú principal?', 'pm.leaveQ': '¿Salir de la sala?',
+  'pm.endQ': '¿Terminar la partida para todos?', 'pm.roundLost': 'Se perderá esta ronda', 'pm.yes': 'Sí', 'pm.no': 'No', 'pm.onScreen': 'Ver en pantalla',
+  'cx.move': 'Moverse', 'cx.look': 'Mirar', 'cx.jump': 'Saltar', 'cx.hit': 'Golpe · lanzar', 'cx.oink': 'Oink', 'cx.tilt': 'Verter', 'cx.reach': 'Alcance',
+  'cx.view': 'Vista', 'cx.dance': 'Bailar', 'cx.pass': 'Pasar',
+  'm.discoBob': 'Pon un disco y haz que Bob baile', 'a.intGramo': 'Tocadiscos sí / no', 'a.intDisco': 'Bob: baila con el disco',
 };
