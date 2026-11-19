@@ -106,6 +106,18 @@ export type DecorOpts = { height?: number; scale?: number; yaw?: number; collide
  * The building blocks every farm uses (they place models, colliders, nav-blocking rects and hiding info the same way).
  * `blocked` = rects where scattered trees / rocks / bushes must not go (buildings, pens, paths…).
  */
+/**
+ * The farm-pack barns (BigBarn / Barn / SmallBarn) are hollow inside — walls with inner faces, a ceiling, a real
+ * doorway — only their doors shut them. Take the doors off (before the collider is made; swung open, their plain
+ * backs looked like blank boards): the barn is walk-in, so interiors.ts furnishes it and pigs can hide / loot in there.
+ */
+function openDoors(o: THREE.Object3D) {
+  const doors: THREE.Object3D[] = [];
+  o.traverse((c) => { if (/_Door2?$/.test(c.name)) doors.push(c); });
+  for (const d of doors) d.removeFromParent();
+  return doors.length > 0;
+}
+
 export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect, seed: number) {
   const rng = new Rng(seed);
   const blocked: Rect[] = [];
@@ -126,6 +138,7 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
   /** Building: collider follows its real mesh (open barns / sheds can be walked into). */
   const building = (model: string, x: number, z: number, height: number, yaw = 0, collide = true) => {
     const o = fitted(model, { height });
+    openDoors(o);
     o.position.set(x, y(x, z) - 0.05, z); o.rotation.y = yaw;
     scene.add(o); out.statics.push(o);
     const s = sizeOf(o);

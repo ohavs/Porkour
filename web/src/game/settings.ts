@@ -10,7 +10,7 @@ export const SETTINGS = {
   /** What "Auto" settled on after measuring this machine's frame rate (null = not measured yet: the GPU guess). */
   tuned: null as Preset | null,
   sfx: 1, music: 0.6, ambience: 0.8,
-  sens: 1, invertY: false, muted: false, fps: false,
+  sens: 1, invertY: false, muted: false, fps: false, rumble: true,
   outfit: null as Outfit | null,
   /** Coins + XP from finished rounds; what the shop sold me (game/shop.ts): items 'slot:id', gadget counts, the one I take along. */
   coins: 0, xp: 0,

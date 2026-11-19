@@ -3,6 +3,7 @@ import { SETTINGS, saveSettings } from './settings';
 import { walletHtml } from './wardrobe';
 import { level } from './shop';
 import { IC, kc } from './icons';
+import { PADDEV, pg, onPadDev } from './padGlyph';
 import { ICONS, SVG } from './hud';
 import { fullIcon, toggleFull, onFull } from './fullscreen';
 import { farmId, FARM_IDS, reloadOnFarm, STORY, MODES, stageOf, type FarmId } from '../world/farms';
@@ -97,6 +98,7 @@ export class LobbyUI {
       this.goOn();
     });
     onFull(() => this.icons());
+    onPadDev(() => this.render());
     onLang(() => { this.render(); if (this.savesOpen) this.renderSaves(); });
     this.render();
   }
@@ -164,7 +166,7 @@ export class LobbyUI {
     const st = stageOf(farmId());
     const pickBtn = (k: FarmId) => { const ok = unlocked(k), n = stageOf(k);
       return `<button data-f="${k}" class="${k === cur ? 'on' : ''}${ok ? '' : ' lock'}" title="${ok ? '' : t('lobby.locked')}">${n ? `<em>${n}</em>` : ''}${FARM_ICON[k]}<span>${t(('farm.' + k) as Key)}</span>${ok ? (n && n <= storyWon() ? '<u>★</u>' : '') : '<u>🔒</u>'}</button>`; };
-    document.getElementById('lFarm')!.innerHTML = `<div class="fcur">${FARM_ICON[farmId()]}<span><small>${st ? t('lobby.stage', { n: st }) : t('lobby.modes')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
+    document.getElementById('lFarm')!.innerHTML = `<div class="fcur" data-pad>${FARM_ICON[farmId()]}<span><small>${st ? t('lobby.stage', { n: st }) : t('lobby.modes')}</small><b>${t(('farm.' + farmId()) as Key)}</b></span><i>${this.farmPick ? '▾' : '▸'}</i></div>` +
       (this.farmPick ? `<div class="fpick"><div class="fgrp">📖 ${t('lobby.story')}</div>${STORY.map(pickBtn).join('')}` +
         `<button data-f="random" class="${cur === 'random' ? 'on' : ''}">${FARM_ICON.random}<span>${t('farm.random')}</span></button>` +
         `<div class="fgrp">🎮 ${t('lobby.modes')}</div>${MODES.map(pickBtn).join('')}</div>` : '');
@@ -181,7 +183,7 @@ export class LobbyUI {
     }
     // the big button
     const mode = this.h.playMode(), btn = document.getElementById('lPlay')!;
-    btn.textContent = t(mode === 'start' ? 'lobby.start' : mode === 'wait' ? 'lobby.wait' : 'lobby.play');
+    btn.innerHTML = esc(t(mode === 'start' ? 'lobby.start' : mode === 'wait' ? 'lobby.wait' : 'lobby.play')) + (mode === 'wait' ? '' : `<span class="pgs">${pg('MENU')}</span>`);
     btn.classList.toggle('wait', mode === 'wait');
     // the party: you + your friends (online room), or you + "invite" slots
     const room = this.h.party();
@@ -194,7 +196,11 @@ export class LobbyUI {
     }
     // controls as icons (no sentences)
     const P = (...xs: string[]) => `<span class="pp">${xs.join('')}</span>`;
-    document.getElementById('lKeys')!.innerHTML = P(kc('W'), kc('A'), kc('S'), kc('D'), IC.walk) + P(IC.rmb, IC.grab) + P(IC.lmb, IC.fist) + P(IC.lmb, IC.hold, IC.throw) +
-      P(kc('Q'), ICONS.fart) + P(kc(t('key.space')), '<b class="kj">↑</b>') + P(kc('E'), ICONS.stand) + P(kc('V'), IC.eye);
+    document.getElementById('lKeys')!.innerHTML = PADDEV.on
+      // gamepad: the stage on the sticks, the menus on the D-pad (dances on View: no first person here)
+      ? P(pg('LS'), IC.walk) + P(pg('RS'), IC.aim) + P(IC.rmb, IC.grab) + P(IC.lmb, IC.fist) + P(IC.lmb, IC.hold, IC.throw) +
+        P(kc('Q'), ICONS.fart) + P(kc(t('key.space')), '<b class="kj">↑</b>') + P(kc('E'), ICONS.stand) + P(pg('VIEW'), IC.note) + P(pg('DUD'), IC.gear)
+      : P(kc('W'), kc('A'), kc('S'), kc('D'), IC.walk) + P(IC.rmb, IC.grab) + P(IC.lmb, IC.fist) + P(IC.lmb, IC.hold, IC.throw) +
+        P(kc('Q'), ICONS.fart) + P(kc(t('key.space')), '<b class="kj">↑</b>') + P(kc('E'), ICONS.stand) + P(kc('V'), IC.eye);
   }
 }

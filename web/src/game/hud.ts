@@ -1,3 +1,6 @@
+import { PADDEV, pg, onPadDev, type PadG } from './padGlyph';
+/** The ability rings' pad buttons. */
+const AB_PAD: Record<string, PadG> = { grab: 'LT', sprint: 'LB', fart: 'B', wallow: 'X', stand: 'Y' };
 import * as THREE from 'three';
 import { PIG, HP, type Pig } from '../pig/pig';
 import { clamp } from '../core/util';
@@ -104,6 +107,7 @@ export class Hud {
     document.getElementById('bMenu')!.insertAdjacentHTML('afterbegin', SVG.menu);
     this.renderHelp();
     onLang(() => this.renderHelp());
+    onPadDev(() => this.renderHelp());
     this.alertEl = document.createElement('div'); this.alertEl.id = 'alert'; this.alertEl.className = 'txt l0';
     document.getElementById('hud')!.appendChild(this.alertEl);
     // hidden on the title screen (it covered the logo); shown when the game starts (flashHelp)
@@ -120,14 +124,23 @@ export class Hud {
 
   renderHelp() {
     const row = (k: string, a: Key) => `<div class="row"><kbd>${k}</kbd><span>${t(a)}</span></div>`;
-    this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
+    if (PADDEV.on) {
+      // gamepad: its buttons (Xbox / PlayStation glyphs)
+      const pr = (g: PadG | PadG[], a: Key) => `<div class="row"><kbd class="pads">${([] as PadG[]).concat(g).map(pg).join('')}</kbd><span>${t(a)}</span></div>`;
+      this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
+        pr('LS', 'help.move') + pr('RS', 'help.look') + pr('A', 'help.jump') + pr('LT', 'help.grab') + pr('RT', 'help.punch') + pr('LB', 'help.sprint') +
+        pr('B', 'help.fart') + pr('X', 'help.wallow') + pr('Y', 'help.stand') + pr('R3', 'help.oink') + pr('RB', 'help.tilt') + pr('DUD', 'help.reach') +
+        pr('VIEW', 'help.view') + pr('DL', 'key.emote' as Key) + pr('DR', 'key.pass' as Key) + pr('MENU', 'menu.settings' as Key);
+    } else this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
       row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + row('V', 'help.view') + row('B', 'key.emote' as Key) + row('G', 'key.pass' as Key) + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
-      const kk = this.ab[k].el.querySelector('.key') as HTMLElement; kk.textContent = t(kk.dataset.k!);
+      const kk = this.ab[k].el.querySelector('.key') as HTMLElement;
+      if (PADDEV.on) kk.innerHTML = pg(AB_PAD[k]); else kk.textContent = t(kk.dataset.k!);
+      kk.classList.toggle('pad', PADDEV.on);
     }
   }
 
@@ -372,7 +385,7 @@ export class Hud {
         const sIc = sd.left && sd.def?.smokes ? IC.cig : sd.left && sd.def?.snack ? IC.eat : '';
         p = row(P(IC.rmb, IC.grab, val(tg)), sIc ? P(IC.lmb, sIc) : '', coop(tg) && !tg.heldBy ? P(IC.two) : '');
       }
-      else if (HANDS.far) p = row(P(IC.reach));   // it's under the crosshair, but too far: roll the wheel / step closer
+      else if (HANDS.far) p = row(P(PADDEV.on ? pg('DU') : '', IC.reach));   // it's under the crosshair, but too far: roll the wheel / step closer
       else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
     if (!p && G.chain && !pig.out && !pig.cage && !pig.heldBy) { const nd = G.chain.needsAt(pig); if (nd) p = `<div class="pr"><span class="pp needs">${nd}</span></div>`; }

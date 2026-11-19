@@ -1,3 +1,5 @@
+import { PadNav } from './game/padNav';
+import { PADDEV } from './game/padGlyph';
 import { initPhysics } from './core/physics';
 import { preload } from './core/assets';
 import { Input } from './core/input';
@@ -147,6 +149,28 @@ async function boot() {
   const room = params.get('room');
   // after the first frames are drawn (the first frame compiles every shader and can block for a while)
   if (room || params.has('lobby')) requestAnimationFrame(() => requestAnimationFrame(() => lobby.open(room ?? '')));
+  // gamepad in the menus: the topmost open overlay gets the focus ring (B = Esc, Start = menu / PLAY)
+  const shown = (id: string) => { const e = document.getElementById(id); return e?.classList.contains('show') ? e : null; };
+  const nav = new PadNav(input, {
+    root: () => {
+      const lost = shown('gfxLost'); if (lost) return { el: lost };
+      if (game.lockpick.isOpen || game.wheel.isOpen) return null;   // the game's own buttons drive these
+      if (wardrobe.isOpen) return { el: document.getElementById('wardrobe')!, def: '#wItems .on, #wItems button, #wItems .gd' };
+      if (ADMIN.open) return { el: document.getElementById('admin')! };
+      if (game.menu.menuOpen) return { el: document.getElementById('menu')! };
+      const sv = shown('saves'); if (sv) return { el: sv, def: '.sslot.on .chip, .sslot .chip.go, .sslot .chip' };
+      if (lobby.isOpen) return { el: document.getElementById('lobby')!, def: '[data-a=quick], [data-a=start], .chip.big, [data-a=retry], [data-a=back]' };
+      const res = document.getElementById('results');
+      if (res && res.style.display !== 'none' && res.childElementCount) return { el: res, def: '[data-r=next], [data-r=again]' };
+      if (!started && game.mode === 'lobby' && ui.el.classList.contains('show')) return { el: ui.el, soft: true, def: '#lPlay' };
+      return null;
+    },
+    start: () => {
+      if (game.mode === 'lobby') { if (!started && ui.el.classList.contains('show')) document.getElementById('lPlay')!.click(); }
+      else if (game.running && !game.menu.blocking) game.menu.open();
+    },
+  });
+  (window as any).__nav = nav;
   // leaving pointer lock (Esc) opens the menu (or just stops the lock-pick); clicking the game re-locks
   let escUntil = 0, escClosed = 0;
   const hint = document.getElementById('clickHint')!;
@@ -161,7 +185,7 @@ async function boot() {
   });
   gfx.renderer.domElement.addEventListener('click', () => { if (game.running && game.mode === 'play' && !game.menu.blocking) input.lock(); });
   /** An overlay closed by Esc: the browser only gives the mouse back on a click, so say so if it didn't come back. */
-  const resume = () => setTimeout(() => { if (game.running && game.mode === 'play' && !document.pointerLockElement && !game.menu.blocking && !lobby.isOpen) hint.classList.add('show'); }, 250);
+  const resume = () => setTimeout(() => { if (!PADDEV.on && game.running && game.mode === 'play' && !document.pointerLockElement && !game.menu.blocking && !lobby.isOpen) hint.classList.add('show'); }, 250);
   // Esc closes whatever is open (menu, admin panel, wardrobe, lobby, lock-pick, controls card)
   addEventListener('keydown', (e) => {
     if (e.code !== 'Escape' || e.repeat || performance.now() < escUntil) return;

@@ -54,6 +54,11 @@ export const EN_X = {
   // the emote wheel (hold B)
   'em.hula': 'Hula Hog', 'em.robot': 'Robo Pork', 'em.disco': 'Pork Fever', 'em.spin': 'Bacon Spin', 'em.chicken': 'Cluck Strut', 'em.wiggle': 'Wiggle',
   'key.emote': 'Dances (hold)', 'key.pass': 'Pass it',
+  'menu.rumble': 'Controller vibration', 'menu.soundOn': 'Sound on',
+  'm.radioLure': 'Lure Bob: switch on a radio or TV and let him come to turn it off', 'm.pieBob': 'Bake a pie and throw it in Bob\'s face',
+  'm.bubbleBath': 'Take a bubble bath', 'a.interiors': 'Inside the buildings', 'a.intRoom': 'Teleport: next furnished room',
+  'a.intRadio': 'Nearest radio on / off', 'a.intTv': 'Nearest TV: next channel', 'a.intBake': 'Nearest oven: pie now', 'a.intBath': 'Nearest bath: fill it',
+  'a.intLure': 'Bob: switch the radio / TV off', 'bob.radioOff': 'Bob is switching it off',
   'm.couchSesh': 'Get high on the lounge couch', 'a.tpLounge': 'Teleport: lounge',
   'item.furniture': 'Furniture',
   // s22: new missions + places
@@ -112,6 +117,11 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.minesNew': 'Minas nuevas', 'a.tpGulag': 'Teletransporte: gulag', 'a.hurtMe': 'Hacerme daño (−30 PV)', 'a.killMe': 'Matarme (gulag)',
   'em.hula': 'Hula cerdito', 'em.robot': 'Robo-cerdo', 'em.disco': 'Fiebre porcina', 'em.spin': 'Giro beicon', 'em.chicken': 'Baile del pollo', 'em.wiggle': 'Meneíto',
   'key.emote': 'Bailes (mantén)', 'key.pass': 'Pásalo',
+  'menu.rumble': 'Vibración del mando', 'menu.soundOn': 'Sonido activado',
+  'm.radioLure': 'Atrae a Bob: enciende una radio o una tele y deja que venga a apagarla', 'm.pieBob': 'Hornea una tarta y tírasela a Bob a la cara',
+  'm.bubbleBath': 'Date un baño de burbujas', 'a.interiors': 'Dentro de los edificios', 'a.intRoom': 'Teletransporte: siguiente sala amueblada',
+  'a.intRadio': 'Radio más cercana on / off', 'a.intTv': 'Tele más cercana: otro canal', 'a.intBake': 'Horno más cercano: tarta ya', 'a.intBath': 'Bañera más cercana: llenarla',
+  'a.intLure': 'Bob: apagar la radio / tele', 'bob.radioOff': 'Bob lo está apagando',
   'm.couchSesh': 'Colócate en el sofá del salón', 'a.tpLounge': 'Teletransporte: salón',
   'item.furniture': 'Mueble',
   'm.wallJump': 'Sube un muro de piedra de un pedo-salto (sin rampa)', 'm.cheeseRiver': 'Echa una rueda de queso al río', 'm.peakClimb': 'Sube a la cima de la montaña',

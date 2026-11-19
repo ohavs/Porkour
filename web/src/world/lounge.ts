@@ -25,6 +25,26 @@ export const LOUNGE = { W: 8.4, D: 5.6, H: 2.9, couch: 4, seatH: 0.48, sitR: 0.9
 const CHANNELS = 4;
 
 const v1 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+/** One TV picture (the lounge's TV, the TVs in the houses): 0 colour bars, 1 snow, 2 a pig cartoon, 3 Bob's BBQ show. */
+export function drawChannel(cv: HTMLCanvasElement, ch: number, t: number) {
+  const c = cv.getContext('2d')!, w = cv.width, h = cv.height;
+  switch (ch) {
+    case 0: { const cols = ['#fff', '#ff0', '#0ff', '#0f0', '#f0f', '#f00', '#00f']; cols.forEach((col, i) => { c.fillStyle = col; c.fillRect((i * w) / 7, 0, w / 7 + 1, h * 0.75); }); c.fillStyle = '#111'; c.fillRect(0, h * 0.75, w, h); break; }
+    case 1: { const img = c.createImageData(w, h); for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; } c.putImageData(img, 0, 0); break; }
+    case 2: {   // a cartoon: a pink pig face bouncing on blue
+      c.fillStyle = '#5fb6e6'; c.fillRect(0, 0, w, h); const y = h * 0.55 - Math.abs(Math.sin(t * 4)) * 18;
+      c.fillStyle = '#ffb3c7'; c.beginPath(); c.arc(w / 2, y, 20, 0, 7); c.fill(); c.fillStyle = '#ff8fb0'; c.beginPath(); c.ellipse(w / 2, y + 5, 9, 6, 0, 0, 7); c.fill();
+      c.fillStyle = '#222'; for (const s of [-1, 1]) { c.beginPath(); c.arc(w / 2 + s * 8, y - 6, 3, 0, 7); c.fill(); }
+      c.fillStyle = '#7cc95a'; c.fillRect(0, h * 0.85, w, h); break;
+    }
+    default: {   // Bob's BBQ show: a red grill, flames
+      c.fillStyle = '#3a2614'; c.fillRect(0, 0, w, h); c.fillStyle = '#c63a2f'; c.beginPath(); c.arc(w / 2, h * 0.7, 26, Math.PI, 0); c.fill();
+      for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#ffd166' : '#ff7a2a'; const fh = 10 + Math.abs(Math.sin(t * 9 + i)) * 14; c.fillRect(w / 2 - 20 + i * 8, h * 0.7 - 26 - fh, 6, fh); }
+      c.fillStyle = '#fff'; c.font = 'bold 11px sans-serif'; c.fillText('BBQ', w / 2 - 12, 14);
+    }
+  }
+}
+
 type V2 = [number, number];
 
 export class Lounge {
@@ -210,22 +230,7 @@ export class Lounge {
     for (const p of G.pigs as Pig[]) if (p.input.grabP && p.seat < 0 && !p.held && this.seatFor(p) < 0 && this.tvNear(p)) { this.zap(); p.touch(v1.copy(this.tvAt).setY(this.tvAt.y + 0.8)); break; }
   }
   private drawTV() {
-    const c = this.tvCanvas.getContext('2d')!, w = this.tvCanvas.width, h = this.tvCanvas.height, t = G.time;
-    switch (this.channel) {
-      case 0: { const cols = ['#fff', '#ff0', '#0ff', '#0f0', '#f0f', '#f00', '#00f']; cols.forEach((col, i) => { c.fillStyle = col; c.fillRect((i * w) / 7, 0, w / 7 + 1, h * 0.75); }); c.fillStyle = '#111'; c.fillRect(0, h * 0.75, w, h); break; }
-      case 1: { const img = c.createImageData(w, h); for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; } c.putImageData(img, 0, 0); break; }
-      case 2: {   // a cartoon: a pink pig face bouncing on blue
-        c.fillStyle = '#5fb6e6'; c.fillRect(0, 0, w, h); const y = h * 0.55 - Math.abs(Math.sin(t * 4)) * 18;
-        c.fillStyle = '#ffb3c7'; c.beginPath(); c.arc(w / 2, y, 20, 0, 7); c.fill(); c.fillStyle = '#ff8fb0'; c.beginPath(); c.ellipse(w / 2, y + 5, 9, 6, 0, 0, 7); c.fill();
-        c.fillStyle = '#222'; for (const s of [-1, 1]) { c.beginPath(); c.arc(w / 2 + s * 8, y - 6, 3, 0, 7); c.fill(); }
-        c.fillStyle = '#7cc95a'; c.fillRect(0, h * 0.85, w, h); break;
-      }
-      default: {   // Bob's BBQ show: a red grill, flames
-        c.fillStyle = '#3a2614'; c.fillRect(0, 0, w, h); c.fillStyle = '#c63a2f'; c.beginPath(); c.arc(w / 2, h * 0.7, 26, Math.PI, 0); c.fill();
-        for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#ffd166' : '#ff7a2a'; const fh = 10 + Math.abs(Math.sin(t * 9 + i)) * 14; c.fillRect(w / 2 - 20 + i * 8, h * 0.7 - 26 - fh, 6, fh); }
-        c.fillStyle = '#fff'; c.font = 'bold 11px sans-serif'; c.fillText('BBQ', w / 2 - 12, 14);
-      }
-    }
+    drawChannel(this.tvCanvas, this.channel, G.time);
     this.tvTex.needsUpdate = true;
   }
 

@@ -57,7 +57,9 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade'
   // s22 (user: "add more missions"): the new ground (terrace walls, the river, the mountain), the furnished buildings, Bob
   | 'wallJump' | 'cheeseRiver' | 'peakClimb' | 'bobSoak' | 'danceBob' | 'highUp'
-  | 'bedNap' | 'fridgeRaid' | 'yardSale' | 'sofaSwim' | 'toiletFlush';
+  | 'bedNap' | 'fridgeRaid' | 'yardSale' | 'sofaSwim' | 'toiletFlush'
+  // s23: the TV / radio lure, oven pies, the bubble bath
+  | 'radioLure' | 'pieBob' | 'bubbleBath';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -67,9 +69,9 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
-  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale'];
+  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob'];
 const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
-  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', ...REQ_POOL];
+  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', ...REQ_POOL];
 /** Bonus pranks per round (user: "add more missions"; was 2). */
 const BONUS_N = 3;
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
@@ -238,7 +240,10 @@ export class Round {
       ...(this.game.interiors?.fridges.length ? ['fridgeRaid'] as MissionId[] : []),
       ...((this.game.interiors?.pieces.length ?? 0) >= 6 ? ['yardSale'] as MissionId[] : []),
       ...(this.game.interiors?.pieces.length && !G.snowy ? ['sofaSwim'] as MissionId[] : []),
-      ...(this.game.interiors?.hasToilet ? ['toiletFlush'] as MissionId[] : [])];
+      ...(this.game.interiors?.hasToilet ? ['toiletFlush'] as MissionId[] : []),
+      ...(this.game.interiors?.radios.length || this.game.interiors?.tvs.length ? ['radioLure'] as MissionId[] : []),
+      ...(this.game.interiors?.ovens.length ? ['pieBob'] as MissionId[] : []),
+      ...(this.game.interiors?.baths.length ? ['bubbleBath'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
@@ -296,7 +301,9 @@ export class Round {
     if (type === 'serenade') this.done('serenade');
     if (type === 'smashed' && text === 'flowerPot') this.count('smashPots');
     if (type === 'smashed' && text === 'melon') this.count('melonSmash');
-    if (type === 'splatBob') this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob');
+    if (type === 'splatBob') { if (text === 'ovenPie') this.done('pieBob'); else this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob'); }
+    if (type === 'radioOff') this.done('radioLure');
+    if (type === 'bath') this.done('bubbleBath');
     if (type === 'treeShaken') this.count('shakeTrees');
     if (type === 'pressed') this.count('ciderPress');
     if (type === 'bobStung') this.done('beeBob');
@@ -559,6 +566,9 @@ export class Round {
     if (x.id === 'yardSale') return IC.rmb + IC.couch + IC.walk;
     if (x.id === 'sofaSwim') return IC.couch + IC.water;
     if (x.id === 'toiletFlush') return IC.rmb + IC.loo;
+    if (x.id === 'radioLure') return IC.fist + IC.note + IC.bob;
+    if (x.id === 'pieBob') return L.held?.kind === 'prop' && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie' ? IC.lmb + IC.throw + IC.bob : IC.rmb + IC.oven;
+    if (x.id === 'bubbleBath') return IC.rmb + IC.water;
     if (x.id === 'highUp') return kc('Q') + IC.cloud + IC.house;
     if (x.id === 'bobSoak') return IC.fist + IC.bob + IC.water;
     if (x.id === 'cheeseRiver') return IC.grab + IC.water;
@@ -632,9 +642,12 @@ export class Round {
         case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
         case 'couchSesh': mark(i, g.lounge?.markPos); return;
         // s22: the furnished buildings (nearest bed / fridge / toilet / piece), the peak, the terrace walls
-        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': {
+        case 'pieBob': if (L.held && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie') { atBob(i); return; }   // falls through: the nearest oven
+        // eslint-disable-next-line no-fallthrough
+        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': case 'radioLure': case 'bubbleBath': {
           const it = g.interiors; if (!it) return;
-          const want = m.id === 'bedNap' ? ['f_bed', 'f_bedKing', 'f_bunk'] : m.id === 'toiletFlush' ? ['f_toilet'] : m.id === 'fridgeRaid' ? ['f_fridge'] : null;
+          const want = m.id === 'bedNap' ? ['f_bed', 'f_bedKing', 'f_bunk'] : m.id === 'toiletFlush' ? ['f_toilet'] : m.id === 'fridgeRaid' ? ['f_fridge']
+            : m.id === 'radioLure' ? ['f_radio', 'f_tvSet'] : m.id === 'pieBob' ? ['f_oven'] : m.id === 'bubbleBath' ? ['f_bathtub'] : null;
           const list = it.pieces.filter(({ pr, home }) => !pr.banked && !pr.heldBy && (!want || want.includes(pr.def.id ?? ''))
             && (m.id !== 'yardSale' || Math.hypot(pr.synced.currP.x - home.x, pr.synced.currP.z - home.z) <= home.r));
           const pc = near(list, (x) => x.pr.obj.position);

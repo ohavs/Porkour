@@ -1,3 +1,5 @@
+import { PADDEV } from '../game/padGlyph';
+import { SETTINGS } from '../game/settings';
 import * as THREE from 'three';
 import { softDot } from './textures';
 
@@ -103,9 +105,20 @@ export class Fx {
   }
   puff(at: THREE.Vector3, b: Burst) { this.emit(this.smoke, at, b); }
   bits(at: THREE.Vector3, b: Burst) { this.emit(this.dots, at, b); }
-  shake(amount: number) { this.shakeAmt = Math.min(1.2, this.shakeAmt + amount); }
+  shake(amount: number) { this.shakeAmt = Math.min(1.2, this.shakeAmt + amount); rumble(amount); }
   update(dt: number) {
     this.smoke.update(dt); this.dots.update(dt);
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.2);
   }
+}
+
+/** The gamepad buzzes with my camera shakes (hits, bangs, landings) — only while a pad is in use and allowed. */
+let rumbleAt = 0;
+function rumble(amount: number) {
+  if (!PADDEV.on || SETTINGS.rumble === false || amount < 0.05) return;
+  const now = performance.now(); if (now - rumbleAt < 90) return; rumbleAt = now;
+  try {
+    const pad = navigator.getGamepads?.().find((p) => p && p.connected) as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, o: object) => Promise<unknown> } }) | undefined;
+    pad?.vibrationActuator?.playEffect?.('dual-rumble', { duration: Math.round(90 + Math.min(1, amount) * 260), strongMagnitude: Math.min(1, amount * 0.9), weakMagnitude: Math.min(1, 0.25 + amount) })?.catch?.(() => {});
+  } catch { /* no rumble on this pad / browser */ }
 }
