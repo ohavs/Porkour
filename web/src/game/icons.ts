@@ -146,6 +146,10 @@ export const IC = {
   lever: svg(`<rect x="4" y="16" width="16" height="5" rx="1.5" fill="#9aa3ad" ${O}/><path d="M12 17 17 5" stroke="#5c5f66" stroke-width="2.8" stroke-linecap="round"/><circle cx="17" cy="5" r="2.6" fill="#ff5a3c" ${O}/><path d="M7 8a6 6 0 0 1 4-4" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round"/>`),
   /** A door (open it). */
   door: svg(`<rect x="5" y="3" width="12" height="18" rx="1" fill="#b5793d" ${O}/><circle cx="14.5" cy="12.5" r="1.3" fill="#ffd166" ${O}/><path d="M17 3l3 2v15l-3 1" fill="#8a5a2a" ${O}/>`),
+  /** Bob's coffee mug (steaming). */
+  mug: svg(`<path d="M5 9h11v9a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z" fill="#fff6e6" ${O}/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16" fill="none" ${O}/><path d="M5 9h11" stroke="#4f8fd8" stroke-width="2.4"/><path d="M8.5 6.5c-1-1.4 1-2 0-3.5M12.5 6.5c-1-1.4 1-2 0-3.5" fill="none" stroke="#fff6e6" stroke-width="1.6" stroke-linecap="round"/>`),
+  /** A bottle of hot sauce (a chili on the label). */
+  chili: svg(`<path d="M10 2h4v4l2 3v11a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9l2-3z" fill="#e2352b" ${O}/><rect x="9.6" y="1.5" width="4.8" height="3" rx=".8" fill="#3f9a3a" ${O}/><path d="M9.5 13.5c1.2 2.4 4 2.8 5 .5" fill="none" stroke="#ffd166" stroke-width="2.2" stroke-linecap="round"/>`),
 };
 export type IconId = keyof typeof IC;
 

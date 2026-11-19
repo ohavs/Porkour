@@ -367,3 +367,33 @@ export function makeClock() {
   add(pend, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 20), 0xd9a92e, 0, -0.64, 0, Math.PI / 2, 0, 0);
   return g;
 }
+
+/**
+ * Bob's coffee mug (his coffee break on the porch, world/porch.ts): a fat white enamel tin mug with a blue rim, a
+ * handle, and coffee in it — the surface (named 'coffee', its own material) turns red when it's spiked with hot sauce,
+ * brown-grey with mud, and hides once he has spat it out.
+ */
+export function makeCoffeeMug() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.075, 0.068, 0.15, 16), 0xf6f1e4, 0, 0.075, 0);
+  add(g, new THREE.TorusGeometry(0.073, 0.008, 6, 20), 0x3f7fd0, 0, 0.15, 0, Math.PI / 2);                 // blue rim
+  add(g, new THREE.CylinderGeometry(0.069, 0.069, 0.006, 16), 0x3f7fd0, 0, 0.003, 0);                       // blue foot
+  add(g, new THREE.TorusGeometry(0.038, 0.011, 6, 12, Math.PI * 1.25), 0xf6f1e4, 0.085, 0.08, 0, 0, 0, -Math.PI * 0.62);   // handle
+  for (const [x, y] of [[-0.02, 0.06], [0.03, 0.1], [0.0, 0.035]]) add(g, new THREE.SphereGeometry(0.008, 6, 4), 0x2d2a36, x, y, 0.071);   // chipped enamel
+  const c = new THREE.Mesh(new THREE.CircleGeometry(0.066, 16), toonMat(0x5a3218));
+  c.name = 'coffee'; c.rotation.x = -Math.PI / 2; c.position.y = 0.135; g.add(c);
+  return g;
+}
+
+/** A bottle of very hot sauce (by Bob's BBQ grill): red, a green cap, a cream label with a little red chili. */
+export function makeHotSauce() {
+  const g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(0.05, 0.052, 0.16, 14), 0xd8281f, 0, 0.08, 0);
+  add(g, new THREE.CylinderGeometry(0.022, 0.05, 0.05, 14), 0xd8281f, 0, 0.185, 0);                       // shoulders
+  add(g, new THREE.CylinderGeometry(0.02, 0.022, 0.05, 10), 0xd8281f, 0, 0.235, 0);                       // neck
+  add(g, new THREE.CylinderGeometry(0.026, 0.026, 0.035, 10), 0x2f8a35, 0, 0.275, 0);                     // cap
+  add(g, new THREE.CylinderGeometry(0.0525, 0.0525, 0.08, 14, 1, true), 0xfff1c9, 0, 0.085, 0);            // label
+  add(g, new THREE.CapsuleGeometry(0.012, 0.045, 4, 8), 0xe2352b, 0, 0.085, 0.055, 0, 0, 1.2);             // chili
+  add(g, new THREE.CylinderGeometry(0.004, 0.004, 0.02, 4), 0x2f8a35, 0.03, 0.1, 0.055, 0, 0, 1.2);
+  return g;
+}

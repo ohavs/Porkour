@@ -221,6 +221,9 @@ export class Hud {
     else if (st === 'loo' || st === 'inLoo') { txt = t(st === 'loo' ? 'bob.loo' : 'bob.inLoo'); cls = 'blue'; ic = 'loo'; }
     else if (st === 'toHammock' || st === 'hammock') { txt = t(st === 'hammock' ? 'bob.nap' : 'bob.toNap'); cls = 'blue'; ic = 'zzz'; }
     else if (st === 'phone' || st === 'onPhone') { txt = t(st === 'phone' ? 'bob.phone' : 'bob.onPhone'); cls = 'blue'; ic = 'phone'; }
+    else if (st === 'hot') { txt = t(bob.activity); cls = 'green'; ic = bob.activity === 'bob.yuck' ? 'mud' : 'fire'; }
+    else if (st === 'cool' || st === 'dunk') { txt = t('bob.cool'); cls = 'blue'; ic = 'water'; }
+    else if (st === 'routine' && bob.doing && bob.chores[bob.choreIdx]?.id === 'paper' && G.porch) { txt = t('bob.coffee'); cls = 'blue'; ic = 'mug'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; ic = 'wolf'; }
     else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; ic = 'trap'; }
     else if (bob.doing && bob.chores[bob.choreIdx]?.anim === 'nap') ic = 'zzz';
@@ -233,6 +236,7 @@ export class Hud {
     if (bob.chasing || st === 'carry' || st === 'taunt') { sym = '!'; col = '#ff5a3c'; fill = 1; }
     else if (st === 'down' || st === 'stagger') { sym = '✦'; col = '#fff1a8'; fill = 1; }
     else if (st === 'cough') { sym = '~'; col = '#b6e36a'; fill = 1; }
+    else if (st === 'hot' || st === 'cool' || st === 'dunk') { sym = '~'; col = '#ff7a2a'; fill = 1; }
     else if (st === 'dance') { sym = '♪'; col = '#ff9ad2'; fill = 1; }
     else if (s > 0.04 || st === 'suspect' || st === 'investigate' || st === 'search') { sym = '?'; fill = Math.max(s, 0.3); }
     else if (bob.doing && bob.chores[bob.choreIdx].anim === 'nap') { sym = 'z'; col = '#cfe8ff'; fill = 1; }

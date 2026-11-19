@@ -40,6 +40,12 @@ export const EN_X = {
   'menu.toLobby': 'Back to the lobby', 'lobby.story': 'Story', 'lobby.modes': 'Modes', 'lobby.stage': 'Stage {n}', 'lobby.locked': 'Win the stage before to unlock',
   'net.switching': 'Switching farms…', 'at.owner': 'Owner', 'a.users': 'Players online', 'a.refresh': 'Refresh', 'a.giveCoins': 'Give coins', 'a.giveLevel': '+1 level', 'a.ownerHint': 'Your account: all coins and the top level.',
   'a.weedMat': 'Paper + filter + weed on the mat', 'a.weedPot': 'Butter + weed in the pot', 'a.brewWort': 'Wort ready in the kettle',
+  // Bob's coffee break on the porch (world/porch.ts)
+  'm.coffeeSpike': 'Spike Bob\'s coffee (hot sauce or mud)', 'bob.coffee': 'Bob is reading the paper over a coffee',
+  'bob.hot': 'Bob\'s mouth is on fire!', 'bob.yuck': 'Bob spits out his coffee', 'bob.cool': 'Bob is cooling his head in the pond',
+  'item.coffeeMug': 'Bob\'s coffee mug', 'item.hotSauce': 'Hot sauce',
+  'a.coffee': 'Coffee break (porch)', 'a.coffeeGo': 'Bob: coffee break now', 'a.coffeeSip': 'Bob: a sip now', 'a.coffeeHot': 'Hot sauce in his coffee',
+  'a.coffeeMud': 'Mud in his coffee', 'a.coffeeSauce': 'Hot sauce in front of me', 'a.tpPorch': 'Teleport: porch',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -77,4 +83,9 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'menu.toLobby': 'Volver a la sala', 'lobby.story': 'Historia', 'lobby.modes': 'Modos', 'lobby.stage': 'Nivel {n}', 'lobby.locked': 'Gana el nivel anterior para desbloquearlo',
   'net.switching': 'Cambiando de granja…', 'at.owner': 'Dueño', 'a.users': 'Jugadores conectados', 'a.refresh': 'Actualizar', 'a.giveCoins': 'Dar monedas', 'a.giveLevel': '+1 nivel', 'a.ownerHint': 'Tu cuenta: todas las monedas y el nivel máximo.',
   'a.weedMat': 'Papel + filtro + hierba en la esterilla', 'a.weedPot': 'Mantequilla + hierba en la olla', 'a.brewWort': 'Mosto listo en el caldero',
+  'm.coffeeSpike': 'Échale algo al café de Bob (salsa picante o barro)', 'bob.coffee': 'Bob lee el periódico con un café',
+  'bob.hot': '¡A Bob le arde la boca!', 'bob.yuck': 'Bob escupe el café', 'bob.cool': 'Bob se refresca la cabeza en el estanque',
+  'item.coffeeMug': 'La taza de café de Bob', 'item.hotSauce': 'Salsa picante',
+  'a.coffee': 'Café (porche)', 'a.coffeeGo': 'Bob: a tomar café ya', 'a.coffeeSip': 'Bob: un sorbo ya', 'a.coffeeHot': 'Picante en su café',
+  'a.coffeeMud': 'Barro en su café', 'a.coffeeSauce': 'Salsa picante delante de mí', 'a.tpPorch': 'Teletransporte: porche',
 };

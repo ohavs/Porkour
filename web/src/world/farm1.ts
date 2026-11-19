@@ -34,7 +34,7 @@ const CHORES: Chore[] = [
   { id: 'laundry', at: [-31.5, -27.2], look: [-31.5, -28.6], anim: 'laundry', dur: 14, view: 'busy' },
   { id: 'nap', at: [38, -81], look: [38, -74], anim: 'nap', dur: 28, view: 'nap' },
   { id: 'garden', at: [-36, -58.5], look: [-41, -58.5], anim: 'water', dur: 20, view: 'busy' },
-  { id: 'paper', at: [-15.3, -29.2], look: [-12, -22], anim: 'read', dur: 22, view: 'busy' },
+  { id: 'paper', at: [-15.3, -29.2], look: [-12, -22], anim: 'read', dur: 30, view: 'paper' },
   { id: 'coffee', at: [-4.5, -30.5], look: [0, -20], anim: 'coffee', dur: 18, view: 'busy' },
   { id: 'wood', at: [-40.4, 10.4], look: [-40.4, 9], anim: 'chop', dur: 18, view: 'busy' },
   { id: 'tractor', at: [6.8, 6.6], look: [9, 9], anim: 'fix', dur: 16, view: 'busy' },

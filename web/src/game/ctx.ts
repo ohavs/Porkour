@@ -101,6 +101,8 @@ export const G = {
   jail: null as null | import('../world/jail').Jail,
   /** Bob's hammock (world/hammock.ts: his siesta), when the farm has one. */
   hammock: null as any,
+  /** Bob's coffee break (world/porch.ts: side table, mug, hot sauce), when the farm has one. */
+  porch: null as any,
   /** Spots where RMB does something instead of a grab (the phone jack, the payphone): `icon` = the HUD prompt's icon. */
   uses: [] as { near(p: any): boolean; icon(p: any): string }[],
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */

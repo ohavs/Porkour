@@ -25,6 +25,7 @@ import type { Phones } from '../world/phone';
 import { HeavyLoot } from '../world/heavyLoot';
 import { Jail } from '../world/jail';
 import type { Hammock } from '../world/hammock';
+import type { Porch } from '../world/porch';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -77,6 +78,8 @@ export class Game {
   heavy!: HeavyLoot;
   /** Bob's hammock (his siesta). */
   hammock: Hammock | null = null;
+  /** Bob's coffee break on the porch (side table, mug, hot sauce). */
+  porch: Porch | null = null;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -145,6 +148,8 @@ export class Game {
     this.loos = this.farm.loos ?? []; G.loos = this.loos;
     this.phones = this.farm.phones ?? null; G.phones = this.phones;
     this.hammock = this.farm.hammock ?? null; G.hammock = this.hammock;
+    this.porch = this.farm.porch ?? null; G.porch = this.porch;
+    if (this.porch) this.porch.troughs = this.farm.troughs ?? [];
     G.chain = this.farm.chain ?? null;
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
     G.cam = this.gfx.camera;
@@ -173,6 +178,7 @@ export class Game {
     this.menu = new Menu(this);
     this.lockpick = new Lockpick();
     HANDS.init(scene, this.farm.props);
+    this.porch?.reset();   // his mug in its spot on the table
     if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
     this.fpHands = new FpHands(this.gfx.camera);
     this.input.onPress = (b) => {
@@ -368,7 +374,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); }
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
@@ -436,6 +442,11 @@ export class Game {
         case 'bobNap': H.emote(bob, 'zzz', 2, 2.4); break;
         case 'hammockFlip': H.emote(bob, 'stars', 1.6, 1.4); break;
         case 'mudFace': H.emote(bob, 'mud', 1.4, 0.6); break;
+        // Bob's coffee break
+        case 'bobCoffee': H.emote(bob, 'mug', 1.8, 2.4); break;
+        case 'coffeeSpiked': if (e.who === this.local && this.porch) H.emote(this.porch.markPos.clone(), e.why === 'mud' ? 'mud' : 'chili', 1.2, 0); break;
+        case 'coffeeSpit': H.emote(bob, e.why === 'mud' ? 'mud' : 'fire', 2, 2.4); break;
+        case 'mugGone': H.emote(bob, 'question', 1.8, 2.4); break;
         case 'clockBong': { const at = this.heavy.clockPos(Number(e.why ?? 0)); if (at) H.emote(at.clone(), 'clock', 1, 2.6); break; }
         case 'prankOink': if (me) H.emote(this.local, 'pig', 1.2, 1.3); break;
         case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
@@ -506,6 +517,7 @@ export class Game {
     this.phones?.reset();
     this.heavy.reset();
     this.hammock?.reset();
+    this.porch?.reset();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
@@ -592,6 +604,20 @@ export class Game {
       case 'nap:in': f?.napNow(true); break;
       case 'nap:swing': this.hammock?.push(2.2, tmpV.set(this.hammock.side.x, 0, this.hammock.side.z)); break;
       case 'nap:mud': if (f && f.mudMarks < 3) f.setMud(f.mudMarks + 1); else f?.setMud(0); break;
+      case 'coffee:go': f?.coffeeNow(); this.menu.toggleAdmin(); break;
+      case 'coffee:sip': f?.coffeeNow(true); break;
+      case 'coffee:hot': this.porch?.spike(1); break;
+      case 'coffee:mud': this.porch?.spike(2); break;
+      case 'coffee:sauce': {
+        const pr = this.porch?.sauce; if (!pr) break;
+        if (pr.heldBy) pr.heldBy.release?.(false);
+        if (pr.dockedIn) HANDS.undock(pr, null, false);
+        pr.setLeft(1);
+        const fw = L.forward, x = L.pos.x + fw.x * 0.6, z = L.pos.z + fw.z * 0.6;   // within reach of the snout
+        pr.unbank(tmpV.set(x, G.terrain.height(x, z), z), L.yaw);
+        break;
+      }
+      case 'tp:porch': { const pc = this.porch; if (pc) { const p = pc.chair.clone().addScaledVector(pc.fwd, 2.4).addScaledVector(pc.right, 1.2); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
       case 'tp:hammock': { const h = this.hammock; if (h) { const p = h.getIn.clone().addScaledVector(h.side, 1.4); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
       case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
       case 'gates:lock': this.gates.all('locked'); break;
@@ -913,6 +939,7 @@ export class Game {
     this.phones?.render(dt);
     this.heavy.render();
     this.hammock?.render();
+    this.porch?.render(dt);
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);

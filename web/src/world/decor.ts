@@ -12,6 +12,7 @@ import type { PROPS } from './props';
 import { Outhouse } from './outhouse';
 import { Phones } from './phone';
 import { Hammock } from './hammock';
+import { Porch } from './porch';
 
 interface Ctx {
   scene: THREE.Scene; t: Terrain; rng: Rng; out: FarmBuild; daynight: DayNight; blocked: Rect[];
@@ -253,7 +254,9 @@ export function decorKit(c: Ctx) {
   };
 
   // ---------------------------------------------------------------- Bob's rocking chair (he reads the paper here, facing the look point)
+  // + the side table with his coffee mug, the hot sauce by his grill (world/porch.ts: his coffee break)
   const rocker = (x: number, z: number, lx: number, lz: number) => {
+    out.porch ??= new Porch(scene, out.props, y, x, z, lx, lz, out.cage?.grillPos ?? null);
     const g = group(x, z, Math.atan2(lx - x, lz - z) + Math.PI);
     for (const s of [-1, 1]) {
       add(new THREE.TorusGeometry(0.7, 0.03, 6, 20, 1.1), DARKWOOD, [s * 0.28, 0.72, 0.05], g, [0, Math.PI / 2, Math.PI + 1.0]);
@@ -267,6 +270,7 @@ export function decorKit(c: Ctx) {
 
   // ---------------------------------------------------------------- water trough
   const trough = (x: number, z: number, yaw = 0) => {
+    (out.troughs ??= []).push({ x, z, yaw });
     const g = group(x, z, yaw);
     add(new THREE.BoxGeometry(2.2, 0.5, 0.7), 0x8a8f99, [0, 0.25, 0], g);
     add(new THREE.BoxGeometry(2.0, 0.04, 0.5), toonMat(0x5fb6e6), [0, 0.46, 0], g);
