@@ -27,7 +27,9 @@ export interface Carrier {
   fartedOn?(p: any): void;
 }
 
-export interface Noise { x: number; y: number; z: number; radius: number; t: number }
+export interface Noise { x: number; y: number; z: number; radius: number; t: number;
+  /** Bob's own clatter (furniture he bumped walking past): he doesn't go and look. */
+  byBob?: boolean }
 /** Fart / stink cloud (Bob coughs, animals run) or a cherry bomb's bang (`kind` 'bang': animals run, no cough). */
 export interface Cloud { x: number; y: number; z: number; r: number; until: number; kind?: 'bang' | 'stink';
   /** A fart (s25): who let it go and when — a fresh one next to a flame goes up in a fireball (`world/fireball.ts`). */
@@ -114,6 +116,8 @@ export const G = {
   camSkip: new Set<number>(),
   /** Bob's coffee break (world/porch.ts: side table, mug, hot sauce), when the farm has one. */
   porch: null as any,
+  /** Bob's lunch in his farmhouse kitchen (world/lunch.ts), when the farm has the house. */
+  lunch: null as any,
   /** Land mines (world/mines.ts) and the pigs' gulag (world/gulag.ts: dead pigs work their way out). */
   mines: null as any, gulag: null as any,
   /** Cannabis mode's smoking lounge (world/lounge.ts: the couch). */
@@ -152,9 +156,9 @@ export const G = {
     if (pig === this.localPig) this.fx.shake(amount);
     else if (this.rec) { const i = this.pigs.indexOf(pig); if (i >= 0) this.rec.shakes.push([i, amount]); }
   },
-  noise(p: THREE.Vector3, radius: number) {
+  noise(p: THREE.Vector3, radius: number, byBob = false) {
     for (const g of this.pigs) if (ignored(g) && Math.abs(g.pos.x - p.x) < 1 && Math.abs(g.pos.z - p.z) < 1) return;   // a ghost makes no sound
-    this.noises.push({ x: p.x, y: p.y, z: p.z, radius, t: this.time });
+    this.noises.push({ x: p.x, y: p.y, z: p.z, radius, t: this.time, byBob });
     if (this.noises.length > 40) this.noises.shift();
   },
 };

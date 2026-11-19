@@ -63,6 +63,8 @@ export class Prop implements Holdable {
   synced: Synced;
   obj = new THREE.Group();
   lastHit = 0;
+  /** Last time Bob's body bumped it (its clatter then is his own: he doesn't go and look). */
+  bobT = -10;
   /** Dropped in the stash: counted, hidden, out of the world until the next round. */
   banked = false;
   /** Smashed to bits (breakables): hidden like banked, but not loot. */
@@ -241,7 +243,9 @@ export class Prop implements Holdable {
     if (vol < 0.08) return;
     const p = this.body.translation();
     G.audio.play(this.def.sound ?? 'wood', { pos: new THREE.Vector3(p.x, p.y, p.z), vol, minGap: 0.03 });
-    if (vol > 0.4) G.noise(new THREE.Vector3(p.x, p.y, p.z), 10 * vol);
+    // Bob bumped it (or what it rattles against), or it clatters right next to him: his own noise, he doesn't go and look
+    const bob = G.farmer as { pos: THREE.Vector3 } | null;
+    if (vol > 0.4) G.noise(new THREE.Vector3(p.x, p.y, p.z), 10 * vol, G.time - this.bobT < 2 || (!!bob && Math.hypot(p.x - bob.pos.x, p.z - bob.pos.z) < 2.6 && !this.heldBy));
   }
 }
 

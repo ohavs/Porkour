@@ -14,7 +14,7 @@ const AICON: Record<string, string> = {
   hurtMe: '🩹', killMe: '💀', 'mine:me': '💣', 'mine:bob': '💣', 'mines:new': '🎲', mines: '💣',
   fp: '👁️', fly: '🕊️', god: '👻', noCooldowns: '⚡', easyEscape: '🔓', respawn: '🏠', mud: '🟤', knock: '💫', predict: '📡', netLag: '🐢',
   'jail:others': '🔒', 'jail:free': '🔓', jailSecs: '⏱️', bob: '👨‍🌾', chill: '😎', showSight: '👀', bbqTime: '🔥', catch: '🫳', bobCarry: '🧺',
-  slap: '👋', bobDown: '💥', bobHunt: '🔎', dance: '💃', danceNear: '🕺', mow: '🚜', bed: '🛏️', 'loo:go': '🚽', 'phone:ring': '☎️', 'nap:go': '💤', 'coffee:go': '☕', 'coffee:hot': '🌶️', 'coffee:mud': '💩', 'coffee:sauce': '🌶️', 'coffee:sip': '☕',
+  slap: '👋', bobDown: '💥', bobHunt: '🔎', dance: '💃', danceNear: '🕺', mow: '🚜', bed: '🛏️', 'loo:go': '🚽', 'phone:ring': '☎️', 'nap:go': '💤', 'coffee:go': '☕', 'coffee:hot': '🌶️', 'coffee:mud': '💩', 'coffee:sauce': '🌶️', 'coffee:sip': '☕', 'lunch:go': '🍳', 'lunch:hot': '🌶️', 'lunch:mud': '💩', 'lunch:chair': '🪑', 'tp:kitchen': '🍳',
   grill: '🍖', free: '🔓', dogMe: '🐕', trapMe: '🪤', roosterMe: '🐓', turkeyMe: '🦃', hour: '🕐', daySpeed: '⏩', freezeTime: '⏸️', day: '☀️', night: '🌙',
   wolves: '🐺', nowolves: '🚫', gameSpeed: '🏃', 'mod:none': '🌤️', 'mod:rain': '🌧️', 'mod:fog': '🌫️', 'mod:grumpy': '😠', 'mod:market': '🛒', 'mod:random': '🎲',
   roundMins: '⏳', roundWin: '🏆', loot100: '💰', roundEnd: '🏁', roundNew: '🔄', pick: '🔐', smoke: '🚬', boosts: '💪', clock: '🕰️', snowcoat: '❄️',
@@ -373,7 +373,7 @@ export class Menu {
           sec('a.alert') + `<div class="tiles" style="grid-template-columns:repeat(4,1fr)">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}" class="tile${g.farmer?.level === l ? ' on' : ''}" title="${tip(('alert.' + l) as Key)}"><b>${['😴', '🤨', '😠', '🤬'][l]}</b>${l}</button>`).join('')}</div>` +
           grid(btn('catch', 'a.catchMe'), btn('bobCarry', 'a.bobCarry'), btn('slap', 'a.bobSlap'), btn('bobDown', 'a.bobDown'), btn('bobHunt', 'a.bobHunt'),
             btn('dance', 'a.bobDance'), btn('danceNear', 'a.bobDanceNear'), btn('mow', 'a.bobMow'), btn('bed', 'a.bobSleep'), g.farm.house?.bed ? btn('bedNow', 'a.bobBedNow') : '',
-            g.loos.length ? btn('loo:go', 'a.looGo') : '', g.phones?.wall ? btn('phone:ring', 'a.phoneRing') : '', g.hammock ? btn('nap:go', 'a.napGo') : '', g.porch ? btn('coffee:go', 'a.coffeeGo') : '',
+            g.loos.length ? btn('loo:go', 'a.looGo') : '', g.phones?.wall ? btn('phone:ring', 'a.phoneRing') : '', g.hammock ? btn('nap:go', 'a.napGo') : '', g.porch ? btn('coffee:go', 'a.coffeeGo') : '', g.lunch ? btn('lunch:go', 'a.lunchGo') : '',
             btn('grill', 'a.grillNow'), btn('free', 'a.freeAll'), btn('dogMe', 'a.dogMe'), btn('trapMe', 'a.trapMe'), btn('roosterMe', 'a.roosterMe'), btn('turkeyMe', 'a.turkeyMe'));
         break;
       case 'world':
@@ -395,6 +395,7 @@ export class Menu {
           (g.loos.length ? sec('a.loo') + grid(btn('loo:in', 'a.looIn'), btn('loo:bolt', 'a.looBolt'), btn('loo:tip', 'a.looTip'), btn('tp:loo', 'a.tpLoo'), btn('tp:safe', 'a.tpSafe')) : '') +
           (g.phones ? sec('a.phone') + grid(btn('phone:prank', 'a.phonePrank'), btn('phone:plug', 'a.phonePlug'), btn('tp:phone', 'a.tpPhone'), btn('tp:pay', 'a.tpPay'), btn('clock:strike', 'a.clockStrike')) : '') +
           (g.hammock ? sec('a.nap') + grid(btn('nap:in', 'a.napIn'), btn('nap:swing', 'a.napSwing'), btn('nap:mud', 'a.napMud'), btn('tp:hammock', 'a.tpHammock')) : '') +
+          (g.lunch ? sec('a.lunch') + grid(btn('lunch:go', 'a.lunchGo'), btn('lunch:chair', 'a.lunchChair'), btn('lunch:hot', 'a.lunchHot'), btn('lunch:mud', 'a.lunchMud'), btn('tp:kitchen', 'a.tpKitchen')) : '') +
           (g.porch ? sec('a.coffee') + grid(btn('coffee:sip', 'a.coffeeSip'), btn('coffee:hot', 'a.coffeeHot'), btn('coffee:mud', 'a.coffeeMud'), btn('coffee:sauce', 'a.coffeeSauce'), btn('tp:porch', 'a.tpPorch')) : '') +
           (f.orchard ? sec('a.farm2') + grid(btn('tree:shake', 'a.treeShake'), btn('bees:me', 'a.beesMe'), btn('bringApples', 'a.bringApples')) : '') +
           (f.dairy ? sec('a.farm3') + grid(btn('bull:me', 'a.bullMe'), btn('bull:out', 'a.bullOut'), btn('bringRag', 'a.bringRag'), btn('cow:tip', 'a.cowTip'), btn('milk:spill', 'a.milkSpill'), btn('bringCheese', 'a.bringCheese')) : '') +

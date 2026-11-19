@@ -23,6 +23,7 @@ import { PHONE, type Phones } from '../world/phone';
 import { NAP, type Hammock } from '../world/hammock';
 import { BED, type Farmhouse } from '../world/farmhouse';
 import { COFFEE, type Porch } from '../world/porch';
+import { MEAL, PH, type Lunch } from '../world/lunch';
 
 /** Tuning. */
 export const BOB = {
@@ -81,6 +82,8 @@ const VIEW = {
   phone: { cos: Math.cos(0.6), range: 12 },
   /** Behind his newspaper (the coffee break): sees nothing in front (only a pig right next to him). */
   paper: { cos: 2, range: 0 },
+  /** Eating his lunch: eyes on his plate (a narrow cone, close). */
+  meal: { cos: Math.cos(0.55), range: 7 },
 };
 type View = keyof typeof VIEW;
 
@@ -93,7 +96,7 @@ export interface Chore {
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
   | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone' | 'toHammock' | 'hammock'
-  | 'hot' | 'cool' | 'dunk';
+  | 'hot' | 'cool' | 'dunk' | 'meal';
 
 /** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
 export interface BobJob {
@@ -111,7 +114,7 @@ export interface BobJob {
 
 /** In his bed: how far he hears (m), how long he lies groggy after a noise (s), the bed moved this far = he tumbles out. */
 const BED_HEAR = 16, BED_GROGGY = 1.1, BED_SHOVE = 0.8;
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), q0 = new THREE.Quaternion();
 const UP = THREE.Object3D.DEFAULT_UP;
 /** Bob's spoken lines (the rest are grunts / groans). */
 const LINES = new Set(['hey', 'grr', 'ha', 'hello', 'insult', 'win', 'bye', 'oops']);
@@ -246,6 +249,14 @@ export class Farmer {
    * was in it (1 hot sauce / 2 mud) and the spot by the pond where he dunks his head.
    */
   private sipNext = 0; private tasted = false; spitKind = 0; private coolAt = new THREE.Vector3(); private coolWater = new THREE.Vector3();
+  /** Where the spit-take happened (he comes back to look there): the porch's mug / his lunch plate. */
+  private spitFrom = new THREE.Vector3();
+  /**
+   * Lunch in the kitchen (world/lunch.ts): the game hour it's due after, had it this round, sitting on his chair (body
+   * off), where he stood to sit down, the next bite, this bite reached his mouth, bites eaten, been to the fridge.
+   */
+  private mealHour = -1; private mealDone = false; private seated = false; private mealFrom = new THREE.Vector3();
+  private biteNext = 0; private biteIn = false; private mealBites = 0; private fridged = false; private mealTries = 0;
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -305,6 +316,7 @@ export class Farmer {
     if (this.state === 'inLoo' && s !== 'inLoo' && this.loo) { this.loo.vacate(); this.loo = null; }
     if (this.state === 'onPhone' && s !== 'onPhone') { (G.phones as Phones | null)?.hangUp(); this.lookYaw = 0; }
     if (this.state === 'hammock' && s !== 'hammock') { (G.hammock as Hammock | null)?.climbOut(); this.body.setEnabled(true); this.parts.setEnabled(true); }
+    if (this.state === 'meal' && s !== 'meal') this.leaveMeal();
     this.state = s; this.stateT = this.now;
   }
   /** Day chores, evening flashlight round, bed at night — but on alert (2+) he keeps patrolling all night. */
@@ -359,6 +371,7 @@ export class Farmer {
     this.dropProp();
     this.stopRiding();
     if (this.lying) this.getUp();
+    this.leaveMeal(); this.mealDone = false; this.mealHour = -1; this.mealTries = 0;
     this.body.setTranslation({ x: at.x, y: at.y + CENTER + 0.05, z: at.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.vel.set(0, 0, 0);
     this.sus.clear(); this.target = null; this.hunt = null; this.path = []; this.doing = false;
@@ -409,7 +422,7 @@ export class Farmer {
   knockDown() { if (this.gone) this.wake(); if (this.state !== 'off' && this.state !== 'down') this.hit(BOB.knockdown + 10, this.forward.clone()); }
   /** Admin: pick this pig up right now (tests the limp, dangling pig). */
   carryMe(p: Pig) { if (this.state === 'off' || this.state === 'down') return; if (this.gone) this.wake(); this.stopRiding(); this.pickUp(p); }
-  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo', 'phone', 'onPhone', 'toHammock'].includes(this.state); }
+  private calm() { return ['routine', 'investigate', 'search', 'suspect', 'guard', 'dust', 'dance', 'tidy', 'setTrap', 'market', 'gate', 'job', 'loo', 'phone', 'onPhone', 'toHammock', 'meal'].includes(this.state); }
 
   // ================================================================== fixed step
   preStep(dt: number) {
@@ -424,6 +437,7 @@ export class Farmer {
     if (this.state === 'away') { if (!marketHours()) this.wake(); return; }
     if (this.state === 'inLoo') { this.looStep(); return; }
     if (this.state === 'hammock') { this.napStep(); return; }
+    if (this.seated) { this.seatStep(dt); return; }
     const p = this.body.translation(); this.pos.set(p.x, p.y - CENTER, p.z);
     const lv = this.body.linvel(); this.vel.set(lv.x, lv.y, lv.z);
     if (p.y < -20) { const d = this.zones.door; this.body.setTranslation({ x: d.x, y: d.y + 3, z: d.z + 3 }, true); return; }
@@ -544,6 +558,7 @@ export class Farmer {
       case 'hot': this.hotStep(); break;
       case 'cool': want = this.coolStep(dt); break;
       case 'dunk': this.dunkStep(dt); break;
+      case 'meal': want = this.mealStep(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -732,6 +747,11 @@ export class Farmer {
   // ================================================================== perception
   private view(): View {
     if (this.dozing) return 'nap';
+    if (this.state === 'meal') {   // the kitchen is lit: cooking / at the fridge = his back to the room, eating = eyes on his plate
+      const ph = (G.lunch as Lunch | null)?.ph;
+      if (ph === PH.Cook || ph === PH.Fridge) return 'busy';
+      if (ph === PH.Sit || ph === PH.Eat) return 'meal';
+    }
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
     if (this.state === 'routine' && this.doing) return this.sipping ? 'busy' : this.chores[this.choreIdx].view;
     if (this.state === 'hot' || this.state === 'dunk') return 'nap';   // eyes squeezed shut / head in the pond
@@ -881,13 +901,15 @@ export class Farmer {
       }
     }
     // noises
-    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance' || this.state === 'onPhone') {
+    if (this.state === 'routine' || this.state === 'search' || this.state === 'guard' || this.state === 'dance' || this.state === 'onPhone' || this.state === 'meal') {
       for (const n of G.noises) {
         if (n.t <= this.noiseT) continue;
         this.noiseT = n.t;
         const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
+        if ((n.byBob || (d < 1.8 && n.radius < 12)) && !this.asleep) continue;   // his own clatter (a chair he bumped walking past)
         const vw = this.view(), asleep = vw === 'nap';
         const r = this.state === 'onPhone' ? Math.min(n.radius, PHONE.hear) : vw === 'paper' ? Math.min(n.radius, COFFEE.hear)   // chatting / reading: only what's close
+          : vw === 'meal' ? Math.min(n.radius, MEAL.hear)
           : n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1);
         if (d > r * ALERT.hear[this.level] * modHear()) continue;
         this.stopRiding();
@@ -1152,7 +1174,7 @@ export class Farmer {
       const k = this.now - pc.sipT0;
       if (!this.tasted && k > COFFEE.taste) {
         this.tasted = true;
-        if (pc.spiked && pc.full) { this.spitTake(pc); return; }
+        if (pc.spiked && pc.full) { this.spitTake(pc, pc.top); return; }
         G.audio.play('drink', { pos: v1.copy(this.pos).setY(this.pos.y + 1.3), vol: 0.45, pitch: 0.75 });
       }
       if (k > COFFEE.sip) { pc.endSip(); this.sipNext = this.now + COFFEE.sipEvery[0] + Math.random() * (COFFEE.sipEvery[1] - COFFEE.sipEvery[0]); }
@@ -1166,9 +1188,10 @@ export class Farmer {
     this.lookYaw = 0;
     this.startSearch(pc.top, null, 3);
   }
-  /** Spiked: he spits it all out, the mug flies — hot sauce = fire breath, hopping, then off to dunk his head in the pond. */
-  private spitTake(pc: Porch) {
+  /** Spiked: he spits it all out, the mug / plate flies — hot sauce = fire breath, hopping, then off to dunk his head in the pond. */
+  private spitTake(pc: { spit(dir: THREE.Vector3): number }, from: THREE.Vector3, ev = 'coffeeSpit') {
     const f = this.forward.clone();
+    this.spitFrom.copy(from);
     const kind = pc.spit(f);
     this.spitKind = kind;
     const m = v1.copy(this.pos).setY(this.pos.y + 1.25).addScaledVector(f, 0.35);
@@ -1178,7 +1201,7 @@ export class Farmer {
     this.doing = false; this.lookYaw = 0; this.path = [];
     this.go('hot'); this.activity = kind === 1 ? 'bob.hot' : 'bob.yuck';
     this.raise('prank');
-    G.events.push({ type: 'coffeeSpit', why: kind === 1 ? 'hot' : 'mud' });
+    G.events.push({ type: ev, why: kind === 1 ? 'hot' : 'mud' });
   }
   /** Hopping about, fanning his mouth (fire breath) — then to the pond; mud: spitting, wiping his tongue — then he hunts. */
   private hotStep() {
@@ -1218,11 +1241,207 @@ export class Farmer {
       this.afterCoffee();
     }
   }
-  /** Furious: back to the porch to find whoever did it. */
+  /** Furious: back to the porch / the kitchen table to find whoever did it. */
   private afterCoffee() {
-    const pc = G.porch as Porch | null;
     this.voice('grr');
-    this.startSearch(pc ? pc.top : this.pos, null, 3);
+    this.startSearch(this.spitFrom, null, 3);
+  }
+
+  // ================================================================== lunch in the kitchen (world/lunch.ts)
+  /** It's lunchtime (day farms: after ~11:30; a night farm: 1.6 h into its evening = dinner). */
+  private mealHourPast() {
+    const h = G.hour;
+    if (this.mealHour < 0) this.mealHour = h >= 15 ? (h + MEAL.dinner) % 24 : MEAL.hour + Math.random() * MEAL.spread;
+    const m = this.mealHour;
+    return m >= 15 ? h >= m || h < 12 : h >= m;
+  }
+  /** Admin: lunch now (walks to the stove). */
+  forceMeal() {
+    const L = G.lunch as Lunch | null;
+    if (!L?.usable || this.state === 'off' || this.state === 'down' || this.carrying) return;
+    if (this.gone) this.wake();
+    this.mealDone = true; this.startMeal();
+  }
+  private startMeal() {
+    const L = G.lunch as Lunch;
+    this.stopRiding(); this.doing = false; this.path = []; this.stuck = 0; this.lookYaw = 0;
+    this.go('meal');
+    L.begin(G.props as Prop[]);
+    this.mealPass(L, true);
+    L.ph = PH.ToStove; L.t0 = this.now; L.biteT0 = -10; L.spat = 0;
+    this.mealBites = 0; this.fridged = false; this.biteIn = false;
+    this.voice('mutter', 0.7);
+    G.events.push({ type: 'bobLunch' });
+  }
+  private mealPh(ph: number) { const L = G.lunch as Lunch; L.ph = ph; L.t0 = this.now; }
+  /** On his feet in the kitchen: to the stove, cooking, the pan to the table, dishing up, to the fridge and back. */
+  private mealStep(dt: number) {
+    const L = G.lunch as Lunch | null;
+    if (!L) { this.backToWork(); return 0; }
+    this.activity = L.ph === PH.Cook ? 'bob.cook' : 'bob.lunch';
+    const arrive = (at: THREE.Vector3, sp: number, near = 0.45) => {
+      const d = this.moveTo(at, sp, dt);
+      // close enough — or wedged against the furniture near it for a while (he sits / cooks from where he got to)
+      if (d < near || (d < 1.6 && this.stuck >= 2) || (d < 1.2 && this.now - L.t0 > 6 && Math.hypot(this.vel.x, this.vel.z) < 0.3)) { this.stuck = 0; return true; }
+      return false;
+    };
+    switch (L.ph) {
+      case PH.ToStove:
+        if (arrive(L.stove, BOB.walk)) { this.mealPh(PH.Cook); G.audio.play('metal', { pos: L.hob, vol: 0.45, pitch: 1.4 }); }
+        return BOB.walk;
+      case PH.Cook:
+        this.face(L.hob, dt, 6);
+        if (this.now - L.t0 > MEAL.cook) { this.mealPh(PH.Serve); this.voice('mutter', 0.5); }
+        return 0;
+      case PH.Serve:
+        if (arrive(L.stand, BOB.walk * 0.8, 0.5)) this.mealPh(PH.Dish);
+        return BOB.walk * 0.8;
+      case PH.Dish:
+        this.face(L.placeSpot(v2), dt, 8);
+        if (this.now - L.t0 > MEAL.dish) {
+          if (!L.plateHome()) { this.lunchGone(L); return 0; }
+          L.dishUp();
+          G.audio.play('squish', { pos: L.placeSpot(v2), vol: 0.5, pitch: 1.4 });
+          this.sitDown(L);
+        }
+        return 0;
+      case PH.ToFridge:
+        if (!L.fridge) { this.mealPh(PH.Back); return 0; }
+        if (arrive(L.fridgeAt, BOB.walk)) { this.mealPh(PH.Fridge); G.audio.play('creak', { pos: L.fridgeAt, vol: 0.5, pitch: 1.3 }); }
+        return BOB.walk;
+      case PH.Fridge:
+        this.face(L.fridgeLook, dt, 6);
+        if (this.now - L.t0 > MEAL.fridgeLook) { this.mealPh(PH.Back); G.audio.play('thud', { pos: L.fridgeAt, vol: 0.4, pitch: 1.2 }); }
+        return 0;
+      case PH.Back:
+        if (arrive(L.stand, BOB.walk, 0.5)) this.sitDown(L);
+        return BOB.walk;
+      default: this.backToWork(); return 0;
+    }
+  }
+  /** During lunch he doesn't shove his own chair / table / plate about (squeezing in beside the chair): no contact with them. */
+  private passing = false;
+  private mealPass(L: Lunch, on: boolean) {
+    if (on === this.passing) return;
+    this.passing = on;
+    for (const pr of [L.chair, L.table, L.plate]) ignorePair(this.body, pr.body, on);
+  }
+  /** Down onto his chair (he doesn't look: if it isn't there, he finds out the hard way). */
+  private sitDown(L: Lunch) {
+    this.mealFrom.copy(this.pos);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.vel.set(0, 0, 0);
+    this.body.setEnabled(false); this.parts.setEnabled(false);
+    this.seated = true;
+    this.mealPh(PH.Sit);
+  }
+  /** On the chair (body off): sitting down, eating, getting up for the fridge / when he's done. */
+  private seatStep(dt: number) {
+    const L = G.lunch as Lunch;
+    this.yell = Math.max(0, this.yell - dt * 2);
+    const k = L.ph === PH.Sit ? Math.min(1, (this.now - L.t0) / MEAL.sit) : 1;
+    this.yaw = L.bobPose(this.pos, q0, k, this.mealFrom);
+    this.vel.set(0, 0, 0);
+    if (L.ph === PH.Sit) {
+      if (k < 1) return;
+      if (!L.chairOk(L.chairHome, MEAL.chairR)) { this.chairFall(L); return; }
+      // a pig sitting on his chair: he sits on it! It squeals and shoots off, he's up and after it
+      const squat = this.pigs.find((p) => p.seat >= 0 && !p.out && Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < 0.75 && Math.abs(p.pos.y - this.pos.y) < 1.4);
+      if (squat) { this.sitOnPig(L, squat); return; }
+      const t = L.chair.body.translation(); L.sitAt.set(t.x, t.y, t.z);
+      L.chair.body.setAdditionalMass(MEAL.bobKg, true);
+      G.audio.play('creak', { pos: this.pos, vol: 0.6, pitch: 1.1 });
+      this.mealPh(PH.Eat); this.biteNext = this.now + 0.7;
+      return;
+    }
+    // shoved off / tipped over / pulled out from under him
+    if (!L.chairOk(L.sitAt, MEAL.shove)) { this.chairFall(L); return; }
+    this.activity = 'bob.lunch';
+    this.checkClouds(); if (this.state !== 'meal') return;
+    this.perceive(dt); if (this.state !== 'meal' || !this.seated) return;
+    // a bite: the fork to the plate (is it still there?), to his mouth — spiked = the spit-take
+    if (this.biteIn && this.now - L.biteT0 > MEAL.fork * 0.55) {
+      this.biteIn = false;
+      if (L.spiked && L.full) { this.unseat(L); this.spitTake(L, L.placeSpot(new THREE.Vector3()), 'lunchSpit'); return; }
+      L.bite(); this.mealBites++;
+      G.audio.play('munch', { pos: v1.copy(this.pos).setY(this.pos.y + 1.2), vol: 0.5, pitch: 0.8 });
+      this.biteNext = this.now + MEAL.bite[0] + Math.random() * (MEAL.bite[1] - MEAL.bite[0]);
+    }
+    if (this.biteIn || this.now < this.biteNext) return;
+    if (!L.full && L.plateHome()) { this.mealOver(L); return; }   // all gone: a happy man
+    if (!L.plateHome()) { this.lunchGone(L); return; }
+    if (this.mealBites >= MEAL.fridgeAfter && !this.fridged && L.fridge) {   // something from the fridge (his back to the table)
+      this.fridged = true; this.unseat(L); this.mealPh(PH.ToFridge); this.voice('mutter', 0.5);
+      return;
+    }
+    L.biteT0 = this.now; this.biteIn = true;
+  }
+  /** He sat on a pig on his chair. */
+  private sitOnPig(L: Lunch, p: Pig) {
+    this.unseat(L); this.mealPass(L, false);
+    const f = this.forward;
+    p.knock(v1.set(f.x * 4.5, 5.5, f.z * 4.5), true);
+    G.audio.play('squeal', { pos: p.pos, vol: 1.1, pitch: 1.15 });
+    G.audio.play('body', { pos: p.pos, vol: 0.9, pitch: 0.8 });
+    G.fx.bits(v2.copy(p.pos).setY(p.pos.y + 0.5), { count: 12, color: 0xfff1a8, speed: 3, up: 2, life: 0.5, size: 0.12, grow: 0, drag: 3, alpha: 1 });
+    G.events.push({ type: 'satOnPig', who: p });
+    L.ph = PH.None;
+    this.alarmed(p);
+  }
+  /** Up off the chair (beside it). */
+  private unseat(L: Lunch) {
+    if (!this.seated) return;
+    this.seated = false;
+    L.chair.body.setAdditionalMass(0, true);
+    const s = L.stand;
+    this.body.setTranslation({ x: s.x, y: s.y + CENTER + 0.05, z: s.z }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.pos.copy(s); this.vel.set(0, 0, 0);
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.parts.snap();
+  }
+  /** The meal's interrupted (a noise, a pig, a hit, a new round…): up he gets, the kitchen's left as it is. */
+  private leaveMeal() {
+    const L = G.lunch as Lunch | null;
+    if (!L) return;
+    this.unseat(L);
+    this.mealPass(L, false);
+    // called away before the food was on the plate: he'll have another go after his next chore (twice at most)
+    if ((L.ph === PH.ToStove || L.ph === PH.Cook || L.ph === PH.Serve) && this.mealTries < 2) { this.mealTries++; this.mealDone = false; }
+    L.ph = PH.None;
+  }
+  /** Finished: an empty plate, back to work. */
+  private mealOver(L: Lunch) {
+    this.unseat(L); this.mealPass(L, false);
+    L.ph = PH.None;
+    this.voice('ha', 0.5);
+    G.events.push({ type: 'bobAte' });
+    this.backToWork();
+  }
+  /** He reaches for his lunch — gone! (Or never there to dish up onto.) "Huh?" and he searches round the table. */
+  private lunchGone(L: Lunch) {
+    this.unseat(L); this.mealPass(L, false);
+    L.ph = PH.None;
+    this.voice('huh'); this.raise('loot');
+    G.events.push({ type: 'lunchGone' });
+    this.startSearch(L.placeSpot(new THREE.Vector3()).setY(L.house.y0), null, 3);
+  }
+  /** His chair wasn't there (or went out from under him): down on his back, then he hunts for the joker. */
+  private chairFall(L: Lunch) {
+    const at = this.pos.clone();
+    this.seated = false; this.mealPass(L, false);
+    L.chair.body.setAdditionalMass(0, true);
+    L.ph = PH.None;
+    this.state = 'routine';   // (stun's go() must not stand him up beside the chair)
+    this.body.setTranslation({ x: at.x, y: L.house.y0 + CENTER + 0.3, z: at.z }, true);
+    this.body.setEnabled(true); this.parts.setEnabled(true); this.parts.snap();
+    this.vel.set(0, 0, 0);
+    this.voice('oops');
+    this.stun('down', BOB.downTime);
+    const f = this.forward;
+    this.body.setLinvel({ x: -f.x * 0.8, y: -0.5, z: -f.z * 0.8 }, true);
+    this.parts.matchVelocity();
+    this.raise('prank');
+    G.events.push({ type: 'chairPull' });
+    this.afterStun = () => { this.voice('grr'); this.startSearch(at, null, 3); };
   }
   private nextChore() {
     const phase = this.phaseNow();
@@ -1234,6 +1453,10 @@ export class Farmer {
       const o = this.looPick();
       if (o) { this.loo = o; this.go('loo'); this.voice('mutter', 0.6); G.events.push({ type: 'bobLoo' }); return; }
       this.looNext = this.now + 20;
+    }
+    // lunch in the kitchen (once a round, before his nap)
+    if (phase !== 'night' && !this.mealDone && this.mealHourPast() && !this.carrying && !marketHours() && (G.lunch as Lunch | null)?.usable) {
+      this.mealDone = true; this.startMeal(); return;
     }
     // after lunch: a nap in the hammock (once a round)
     if (phase === 'day' && !this.napped && G.hour >= this.napHour && !this.carrying && (G.hammock as Hammock | null)?.usable) {
@@ -2365,6 +2588,11 @@ export class Farmer {
     r.quaternion.copy(this.vq);
     if (this.state === 'hammock' && G.hammock) { (G.hammock as Hammock).bobPose(r.position, r.quaternion); this.vq.copy(r.quaternion); }
     if (this.inBed && (G.house as Farmhouse | null)?.bed) { (G.house as Farmhouse).bedPose(r.position, r.quaternion); this.vq.copy(r.quaternion); }
+    const lunch = G.lunch as Lunch | null;
+    if (this.state === 'meal' && lunch && (lunch.ph === PH.Sit || lunch.ph === PH.Eat)) {   // on his kitchen chair (lowering onto it)
+      const k = lunch.ph === PH.Sit ? Math.min(1, (this.now - lunch.t0) / MEAL.sit) : 1;
+      v3.copy(r.position); lunch.bobPose(r.position, r.quaternion, k, v3); this.vq.copy(r.quaternion);
+    }
     let hand: THREE.Vector3 | null = null;
     const holding = !!this.carrying || (G.net === 'client' ? this.netHolding : !!this.heldProp);
     if (holding) {
@@ -2373,7 +2601,7 @@ export class Farmer {
       hand.y += CENTER;
     }
     const anim = this.animFor();
-    const fl = this.flashlightOn && !this.riding;
+    const fl = this.flashlightOn && !this.riding && this.state !== 'meal';
     this.flash.intensity = fl ? 60 : 0;
     if (this.riding && G.net === 'client') this.mower.showRide(this.pos, this.yaw, Math.hypot(this.vel.x, this.vel.z), dt);
     this.visual.update({
@@ -2382,7 +2610,8 @@ export class Farmer {
       yell: this.yell, lookYaw: this.lookYaw, carrying: holding, flashlight: fl, limp, rel: this.relQ, hand,
       weapon: this.weapon, fury: this.state === 'hot' || this.state === 'cool' ? 1 : this.level / 3,
       sip: anim === 'sip' ? (this.now - ((G.porch as Porch | null)?.sipT0 ?? 0)) / COFFEE.sip : 0,
-      fire: (G.porch as Porch | null)?.spat ?? 0, soot: Math.min(1, Math.max(0, (this.sootUntil - this.now) / 8)),
+      meal: anim === 'eat' ? (this.now - (lunch?.biteT0 ?? -10)) / MEAL.fork : anim === 'dish' ? (this.now - (lunch?.t0 ?? 0)) / MEAL.dish : 0,
+      fire: Math.max((G.porch as Porch | null)?.spat === 1 ? 1 : 0, lunch?.spat === 1 ? 1 : 0), soot: Math.min(1, Math.max(0, (this.sootUntil - this.now) / 8)),
     });
     // fresh soot: his hair still smokes a while
     if (this.sootUntil - this.now > 30 && this.now > this.sootFx) {
@@ -2447,6 +2676,10 @@ export class Farmer {
       case 'hammock': case 'sleep': return 'hammock';
       case 'hot': case 'cool': return 'hot';
       case 'dunk': return 'dunk';
+      case 'meal': {
+        const ph = (G.lunch as Lunch | null)?.ph;
+        return ph === PH.Cook ? 'cook' : ph === PH.Serve ? 'serve' : ph === PH.Dish ? 'dish' : ph === PH.Sit || ph === PH.Eat ? 'eat' : ph === PH.Fridge ? 'fridge' : 'idle';
+      }
       default: return 'idle';
     }
   }

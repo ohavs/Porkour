@@ -9,7 +9,7 @@ export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
   | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
   | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone' | 'hammock'
-  | 'sip' | 'hot' | 'dunk';
+  | 'sip' | 'hot' | 'dunk' | 'cook' | 'serve' | 'dish' | 'eat' | 'fridge';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
@@ -26,12 +26,15 @@ export interface FarmerPose {
   sip?: number;
   /** What his last spiked cup had in it (1 = hot sauce: fire breath while he hops about). */
   fire?: number;
+  /** Lunch (world/lunch.ts): how far through the fork's trip ('eat': 0..1, more = chewing) / dishing up ('dish'). */
+  meal?: number;
 }
 
-const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', sip: 'paper', laundry: 'shirt' };
+const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', sip: 'paper', laundry: 'shirt',
+  cook: 'pan', serve: 'pan', dish: 'pan', eat: 'cutlery' };
 const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a), SOOT = new THREE.Color(0x2e2a28);
 /** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
-const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock', 'sip', 'hot', 'dunk']);
+const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock', 'sip', 'hot', 'dunk', 'cook', 'serve', 'dish', 'eat', 'fridge']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
@@ -356,6 +359,38 @@ export class FarmerVisual {
         if (Math.random() < dt * 3) { this.headPos(v1); v1.y += 0.2; G.fx.puff(v1, { count: 1, color: 0xffffff, spread: 0.15, speed: 0.2, up: 1, life: 1, size: 0.25, grow: 0.4, alpha: 0.5 }); }
         break;
       }
+      case 'cook': {   // at the stove: the pan held out over the burner, a toss now and then, eyes on the sausages
+        const k = cyc(1.7), toss = k < 0.16 ? Math.sin((k / 0.16) * Math.PI) : 0;
+        T.rsx = -1.15 - toss * 0.3; T.rex = -0.45 + toss * 0.2; T.rsz = 0.08;
+        T.lsz = 0.55; T.lsx = 0.15; T.lex = -1.5;   // hand on the hip
+        T.lean = 0.14; T.headX = 0.4; T.headY = Math.sin(t * 0.7) * 0.08;
+        if (k < 0.04 && this.fxT <= 0) { this.fxT = 0.5; G.audio.play('sizzle', { pos: this.tipOf('pan', v1), vol: 0.35, pitch: 1.3, minGap: 0.4 }); }
+        break;
+      }
+      case 'serve':   // carrying the hot pan to the table, held out in front
+        T.rsx = -1.05; T.rex = -0.55; T.rsz = 0.1; T.lsz = 0.25; T.headX = 0.2;
+        break;
+      case 'dish': {   // tipping the pan over his plate
+        const k = clamp(p.meal ?? 0, 0, 1);
+        T.rsx = -1.05; T.rex = -0.35; T.rsz = 0.18; T.lean = 0.25; T.headX = 0.45;
+        T.lsz = 0.55; T.lsx = 0.15; T.lex = -1.5;
+        R.tools.pan.rotation.y = -Math.sin(k * Math.PI) * 1.5;
+        break;
+      }
+      case 'eat': {   // on his chair at the table: left forearm on the table, the fork to the plate, to his mouth, chewing
+        T.hipY = -HIP + 0.48; T.ltx = T.rtx = -1.45; T.lkx = T.rkx = 1.4; T.lsz = 0.22; T.rsz = -0.12;
+        T.lean = 0.2; T.lsx = -0.95; T.lex = -1.0;
+        const k = p.meal ?? 2;
+        if (k < 0.35) { T.rsx = -0.8; T.rex = -0.85; T.headX = 0.4; }                     // down to the plate
+        else if (k < 0.8) { T.rsx = -1.4; T.rex = -2.15; T.rsz = 0.12; T.headX = -0.05; T.lean = 0.08; }   // to his mouth
+        else { T.rsx = -0.75; T.rex = -1.05; T.headX = 0.3 + Math.sin(t * 9) * 0.03; T.headY = Math.sin(t * 0.6) * 0.12; }
+        break;
+      }
+      case 'fridge':   // head in the fridge: one hand on the door, the other rummaging
+        T.lean = 0.45; T.headX = 0.25; T.ltx = -0.15; T.lkx = 0.25; T.rtx = 0.1; T.rkx = 0.2;
+        T.lsx = -1.45; T.lsz = 0.55; T.lex = -0.35;
+        T.rsx = -1.25 + Math.sin(t * 4) * 0.15; T.rex = -0.5; T.rsz = -0.1 + Math.sin(t * 3) * 0.12;
+        break;
       case 'laundry': {   // pegging a shirt on the line
         const k = (a % 4) / 4, up = k < 0.5 ? Math.sin(k * Math.PI * 2) : 0;
         T.lsx = T.rsx = -2.3 - up * 0.3; T.lex = T.rex = -0.4; T.lsz = 0.2; T.rsz = -0.2; T.lean = -0.12; T.headX = -0.4;
@@ -402,7 +437,8 @@ export class FarmerVisual {
     R.browL.rotation.z = Math.PI / 2 - 0.45 * ang + (p.anim === 'down' ? 0.3 : 0);
     R.browR.rotation.z = Math.PI / 2 + 0.45 * ang - (p.anim === 'down' ? 0.3 : 0);
     R.browL.position.y = R.browR.position.y = 0.3 - ang * 0.02 + (p.anim === 'suspect' || p.anim === 'look' ? 0.025 : 0);
-    R.mouth.scale.y = damp(R.mouth.scale.y, 0.012 + clamp(p.yell, 0, 1) * 0.05 + (p.anim === 'pant' || p.anim === 'cough' || p.anim === 'hot' ? 0.035 : 0), 20, dt);
+    const chew = p.anim === 'eat' && (p.meal ?? 2) > 0.6 && (p.meal ?? 2) < 2.2 ? Math.max(0, Math.sin(t * 13)) * 0.03 : 0;
+    R.mouth.scale.y = damp(R.mouth.scale.y, 0.012 + chew + clamp(p.yell, 0, 1) * 0.05 + (p.anim === 'pant' || p.anim === 'cough' || p.anim === 'hot' ? 0.035 : 0), 20, dt);
     if (t > this.blinkAt) this.blinkAt = t + 2 + Math.random() * 3;
     const shut = p.anim === 'nap' || p.anim === 'hammock' || p.anim === 'down' || p.anim === 'cough' || p.anim === 'hot' || p.anim === 'dunk' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = damp(e.scale.y, shut, 30, dt);
@@ -419,6 +455,11 @@ export class FarmerVisual {
       this.shown = want;
     }
     if (want === 'can') R.tools.can.rotation.x = 0.55 + Math.sin(a * 0.9) * 0.1;
+    if (want === 'pan') {   // the sausages ride in the pan until they slide onto his plate
+      const food = R.tools.pan.getObjectByName('panFood');
+      if (food) food.visible = p.anim !== 'dish' || (p.meal ?? 0) < 0.55;
+      if (p.anim !== 'dish') R.tools.pan.rotation.y = 0;
+    }
     if (want === 'fork') {   // lowered, tines forward; straight out along the arm in the lunge
       const tilt = R.tools.fork.children[0];
       tilt.rotation.x = damp(tilt.rotation.x, p.anim === 'lunge' || p.anim === 'windup' ? -0.15 : p.run ? -1.25 : Math.PI - 0.12, 12, dt);

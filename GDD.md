@@ -179,3 +179,11 @@ Thief / Hitman (suspicion meter, noise, disguise ≈ mud).
 3. Online 4 players (relay + room codes).
 4. Loot, missions, round loop, weapons.
 5. Alert levels, dog, traps, modifiers; farm 2…; shop.
+
+## Session 27 additions (2026-11-20)
+- **Bob's lunch in his kitchen** (breathing window #6, farms 1–5; farm 4: dinner): once a round, ~11:30, he fries
+  sausages at the stove (his back to the room, the burner is a flame for fart fireballs), carries the pan to the table,
+  dishes up and sits on HIS chair (back to the front door), eats with a fork (eyes on his plate), gets up once for the
+  fridge, finishes, back to work. Pranks: **pull his chair** away as he sits (he lands on his back) · **steal his
+  plate** (he reaches for it — gone) · **spike it** (the hot sauce bottle is on his table; or a muddy hoof) → the
+  spit-take + fire breath. A pig sitting on his chair = he sits on it (it flies, he chases).

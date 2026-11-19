@@ -27,6 +27,7 @@ import { HeavyLoot } from '../world/heavyLoot';
 import { Jail } from '../world/jail';
 import type { Hammock } from '../world/hammock';
 import type { Porch } from '../world/porch';
+import { Lunch } from '../world/lunch';
 import { Mines } from '../world/mines';
 import { Gulag } from '../world/gulag';
 import { EmoteWheel } from './emotes';
@@ -88,6 +89,8 @@ export class Game {
   hammock: Hammock | null = null;
   /** Bob's coffee break on the porch (side table, mug, hot sauce). */
   porch: Porch | null = null;
+  /** Bob's lunch in his farmhouse kitchen (world/lunch.ts). */
+  lunch: Lunch | null = null;
   /** Land mines (a few each round). */
   mines!: Mines;
   /** The pigs' gulag (dead pigs work their way out), when the farm has room for it. */
@@ -225,6 +228,14 @@ export class Game {
       // furniture inside every building a pig can walk into
       this.interiors = new Interiors(scene, f.props, this.nav, f.buildings ?? [], f.places.stash, f.house ?? null);
       G.uses.push({ near: (p: Pig) => p.seat < 0 && SEATS.seatFor(p) >= 0, icon: () => 'couch' });   // RMB at any free seat: sit
+      // Bob's lunch in his kitchen: his chair = the one nearest the front door (his back to it)
+      const h = f.house;
+      if (h?.oven && h.table && h.chairs.length) {
+        const chair = h.chairs.reduce((a, b) => (b.body.translation().x - h.door.x) ** 2 + (b.body.translation().z - h.door.z) ** 2
+          < (a.body.translation().x - h.door.x) ** 2 + (a.body.translation().z - h.door.z) ** 2 ? b : a);
+        this.lunch = new Lunch(scene, f.props, h, h.oven, h.table, chair, h.fridge);
+      }
+      G.lunch = this.lunch;
     }
     G.chain = this.farm.chain ?? null;
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
@@ -425,6 +436,9 @@ export class Game {
     for (const pr of this.farm.props) pr.synced.beforeStep();
     step((h1, h2, force) => {
       const a = owners.get(h1), b = owners.get(h2);
+      // Bob bumped a piece of furniture: it (and whatever it knocks into) clatters, but that's his own noise
+      if (a instanceof Prop && (b === this.farmer || (b instanceof Prop && G.time - b.bobT < 2))) a.bobT = G.time;
+      if (b instanceof Prop && (a === this.farmer || (a instanceof Prop && G.time - a.bobT < 2))) b.bobT = G.time;
       if (a instanceof Prop) a.impact(force);
       if (b instanceof Prop) b.impact(force);
       // a thrown thing hits a static farm thing that reacts (fruit tree, beehive)
@@ -472,7 +486,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.farm.house?.step(); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.farm.house?.step(); this.porch?.step(); this.lunch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
       this.fireballs.step();
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
@@ -558,6 +572,11 @@ export class Game {
         case 'coffeeSpiked': if (e.who === this.local && this.porch) H.emote(this.porch.markPos.clone(), e.why === 'mud' ? 'mud' : 'chili', 1.2, 0); break;
         case 'coffeeSpit': H.emote(bob, e.why === 'mud' ? 'mud' : 'fire', 2, 2.4); break;
         case 'mugGone': H.emote(bob, 'question', 1.8, 2.4); break;
+        case 'bobLunch': H.emote(bob, 'plate', 1.8, 2.4); break;
+        case 'lunchSpit': H.emote(bob, e.why === 'mud' ? 'mud' : 'fire', 2, 2.4); break;
+        case 'lunchGone': H.emote(bob, 'question', 1.8, 2.4); break;
+        case 'chairPull': H.emote(bob, 'chair', 1.8, 1.4); break;
+        case 'lunchSpiked': if (e.who === this.local && this.lunch) H.emote(this.lunch.markPos.clone(), e.why === 'mud' ? 'mud' : 'chili', 1.2, 0); break;
         case 'clockBong': { const at = this.heavy.clockPos(Number(e.why ?? 0)); if (at) H.emote(at.clone(), 'clock', 1, 2.6); break; }
         case 'prankOink': if (me) H.emote(this.local, 'pig', 1.2, 1.3); break;
         case 'pigDunked': H.emote(e.who, 'splash', 1.4, 1.3); break;
@@ -629,6 +648,7 @@ export class Game {
     this.heavy.reset();
     this.hammock?.reset();
     this.porch?.reset();
+    this.lunch?.reset();
     this.mines.reset();
     this.gulag?.reset();
     this.interiors.reset();
@@ -719,6 +739,17 @@ export class Game {
       case 'nap:in': f?.napNow(true); break;
       case 'nap:swing': this.hammock?.push(2.2, tmpV.set(this.hammock.side.x, 0, this.hammock.side.z)); break;
       case 'nap:mud': if (f && f.mudMarks < 3) f.setMud(f.mudMarks + 1); else f?.setMud(0); break;
+      case 'lunch:go': f?.forceMeal(); this.menu.toggleAdmin(); break;
+      case 'lunch:hot': this.lunch?.spike(1); break;
+      case 'lunch:mud': this.lunch?.spike(2); break;
+      case 'lunch:chair': {   // drag his chair 1.3 m out from the table (as a pig would)
+        const lu = this.lunch; if (!lu) break;
+        const c = lu.chair, t = c.body.translation();
+        c.body.setTranslation({ x: t.x - lu.chairFwd.x * 1.3, y: t.y + 0.05, z: t.z - lu.chairFwd.z * 1.3 }, true);
+        c.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        break;
+      }
+      case 'tp:kitchen': { const lu = this.lunch; if (lu) { const p = lu.stand.clone().addScaledVector(lu.chairFwd, -1.2); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
       case 'coffee:go': f?.coffeeNow(); this.menu.toggleAdmin(); break;
       case 'coffee:sip': f?.coffeeNow(true); break;
       case 'coffee:hot': this.porch?.spike(1); break;
@@ -1106,6 +1137,7 @@ export class Game {
     this.hammock?.render();
     this.farm.house?.render(dt, this.mode === 'play' ? this.local : null, this.fpNow(), !!this.farmer && !this.farmer.asleep && this.farmer.state !== 'off');
     this.porch?.render(dt);
+    this.lunch?.render(dt);
     if (this.mode === 'play') this.mines.render(dt);
     this.gulag?.render();
     this.lounge?.render(dt);

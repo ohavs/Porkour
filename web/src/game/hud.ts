@@ -260,6 +260,7 @@ export class Hud {
     else if (st === 'phone' || st === 'onPhone') { txt = t(st === 'phone' ? 'bob.phone' : 'bob.onPhone'); cls = 'blue'; ic = 'phone'; }
     else if (st === 'hot') { txt = t(bob.activity); cls = 'green'; ic = bob.activity === 'bob.yuck' ? 'mud' : 'fire'; }
     else if (st === 'cool' || st === 'dunk') { txt = t('bob.cool'); cls = 'blue'; ic = 'water'; }
+    else if (st === 'meal') { txt = t(bob.activity === 'bob.cook' ? 'bob.cook' : 'bob.lunch'); cls = 'blue'; ic = 'plate'; }
     else if (st === 'routine' && bob.doing && bob.chores[bob.choreIdx]?.id === 'paper' && G.porch) { txt = t('bob.coffee'); cls = 'blue'; ic = 'mug'; }
     else if (st === 'shoo') { txt = t('bob.shoo'); cls = 'yellow'; ic = 'wolf'; }
     else if (st === 'setTrap') { txt = t('bob.trap'); cls = 'yellow'; ic = 'trap'; }
