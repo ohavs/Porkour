@@ -1,3 +1,4 @@
+import { PADDEV } from './padGlyph';
 import * as THREE from 'three';
 import { step, owners, world, raycast, L as L_ } from '../core/physics';
 import type { Input } from '../core/input';
@@ -148,6 +149,8 @@ export class Game {
   private wardrobeEl = document.getElementById('wardrobe')!;
   /** Test hook: overrides keyboard input when set. */
   scripted: Partial<PigInput> | null = null;
+  /** Admin: the furnished room the last "next room" teleport went to. */
+  private intRoom = -1;
   /** Online: host simulation + snapshots, or player view of the host's world. */
   net: NetHost | NetClient | null = null;
   private bgWorker: Worker | null = null;
@@ -259,7 +262,7 @@ export class Game {
       if (b === 'emote') { if (!this.lockpick.isOpen && !this.local.out) { this.wheel.icons(this.local.visual.color, this.local.visual.outfit); this.wheel.open(); } return; }
       if (this.wheel.isOpen && b === 'attack') { this.pendingEmote = this.wheel.close(); this.input.clearPresses(); return; }   // click = pick
       if (this.lockpick.isOpen) {
-        if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
+        if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab' || b === 'fart') this.lockpick.close();   // (pad B = back)
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
         return;
       }
@@ -329,7 +332,7 @@ export class Game {
     if (this.mode === 'lobby') {
       // lobby: W = away from the fixed camera; the pig faces where it walks, the pointer when it holds something /
       // clicks (aim: throws fly toward the pointer), the camera when it just stands there
-      const L = this.local, at = this.stage.floorAt(this.gfx.camera, this.input.mouseX, this.input.mouseY, tmpV);
+      const L = this.local, at = PADDEV.on ? this.padAim(L, tmpV) : this.stage.floorAt(this.gfx.camera, this.input.mouseX, this.input.mouseY, tmpV);
       const aim = Math.atan2(at.x - L.pos.x, at.z - L.pos.z), moving = inp.mx * inp.mx + inp.mz * inp.mz > 0.01;
       // idle: face the camera (like a lobby character); holding / aiming / clicking: face the pointer
       inp.yaw = moving && !L.held && L.chargeStart < 0 ? Math.atan2(inp.mx, inp.mz) : L.held || L.chargeStart >= 0 || inp.attack || inp.grab || inp.attackP || inp.grabP ? aim : 0;
@@ -346,6 +349,19 @@ export class Game {
     this.aimInput(inp);
     if (s) for (const k of ['ax', 'ay', 'az', 'reach', 'tilt'] as const) if (s[k] !== undefined) (inp as unknown as Record<string, unknown>)[k] = s[k];
     return inp;
+  }
+  /**
+   * Lobby on a gamepad (no pointer): the right stick points where to aim on the stage floor (screen directions: up =
+   * away from the camera); let go = straight ahead of the pig.
+   */
+  private padAim(L: Pig, out: THREE.Vector3) {
+    const rx = this.input.padRX, ry = this.input.padRY, cam = this.gfx.camera;
+    cam.getWorldDirection(out); out.y = 0; out.normalize();
+    let dx: number, dz: number;
+    if (Math.hypot(rx, ry) > 0.25) { dx = out.x * -ry - out.z * rx; dz = out.z * -ry + out.x * rx; }   // forward × up + screen-right × right
+    else { dx = Math.sin(L.yaw); dz = Math.cos(L.yaw); }
+    const n = Math.hypot(dx, dz) || 1;
+    return out.set(L.pos.x + (dx / n) * 4, L.pos.y, L.pos.z + (dz / n) * 4);
   }
   /** First person right now (knocked over, carried or out of the round: the camera steps back to third person). */
   fpNow() {
@@ -562,7 +578,7 @@ export class Game {
 
   /** The lobby: everybody on the stage, a fixed camera, the clock stopped on a sunny afternoon. */
   enterLobby() {
-    this.mode = 'lobby'; G.lobby = true; this.running = true;
+    this.mode = 'lobby'; G.lobby = true; this.running = true; this.input.lobby = true;
     document.body.classList.add('inLobby');
     this.input.free = true; this.cam.yaw = Math.PI;
     this.daynight.setHour(STAGE.hour);
@@ -575,7 +591,7 @@ export class Game {
   }
   /** PLAY (host / solo; players follow the host): a fresh round on the farm. */
   startPlay() {
-    this.mode = 'play'; G.lobby = false;
+    this.mode = 'play'; G.lobby = false; this.input.lobby = false;
     document.body.classList.remove('inLobby');
     this.input.free = false;
     this.pigs.forEach((p, i) => p.spawn.copy(this.farmSpawns[i]));
@@ -709,6 +725,10 @@ export class Game {
       case 'tp:porch': { const pc = this.porch; if (pc) { const p = pc.chair.clone().addScaledVector(pc.fwd, 2.4).addScaledVector(pc.right, 1.2); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
       case 'tp:hammock': { const h = this.hammock; if (h) { const p = h.getIn.clone().addScaledVector(h.side, 1.4); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
       case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
+      // s23: furnished buildings (next room · nearest radio on / off, TV channel, bake now, fill the bath · Bob comes to switch it off)
+      case 'int:room': { const it = this.interiors, rs = it.rooms; if (!rs.length) break; this.intRoom = (this.intRoom + 1) % rs.length; tp(rs[this.intRoom].x, rs[this.intRoom].z); this.menu.toggleAdmin(); break; }
+      case 'int:radio': case 'int:tv': case 'int:bake': case 'int:bath': this.interiors.admin(a.slice(4), L.pos); break;
+      case 'int:lure': { const j = this.interiors.lureJob(L.pos, f?.pos); if (f && j) f.jobNow(j); break; }
       case 'gates:lock': this.gates.all('locked'); break;
       case 'gates:shut': this.gates.all('shut'); break;
       case 'gates:open': this.gates.all('free'); break;
@@ -1026,7 +1046,7 @@ export class Game {
     this.input.poll();
     // the emote wheel: steer with the mouse / stick (lobby: the pointer), let go of B = dance
     if (this.wheel.isOpen) {
-      if (this.input.free) this.wheel.feed(0, 0), this.wheel.stick(this.input.mouseX * innerWidth / innerHeight * 3, -this.input.mouseY * 3);
+      if (this.input.free && !PADDEV.on) this.wheel.feed(0, 0), this.wheel.stick(this.input.mouseX * innerWidth / innerHeight * 3, -this.input.mouseY * 3);
       else { this.wheel.feed(this.input.lookX / this.input.sensitivity / 260, this.input.lookY / this.input.sensitivity / 260 * (this.input.invertY ? -1 : 1)); this.wheel.stick(this.input.padRX, this.input.padRY); }
       if (!this.input.held.has('emote') || this.menu.blocking) { const id = this.wheel.close(); if (id && !this.menu.blocking) this.pendingEmote = id; }
     }
@@ -1072,7 +1092,7 @@ export class Game {
     if (this.mode === 'play') this.mines.render(dt);
     this.gulag?.render();
     this.lounge?.render(dt);
-    this.interiors.render();
+    this.interiors.render(dt);
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);

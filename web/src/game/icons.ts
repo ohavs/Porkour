@@ -2,6 +2,9 @@
  * Small HUD icons (24×24 SVG, cartoon: fat shapes with a dark brown outline) so the HUD can show things instead of
  * telling them: what a key does, what's going on with you, what just happened over someone's head.
  */
+import { PADDEV, KEY_PAD, pg, type PadG } from './padGlyph';
+import { t } from '../i18n';
+
 const O = 'stroke="#3b2412" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"';
 const svg = (body: string, w = 24) => `<svg class="ic" viewBox="0 0 ${w} 24" width="${w}" height="24">${body}</svg>`;
 
@@ -159,5 +162,14 @@ export const IC = {
 };
 export type IconId = keyof typeof IC;
 
-/** A key cap (letters / Space / Shift) in the HUD style. */
-export const kc = (k: string) => `<kbd class="kc">${k}</kbd>`;
+/** A key cap (letters / Space / Shift) in the HUD style; with a gamepad in use, the pad button that does the same. */
+export const kc = (k: string) => {
+  if (PADDEV.on) { const g = KEY_PAD[k] ?? (k === t('key.space') ? 'A' : k === t('key.shift') ? 'LB' : null); if (g) return pg(g); }
+  return `<kbd class="kc">${k}</kbd>`;
+};
+// the mouse icons turn into the pad's triggers / right stick while a gamepad is in use
+{
+  const kb = { lmb: IC.lmb, rmb: IC.rmb, mouse: IC.mouse };
+  const pad: Record<keyof typeof kb, PadG> = { lmb: 'RT', rmb: 'LT', mouse: 'RS' };
+  for (const k of Object.keys(kb) as (keyof typeof kb)[]) Object.defineProperty(IC, k, { get: () => (PADDEV.on ? pg(pad[k]) : kb[k]), enumerable: true });
+}

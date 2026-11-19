@@ -124,6 +124,13 @@
   .ab .cd { position:absolute; inset:0; border-radius:50%; }
   .ab .key { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); font-family: Title; font-size:13px; color: var(--gold);
     background: rgba(40,22,8,.85); padding: 1px 7px 0; border-radius: 8px; white-space:nowrap; }
+  body.padOn #topbtns .k { display:none; }
+  /* user: "as many of the top-right icons as possible into the settings" — sound / controls / full screen live there
+     now (M / H keys still work); kept: first person + settings */
+  #bSound, #bHelp, #bFull, #lSound, #lFull { display:none !important; }
+  .ab .key.pad { background: none; padding: 0; bottom: -14px; } .ab .key.pad svg { width: 24px; height: 24px; display:block; }
+  #help .row kbd.pads { display:flex; gap: 3px; align-items:center; } #help .row kbd.pads svg { width: 22px; height: 22px; }
+  .playBtn .pgs { display:none; } body.padOn .playBtn .pgs { display:inline-block; vertical-align: middle; margin-left: 8px; } .playBtn .pgs svg { width: 30px; height: 30px; }
   .ab .lbl { position:absolute; top:-17px; left:50%; transform:translateX(-50%); font-size:12px; white-space:nowrap; opacity:.85; }
   .ab.ready { animation: ready .35s ease-out; }
   .ab.active { box-shadow: inset 0 0 0 3px var(--gold), 0 0 14px var(--gold); }

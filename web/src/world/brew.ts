@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { G } from '../game/ctx';
 import type { Pig } from '../pig/pig';
 import type { Prop } from './props';
-import { IC, type IconId } from '../game/icons';
+import { IC, kc, type IconId } from '../game/icons';
 import type { Rect } from './terrain';
 import type { Kit } from './farmKit';
 import { Chain, buildShed, buildBeam, need, fillable, Pump } from './chain';
@@ -483,7 +483,7 @@ export class Brew extends Chain {
   }
   /** How to do the next step (mission list icons). */
   stepIcons(id: string, me: Pig): string {
-    const I = (...k: (IconId | string)[]) => k.map((x) => (x in IC ? IC[x as IconId] : `<kbd class="kc">${x}</kbd>`)).join('');
+    const I = (...k: (IconId | string)[]) => k.map((x) => (x in IC ? IC[x as IconId] : kc(x))).join('');
     const held = this.item(me.held), has = (item: string, full = false) => this.props.some((p) => !p.banked && p.def.item === item && (!full || p.left > 0.05));
     switch (id) {
       case 'brewBeer':

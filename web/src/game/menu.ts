@@ -19,6 +19,7 @@ const AICON: Record<string, string> = {
   wolves: '🐺', nowolves: '🚫', gameSpeed: '🏃', 'mod:none': '🌤️', 'mod:rain': '🌧️', 'mod:fog': '🌫️', 'mod:grumpy': '😠', 'mod:market': '🛒', 'mod:random': '🎲',
   roundMins: '⏳', roundWin: '🏆', loot100: '💰', roundEnd: '🏁', roundNew: '🔄', pick: '🔐', smoke: '🚬', boosts: '💪', clock: '🕰️', snowcoat: '❄️',
   weed: '🌿', brew: '🍺', tree: '🍎', bees: '🐝', bull: '🐂', cow: '🐄', milk: '🥛', lantern: '🎃', lanterns: '🎃', catapult: '🏹', giant: '🎃', snowman: '⛄',
+  'int:room': '🏚️', 'int:radio': '📻', 'int:tv': '📺', 'int:bake': '🥧', 'int:bath': '🛁', 'int:lure': '👨‍🌾',
   bigball: '⚪', gadget: '🎁', snack: '🥫', bring: '📦', gate: '🚪', gates: '🚪', loo: '🚽', phone: '☎️', nap: '🛌', tp: '📍', alert: '🚨',
 };
 function adminIcon(k: string) {
@@ -154,14 +155,17 @@ export class Menu {
       row(ROW.lang, 'menu.language', langs) +
       row(ROW.gfx, 'menu.quality', seg('preset', presets, G0)) +
       `<div class="btns"><button class="chip small" data-b="tune" title="${t('g.tuneD').replace(/"/g, '&quot;')}">⚡ ${t('g.tune')}${G0 === 'auto' ? ` · ${t(('g.' + presetOf('auto')) as Key)}` : ''}</button></div>` +
+      row(ROW.sound, 'menu.soundOn', seg('mute', [['0', t('menu.on')], ['1', t('menu.off')]], this.game.audio.muted ? '1' : '0')) +
       row(ROW.sound, 'menu.sound', slider('sound', SETTINGS.sfx)) +
       row(ROW.music, 'menu.musicS', slider('music', SETTINGS.music)) +
       row(ROW.mouse, 'menu.mouse', slider('sens', SETTINGS.sens, 3, 0.1)) +
       row(fullIcon(false), 'menu.full', seg('full', [['1', t('menu.on')], ['0', t('menu.off')]], isFull() ? '1' : '0')) +
       `<div class="btns"><button class="chip small" data-b="advanced">${this.advanced ? '▾' : '▸'} ${t('menu.more')}</button></div>` +
       (this.advanced ? `<div class="adv">` + f('menu.sfx', slider('sfx', SETTINGS.sfx)) + f('menu.ambience', slider('ambience', SETTINGS.ambience)) +
-        f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) + this.graphics(seg, slider, f) + '</div>' : '') +
+        f('menu.invert', seg('invert', [['0', t('menu.off')], ['1', t('menu.on')]], SETTINGS.invertY ? '1' : '0')) +
+        f('menu.rumble', seg('rumble', [['1', t('menu.on')], ['0', t('menu.off')]], SETTINGS.rumble !== false ? '1' : '0')) + this.graphics(seg, slider, f) + '</div>' : '') +
       `<div class="btns"><button class="chip big" data-b="resume">${t('menu.resume')}</button><button class="chip" data-b="wardrobe">${t('menu.wardrobe')}</button>` +
+      `<button class="chip small" data-b="help">🎮 ${t('help.title')}</button>` +
       (canAdmin() ? `<button class="chip small" data-b="admin">🛠️ ${t('menu.admin')}</button>` : '') + `</div>` +
       (online.room ? `<div class="btns"><span class="lw">${t('net.code')} <b>${online.room.code}</b></span><button class="chip" data-b="invite">${t('net.copyInvite')}</button>` +
         `<button class="chip" data-b="leave">🏠 ${t(online.isHost ? 'net.endGame' : 'net.leave')}</button></div>`
@@ -175,6 +179,8 @@ export class Menu {
         this.setGfx(k, (typeof PRESETS.high[k] === 'boolean' ? v === '1' : parseFloat(v)) as never);
       }
       if (name === 'showFps') { SETTINGS.fps = v === '1'; saveSettings(); }
+      if (name === 'mute') { if ((v === '1') !== this.game.audio.muted) this.toggleSound(); }
+      if (name === 'rumble') { SETTINGS.rumble = v === '1'; saveSettings(); }
       if (name === 'invert') { SETTINGS.invertY = v === '1'; saveSettings(); this.game.applySettings(); }
       if (name === 'full') { setFull(v === '1').then(() => this.renderMenu()); return; }
       this.renderMenu();
@@ -197,6 +203,7 @@ export class Menu {
     this.panel.querySelectorAll<HTMLElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.b;
       if (k === 'resume') this.close();
+      if (k === 'help') { this.close(); this.game.hud.flashHelp(20); }
       if (k === 'advanced') { this.advanced = !this.advanced; this.renderMenu(); }
       if (k === 'tune') {   // measure again from the graphics card's guess (while playing)
         SETTINGS.tuned = null; setTuned(null); this.choosePreset('auto'); this.game.retune();
@@ -325,6 +332,8 @@ export class Menu {
           (f.dairy ? sec('a.farm3') + grid(btn('bull:me', 'a.bullMe'), btn('bull:out', 'a.bullOut'), btn('bringRag', 'a.bringRag'), btn('cow:tip', 'a.cowTip'), btn('milk:spill', 'a.milkSpill'), btn('bringCheese', 'a.bringCheese')) : '') +
           (f.pumpkins ? sec('a.farm4') + grid(btn('lantern:out', 'a.lanternOut'), btn('lanterns:out', 'a.lanternsOut'), btn('lanterns:on', 'a.lanternsOn'), btn('bob:relight', 'a.bobRelight'), btn('catapult:me', 'a.catapultMe'), btn('catapult:fire', 'a.catapultFire'), btn('catapult:bob', 'a.catapultBob'), btn('bringPumpkin', 'a.bringPumpkin'), btn('giant:me', 'a.giantMe')) : '') +
           (f.winter ? sec('a.farm5') + grid(btn('snowman:down', 'a.snowmanDown'), btn('snowman:bob', 'a.snowmanBob'), btn('bringSnowball', 'a.bringSnowball'), btn('bigball:me', 'a.bigBall'), btn('bob:ice', 'a.bobIce'), btn('snowcoat', 'a.snowCoat')) : '') +
+          (g.interiors?.rooms.length ? sec('a.interiors') + grid(btn('int:room', 'a.intRoom'), g.interiors.radios.length ? btn('int:radio', 'a.intRadio') : '', g.interiors.tvs.length ? btn('int:tv', 'a.intTv') : '',
+            g.interiors.ovens.length ? btn('int:bake', 'a.intBake') : '', g.interiors.baths.length ? btn('int:bath', 'a.intBath') : '', btn('int:lure', 'a.intLure')) : '') +
           sec('a.pranks') + grid(btn('pick', 'a.pick'), hasTp('garden') ? `<button data-tp="garden" class="tile"><b>📍</b>${short(t('a.tpGarden'))}</button>` : '');
         break;
       case 'owner': {

@@ -1,6 +1,7 @@
 import { G } from './ctx';
 import { t } from '../i18n';
 import { clamp } from '../core/util';
+import { PADDEV, pg } from './padGlyph';
 
 export interface PickOpts {
   /** Pins to set. */
@@ -18,7 +19,7 @@ const CSS = `
 #pick h3 { margin:0; font-family: Title; font-weight: normal; color: var(--gold); font-size: 24px; }
 #pick .hint { font-size: 15px; opacity: .9; text-align:center; max-width: 340px; }
 #pick .hint b { color: var(--gold); }
-#pick .sub { font-size: 12px; opacity: .65; }
+#pick .sub { font-size: 12px; opacity: .65; } #pick .hint svg.pg, #pick .sub svg.pg { vertical-align: middle; width: 22px; height: 22px; }
 #pick svg { width: 340px; height: 200px; overflow: visible; }
 #pick.shake svg { animation: pickShake .35s; }
 @keyframes pickShake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-9px) rotate(-2deg) } 40% { transform: translateX(8px) rotate(2deg) } 60% { transform: translateX(-6px) } 80% { transform: translateX(4px) } }
@@ -111,7 +112,8 @@ export class Lockpick {
     const n = this.o.pins, gap = (L.x1 - L.x0) / n;
     const zoneH = this.o.zone * 2 * L.travel;
     this.el.innerHTML = `<h3>${t('pick.title')}</h3><svg viewBox="0 0 340 200"></svg>` +
-      `<div class="hint">${t('pick.hint', { lmb: `<b>${t('key.lmb')}</b>`, space: `<b>${t('key.space')}</b>` })}</div><div class="sub">${t('pick.sub')}</div>`;
+      (PADDEV.on ? `<div class="hint">${t('pick.hint', { lmb: pg('RT'), space: pg('A') })}</div><div class="sub">${t('pick.sub').replace('Esc', pg('B'))}</div>`
+        : `<div class="hint">${t('pick.hint', { lmb: `<b>${t('key.lmb')}</b>`, space: `<b>${t('key.space')}</b>` })}</div><div class="sub">${t('pick.sub')}</div>`);
     this.svg = this.el.querySelector('svg')!;
     const mk = <K extends keyof SVGElementTagNameMap>(tag: K, a: Record<string, string | number>, parent: Element = this.svg) => {
       const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, String(a[k])); parent.appendChild(e); return e;
