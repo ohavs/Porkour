@@ -19,7 +19,7 @@ const AICON: Record<string, string> = {
   wolves: '🐺', nowolves: '🚫', gameSpeed: '🏃', 'mod:none': '🌤️', 'mod:rain': '🌧️', 'mod:fog': '🌫️', 'mod:grumpy': '😠', 'mod:market': '🛒', 'mod:random': '🎲',
   roundMins: '⏳', roundWin: '🏆', loot100: '💰', roundEnd: '🏁', roundNew: '🔄', pick: '🔐', smoke: '🚬', boosts: '💪', clock: '🕰️', snowcoat: '❄️',
   weed: '🌿', brew: '🍺', tree: '🍎', bees: '🐝', bull: '🐂', cow: '🐄', milk: '🥛', lantern: '🎃', lanterns: '🎃', catapult: '🏹', giant: '🎃', snowman: '⛄',
-  'int:room': '🏚️', 'int:radio': '📻', 'int:tv': '📺', 'int:bake': '🥧', 'int:bath': '🛁', 'int:lure': '👨‍🌾', 'int:gramo': '🎶', 'int:disco': '🕺',
+  'int:room': '🏚️', 'int:radio': '📻', 'int:tv': '📺', 'int:bake': '🥧', 'int:bath': '🛁', 'int:lure': '👨‍🌾', 'int:gramo': '🎶', 'int:disco': '🕺', 'int:sink': '🚰', 'int:fire': '🔥', 'int:tap': '👨‍🌾', 'fireball:me': '🔥', 'fireball:bob': '💥', 'tp:grill': '🍖',
   bigball: '⚪', gadget: '🎁', snack: '🥫', bring: '📦', gate: '🚪', gates: '🚪', loo: '🚽', phone: '☎️', nap: '🛌', tp: '📍', alert: '🚨',
 };
 function adminIcon(k: string) {
@@ -338,7 +338,7 @@ export class Menu {
     // (user: "a menu in the game's style, less text"): icon tiles with a word or two; the full sentence is the tooltip
     const tip = (label: Key) => t(label).replace(/"/g, '&quot;');
     const tog = (k: keyof typeof ADMIN, label: Key) =>
-      `<button class="tile sw${ADMIN[k] ? ' on' : ''}" data-tg="${k}" title="${tip(label)}"><i></i><b>${adminIcon(k)}</b>${short(t(label))}</button>`;
+      `<button class="tile tg${ADMIN[k] ? ' on' : ''}" data-tg="${k}" title="${tip(label)}"><i></i><b>${adminIcon(k)}</b>${short(t(label))}</button>`;
     const rng = (k: string, label: Key, v: number, min: number, max: number, step: number) =>
       `<div class="field" title="${tip(label)}"><b class="fi">${adminIcon(k)}</b><span>${short(t(label))}</span><b data-val="${k}">${v}</b><input type="range" data-r="${k}" min="${min}" max="${max}" step="${step}" value="${v}"></div>`;
     const btn = (k: string, label: Key, on = false) => `<button data-a="${k}" class="tile${on ? ' on' : ''}" title="${tip(label)}"><b>${adminIcon(k)}</b>${short(t(label))}</button>`;
@@ -378,6 +378,7 @@ export class Menu {
       case 'world':
         body = rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) +
           grid(tog('freezeTime', 'a.freeze'), btn('day', 'a.toDay'), btn('night', 'a.toNight'), btn('wolves', 'a.wolves'), btn('nowolves', 'a.noWolves')) +
+          sec('a.fire') + grid(btn('fireball:me', 'a.fireballMe'), btn('fireball:bob', 'a.fireballBob'), btn('tp:grill', 'a.tpGrill')) +
           sec('a.mines') + grid(tog('mines', 'a.minesOn'), btn('mine:me', 'a.mineMe'), btn('mine:bob', 'a.mineBob'), btn('mines:new', 'a.minesNew'), g.gulag ? btn('tp:gulag', 'a.tpGulag') : '') +
           rng('gameSpeed', 'a.gameSpeed', ADMIN.gameSpeed, 0.25, 3, 0.25) +
           sec('a.mods') + grid(...(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) => `<button data-a="mod:${m}" class="tile${G.mod === m ? ' on' : ''}"><b>${adminIcon('mod:' + m)}</b>${m === 'none' ? t('menu.off') : short(t(('mod.' + m) as Key))}</button>`),
@@ -400,7 +401,8 @@ export class Menu {
           (f.winter ? sec('a.farm5') + grid(btn('snowman:down', 'a.snowmanDown'), btn('snowman:bob', 'a.snowmanBob'), btn('bringSnowball', 'a.bringSnowball'), btn('bigball:me', 'a.bigBall'), btn('bob:ice', 'a.bobIce'), btn('snowcoat', 'a.snowCoat')) : '') +
           (g.interiors?.rooms.length ? sec('a.interiors') + grid(btn('int:room', 'a.intRoom'), g.interiors.radios.length ? btn('int:radio', 'a.intRadio') : '', g.interiors.tvs.length ? btn('int:tv', 'a.intTv') : '',
             g.interiors.ovens.length ? btn('int:bake', 'a.intBake') : '', g.interiors.baths.length ? btn('int:bath', 'a.intBath') : '', btn('int:lure', 'a.intLure'),
-            g.interiors.gramos.length ? btn('int:gramo', 'a.intGramo') : '', g.interiors.gramos.length ? btn('int:disco', 'a.intDisco') : '') : '') +
+            g.interiors.gramos.length ? btn('int:gramo', 'a.intGramo') : '', g.interiors.gramos.length ? btn('int:disco', 'a.intDisco') : '',
+            g.interiors.sinks.length ? btn('int:sink', 'a.intSink') : '', g.interiors.sinks.length ? btn('int:tap', 'a.intTap') : '', g.interiors.hearths.length ? btn('int:fire', 'a.intFire') : '') : '') +
           sec('a.pranks') + grid(btn('pick', 'a.pick'), hasTp('garden') ? `<button data-tp="garden" class="tile"><b>📍</b>${short(t('a.tpGarden'))}</button>` : '');
         break;
       case 'owner': {

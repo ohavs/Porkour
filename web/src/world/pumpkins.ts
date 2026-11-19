@@ -105,6 +105,7 @@ export class Pumpkins {
     const light = this.daynight.addLight(new THREE.Vector3(x, y + h + 0.7, z), PUMPKIN.lightI, PUMPKIN.lightD, 0xff8a2a);   // above it: lights the ground, doesn't burn out the pumpkin
     const l: Lantern = { i, x, y, z, yaw, h, lit: true, outAt: -10, wobT: -10, light, spot: { kind: 'spot', markPos: new THREE.Vector3(x, y + h, z), heldBy: null } };
     this.lanterns.push(l);
+    G.flames.push({ r: 0.7, at: (o) => (l.lit ? o.set(l.x, l.y + l.h * 0.5, l.z) : null) });   // a fart next to a lit one = a fireball
     // collider: rams and thrown things find it
     const body = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x, y + h * 0.42, z));
     const c = world.createCollider(RAPIER.ColliderDesc.ball(h * 0.48).setCollisionGroups(groups(L.STATIC)), body);

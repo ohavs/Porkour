@@ -140,6 +140,7 @@ export class Brew extends Chain {
     // the kettle: a cauldron over a fire pit, a little in front of the shed's open side
     const [fx, fz] = [o.pump[0] + 4.5, o.pump[1] + 1.5], fy = kit.y(fx, fz);
     this.fireC.set(fx, fy, fz);
+    G.flames.push({ r: 0.9, at: (o) => (this.fuel > 0 ? o.copy(this.fireC).setY(this.fireC.y + 0.3) : null) });   // a fart over the fire pit = a fireball
     const ring = new THREE.Group(); ring.position.copy(this.fireC); scene.add(ring);
     const stone = toonMat(0x8a8f99);
     for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2, s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22), stone); s.position.set(Math.cos(a) * 0.85, 0.12, Math.sin(a) * 0.85); s.rotation.set(k, k * 2, 0); ring.add(s); }

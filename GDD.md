@@ -77,6 +77,16 @@ will-o'-wisps, frogs), farm 5 a big frozen lake + a snowy mountain (the crown ne
   camera, smoke, eat, dance seated, pass the joint (G), an old TV. Very drunk: Q = throw up (blasts you backward).
 - Next: furniture and things to do inside every building; full controller support.
 
+## Session 25 additions (2026-11-19)
+- **Fart + fire = fireball**: a fart next to anything burning (the BBQ grill, a lit fireplace, an oven baking, a
+  jack-o'-lantern, a lighter / joint / cigarette — your own too) goes up: boom, everyone close flies and comes out black
+  with soot; Bob next to it lands on his back with a black face and drops the pig he carries (a carried pig farting by
+  the grill = a way out). Missions: make one, blow Bob up with one.
+- **Sinks**: RMB = the tap; left running it overflows and the floor floods — Bob hears the water, comes to shut it and
+  slips on the wet floor (mission). A can / bucket under the tap fills.
+- **Fireplace** (in the barns): RMB = light it; things thrown in burn up; smoke out of the top.
+- Bob can step up onto low floors now (he couldn't get into the barns).
+
 ## Active hands (2026-11-18, user: "not mini-games — the pig physically takes the filter, the paper, puts the filter on the paper, pours the stuff in and rolls it; like Burglin' Gnomes / Grr Grr Gnomes: the hands reach out, the thing sticks to them, you move it and it snaps where it goes — everywhere in the game")
 - **Aim**: what you hold goes where your crosshair is (within reach); it stays upright and faces where you face.
   **Mouse wheel** = reach further (arms stretch when standing, the neck stretches on four legs), back = normal.

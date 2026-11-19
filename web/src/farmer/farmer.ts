@@ -555,6 +555,7 @@ export class Farmer {
     const dx = target.x - this.vel.x, dz = target.z - this.vel.z, dl = Math.hypot(dx, dz), mx = BOB.accel * dt * (onIce ? BOB.ice : 1);
     if (dl > mx) { this.vel.x += (dx / dl) * mx; this.vel.z += (dz / dl) * mx; } else { this.vel.x = target.x; this.vel.z = target.z; }
     this.body.setLinvel(this.vel, true);
+    if (want !== 0 && !this.riding && !this.lying) this.stepUp(target);
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (sp > 0.4 && this.state !== 'stagger' && this.state !== 'lunge') this.yaw = dampAngle(this.yaw, Math.atan2(this.vel.x, this.vel.z), this.riding ? 4 : 8, dt);
     this.body.setRotation(new THREE.Quaternion().setFromAxisAngle(UP, this.yaw), true);
@@ -574,6 +575,24 @@ export class Farmer {
     }
   }
   private moveVel = new THREE.Vector3();
+  /**
+   * A low ledge in his way (a barn's raised floor at its door, a deck, a kerb ≤ 0.38 m): he steps up onto it. His
+   * capsule can't climb one by itself (it just pushes against the edge) — the nav grid treats anything that low as
+   * walkable, so without this he stood at a barn door forever (the record player, a running tap inside).
+   */
+  private stepUp(dir: THREE.Vector3) {
+    const sp = Math.hypot(dir.x, dir.z); if (sp < 0.3) return;
+    const fx = dir.x / sp, fz = dir.z / sp, reach = RAD + 0.22, feet = this.pos.y;
+    const low = raycast(v3.set(this.pos.x, feet + 0.06, this.pos.z), v2.set(fx, 0, fz), reach, L.STATIC, this.body);
+    if (!low || low.normal.y > 0.6) return;
+    if (raycast(v3.set(this.pos.x, feet + 0.44, this.pos.z), v2.set(fx, 0, fz), reach + 0.1, L.STATIC, this.body)) return;   // a wall, not a step
+    const top = raycast(v3.set(this.pos.x + fx * (low.dist + 0.12), feet + 0.44, this.pos.z + fz * (low.dist + 0.12)), v2.set(0, -1, 0), 0.5, L.STATIC, this.body);
+    if (!top || top.normal.y < 0.7) return;
+    const rise = 0.44 - top.dist;
+    if (rise < 0.03 || rise > 0.38) return;
+    const t = this.body.translation();
+    this.body.setTranslation({ x: t.x + fx * 0.05, y: t.y + rise + 0.02, z: t.z + fz * 0.05 }, true);
+  }
 
   postStep() {
     this.synced.capture();
@@ -2018,8 +2037,8 @@ export class Farmer {
     return true;
   }
 
-  /** He stepped in spilled milk (farm 3) / hurried across the ice (farm 5): feet up, flat on his back. */
-  slip(on: 'milk' | 'ice' = 'milk'): boolean {
+  /** He stepped in spilled milk (farm 3) / hurried across the ice (farm 5) / a flooded floor (a sink left running): feet up, flat on his back. */
+  slip(on: 'milk' | 'ice' | 'water' = 'milk'): boolean {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away' || this.riding) return false;
     if ((this.hitBy.get('slip') ?? -10) > this.now - 4) return false;
     this.hitBy.set('slip', this.now);
@@ -2089,6 +2108,29 @@ export class Farmer {
     const look = at.clone();
     this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
   }
+  /**
+   * A pig's fart went up in a fireball next to him (s25, host): flat on his back, a pig he carries is dropped, his face
+   * black with soot (smoking a while), then he hunts round the spot, fuming. Further out he only jumps (stagger).
+   */
+  fireballed(at: THREE.Vector3, close: boolean) {
+    if (this.asleep || this.state === 'off' || this.state === 'away') return false;
+    if (!close) return this.startle(at);
+    if (this.carrying) this.release(false);
+    this.sootUntil = this.now + 45;
+    this.voice('oops', 1);
+    this.raise('down');
+    G.events.push({ type: 'bobFireball' });
+    const dir = v2.set(this.pos.x - at.x + (Math.random() - 0.5) * 0.4, 0, this.pos.z - at.z + (Math.random() - 0.5) * 0.4).normalize();
+    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone());
+    const lv = this.body.linvel();
+    this.body.setLinvel({ x: lv.x + dir.x * 4.5, y: 6.5, z: lv.z + dir.z * 4.5 }, true);
+    this.parts.matchVelocity?.();
+    const look = at.clone();
+    this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
+    return true;
+  }
+  /** Soot on his face from a fireball (s25): until (his clock), synced. */
+  sootUntil = 0; private sootFx = 0;
   /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */
   startle(at: THREE.Vector3) {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
@@ -2209,7 +2251,7 @@ export class Farmer {
     const hp = this.grip.pos, bp = this.body.translation();
     const hl = this.carrying || this.heldProp ? v1.set(hp.x - bp.x, hp.y - bp.y, hp.z - bp.z).applyAxisAngle(UP, -this.yaw) : v1.set(0, 0, 0);
     n.push(Math.round(hl.x * 1000) / 1000, Math.round(hl.y * 1000) / 1000, Math.round(hl.z * 1000) / 1000);
-    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level, this.mudMarks);
+    n.push(this.hunt ? G.pigs.indexOf(this.hunt) : -1, this.heldProp ? 1 : 0, Math.round(this.heat * 10) / 10, this.level, this.mudMarks, Math.max(0, Math.round((this.sootUntil - this.now) * 10) / 10));
     s.push(this.state, this.activity, this.debugAnim ?? '');
   }
   netApply(n: number[], s: string[], nb: number[] = n, alpha = 0) {
@@ -2230,6 +2272,7 @@ export class Farmer {
     this.heat = n[at + 20] ?? 0;
     this.level = n[at + 21] ?? 0;   // the 'alert' event itself comes with the host's recorded events
     if ((n[at + 22] ?? 0) !== this.mudMarks) this.setMud(n[at + 22] ?? 0);
+    this.sootUntil = this.now + (n[at + 23] ?? 0);
     this.visual.root.visible = !this.asleep;
   }
   netPose(p: THREE.Vector3) { this.pos.copy(p).setY(p.y - CENTER); }
@@ -2265,8 +2308,13 @@ export class Farmer {
       yell: this.yell, lookYaw: this.lookYaw, carrying: holding, flashlight: fl, limp, rel: this.relQ, hand,
       weapon: this.weapon, fury: this.state === 'hot' || this.state === 'cool' ? 1 : this.level / 3,
       sip: anim === 'sip' ? (this.now - ((G.porch as Porch | null)?.sipT0 ?? 0)) / COFFEE.sip : 0,
-      fire: (G.porch as Porch | null)?.spat ?? 0,
+      fire: (G.porch as Porch | null)?.spat ?? 0, soot: Math.min(1, Math.max(0, (this.sootUntil - this.now) / 8)),
     });
+    // fresh soot: his hair still smokes a while
+    if (this.sootUntil - this.now > 30 && this.now > this.sootFx) {
+      this.sootFx = this.now + 0.28;
+      G.fx.puff(this.visual.headPos(v1).setY(v1.y + 0.35), { count: 1, color: 0x55524e, spread: 0.12, speed: 0.3, up: 1.1, life: 1.4, size: 0.35, grow: 1.2, drag: 1, alpha: 0.45 });
+    }
   }
 
   /** A cartoon storm cloud that follows grumpy Bob around (drizzle + an odd flicker). */

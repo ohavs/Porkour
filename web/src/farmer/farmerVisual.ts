@@ -14,6 +14,8 @@ export type FarmerAnim =
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
   angry: number; yell: number; lookYaw: number; carrying: boolean; flashlight?: boolean;
+  /** Soot from a fart fireball (0..1): a black face. */
+  soot?: number;
   /** Knocked down (real ragdoll): `rel` = physical rotations of head, armL, armR, legL, legR relative to the torso. */
   limp?: boolean; rel?: THREE.Quaternion[];
   /** Grip hand (model space) while he holds a pig: both arms reach for it. */
@@ -27,7 +29,7 @@ export interface FarmerPose {
 }
 
 const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', sip: 'paper', laundry: 'shirt' };
-const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a);
+const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a), SOOT = new THREE.Color(0x2e2a28);
 /** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
 const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock', 'sip', 'hot', 'dunk']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
@@ -405,7 +407,7 @@ export class FarmerVisual {
     const shut = p.anim === 'nap' || p.anim === 'hammock' || p.anim === 'down' || p.anim === 'cough' || p.anim === 'hot' || p.anim === 'dunk' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = damp(e.scale.y, shut, 30, dt);
     const green = p.anim === 'cough' ? 0.55 : 0, red = (p.fury ?? 0) * 0.42 * (0.85 + Math.sin(t * 5) * 0.15 * (p.fury ?? 0));
-    for (const f of R.face) f.mat.color.copy(f.base).lerp(RED, red).lerp(GREEN, green);
+    for (const f of R.face) f.mat.color.copy(f.base).lerp(RED, red).lerp(GREEN, green).lerp(SOOT, (p.soot ?? 0) * 0.78);
     // hat flies a little when knocked
     R.hat.position.y = 0.36 + (p.anim === 'down' ? Math.max(0, 0.25 - Math.abs(a - 0.3)) * 0.8 : 0);
     // tools
