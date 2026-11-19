@@ -51,6 +51,9 @@ export const EN_X = {
   'e.baconMe': 'BACON!', 'e.diedMe': 'Out of HP: the gulag!', 'e.diedOther': '{who} is in the gulag!', 'e.gulagOut': 'Free again!',
   'a.mines': 'Land mines', 'a.minesOn': 'Mines each round', 'a.mineMe': 'Mine in front of me', 'a.mineBob': 'Mine in front of Bob',
   'a.minesNew': 'New mines', 'a.tpGulag': 'Teleport: gulag', 'a.hurtMe': 'Hurt me (−30 HP)', 'a.killMe': 'Kill me (gulag)',
+  // the emote wheel (hold B)
+  'em.hula': 'Hula Hog', 'em.robot': 'Robo Pork', 'em.disco': 'Pork Fever', 'em.spin': 'Bacon Spin', 'em.chicken': 'Cluck Strut', 'em.wiggle': 'Wiggle',
+  'key.emote': 'Dances (hold)', 'key.pass': 'Pass it',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -97,4 +100,6 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'e.baconMe': '¡BEICON!', 'e.diedMe': 'Sin vida: ¡al gulag!', 'e.diedOther': '¡{who} está en el gulag!', 'e.gulagOut': '¡Libre otra vez!',
   'a.mines': 'Minas', 'a.minesOn': 'Minas en cada ronda', 'a.mineMe': 'Mina delante de mí', 'a.mineBob': 'Mina delante de Bob',
   'a.minesNew': 'Minas nuevas', 'a.tpGulag': 'Teletransporte: gulag', 'a.hurtMe': 'Hacerme daño (−30 PV)', 'a.killMe': 'Matarme (gulag)',
+  'em.hula': 'Hula cerdito', 'em.robot': 'Robo-cerdo', 'em.disco': 'Fiebre porcina', 'em.spin': 'Giro beicon', 'em.chicken': 'Baile del pollo', 'em.wiggle': 'Meneíto',
+  'key.emote': 'Bailes (mantén)', 'key.pass': 'Pásalo',
 };

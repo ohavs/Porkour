@@ -30,6 +30,10 @@ export interface PigInput {
   reach: number; tilt: boolean;
   /** First person: the body always faces where the camera looks (the hooves / snout work where you look). */
   face?: boolean;
+  /** Emote wheel: start this dance (1..7; 0 = none) — a one-step press. */
+  emote?: number;
+  /** The couch: pass what I hold (a joint…) to the pig next to me — a one-step press. */
+  passP?: boolean;
 }
 export const emptyInput = (): PigInput => ({
   mx: 0, mz: 0, yaw: 0, pitch: 0, jump: false, sprint: false, fart: false, stand: false, wallow: false, grab: false, attack: false,
@@ -48,6 +52,9 @@ export interface RemotePose { x: number; y: number; z: number; vx: number; vy: n
 export const HP = { max: 100, regenDelay: 9, regen: 5, shot: 34, bull: 25, bang: 20 };
 /** Mine victims land as a strip of bacon for … s. */
 export const BACON = { time: 5.5 };
+
+/** The breakdance spin is done lying on the back (game/emotes.ts ids). */
+export const DANCE_SPIN = 4;
 
 export const PIG = {
   mass: 30, walk: 4.8, standWalk: 3.5, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
@@ -180,6 +187,22 @@ export class Pig implements Holdable {
   /** 1 = high, 2 = drunk, 0 = sober. Level (0..1.3) kicks in over 5 s from buzzFrom, fades over 25 s after buzzUntil. */
   buzzKind = 0; buzzLvl = 0; buzzFrom = 0; buzzUntil = 0;
   private lagX = 0; private lagZ = 0;
+  // ---- dancing (the emote wheel: game/emotes.ts); synced
+  danceId = 0; danceAt = 0;
+  /** Start a dance (host): free hooves, on two legs (the spin is on its back) — any move / action stops it. */
+  startDance(id: number) {
+    if (this.mode !== 'normal' || this.heldBy || this.out || this.gulag) return;
+    if (this.held) this.release(false);
+    if (this.handle) this.letGo();
+    this.danceId = id; this.danceAt = this.now;
+    if (id === DANCE_SPIN) { if (this.standing) this.toggleStand(); } else if (!this.standing) this.toggleStand();
+    G.events.push({ type: 'dance', who: this, why: String(id) });
+  }
+  private danceStop(inp: PigInput) {
+    if (!this.danceId) return;
+    if (this.mode !== 'normal' || Math.hypot(inp.mx, inp.mz) > 0.1 || inp.jumpP || inp.fartP || inp.sprintP || inp.grabP || inp.attackP || inp.wallowP || inp.standP || this.held)
+      this.danceId = 0;
+  }
   // ---- health (HP) and bacon
   hp = HP.max; private hurtAt = -100;
   /** Bacon (blown up by a mine): lying there as a sizzling strip until then; `baconArm` = it turns to bacon when it lands. */
@@ -375,6 +398,9 @@ export class Pig implements Holdable {
     this.jumpBuf = inp.jumpP ? 0.14 : this.jumpBuf - dt;
     if (!this.sprinting) this.rammed.clear();
 
+    // --- dancing: an emote starts it, anything else stops it (standing up / down is part of the dance, not a stop)
+    this.danceStop(inp);
+    if (inp.emote) { this.startDance(inp.emote); inp.standP = false; }
     // --- abilities
     if (inp.standP && this.mode === 'normal') this.toggleStand();
     if (inp.wallowP && this.mode === 'normal' && this.grounded) this.startWallow();
@@ -1304,7 +1330,7 @@ export class Pig implements Holdable {
     n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
     n.push(this.jailUntil, this.frozenUntil, this.flying ? 1 : 0, ...this.buzzState());
     n.push(this.handle ? this.handle.id : -1, this.mouthAt, this.touchAt, Math.round(this.touchP.x * 100) / 100, Math.round(this.touchP.y * 100) / 100, Math.round(this.touchP.z * 100) / 100);
-    n.push(Math.round(this.hp * 10) / 10, this.baconUntil, this.gulag ? 1 : 0);
+    n.push(Math.round(this.hp * 10) / 10, this.baconUntil, this.gulag ? 1 : 0, this.danceId, this.danceAt);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -1359,7 +1385,7 @@ export class Pig implements Holdable {
       this.mouthAt = n[j + 9];
       if (n[j + 10] !== undefined) { this.touchAt = n[j + 10]; this.touchP.set(n[j + 11], n[j + 12], n[j + 13]); }
     }
-    if (n[j + 14] !== undefined) { this.hp = n[j + 14]; this.baconUntil = n[j + 15]; this.gulag = n[j + 16] === 1; }
+    if (n[j + 14] !== undefined) { this.hp = n[j + 14]; this.baconUntil = n[j + 15]; this.gulag = n[j + 16] === 1; this.danceId = n[j + 17] ?? 0; this.danceAt = n[j + 18] ?? 0; }
   }
   /** Player side: the host's pig is flying (admin). */
   netFly = false;
@@ -1407,6 +1433,7 @@ export class Pig implements Holdable {
     this.jumpBuf = inp.jumpP ? 0.14 : this.jumpBuf - dt;
     const normal = this.mode === 'normal' && this.now >= this.predWallow;
     if (inp.standP && normal) this.setStanding(!this.standing);
+    if (inp.emote && normal) this.setStanding(inp.emote !== DANCE_SPIN);   // a dance: on two legs at once (the host starts it)
     if (inp.sprintP && normal && this.now >= this.sprintReady) {
       this.sprintUntil = this.predSprintUntil = this.now + PIG.sprintDur; this.sprintReady = this.predSprint = this.now + PIG.sprintCd * (this.boosted('energy') ? SNACK.sprintCd : 1);
       this.setStanding(false);
@@ -1494,7 +1521,8 @@ export class Pig implements Holdable {
       act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',
       actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
       cig: this.smoking, strong: this.boosted('spinach'),
-      lookAt: this.glance(), red: this.smoking ? 1 : clamp(this.high * 1.6, 0, 1), bacon: this.bacon,
+      lookAt: this.danceId ? null : this.glance(), red: this.smoking ? 1 : clamp(this.high * 1.6, 0, 1), bacon: this.bacon,
+      dance: this.danceId && this.mode === 'normal' ? this.danceId : 0, danceT: this.now - this.danceAt,
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,

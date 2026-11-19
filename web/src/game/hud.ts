@@ -123,7 +123,7 @@ export class Hud {
     this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
-      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + row('V', 'help.view') + `<div class="keys">${t('help.keys')}</div>`;
+      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + row('V', 'help.view') + row('B', 'key.emote' as Key) + row('G', 'key.pass' as Key) + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);

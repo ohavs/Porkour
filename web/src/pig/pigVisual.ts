@@ -44,7 +44,101 @@ export interface PigPose {
   red?: number;
   /** Blown up by a mine: a sizzling strip of bacon lies there instead of the pig. */
   bacon?: boolean;
+  /** Dancing (the emote wheel: game/emotes.ts ids) and for how long (s). */
+  dance?: number; danceT?: number;
 }
+
+/** One frame of a dance: body offsets / turns, head, hind legs, each hoof's target (from its shoulder, pig model space:
+ * +x = the pig's left, +y up, +z forward), front legs when it isn't standing, blissful eyes. */
+interface DanceFrame {
+  hipX: number; hipY: number; swayY: number; swayZ: number; upperY: number; upperZ: number; upperX: number;
+  headX: number; headY: number; headZ: number; legL: number; legR: number; legLz: number; legRz: number;
+  arm: [THREE.Vector3, THREE.Vector3]; frontL: number; frontR: number; rate: number; eyes: number; back: boolean; tail: number;
+}
+const DF: DanceFrame = { hipX: 0, hipY: 0, swayY: 0, swayZ: 0, upperY: 0, upperZ: 0, upperX: 0, headX: 0, headY: 0, headZ: 0, legL: 0, legR: 0, legLz: 0, legRz: 0,
+  arm: [new THREE.Vector3(), new THREE.Vector3()], frontL: 0, frontR: 0, rate: 22, eyes: 1, back: false, tail: 4 };
+const sm = (x: number) => { const k = clamp(x, 0, 1); return k * k * (3 - 2 * k); };
+/** Robo Pork's poses: [left hoof, right hoof] (from the shoulder), head yaw / pitch, torso twist. */
+const ROBO: [number[], number[], number, number, number][] = [
+  [[0.22, 0.2, 0.08], [0.02, -0.26, 0.04], 0.55, 0, 0.25],
+  [[-0.02, -0.26, 0.04], [-0.22, 0.2, 0.08], -0.55, 0, -0.25],
+  [[0.02, 0.0, 0.34], [-0.02, 0.0, 0.34], 0, 0.25, 0],
+  [[0.24, 0.02, 0.0], [-0.06, -0.24, 0.1], 0.35, -0.15, 0.35],
+  [[0.12, 0.34, 0.06], [-0.12, 0.34, 0.06], 0, -0.35, 0],
+  [[0.04, 0.04, 0.3], [-0.2, -0.1, -0.02], -0.4, 0.1, -0.3],
+];
+
+/**
+ * The dances (game/emotes.ts): each a little choreography on a beat. 1 Hula Hog — hips round, both hooves wave like
+ * the sea; 2 Robo Pork — snapping robot poses with servo clicks; 3 Pork Fever — disco point up / down, hip bounce, a
+ * spin every 4 beats; 4 Bacon Spin — on its back, spinning, legs pedalling, a freeze now and then; 5 Cluck Strut —
+ * chicken wings, pecking head, high steps, a clap; 6 Wiggle — turns its back and shakes its bum, looking over its shoulder.
+ */
+function danceFrame(id: number, t: number): DanceFrame {
+  const D = DF;
+  D.hipX = D.hipY = D.swayY = D.swayZ = D.upperY = D.upperZ = D.upperX = D.headX = D.headY = D.headZ = 0;
+  D.legL = D.legR = D.legLz = D.legRz = D.frontL = D.frontR = 0; D.rate = 22; D.eyes = 1; D.back = false; D.tail = 6;
+  const [L, R] = D.arm;
+  const TAU = Math.PI * 2;
+  switch (id) {
+    case 1: {   // Hula Hog (100 bpm): hips circle, hooves flow side to side
+      const b = t * (100 / 60), w = Math.sin(TAU * b / 2), c = Math.cos(TAU * b / 2);
+      D.hipX = w * 0.07; D.hipY = -0.03 + Math.abs(Math.sin(Math.PI * b)) * 0.025; D.swayZ = w * 0.13; D.upperZ = -w * 0.12; D.upperX = c * 0.05;
+      D.headZ = -w * 0.22; D.headX = -0.1; D.eyes = 0.45;
+      L.set(0.08 + w * 0.26, 0.02 + Math.sin(TAU * b + 0.5) * 0.07, 0.2);
+      R.set(-0.08 + w * 0.26, 0.02 + Math.sin(TAU * b + 2.1) * 0.07, 0.2);
+      D.legL = Math.max(0, w) * 0.25; D.legR = Math.max(0, -w) * 0.25; D.tail = 3;
+      break;
+    }
+    case 2: {   // Robo Pork (120 bpm, a pose every half beat): snap… hold
+      const b = t * (120 / 60) * 2, k = Math.floor(b), f = b - k;
+      const A = ROBO[k % ROBO.length], B = ROBO[(k + ROBO.length - 1) % ROBO.length], m = sm(f / 0.18);
+      L.set(B[0][0] + (A[0][0] - B[0][0]) * m, B[0][1] + (A[0][1] - B[0][1]) * m, B[0][2] + (A[0][2] - B[0][2]) * m);
+      R.set(B[1][0] + (A[1][0] - B[1][0]) * m, B[1][1] + (A[1][1] - B[1][1]) * m, B[1][2] + (A[1][2] - B[1][2]) * m);
+      D.headY = B[2] + (A[2] - B[2]) * m; D.headX = B[3] + (A[3] - B[3]) * m; D.upperY = B[4] + (A[4] - B[4]) * m;
+      D.hipY = -0.02 * Math.floor(k / 2 % 2); D.rate = 60; D.eyes = 1.15; D.tail = 0;
+      D.legL = k % 4 === 1 ? 0.35 : 0; D.legR = k % 4 === 3 ? 0.35 : 0;
+      break;
+    }
+    case 3: {   // Pork Fever (110 bpm): point up, point down; a spin every 4th beat
+      const b = t * (110 / 60), k = Math.floor(b), f = b - k, up = k % 2 === 0;
+      const spin = k % 8 === 7 ? sm(f) * TAU : 0;
+      D.swayY = spin; D.hipY = -0.045 * Math.abs(Math.cos(Math.PI * b)); D.swayZ = (up ? 1 : -1) * 0.1 * sm(f * 3);
+      R.copy(up ? _danceUp : _danceDown); L.set(0.16, -0.2, -0.04);   // the right hoof points, the left on the hip
+      D.headX = up ? -0.35 : 0.3; D.headY = up ? -0.3 : 0.2; D.upperZ = up ? -0.12 : 0.1;
+      D.legL = up ? 0.15 : 0; D.legR = up ? 0 : 0.15;
+      break;
+    }
+    case 4: {   // Bacon Spin: on its back, spinning, legs pedalling; every 2.6 s a freeze pose
+      const cyc = t % 2.6, frz = cyc > 2.1;
+      D.back = true;
+      D.swayY = (Math.floor(t / 2.6) * 2.1 + Math.min(cyc, 2.1)) * 7.5;
+      const ped = frz ? 0 : t * 13;
+      D.legL = frz ? -1.2 : Math.sin(ped) * 0.9; D.legR = frz ? 0.6 : Math.sin(ped + Math.PI) * 0.9;
+      D.frontL = frz ? -1.4 : Math.sin(ped + 1.6) * 0.8; D.frontR = frz ? 0.3 : Math.sin(ped + 4.7) * 0.8;
+      D.headY = frz ? 0.5 : Math.sin(t * 9) * 0.25; D.eyes = frz ? 0.4 : 1; D.tail = 14;
+      break;
+    }
+    case 5: {   // Cluck Strut (130 bpm): flapping wings, pecking, high steps; a clap every 4 beats
+      const b = t * (130 / 60), k = Math.floor(b), f = b - k, flap = Math.abs(Math.sin(TAU * b)), clap = k % 4 === 3;
+      if (clap) { const c = Math.sin(Math.PI * clamp(f * 2, 0, 1)); L.set(0.04 - c * 0.06, 0.06, 0.24); R.set(-0.04 + c * 0.06, 0.06, 0.24); }
+      else { L.set(0.12 + flap * 0.12, -0.04 + flap * 0.06, -0.03); R.set(-0.12 - flap * 0.12, -0.04 + flap * 0.06, -0.03); }
+      D.headX = Math.sin(TAU * b) * 0.35; D.hipY = -0.05 * Math.abs(Math.sin(Math.PI * b)); D.swayZ = Math.sin(TAU * b * 2) * 0.07;
+      D.legL = k % 2 === 0 ? Math.sin(Math.PI * f) * 0.7 : 0; D.legR = k % 2 === 1 ? Math.sin(Math.PI * f) * 0.7 : 0; D.rate = 34;
+      break;
+    }
+    case 6: {   // Wiggle: back to the camera, bum shaking, glancing back over the shoulder
+      const turn = sm(t / 0.4);
+      D.swayY = turn * Math.PI; D.swayZ = Math.sin(t * 15) * 0.16 * turn; D.hipX = Math.sin(t * 15) * 0.05 * turn; D.hipY = -0.06;
+      D.upperX = 0.25 * turn; D.headY = (Math.sin(t * 1.3) > 0 ? 1.1 : -1.1) * turn; D.headX = -0.15;
+      L.set(0.14, -0.16, 0.08); R.set(-0.14, -0.16, 0.08); D.tail = 22; D.eyes = 1.1;
+      D.legL = Math.max(0, Math.sin(t * 15)) * 0.2; D.legR = Math.max(0, -Math.sin(t * 15)) * 0.2;
+      break;
+    }
+  }
+  return D;
+}
+const _danceUp = new THREE.Vector3(-0.2, 0.42, 0.16), _danceDown = new THREE.Vector3(0.16, -0.24, 0.12);
 
 /** A strip of bacon with googly eyes and a curly tail (what a pig becomes when it lands after a mine). */
 function makeBacon() {
@@ -89,10 +183,32 @@ export class PigVisual {
   private lastGrounded = true; private blinkAt = 2;
   /** Eyes: the current idle dart (yaw / pitch, rad) and when the next one starts / this one ends; eyes' smoothed angles. */
   private baconG: THREE.Group | null = null;
+  private backT = 0; private danceBeat = -1; private danceWas = 0;
   private dartAt = 1; private dartEnd = 0; private dartY = 0; private dartX = 0; private eyeY = 0; private eyeX = 0; private redOn = false;
   private limpT = 0; private lf = 0; private ls = 0;
   centerHeight = 0.36;
   outfit: Outfit = defaultOutfit();
+  /** The beat of a dance, as sounds (every browser hears the dancer near it). */
+  private danceSounds(p: PigPose) {
+    const id = p.mode === 'normal' ? p.dance ?? 0 : 0, t = p.danceT ?? 0;
+    if (id !== this.danceWas) { this.danceWas = id; this.danceBeat = -1; }
+    if (!id) return;
+    const at = this.root.position;
+    const beat = (bpm: number, sub = 1) => Math.floor(t * (bpm / 60) * sub);
+    const k = id === 1 ? beat(100) : id === 2 ? beat(120, 2) : id === 3 ? beat(110) : id === 4 ? Math.floor(t * 7.5 / (Math.PI * 2) + (t % 2.6 > 2.1 ? 100 : 0)) : id === 5 ? beat(130) : Math.floor(t / 0.6);
+    if (k === this.danceBeat) return;
+    const first = this.danceBeat < 0; this.danceBeat = k;
+    if (first) return;
+    switch (id) {
+      case 1: if (k % 4 === 0) G.audio.play('oink', { pos: at, vol: 0.35, pitch: 1.35, minGap: 0.5 }); break;
+      case 2: G.audio.play('tick', { pos: at, vol: 0.45, pitch: 2.4 + (k % 3) * 0.2 }); if (k % 8 === 0) G.audio.play('unlock', { pos: at, vol: 0.3, pitch: 2.2 }); break;
+      case 3: if (k % 8 === 7) G.audio.play('whoosh', { pos: at, vol: 0.5, pitch: 1.2 }); else if (k % 2 === 0) G.audio.play('oink', { pos: at, vol: 0.3, pitch: 1.5, minGap: 0.3 }); break;
+      case 4: G.audio.play(k >= 100 ? 'oink' : 'whoosh', { pos: at, vol: 0.4, pitch: k >= 100 ? 1.3 : 1.4, minGap: 0.15 }); break;
+      case 5: if (k % 4 === 3) G.audio.play('slap', { pos: at, vol: 0.45, pitch: 1.7 }); else if (k % 2 === 0) G.audio.play('cluck', { pos: at, vol: 0.4, pitch: 0.9, minGap: 0.3 }); break;
+      case 6: if (k % 2 === 0) G.audio.play('oink', { pos: at, vol: 0.4, pitch: 1.6, minGap: 0.4 }); break;
+    }
+  }
+
   /** Bacon: the pig hides, a strip of bacon lies flat under where it is (its heading), sizzling, eyes rolling. */
   private baconStep(p: PigPose) {
     const on = !!p.bacon;
@@ -233,12 +349,19 @@ export class PigVisual {
     this.sway.position.y = -this.centerHeight;
     this.sway.rotation.x = this.lf;
     this.sway.rotation.z = -this.ls;
+    // dancing: the whole body moves on the beat
+    const dz = p.dance && p.mode === 'normal' ? danceFrame(p.dance, p.danceT ?? 0) : null;
+    this.danceSounds(p);
+    this.sway.rotation.y = dz ? dz.swayY : damp(this.sway.rotation.y, 0, 12, dt);
+    if (dz) { this.sway.rotation.z += dz.swayZ; this.base.position.x = dz.hipX; } else this.base.position.x = damp(this.base.position.x, 0, 12, dt);
 
     // hinge
     R.upper.position.lerpVectors(PIVOT, STAND_POS, sT);
     R.upper.rotation.x = -STAND_ANGLE * sT + (moving ? Math.sin(this.phase * 2) * 0.04 * amp : 0) + (p.punch ? Math.sin(p.punch * Math.PI) * 0.15 * sT : 0);
     R.upper.rotation.z = moving ? Math.sin(this.phase) * 0.06 * amp * (sT * 2 + 0.6) : 0;
-    this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0);
+    this.base.position.y = -this.centerHeight + (moving ? Math.abs(Math.sin(this.phase)) * 0.05 * amp : 0) + (dz ? dz.hipY : 0);
+    R.upper.rotation.y = dz ? dz.upperY : 0;
+    if (dz) { R.upper.rotation.z += dz.upperZ; R.upper.rotation.x += dz.upperX; }
     // headbutt (four legs): the body lunges, the head ducks and rams
     const butt = p.punch && sT < 0.5 && !p.holding ? Math.sin(clamp(p.punch, 0, 1) * Math.PI) : 0;
     if (butt) { R.upper.position.z += butt * 0.22; R.upper.rotation.x += butt * 0.18; }
@@ -274,6 +397,10 @@ export class PigVisual {
         A[1].elbow.rotation.x = damp(A[1].elbow.rotation.x, Math.max(0, Math.cos(this.phase)) * 0.85 * amp, 20, dt);
       }
     }
+    if (dz && !flail) {
+      set(R.hindL, dz.legL, dz.legLz, 26); set(R.hindR, dz.legR, dz.legRz, 26);
+      if (dz.back) { set(R.frontL, dz.frontL, 0.3, 26); set(R.frontR, dz.frontR, -0.3, 26); }
+    }
     R.hindL.position.x = 0.2 * (1 + sT * 0.15); R.hindR.position.x = -0.2 * (1 + sT * 0.15);
 
     // head: looks ahead when standing; reaches for what it holds (four legs)
@@ -292,6 +419,7 @@ export class PigVisual {
     const act = flail ? '' : p.act ?? '', ak = clamp(p.actK ?? 0, 0, 1);
     if (act === 'eat') _q.multiply(_qi.setFromEuler(_e.set(0.25 * sT + Math.sin(p.t * 19) * 0.16, 0, Math.sin(p.t * 7) * 0.08)));
     if (act === 'puff') _q.multiply(_qi.setFromEuler(_e.set(-Math.sin(ak * Math.PI) * 0.3, 0, 0)));
+    if (dz) _q.multiply(_qi.setFromEuler(_e.set(dz.headX, dz.headY, dz.headZ)));
     R.head.quaternion.slerp(_q, 1 - Math.exp(-16 * dt));
     // four legs, holding / working far out in front (the mouse wheel): the neck stretches toward it
     let nx = 0;
@@ -330,6 +458,8 @@ export class PigVisual {
           rate = 30; grip = 0;
         } else if (air) {
           T.set(S.x + side * 0.16, S.y + 0.22, S.z + 0.08); grip = 0.35;
+        } else if (dz) {
+          T.copy(S).add(dz.arm[i]); rate = dz.rate; grip = 0.2;
         } else if (punchK > 0 && i === 1) {
           T.set(S.x + 0.1 * punchK, S.y + 0.06, S.z + 0.16 + 0.46 * punchK); rate = 45; grip = 0;
         } else if (act === 'puff' && i === 1 && p.cig) {
@@ -384,16 +514,18 @@ export class PigVisual {
     // ears flop with speed / bounce, tail wiggles, blink
     const flop = 0.55 + (moving ? Math.sin(this.phase * 2) * 0.25 * amp : 0) - (air ? 0.5 : 0) + (flail ? Math.sin(p.t * 17) * 0.4 : 0);
     set(R.earL, flop, -0.55 + (flail ? Math.sin(p.t * 13) * 0.3 : 0), 14); set(R.earR, flop, 0.55 - (flail ? Math.sin(p.t * 11) * 0.3 : 0), 14);
-    R.tail.rotation.y = Math.sin(p.t * (moving ? 14 : 4)) * (moving ? 0.5 : 0.25);
+    R.tail.rotation.y = Math.sin(p.t * (dz ? dz.tail : moving ? 14 : 4)) * (moving || dz ? 0.5 : 0.25);
     if (p.t > this.blinkAt) this.blinkAt = p.t + 2 + Math.random() * 3;
     const red = clamp(p.red ?? 0, 0, 1);
-    const blink = Math.min(this.blinkAt - p.t < 0.12 ? 0.1 : 1, 1 - red * 0.42);   // stoned: droopy lids
+    const blink = Math.min(this.blinkAt - p.t < 0.12 ? 0.1 : dz ? dz.eyes : 1, 1 - red * 0.42);   // stoned: droopy lids
     for (const e of R.eyes) e.scale.y = flail ? 0.25 : damp(e.scale.y, blink, 30, dt);
     this.lookStep(p, dt, red);
 
     // wallow: roll onto the back (around the body's middle, not the feet)
-    this.roll.rotation.z = this.rollT * Math.PI * (1 + Math.sin(p.t * 9) * 0.04 * this.rollT);
-    this.roll.position.y = this.centerHeight + this.rollT * 0.12;
+    this.backT = damp(this.backT, dz?.back ? 1 : 0, 9, dt);   // (the breakdance spin is on its back too)
+    const rT = Math.max(this.rollT, this.backT);
+    this.roll.rotation.z = rT * Math.PI * (1 + Math.sin(p.t * 9) * 0.04 * this.rollT);
+    this.roll.position.y = this.centerHeight + rT * 0.12;
 
     // outfit animation
     for (const a of this.animParts) {

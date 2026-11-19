@@ -28,6 +28,7 @@ import type { Hammock } from '../world/hammock';
 import type { Porch } from '../world/porch';
 import { Mines } from '../world/mines';
 import { Gulag } from '../world/gulag';
+import { EmoteWheel } from './emotes';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -86,6 +87,8 @@ export class Game {
   mines!: Mines;
   /** The pigs' gulag (dead pigs work their way out), when the farm has room for it. */
   gulag: Gulag | null = null;
+  /** The emote wheel (hold B) and the dance it picked (sent with the next controls). */
+  wheel = new EmoteWheel(); private pendingEmote = 0;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -197,9 +200,12 @@ export class Game {
     this.porch?.reset();   // his mug in its spot on the table
     if (!this.gfx.camera.parent) this.gfx.scene.add(this.gfx.camera);   // so first-person arms (camera children) draw
     this.fpHands = new FpHands(this.gfx.camera);
+    this.wheel.onPick = (id) => { if (id) this.pendingEmote = id; };
     this.input.onPress = (b) => {
       if (!this.running || this.menu.blocking) return;
       if (b === 'view') { if (this.mode === 'play' && !this.lockpick.isOpen) this.toggleView(); return; }
+      if (b === 'emote') { if (!this.lockpick.isOpen && !this.local.out) this.wheel.open(); return; }
+      if (this.wheel.isOpen && b === 'attack') { this.pendingEmote = this.wheel.close(); this.input.clearPresses(); return; }   // click = pick
       if (this.lockpick.isOpen) {
         if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab') this.lockpick.close();
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
@@ -265,6 +271,8 @@ export class Game {
       inp.standP = pressed.has('stand'); inp.wallowP = pressed.has('wallow'); inp.grabP = pressed.has('grab');
       inp.grabR = released.has('grab'); inp.oinkP = pressed.has('oink');
       inp.attackP = pressed.has('attack'); inp.attackR = released.has('attack');
+      inp.passP = pressed.has('pass');
+      if (this.pendingEmote) { inp.emote = this.pendingEmote; this.pendingEmote = 0; }
     }
     if (this.mode === 'lobby') {
       // lobby: W = away from the fixed camera; the pig faces where it walks, the pointer when it holds something /
@@ -396,7 +404,7 @@ export class Game {
     }
     host?.endStep();
     if (G.net !== 'client') HANDS.stepHost(FIXED);
-    if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; }
+    if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.emote = 0; this.scripted.passP = false; }
   }
 
   private handleEvents() {
@@ -877,7 +885,7 @@ export class Game {
     this.pacc += dt;
     let n = 0;
     while (this.pacc >= FIXED && n < 8) {
-      L.input = n === 0 ? pin : { ...pin, ...NO_PRESSES };
+      L.input = n === 0 ? pin : { ...pin, ...NO_PRESSES, emote: 0, passP: false };
       G.mute = true;
       try { L.predictStep(FIXED); } finally { G.mute = false; }
       step();
@@ -934,6 +942,12 @@ export class Game {
     const dt = Math.min(0.1, (nowMs - this.last) / 1000);
     this.last = nowMs;
     this.input.poll();
+    // the emote wheel: steer with the mouse / stick (lobby: the pointer), let go of B = dance
+    if (this.wheel.isOpen) {
+      if (this.input.free) this.wheel.feed(0, 0), this.wheel.stick(this.input.mouseX * innerWidth / innerHeight * 3, -this.input.mouseY * 3);
+      else { this.wheel.feed(this.input.lookX / this.input.sensitivity / 260, this.input.lookY / this.input.sensitivity / 260 * (this.input.invertY ? -1 : 1)); this.wheel.stick(this.input.padRX, this.input.padRY); }
+      if (!this.input.held.has('emote') || this.menu.blocking) { const id = this.wheel.close(); if (id && !this.menu.blocking) this.pendingEmote = id; }
+    }
     const pick = this.lockpick;
     if (pick.isOpen) {
       const still = this.pickOn ? this.pickOn.state === 'locked' && this.pickOn.atLatch(this.local, 0.6) : this.farm.cage.canPick(this.local, 0.6);
@@ -947,7 +961,7 @@ export class Game {
         this.predict(dt, inp);
         this.net.sendInput(inp, this.local.predicting ? this.local.pose() : null);
         if (!this.local.predicting) this.local.input = inp;   // (the HUD's crosshair pick reads it)
-        if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; }   // test hook: a press is one frame
+        if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.emote = 0; this.scripted.passP = false; }   // test hook: a press is one frame
       }
       alpha = Math.max(0, this.net.frame(dt));
       this.carryAlong();
@@ -985,7 +999,7 @@ export class Game {
     for (const s of this.farm.spinners) s.obj.rotateY(s.speed * dt);
     for (const u of this.farm.updaters) u(dt, G.time);
     const lp = this.local.visual.root.position;
-    const look = this.running && !this.menu.blocking;
+    const look = this.running && !this.menu.blocking && !this.wheel.isOpen;
     // working with the hooves (a light thing / a machine part): the camera looks a little past the pig, at the work
     const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
     if (this.mode === 'lobby') this.stage.placeCamera(this.gfx.camera);

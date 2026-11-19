@@ -6,14 +6,15 @@
  * grab = RMB (pick up / drop), attack = LMB (click = hit, hold = throw what you hold), tilt = R (tip what you hold: pour),
  * view = V (first ↔ third person; local only, never sent).
  */
-export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink' | 'tilt' | 'view';
+export type Button = 'jump' | 'sprint' | 'fart' | 'stand' | 'wallow' | 'grab' | 'attack' | 'oink' | 'tilt' | 'view' | 'emote' | 'pass';
 
 const KEYS: Record<string, Button> = {
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', KeyQ: 'fart', KeyE: 'stand',
   KeyC: 'wallow', ControlLeft: 'wallow', KeyF: 'oink', KeyR: 'tilt', KeyV: 'view',
+  KeyB: 'emote', KeyG: 'pass',
 };
 /** Gamepad: RB = tip (pour), R3 = oink, D-pad up / down = reach further / back, View (Back) = first ↔ third person. */
-const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'tilt', 11: 'oink', 8: 'view' };
+const PAD: Partial<Record<number, Button>> = { 0: 'jump', 1: 'fart', 2: 'wallow', 3: 'stand', 6: 'grab', 7: 'attack', 4: 'sprint', 10: 'sprint', 5: 'tilt', 11: 'oink', 8: 'view', 14: 'emote', 15: 'pass' };
 
 export class Input {
   moveX = 0; moveY = 0;        // -1..1, y = forward
@@ -30,6 +31,8 @@ export class Input {
   private lockedAt = 0;
   sensitivity = 0.0024;
   invertY = false;
+  /** Right stick this frame (the emote wheel picks with it on a gamepad). */
+  padRX = 0; padRY = 0;
   /** Mouse wheel: how far the arms / neck reach out (0 = normal … 1 = stretched). */
   reach = 0;
   onKey?: (code: string) => void;
@@ -72,7 +75,8 @@ export class Input {
       const dz = (v: number) => (Math.abs(v) < 0.15 ? 0 : v);
       const px = dz(pad.axes[0] ?? 0), py = dz(pad.axes[1] ?? 0);
       if (px || py) { x = px; y = -py; }
-      this.lookX += dz(pad.axes[2] ?? 0) * 0.05; this.lookY += dz(pad.axes[3] ?? 0) * 0.04;
+      this.padRX = dz(pad.axes[2] ?? 0); this.padRY = dz(pad.axes[3] ?? 0);
+      this.lookX += this.padRX * 0.05; this.lookY += this.padRY * 0.04;
       pad.buttons.forEach((btn, i) => {
         const b = PAD[i]; if (!b) return;
         const on = btn.pressed || btn.value > 0.5;

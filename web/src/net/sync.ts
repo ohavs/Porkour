@@ -72,6 +72,7 @@ export class NetHost {
       if (this.on.peers.get(id)?.slot !== slot) continue;
       const inp = { ...r.inp };
       PRESS.forEach((k, i) => (inp[k] = !!(r.presses & (1 << i))));
+      inp.emote = (r.presses >> 12) & 7; inp.passP = !!(r.presses & (1 << 15));   // (the press word's top bits: an emote, the couch's pass)
       r.presses = 0;
       return inp;
     }
@@ -304,6 +305,8 @@ export class NetClient {
   /** Every rendered frame: send controls (latched presses, ~30 Hz or at once on a press). */
   sendInput(inp: PigInput, pose: number[] | null = null) {
     PRESS.forEach((k, i) => { if (inp[k]) this.pending |= 1 << i; });
+    if (inp.emote) this.pending = (this.pending & ~(7 << 12)) | ((inp.emote & 7) << 12);
+    if (inp.passP) this.pending |= 1 << 15;
     let held = 0; HELD.forEach((k, i) => { if (inp[k]) held |= 1 << i; });
     const mx = Math.round(inp.mx * 127), mz = Math.round(inp.mz * 127);
     const a = (v: number) => (Number.isFinite(v) ? Math.max(-127, Math.min(127, Math.round(v * AIM))) : 0);
