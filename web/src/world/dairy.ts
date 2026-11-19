@@ -32,7 +32,7 @@ const BOB_T = { kind: 'farmer' as const };
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const inRect = (r: Rect, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
-const angDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+const angDiff = (a: number, b: number) => { const d = Math.atan2(Math.sin(b - a), Math.cos(b - a)); return Number.isFinite(d) ? d : 0; };   // (never a `while` wrap: an infinite angle = a frozen game)
 
 interface Puddle { x: number; z: number; t0: number; mesh: THREE.Mesh }
 
@@ -176,6 +176,7 @@ export class Dairy implements CritterBrain {
       if (pig.out || pig.cage || this.hits.has(pig) || pig.heldBy?.kind === 'farmer' || !near(pig.pos, 0.2) || Math.abs(pig.pos.y - p.y) > 1.6) continue;
       this.hits.add(pig);
       pig.knock(v1.set(fwd.x * 10 + (Math.random() - 0.5) * 3, 7.5, fwd.z * 10 + (Math.random() - 0.5) * 3), true);
+      pig.hurt(25, 'bull');
       G.audio.play('body', { pos: pig.pos, vol: 1, pitch: 0.8 });
       G.audio.play('squeal', { pos: pig.pos, vol: 1, minGap: 0.2 });
       G.fx.bits(v1.copy(pig.pos).setY(pig.pos.y + 0.4), { count: 14, color: 0xfff1a8, speed: 4, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });

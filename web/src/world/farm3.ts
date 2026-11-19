@@ -42,7 +42,7 @@ const CHORES: Chore[] = [
   { id: 'nap', at: [-24, -3.4], look: [-24, -8], anim: 'nap', dur: 26, view: 'nap' },
   { id: 'garden', at: [-9.4, -95], look: [-14, -95], anim: 'water', dur: 18, view: 'busy' },
   { id: 'creamery', at: [-35, -29.4], look: [-35, -33], anim: 'pour', dur: 16, view: 'busy' },
-  { id: 'paper', at: [-9.6, -80.6], look: [-7, -72], anim: 'read', dur: 20, view: 'busy' },
+  { id: 'paper', at: [-9.6, -80.6], look: [-7, -72], anim: 'read', dur: 30, view: 'paper' },
   { id: 'laundry', at: [-12, -76.6], look: [-12, -78], anim: 'laundry', dur: 14, view: 'busy' },
   { id: 'milk', at: [6.6, -15.2], look: [8.4, -15.2], anim: 'fix', dur: 16, view: 'busy' },
   { id: 'coffee', at: [14.5, -75.5], look: [11, -70], anim: 'coffee', dur: 16, view: 'busy' },

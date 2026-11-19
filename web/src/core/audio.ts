@@ -110,10 +110,12 @@ export class Audio {
     };
   }
 
+  private lf = new THREE.Vector3(); private lu = new THREE.Vector3();
   setListener(cam: THREE.Camera) {
     const l = this.ctx.listener; const p = cam.position;
-    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
-    const u = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+    if (!Number.isFinite(p.x + p.y + p.z)) return;   // (a NaN camera must not throw every frame)
+    const f = this.lf.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    const u = this.lu.set(0, 1, 0).applyQuaternion(cam.quaternion);
     if (l.positionX) {
       l.positionX.value = p.x; l.positionY.value = p.y; l.positionZ.value = p.z;
       l.forwardX.value = f.x; l.forwardY.value = f.y; l.forwardZ.value = f.z;

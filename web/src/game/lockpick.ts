@@ -43,6 +43,19 @@ export class Lockpick {
   private band!: SVGRectElement;
   private o: PickOpts = { pins: 4, zone: 0.16, speed: 1.4 };
   private set = 0; private h = 0; private dir = 1; private wait = 0; private speedK = 1;
+  /**
+   * User: "every pin comes up at the same speed — too easy". Each pin has its own up / down speeds, every stroke
+   * varies a little more, and now and then it hesitates at the bottom (not too much: it stays readable).
+   */
+  private upK = 1; private downK = 1; private strokeK = 1;
+  private newPin() {
+    this.upK = 0.75 + Math.random() * 0.6; this.downK = 0.75 + Math.random() * 0.6; this.strokeK = 1;
+    this.speedK = 0.9 + Math.random() * 0.25;
+  }
+  private bounce() {
+    this.strokeK = 0.85 + Math.random() * 0.3;
+    if (this.dir === 1 && Math.random() < 0.25) this.wait = 0.08 + Math.random() * 0.17;   // a little hesitation at the bottom
+  }
   private shakeT = 0;
 
   constructor() {
@@ -53,7 +66,7 @@ export class Lockpick {
 
   open(o: PickOpts) {
     this.o = o; this.isOpen = true; this.set = 0; this.h = 0; this.dir = 1; this.wait = 0.35; this.solved = false;
-    this.speedK = 0.9 + Math.random() * 0.2;
+    this.newPin();
     this.build();
     this.el.classList.add('show');
     G.audio.play('unlock', { vol: 0.35, pitch: 1.8 });
@@ -68,7 +81,7 @@ export class Lockpick {
       this.set++;
       G.audio.play('unlock', { vol: 0.5, pitch: 1.3 + this.set * 0.12 });
       if (this.set >= this.o.pins) { this.solved = true; this.close(); return; }
-      this.h = 0; this.dir = 1; this.wait = 0.25; this.speedK = 0.9 + Math.random() * 0.25;
+      this.h = 0; this.dir = 1; this.wait = 0.25; this.newPin();
     } else {
       // slipped: the last pin falls back, loud clank (the host makes it a noise Bob hears)
       this.set = Math.max(0, this.set - 1);
@@ -86,10 +99,10 @@ export class Lockpick {
     if (this.wait > 0) this.wait -= dt;
     else {
       // triangle wave, a hair of easing at the ends so it reads as springy
-      const v = this.o.speed * (1 + this.set * 0.14) * this.speedK;
+      const v = this.o.speed * (1 + this.set * 0.14) * this.speedK * this.strokeK * (this.dir > 0 ? this.upK : this.downK);
       this.h += this.dir * v * dt * (0.55 + 0.45 * Math.sin(clamp(this.h, 0.02, 0.98) * Math.PI));
-      if (this.h >= 1) { this.h = 1; this.dir = -1; }
-      if (this.h <= 0) { this.h = 0; this.dir = 1; }
+      if (this.h >= 1) { this.h = 1; this.dir = -1; this.bounce(); }
+      if (this.h <= 0) { this.h = 0; this.dir = 1; this.bounce(); }
     }
     this.draw();
   }

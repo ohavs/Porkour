@@ -45,7 +45,7 @@ export const SOUND_SETS: Record<string, string[]> = {
 };
 
 /** Wanted but no free recording found yet (see the user's to-do list). */
-export const OPTIONAL = ['cough', 'snore', 'yawn', 'mower', 'wolf_howl', 'banjo'];
+export const OPTIONAL = ['cough', 'snore', 'yawn', 'mower', 'wolf_howl', 'banjo', 'vomit'];
 
 export function allFiles(): string[] {
   const s = new Set<string>();

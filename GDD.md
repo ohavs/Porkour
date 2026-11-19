@@ -61,6 +61,18 @@ Random farm + random modifier. Missions: **loot quota** (value carried to the hi
 1. Bob's family farm (the current world: barn, sty, house, garage, windmill, pasture) ← first.
 2. Orchard & beehives · 3. Dairy & cheese (bull!) · 4. Pumpkin farm at night · 5. Winter farm (ice).
 
+## Session 20 additions (2026-11-19)
+- **Bob's coffee break** (breathing window #4): he reads the paper on his porch rocker (blind to the front) and sips
+  from his real mug on the side table; spike it (hot sauce from the grill / a muddy hoof) → spit-take, fire breath, runs
+  to dunk his head, then hunts. Steal the mug → he searches the porch.
+- **Land mines**: a few random ones each round (blinking light, a beep close by); step on one → sky-high; a pig lands as
+  bacon for a few seconds; lure Bob onto one (prank).
+- **Pig HP + gulag**: rock salt / mines / bangs / the bull hurt; HP comes back slowly. 0 HP → the gulag cabin: turn the
+  big wheel / sack potatoes, then back to the sty.
+- **Emote wheel**: hold B, 6 dances; the lounge (cannabis mode): a couch / armchair / beanbags you sit on facing the
+  camera, smoke, eat, dance seated, pass the joint (G), an old TV. Very drunk: Q = throw up (blasts you backward).
+- Next: furniture and things to do inside every building; full controller support.
+
 ## Active hands (2026-11-18, user: "not mini-games — the pig physically takes the filter, the paper, puts the filter on the paper, pours the stuff in and rolls it; like Burglin' Gnomes / Grr Grr Gnomes: the hands reach out, the thing sticks to them, you move it and it snaps where it goes — everywhere in the game")
 - **Aim**: what you hold goes where your crosshair is (within reach); it stays upright and faces where you face.
   **Mouse wheel** = reach further (arms stretch when standing, the neck stretches on four legs), back = normal.

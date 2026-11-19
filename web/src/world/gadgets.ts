@@ -129,6 +129,7 @@ export class Gadgets {
       if (d > R || pig.cage) continue;
       const k = 1 - d / R, dx = (pig.pos.x - at.x) / (d || 1), dz = (pig.pos.z - at.z) / (d || 1);
       pig.knock(v1.set(dx * 7 * k, 4 + 3 * k, dz * 7 * k), d < R * 0.6);
+      pig.hurt(20 * k, 'bang');
     }
     // loose things fly; other cherry bombs nearby go off soon after
     for (const pr of G.props as Prop[]) {

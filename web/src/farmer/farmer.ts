@@ -21,6 +21,7 @@ import { GATE, type Gate, type Gates } from '../world/gates';
 import { LOO, looFirst, looEvery, type Outhouse } from '../world/outhouse';
 import { PHONE, type Phones } from '../world/phone';
 import { NAP, type Hammock } from '../world/hammock';
+import { COFFEE, type Porch } from '../world/porch';
 
 /** Tuning. */
 export const BOB = {
@@ -54,7 +55,12 @@ export const ALERT = {
   hear: [1, 1.3, 1.45, 1.6], sight: [1, 1.08, 1.15, 1.22], sus: [1, 1.2, 1.35, 1.5], hunt: [1, 0.8, 0.65, 0.5], run: [1, 1, 1.06, 1.16],
   gain: { alarm: 22, suspect: 4, noise: 2, lost: 6, escaped: 10, caged: 4, cough: 6, splat: 5, down: 22, stagger: 9, prank: 10, loot: 6, trap: 6, gateOpen: 5, gateBroken: 14 },
   reach: 2.55, catchR: 1.4, catchAt: 1.15,                                                  // pitchfork (level 2+)
-  gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.3), gunPush: 11,   // shotgun (level 3)
+  gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.27), gunPush: 11,   // shotgun (level 3)
+  /** User: "almost never misses — soften it a tiny bit": the aim locks this long before the shot, a little wobble (rad),
+   * and far shots (past `gunFar` m) can scatter wide (up to `gunFarMiss` at max range). */
+  gunCommit: 0.2, gunWobble: 0.05, gunFar: 8, gunFarMiss: 0.3,
+  /** HP a rock-salt hit costs a pig at point-blank (× the falloff; 3 close hits = the gulag). */
+  gunDmg: 34,
   traps: 4, trapEvery: 25,
   /** Wary (1+): now and then he padlocks a gate that is only latched. */
   lockEvery: 18,
@@ -72,6 +78,8 @@ const VIEW = {
   lit: { cos: Math.cos(1.1), range: 24 },
   /** On the phone: facing the box on its post (glancing over his shoulder now and then). */
   phone: { cos: Math.cos(0.6), range: 12 },
+  /** Behind his newspaper (the coffee break): sees nothing in front (only a pig right next to him). */
+  paper: { cos: 2, range: 0 },
 };
 type View = keyof typeof VIEW;
 
@@ -83,7 +91,8 @@ export interface Chore {
 
 type State = 'routine' | 'investigate' | 'suspect' | 'chase' | 'search' | 'windup' | 'lunge' | 'recover' | 'carry' | 'dust'
   | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'guard' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'shoo' | 'sleep' | 'off' | 'tidy'
-  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone' | 'toHammock' | 'hammock';
+  | 'aim' | 'shoot' | 'setTrap' | 'market' | 'away' | 'gate' | 'job' | 'loo' | 'inLoo' | 'phone' | 'onPhone' | 'toHammock' | 'hammock'
+  | 'hot' | 'cool' | 'dunk';
 
 /** A farm thing Bob fixes once he notices it (farm 4: a jack-o'-lantern that went out). Sources live in `G.jobs`. */
 export interface BobJob {
@@ -220,6 +229,11 @@ export class Farmer {
   private napHour = NAP.hour + Math.random() * NAP.spread; private napped = false; private napUntil = 0; private napWake = 0;
   private napHeard: THREE.Vector3 | null = null; private afterStun: (() => void) | null = null; mudMarks = 0;
   private phoneCall = -1; private phoneUntil = 0; private phoneDeadT = 0; private phoneChat = 0; private phoneGlance = 0; private glanceT = -10; private glanceDir = 1;
+  /**
+   * The coffee break (world/porch.ts): his next sip, whether this sip reached his lips yet; after a spiked cup: what
+   * was in it (1 hot sauce / 2 mud) and the spot by the pond where he dunks his head.
+   */
+  private sipNext = 0; private tasted = false; spitKind = 0; private coolAt = new THREE.Vector3(); private coolWater = new THREE.Vector3();
   /** Grumpy Bob: a little storm cloud over his head. */
   private moodCloud: THREE.Group; private moodDrops: THREE.Mesh[] = [];
   /** Test hook: freeze the brain and show this animation. */
@@ -498,7 +512,7 @@ export class Farmer {
       case 'tidy': want = this.tidy(dt); break;
       case 'aim': {   // rock-salt shotgun (alert 3): a clear wind-up you can dodge
         const t = this.target;
-        if (t) this.face(t.pos, dt, 9);
+        if (t && this.now - this.stateT < ALERT.gunAim - ALERT.gunCommit) this.face(t.pos, dt, 9);   // the last moment: aim locked (dodge!)
         if (this.now - this.stateT > ALERT.gunAim) { this.fire(); this.go('shoot'); }
         break;
       }
@@ -513,6 +527,9 @@ export class Farmer {
       case 'phone': want = this.phoneWalk(dt); break;
       case 'onPhone': want = this.phoneStep(dt); break;
       case 'toHammock': want = this.napWalk(dt); break;
+      case 'hot': this.hotStep(); break;
+      case 'cool': want = this.coolStep(dt); break;
+      case 'dunk': this.dunkStep(dt); break;
       case 'fist': {
         const t = this.target;
         if (t) this.face(t.pos, dt, 8);
@@ -628,7 +645,9 @@ export class Farmer {
   private view(): View {
     if (this.dozing) return 'nap';
     if (G.night > 0.5 && this.state !== 'chase') return 'flashlight';
-    if (this.state === 'routine' && this.doing) return this.chores[this.choreIdx].view;
+    if (this.state === 'routine' && this.doing) return this.sipping ? 'busy' : this.chores[this.choreIdx].view;
+    if (this.state === 'hot' || this.state === 'dunk') return 'nap';   // eyes squeezed shut / head in the pond
+    if (this.state === 'cool') return 'busy';
     if (this.state === 'dance' || ((this.state === 'setTrap' || this.state === 'gate' || this.state === 'job') && this.doing)) return 'busy';
     if (this.state === 'onPhone') return 'phone';
     if (this.state === 'setTrap' || this.state === 'gate' || this.state === 'job' || this.state === 'loo' || this.state === 'phone') return 'normal';
@@ -779,8 +798,9 @@ export class Farmer {
         if (n.t <= this.noiseT) continue;
         this.noiseT = n.t;
         const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
-        const asleep = this.view() === 'nap';
-        const r = this.state === 'onPhone' ? Math.min(n.radius, PHONE.hear) : n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1);   // chatting: only what's close
+        const vw = this.view(), asleep = vw === 'nap';
+        const r = this.state === 'onPhone' ? Math.min(n.radius, PHONE.hear) : vw === 'paper' ? Math.min(n.radius, COFFEE.hear)   // chatting / reading: only what's close
+          : n.radius * (asleep ? 0.6 : this.riding ? 0.5 : 1);
         if (d > r * ALERT.hear[this.level] * modHear()) continue;
         this.stopRiding();
         this.searchAt.set(n.x, n.y, n.z);
@@ -1017,8 +1037,97 @@ export class Farmer {
     this.face(v2.set(c.look[0], 0, c.look[1]), dt, 4);
     if (c.anim === 'look') this.lookYaw = Math.sin((this.now - this.choreUntil + c.dur) * 1.6) * 0.75;
     if (c.anim === 'nap' && Math.random() < dt * 0.25) this.voice('snore', 0.5);
-    if (this.now > this.choreUntil) this.nextChore();
+    if (c.id === 'paper' && G.porch) { this.coffeeStep(); if (this.state !== 'routine' || !this.doing) return 0; }
+    if (this.now > this.choreUntil && !this.sipping) this.nextChore();
     return 0;
+  }
+
+  // ================================================================== coffee break (world/porch.ts)
+  /** The mug is at his lips right now (the paper is down: he sees). */
+  get sipping() { return this.state === 'routine' && this.doing && (G.porch as Porch | null)?.phase === 2; }
+  /** Reading the paper on the porch: a sip every few seconds — if the mug is still there, and if it's still just coffee. */
+  private coffeeStep() {
+    const pc = G.porch as Porch;
+    if (!pc.phase) { pc.begin(); this.sipNext = this.now + 1.5 + Math.random() * 2; G.events.push({ type: 'bobCoffee' }); }
+    if (this.sipSoon && pc.phase === 1) { this.sipNext = this.now; this.sipSoon = false; }
+    if (pc.phase === 1 && this.now > this.sipNext) {
+      if (!pc.mugHome()) { this.mugGone(pc); return; }
+      pc.startSip(); this.tasted = false;
+    } else if (pc.phase === 2) {
+      const k = this.now - pc.sipT0;
+      if (!this.tasted && k > COFFEE.taste) {
+        this.tasted = true;
+        if (pc.spiked && pc.full) { this.spitTake(pc); return; }
+        G.audio.play('drink', { pos: v1.copy(this.pos).setY(this.pos.y + 1.3), vol: 0.45, pitch: 0.75 });
+      }
+      if (k > COFFEE.sip) { pc.endSip(); this.sipNext = this.now + COFFEE.sipEvery[0] + Math.random() * (COFFEE.sipEvery[1] - COFFEE.sipEvery[0]); }
+    }
+  }
+  /** He reaches for his mug — gone! Up he gets and looks around the porch. */
+  private mugGone(pc: Porch) {
+    pc.endBreak();
+    this.voice('huh'); this.raise('loot');
+    G.events.push({ type: 'mugGone' });
+    this.lookYaw = 0;
+    this.startSearch(pc.top, null, 3);
+  }
+  /** Spiked: he spits it all out, the mug flies — hot sauce = fire breath, hopping, then off to dunk his head in the pond. */
+  private spitTake(pc: Porch) {
+    const f = this.forward.clone();
+    const kind = pc.spit(f);
+    this.spitKind = kind;
+    const m = v1.copy(this.pos).setY(this.pos.y + 1.25).addScaledVector(f, 0.35);
+    G.fx.bits(m, { count: 28, color: kind === 1 ? 0x9a3a1e : 0x6b4a2b, spread: 0.06, speed: 4.2, up: 0.8, grav: 9, life: 0.7, size: 0.06, grow: 0, alpha: 1, dir: f });
+    G.audio.play('splash', { pos: m, vol: 0.7, pitch: 1.7 });
+    if (kind === 1) { G.audio.play('fire', { pos: m, vol: 1 }); this.voice('oof', 1); } else this.voice('oops', 1);
+    this.doing = false; this.lookYaw = 0; this.path = [];
+    this.go('hot'); this.activity = kind === 1 ? 'bob.hot' : 'bob.yuck';
+    this.raise('prank');
+    G.events.push({ type: 'coffeeSpit', why: kind === 1 ? 'hot' : 'mud' });
+  }
+  /** Hopping about, fanning his mouth (fire breath) — then to the pond; mud: spitting, wiping his tongue — then he hunts. */
+  private hotStep() {
+    this.activity = this.spitKind === 1 ? 'bob.hot' : 'bob.yuck';
+    if (this.now - this.stateT < (this.spitKind === 1 ? COFFEE.hotTime : COFFEE.mudTime)) return;
+    const w = G.places?.pond;
+    if (this.spitKind !== 1 || !w) { this.afterCoffee(); return; }
+    // the nearest water: the pond's edge or a trough
+    const dx = this.pos.x - w.x, dz = this.pos.z - w.z, d = Math.max(0.1, Math.hypot(dx, dz));
+    let x = w.x + (dx / d) * (w.r + 0.7), z = w.z + (dz / d) * (w.r + 0.7);
+    this.coolWater.set(w.x, 0, w.z);
+    for (const tr of (G.porch as Porch | null)?.troughs ?? []) {
+      const sx = tr.x + Math.sin(tr.yaw) * 0.9, sz = tr.z + Math.cos(tr.yaw) * 0.9;   // stand at its long side
+      if (Math.hypot(sx - this.pos.x, sz - this.pos.z) < Math.hypot(x - this.pos.x, z - this.pos.z)) { x = sx; z = sz; this.coolWater.set(tr.x, 0, tr.z); }
+    }
+    const fr = this.nav.nearestFree(x, z, 4) ?? { x, z };
+    this.coolAt.set(fr.x, G.terrain.height(fr.x, fr.z), fr.z);
+    this.go('cool'); this.path = [];
+    this.voice('oof', 0.8);
+  }
+  private coolStep(dt: number) {
+    this.activity = 'bob.cool';
+    const d = this.moveTo(this.coolAt, BOB.run, dt);
+    if (d < 0.9 || (d < 2.5 && this.stuck >= 2) || this.now - this.stateT > 20) {
+      this.stuck = 0; this.go('dunk');
+      G.audio.play(G.snowy ? 'snowhit' : 'splash', { pos: this.coolAt, vol: 0.9, pitch: 0.9 });
+      G.audio.play('hiss', { pos: this.coolAt, vol: 0.8 });
+      return 0;
+    }
+    return BOB.run;
+  }
+  private dunkStep(dt: number) {
+    this.activity = 'bob.cool';
+    this.face(this.coolWater, dt, 6);
+    if (this.now - this.stateT > COFFEE.dunk) {
+      G.audio.play(G.snowy ? 'snowhit' : 'splash', { pos: this.pos, vol: 0.8, pitch: 1.2 });
+      this.afterCoffee();
+    }
+  }
+  /** Furious: back to the porch to find whoever did it. */
+  private afterCoffee() {
+    const pc = G.porch as Porch | null;
+    this.voice('grr');
+    this.startSearch(pc ? pc.top : this.pos, null, 3);
   }
   private nextChore() {
     const phase = this.phaseNow();
@@ -1200,6 +1309,26 @@ export class Farmer {
     }
     return 0;
   }
+
+  /** Admin: off to his coffee break now / (sip) a sip right now (straight into the rocker if he isn't there yet). */
+  coffeeNow(sip = false) {
+    const pc = G.porch as Porch | null, i = this.chores.findIndex((c) => c.id === 'paper');
+    if (!pc || i < 0 || this.state === 'off' || this.state === 'down') return;
+    if (this.gone) this.wake();
+    if (this.carrying) this.release(false);
+    if (!(this.state === 'routine' && this.doing && this.choreIdx === i)) {
+      this.stopRiding(); this.target = null; this.hunt = null; this.path = [];
+      this.choreIdx = i; this.doing = false; this.go('routine');
+      if (sip) {
+        const c = this.chores[i], y = G.terrain.height(c.at[0], c.at[1]);
+        this.body.setTranslation({ x: c.at[0], y: y + CENTER + 0.05, z: c.at[1] }, true); this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        this.pos.set(c.at[0], y, c.at[1]); this.yaw = Math.atan2(c.look[0] - c.at[0], c.look[1] - c.at[1]);
+        this.doing = true; this.choreUntil = this.now + c.dur;
+      }
+    }
+    if (sip) this.sipSoon = true;
+  }
+  private sipSoon = false;
 
   // ================================================================== the siesta (world/hammock.ts)
   /** Admin: off to the hammock now / straight in. */
@@ -1561,7 +1690,7 @@ export class Farmer {
   // ================================================================== shotgun (alert 3)
   /** Rock salt: a cone of knock-back (ragdoll, no damage) on every pig in front of the barrel, hens fly. */
   private fire() {
-    const f = this.forward.clone(), muzzle = v1.copy(this.pos).addScaledVector(f, 1.1).setY(this.pos.y + 1.35);
+    const f = this.forward.clone().applyAxisAngle(UP, (Math.random() - 0.5) * 2 * ALERT.gunWobble), muzzle = v1.copy(this.pos).addScaledVector(f, 1.1).setY(this.pos.y + 1.35);
     this.gunReady = this.now + ALERT.gunCool;
     G.audio.play('shot', { pos: muzzle, vol: 1.4 });
     G.noise(this.pos, 40);
@@ -1577,11 +1706,13 @@ export class Farmer {
     for (const p of this.pigs) {
       if (p.out || p.cage || p.heldBy?.kind === 'farmer' || ignored(p)) continue;
       const d = cone(p.pos.x, p.pos.z); if (d < 0) continue;
+      if (d > ALERT.gunFar && Math.random() < ALERT.gunFarMiss * (d - ALERT.gunFar) / (ALERT.gunMax - ALERT.gunFar)) continue;   // scattered wide
       const to = v2.set(p.pos.x - muzzle.x, p.pos.y + 0.3 - muzzle.y, p.pos.z - muzzle.z), len = to.length(); to.divideScalar(len);
       const wall = raycast(muzzle, to, len, L.STATIC, undefined, (c) => !SEE_THROUGH.has(c.handle));
       if (wall && wall.dist < len - 0.4) continue;
       const k = clamp(1.15 - d / (ALERT.gunMax + 3), 0.4, 1);
       p.knock(v3.copy(f).multiplyScalar(ALERT.gunPush * k).setY(5.5 * k), true);
+      p.hurt(ALERT.gunDmg * k, 'shot');
       G.audio.play('squeal', { pos: p.pos, vol: 1 });
       G.fx.bits(v2.copy(p.pos).setY(p.pos.y + 0.4), { count: 18, color: 0xffffff, speed: 4, up: 2, life: 0.5, size: 0.07, grow: 0, grav: 8, alpha: 1 });
       G.shakeFor(p, 0.6);
@@ -1934,6 +2065,22 @@ export class Farmer {
     return true;
   }
 
+  /** He stepped on a mine (world/mines.ts): sky-high, then flat on his back (a knock-down); close by: a stagger. */
+  mined(at: THREE.Vector3, onIt: boolean) {
+    if (this.asleep || this.state === 'off' || this.state === 'away') return;
+    if (!onIt) { this.startle(at); return; }
+    if (this.carrying) this.release(false);
+    this.voice('oops', 1);
+    this.raise('down');
+    G.events.push({ type: 'mineBob' });
+    const dir = v2.set(this.pos.x - at.x + (Math.random() - 0.5) * 0.4, 0, this.pos.z - at.z + (Math.random() - 0.5) * 0.4).normalize();
+    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone());
+    const lv = this.body.linvel();
+    this.body.setLinvel({ x: lv.x + dir.x * 2, y: 10, z: lv.z + dir.z * 2 }, true);
+    this.parts.matchVelocity?.();
+    const look = at.clone();
+    this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
+  }
   /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */
   startle(at: THREE.Vector3) {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
@@ -1944,6 +2091,15 @@ export class Farmer {
     return true;
   }
 
+  /** A drunk pig threw up on him (beer mode): disgusted, he staggers back wiping himself. */
+  vomitedOn(_p: Pig) {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'stagger') return;
+    this.voice('oops', 1);
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.2), { count: 14, color: 0xc9c24a, speed: 2, up: 1, life: 0.6, size: 0.08, grow: 0, alpha: 1 });
+    this.raise('splat');
+    G.events.push({ type: 'bobVomited' });
+    this.stun('stagger', BOB.staggerTime);
+  }
   /**
    * An angry bee swarm stings him (farm 2's hives): he yelps and flails (stagger: drops a pig he carries). Not again
    * for a moment, so a swarm on him is a run of stings, not a stun-lock.
@@ -2096,10 +2252,12 @@ export class Farmer {
     this.flash.intensity = fl ? 60 : 0;
     if (this.riding && G.net === 'client') this.mower.showRide(this.pos, this.yaw, Math.hypot(this.vel.x, this.vel.z), dt);
     this.visual.update({
-      speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase' || this.state === 'shoo', anim, at: this.now - this.stateT,
+      speed: Math.hypot(this.vel.x, this.vel.z), run: this.chasing || this.state === 'chase' || this.state === 'shoo' || this.state === 'cool', anim, at: this.now - this.stateT,
       t: this.now, dt, angry: this.chasing || this.state === 'carry' || this.state === 'fist' || this.state === 'shoo' ? 1 : this.state === 'suspect' ? 0.5 : 0,
       yell: this.yell, lookYaw: this.lookYaw, carrying: holding, flashlight: fl, limp, rel: this.relQ, hand,
-      weapon: this.weapon, fury: this.level / 3,
+      weapon: this.weapon, fury: this.state === 'hot' || this.state === 'cool' ? 1 : this.level / 3,
+      sip: anim === 'sip' ? (this.now - ((G.porch as Porch | null)?.sipT0 ?? 0)) / COFFEE.sip : 0,
+      fire: (G.porch as Porch | null)?.spat ?? 0,
     });
   }
 
@@ -2134,7 +2292,7 @@ export class Farmer {
   private animFor(): FarmerAnim {
     if (this.debugAnim) return this.debugAnim;
     switch (this.state) {
-      case 'routine': return this.riding ? 'ride' : this.doing ? this.chores[this.choreIdx].anim : 'idle';
+      case 'routine': return this.riding ? 'ride' : this.doing ? ((G.porch as Porch | null)?.phase === 2 && this.chores[this.choreIdx].id === 'paper' ? 'sip' : this.chores[this.choreIdx].anim) : 'idle';
       case 'search': return 'look';
       case 'suspect': return 'suspect';
       case 'windup': return 'windup';
@@ -2157,6 +2315,8 @@ export class Farmer {
       case 'setTrap': case 'gate': case 'job': return this.doing ? 'fix' : 'idle';
       case 'onPhone': return 'phone';
       case 'hammock': return 'hammock';
+      case 'hot': case 'cool': return 'hot';
+      case 'dunk': return 'dunk';
       default: return 'idle';
     }
   }

@@ -49,6 +49,7 @@ const CHORES: Chore[] = [
   { id: 'reindeer', at: [PADDOCK.x0 - 1, -34], look: [PADDOCK.x0 + 3, -34], anim: 'feed', dur: 16, view: 'busy' },
   { id: 'wood', at: [-20.4, -82.6], look: [-20.4, -84], anim: 'chop', dur: 18, view: 'busy' },
   { id: 'cocoa', at: [TREE.x + 2.6, TREE.z + 3.2], look: [TREE.x, TREE.z], anim: 'coffee', dur: 16, view: 'busy' },
+  { id: 'paper', at: [5.5, -85], look: [5.5, -80], anim: 'read', dur: 30, view: 'paper' },
   { id: 'presents', at: [TREE.x - 1.6, TREE.z + 2.4], look: [TREE.x, TREE.z], anim: 'lean', dur: 10, view: 'normal' },
   { id: 'grit', at: [-14.4, -64.5], look: [-13, -66.5], anim: 'pour', dur: 10, view: 'busy' },
   // evening: flashlight round

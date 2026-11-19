@@ -8,7 +8,8 @@ import { buildFarmer, HIP, type FarmerRig } from './farmerModel';
 export type FarmerAnim =
   | 'idle' | 'feed' | 'water' | 'chop' | 'coffee' | 'nap' | 'fix' | 'pour' | 'lean'
   | 'look' | 'suspect' | 'windup' | 'lunge' | 'recover' | 'carry' | 'stagger' | 'down' | 'cough' | 'fist' | 'pant' | 'dust'
-  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone' | 'hammock';
+  | 'ride' | 'slapWind' | 'slap' | 'taunt' | 'dance' | 'read' | 'laundry' | 'aim' | 'shoot' | 'phone' | 'hammock'
+  | 'sip' | 'hot' | 'dunk';
 
 export interface FarmerPose {
   speed: number; run: boolean; anim: FarmerAnim; at: number; t: number; dt: number;
@@ -19,12 +20,16 @@ export interface FarmerPose {
   hand?: THREE.Vector3 | null;
   /** Alert level gear (pitchfork / shotgun) and how furious he is 0..1 (red face). */
   weapon?: '' | 'fork' | 'gun'; fury?: number;
+  /** Coffee break: how far through a sip (0..1: reach for the mug, to his lips, back to the table). */
+  sip?: number;
+  /** What his last spiked cup had in it (1 = hot sauce: fire breath while he hops about). */
+  fire?: number;
 }
 
-const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', laundry: 'shirt' };
+const TOOL: Partial<Record<FarmerAnim, string>> = { feed: 'bucket', pour: 'bucket', water: 'can', chop: 'axe', coffee: 'mug', fix: 'hammer', read: 'paper', sip: 'paper', laundry: 'shirt' };
 const GREEN = new THREE.Color(0x9ccf4f), RED = new THREE.Color(0xff4a3a);
 /** Poses where he doesn't hold his alert gear (both hands busy / tools / lying). */
-const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock']);
+const NO_GEAR = new Set<FarmerAnim>(['carry', 'ride', 'slapWind', 'slap', 'taunt', 'dance', 'down', 'read', 'laundry', 'nap', 'dust', 'phone', 'hammock', 'sip', 'hot', 'dunk']);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0), qa = new THREE.Quaternion();
 
@@ -320,6 +325,35 @@ export class FarmerVisual {
         T.lsx = T.rsx = -1.15; T.lex = T.rex = -1.0; T.lean = -0.12; T.headX = 0.15 + Math.sin(t * 0.5) * 0.05;
         T.headY = Math.sin(t * 0.9) * 0.18;
         break;
+      case 'sip': {   // the coffee break: paper down in the left hand, the right reaches for the mug, lifts it to his lips, puts it back
+        T.hipY = -HIP + 0.48; T.ltx = T.rtx = -1.45; T.lkx = T.rkx = 1.4; T.lean = -0.12;
+        T.lsx = -0.55; T.lex = -1.0; T.lsz = 0.3;
+        const k = p.sip ?? 0, lips = k > 0.22 && k < 0.8;
+        if (lips) { T.rsx = -1.45; T.rex = -2.15; T.rsz = 0.05; T.headX = -0.3; T.headY = 0; }
+        else { T.rsx = -0.35; T.rex = -0.35; T.rsz = -0.75; T.headX = 0.1; T.headY = -0.5; }   // reaching for the table at his right
+        break;
+      }
+      case 'hot': {   // hot sauce: hopping, both hands fanning his mouth, fire breath + steam out of his ears
+        const hop = Math.abs(Math.sin(t * 9));
+        if (!moving) { T.hipY = hop * 0.12; T.ltx = -hop * 0.5; T.lkx = hop * 0.9; T.rtx = -(1 - hop) * 0.3; T.rkx = (1 - hop) * 0.5; }
+        T.lsx = T.rsx = -1.55 + Math.sin(t * 15) * 0.25; T.lex = T.rex = -1.9; T.lsz = 0.45 + Math.sin(t * 15) * 0.15; T.rsz = -0.45 - Math.sin(t * 15) * 0.15;
+        T.headX = -0.25 + Math.sin(t * 7) * 0.08; T.headY = Math.sin(t * 5) * 0.3; T.lean = moving ? T.lean : -0.05;
+        if ((p.fire ?? 0) === 1) {
+          if (Math.random() < dt * 14) {
+            const m = R.head.localToWorld(v1.set(0, 0.08, 0.32)), f = v2.set(0, 0.15, 1).applyQuaternion(R.head.getWorldQuaternion(qa)).normalize();
+            G.fx.bits(m, { count: 2, color: Math.random() < 0.5 ? 0xff7a2a : 0xffd166, spread: 0.04, speed: 3.2, up: 0.4, life: 0.35, size: 0.1, grow: 0.1, alpha: 1, dir: f });
+          }
+          if (Math.random() < dt * 7) for (const sx of [-1, 1]) G.fx.puff(R.head.localToWorld(v1.set(sx * 0.27, 0.2, 0)), { count: 1, color: 0xffffff, spread: 0.02, speed: 0.4, up: 1.4, life: 0.6, size: 0.12, grow: 0.3, alpha: 0.6 });
+        }
+        break;
+      }
+      case 'dunk': {   // head in the pond: bent right over, hands on his knees, bubbles + steam
+        T.lean = 1.35; T.hipY = -0.12; T.lkx = T.rkx = 0.45; T.ltx = T.rtx = -0.35;
+        T.lsx = T.rsx = -0.7; T.lex = T.rex = -0.3; T.lsz = 0.25; T.rsz = -0.25; T.headX = 0.6;
+        if (Math.random() < dt * 8) { this.headPos(v1); G.fx.bits(v1, { count: 1, color: 0xdff3ff, spread: 0.12, speed: 0.3, up: 1.2, life: 0.5, size: 0.06, grow: 0, alpha: 0.9 }); }
+        if (Math.random() < dt * 3) { this.headPos(v1); v1.y += 0.2; G.fx.puff(v1, { count: 1, color: 0xffffff, spread: 0.15, speed: 0.2, up: 1, life: 1, size: 0.25, grow: 0.4, alpha: 0.5 }); }
+        break;
+      }
       case 'laundry': {   // pegging a shirt on the line
         const k = (a % 4) / 4, up = k < 0.5 ? Math.sin(k * Math.PI * 2) : 0;
         T.lsx = T.rsx = -2.3 - up * 0.3; T.lex = T.rex = -0.4; T.lsz = 0.2; T.rsz = -0.2; T.lean = -0.12; T.headX = -0.4;
@@ -366,9 +400,9 @@ export class FarmerVisual {
     R.browL.rotation.z = Math.PI / 2 - 0.45 * ang + (p.anim === 'down' ? 0.3 : 0);
     R.browR.rotation.z = Math.PI / 2 + 0.45 * ang - (p.anim === 'down' ? 0.3 : 0);
     R.browL.position.y = R.browR.position.y = 0.3 - ang * 0.02 + (p.anim === 'suspect' || p.anim === 'look' ? 0.025 : 0);
-    R.mouth.scale.y = damp(R.mouth.scale.y, 0.012 + clamp(p.yell, 0, 1) * 0.05 + (p.anim === 'pant' || p.anim === 'cough' ? 0.035 : 0), 20, dt);
+    R.mouth.scale.y = damp(R.mouth.scale.y, 0.012 + clamp(p.yell, 0, 1) * 0.05 + (p.anim === 'pant' || p.anim === 'cough' || p.anim === 'hot' ? 0.035 : 0), 20, dt);
     if (t > this.blinkAt) this.blinkAt = t + 2 + Math.random() * 3;
-    const shut = p.anim === 'nap' || p.anim === 'hammock' || p.anim === 'down' || p.anim === 'cough' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
+    const shut = p.anim === 'nap' || p.anim === 'hammock' || p.anim === 'down' || p.anim === 'cough' || p.anim === 'hot' || p.anim === 'dunk' ? 0.15 : this.blinkAt - t < 0.12 ? 0.1 : 1;
     for (const e of R.eyes) e.scale.y = damp(e.scale.y, shut, 30, dt);
     const green = p.anim === 'cough' ? 0.55 : 0, red = (p.fury ?? 0) * 0.42 * (0.85 + Math.sin(t * 5) * 0.15 * (p.fury ?? 0));
     for (const f of R.face) f.mat.color.copy(f.base).lerp(RED, red).lerp(GREEN, green);
