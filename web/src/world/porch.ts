@@ -36,7 +36,7 @@ export const COFFEE = {
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q1 = new THREE.Quaternion();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), ZAX = new THREE.Vector3(0, 0, 1);
 const COFFEE_COL = [0x5a3218, 0xb8321e, 0x6b5a3e];
 const rand = ([a, b]: [number, number]) => a + Math.random() * (b - a);
 
@@ -237,7 +237,7 @@ export class Porch {
       const p = h.localToWorld(v1.set(0, -0.06, 0.08));
       const k = (G.time - this.sipT0) / COFFEE.sip;
       const tip = k > 0.3 && k < 0.75 ? 0.55 : 0;   // tipped to his lips
-      q1.setFromAxisAngle(UP, bob.yaw + Math.PI / 2).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -tip));
+      q1.setFromAxisAngle(UP, bob.yaw + Math.PI / 2).multiply(q2.setFromAxisAngle(ZAX, -tip));
       this.mug.body.setNextKinematicTranslation(p);
       this.mug.body.setNextKinematicRotation(q1);
     }

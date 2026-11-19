@@ -175,7 +175,7 @@ export class Game {
       const shed = f.places.tp.find((x) => x[0] === 'shed');
       if (f.chain?.kind === 1 && shed) {
         const sp = new THREE.Vector3(shed[1], 0, shed[2]);
-        const ls = Gulag.findSpot(this.nav, bounds, sp, avoid, f.inWater, { min: 9, max: 34, pref: 15, half: 4.5 });
+        const ls = Gulag.findSpot(this.nav, bounds, sp, avoid, f.inWater, { min: 9, max: 36, pref: 16, half: 5 });
         if (ls) { this.lounge = new Lounge(scene, f.props, ls.at, ls.yaw); f.places.tp.push(['lounge', ls.at.x + Math.sin(ls.yaw) * 4, ls.at.z + Math.cos(ls.yaw) * 4]); }
       }
       G.lounge = this.lounge;
@@ -411,7 +411,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); }
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
@@ -1047,7 +1047,7 @@ export class Game {
     const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
     // sitting down on the couch: the camera swings round in front of me (I see my pig's face); up again: back behind
     if (L0.seat !== this.seatWas) {
-      if (L0.seat >= 0 && this.lounge) { this.cam.yaw = this.lounge.seatYaw() + Math.PI; this.cam.pitch = 0.1; this.cam.dist = 3.4; }
+      if (L0.seat >= 0 && this.lounge) { this.cam.yaw = this.lounge.seatYaw(L0.seat) + Math.PI; this.cam.pitch = 0.1; this.cam.dist = 3.4; }
       else if (this.seatWas >= 0) { this.cam.yaw = L0.yaw; this.cam.dist = 4.8; }
       this.seatWas = L0.seat;
     }

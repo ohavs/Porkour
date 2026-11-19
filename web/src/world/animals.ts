@@ -51,7 +51,9 @@ const BIRD = { see: 9, close: 3.5, crowEvery: 10, turkeySee: 6, gobbleEvery: 3.5
 const v1 = new THREE.Vector3();
 /** Turn toward an angle by at most `max` radians. */
 function turnTo(a: number, b: number, max: number) {
-  let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+  // (no `while` wrap: an angle that ever went infinite would spin that loop forever = the whole game frozen)
+  const d = Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  if (!Number.isFinite(d)) return Number.isFinite(b) ? b : 0;
   return a + Math.max(-max, Math.min(max, d));
 }
 const DOWN = new THREE.Vector3(0, -1, 0);

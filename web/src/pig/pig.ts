@@ -191,18 +191,18 @@ export class Pig implements Holdable {
   seat = -1;
   /** RMB at a free seat: sit down (with whatever I hold), facing out of the room. */
   private sitDown(i: number) {
-    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(): number } | null;
+    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(i: number): number } | null;
     if (!lg) return;
     this.seat = i; this.danceId = 0;
     if (!this.standing) this.setStanding(true);
-    this.yaw = lg.seatYaw();
+    this.yaw = lg.seatYaw(i);
     G.audio.play('thud', { pos: lg.seats[i], vol: 0.6, pitch: 0.7 });
     G.events.push({ type: 'sat', who: this });
   }
   /** Sitting: held on the cushion (host and my own prediction); WASD / jump / sprint / C = up again. */
   private seatStep(inp: PigInput): boolean {
     if (this.seat < 0) return false;
-    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(): number; standSpot(i: number, o: THREE.Vector3): THREE.Vector3 } | null;
+    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(i: number): number; standSpot(i: number, o: THREE.Vector3): THREE.Vector3 } | null;
     const s = lg?.seats[this.seat];
     if (!lg || !s || this.mode !== 'normal' || this.heldBy || this.out || Math.hypot(inp.mx, inp.mz) > 0.3 || inp.jumpP || inp.sprintP || inp.wallowP || inp.standP) {
       const i = this.seat; this.seat = -1;
@@ -213,7 +213,7 @@ export class Pig implements Holdable {
     // a soft spring onto the cushion (velocity, not teleports: a body yanked about every step upsets the solver)
     const ty = s.y + CENTER[this.shape] - 0.12;
     this.vel.set(clamp((s.x - this.pos.x) * 12, -4, 4), clamp((ty - this.pos.y) * 12, -4, 4), clamp((s.z - this.pos.z) * 12, -4, 4));
-    this.yaw = lg.seatYaw(); this.grounded = true;
+    this.yaw = lg.seatYaw(this.seat); this.grounded = true;
     this.wobble = 0; this.leanX = this.leanZ = 0;
     return true;
   }

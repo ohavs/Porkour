@@ -32,7 +32,7 @@ const BOB_T = { kind: 'farmer' as const };
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
 const inRect = (r: Rect, p: { x: number; z: number }) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
-const angDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+const angDiff = (a: number, b: number) => { const d = Math.atan2(Math.sin(b - a), Math.cos(b - a)); return Number.isFinite(d) ? d : 0; };   // (never a `while` wrap: an infinite angle = a frozen game)
 
 interface Puddle { x: number; z: number; t0: number; mesh: THREE.Mesh }
 

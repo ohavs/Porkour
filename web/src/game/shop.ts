@@ -37,7 +37,7 @@ export function levelFor(slot: Slot, id: string) { return id ? P[itemKey(slot, i
 // ---------------------------------------------------------------- levels
 /** XP needed to reach level n: 300 · n(n−1)/2 (L2 300, L3 900, L4 1800, L5 3000 … L10 13 500). */
 export const xpForLevel = (n: number) => 150 * n * (n - 1);
-export function level(xp = SETTINGS.xp) { let n = 1; while (xp >= xpForLevel(n + 1)) n++; return n; }
+export function level(xp = SETTINGS.xp) { if (!Number.isFinite(xp)) xp = 0; let n = 1; while (n < 999 && xp >= xpForLevel(n + 1)) n++; return n; }
 /** 0..1 progress to the next level. */
 export function levelProgress(xp = SETTINGS.xp) { const n = level(xp), a = xpForLevel(n), b = xpForLevel(n + 1); return (xp - a) / (b - a); }
 
