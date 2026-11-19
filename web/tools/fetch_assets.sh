@@ -114,6 +114,15 @@ pack https://github.com/trebeljahr/quaternius-showcase qshow \
   '/public/glb/medieval_weapons_pack/Scythe.glb' '/public/glb/medieval_village_pack/Bag.glb' '/public/glb/medieval_village_pack/Bag_Open.glb' \
   '/public/glb/medieval_village_pack/Barrel.glb' '/public/glb/modular_dungeon_1/Bucket.glb' '/public/glb/crops_pack/Wheat_Crop.glb' '/public/glb/crops_pack/Wheat_2.glb' \
   '/public/glb/platformer_pack/Ladder_medium.glb' '/public/glb/house_interior_pack/Houseplant_1.glb'
+# ---------------------------------------------------------------- Quaternius Ultimate House Interior (CC0): furniture for the
+# buildings' insides (world/interiors.ts) — beds, couches, chairs, tables, shelves, kitchen, bathroom, lamps, plants
+INTERIOR="Bed_Single Bed_King Bed_Bunk Bookshelf Carpet_1 Carpet_Round Chair_1 Chair_2 Chair_3 Couch_Medium1 Couch_Small1 Couch_Large1 \
+  Drawer_1 Drawer_3 Fireplace Houseplant_2 Houseplant_4 Houseplant_7 Kitchen_Fridge Kitchen_Oven Kitchen_Sink Kitchen_2Drawers \
+  Kitchen_Cabinet1 Light_Floor1 Light_Desk Light_Stand1 NightStand_1 Shelf_1 Shelf_Small1 Stool Table_RoundLarge Table_RoundSmall \
+  Trashcan_Small1 Bathroom_Toilet Bathroom_Bathtub Bathroom_WashingMachine Bathroom_ToiletPaper Bathroom_Sink Plate_1 Fork Knife Spoon"
+pack https://github.com/trebeljahr/quaternius-showcase qshow-int $(for n in $INTERIOR; do echo "/public/glb/house_interior_pack/$n.glb"; done)
+grab interior "$CACHE/qshow-int/public/glb/house_interior_pack" 256 $INTERIOR
+
 for n in Cow ShibaInu Wolf Donkey Horse Horse_White Alpaca Bull Husky Stag Deer; do
   d="$OUT/animals/$n.glb"; [ -f "$d" ] && continue; mkdir -p "$OUT/animals"
   "$GT" resample "$CACHE/qshow/public/glb/animals_pack/$n.glb" "$d" >/dev/null && "$GT" prune "$d" "$d" >/dev/null

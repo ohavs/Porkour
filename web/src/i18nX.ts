@@ -55,6 +55,7 @@ export const EN_X = {
   'em.hula': 'Hula Hog', 'em.robot': 'Robo Pork', 'em.disco': 'Pork Fever', 'em.spin': 'Bacon Spin', 'em.chicken': 'Cluck Strut', 'em.wiggle': 'Wiggle',
   'key.emote': 'Dances (hold)', 'key.pass': 'Pass it',
   'm.couchSesh': 'Get high on the lounge couch', 'a.tpLounge': 'Teleport: lounge',
+  'item.furniture': 'Furniture',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -104,4 +105,5 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'em.hula': 'Hula cerdito', 'em.robot': 'Robo-cerdo', 'em.disco': 'Fiebre porcina', 'em.spin': 'Giro beicon', 'em.chicken': 'Baile del pollo', 'em.wiggle': 'Meneíto',
   'key.emote': 'Bailes (mantén)', 'key.pass': 'Pásalo',
   'm.couchSesh': 'Colócate en el sofá del salón', 'a.tpLounge': 'Teletransporte: salón',
+  'item.furniture': 'Mueble',
 };

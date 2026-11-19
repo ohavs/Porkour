@@ -5,6 +5,7 @@ import { toonMat } from '../render/toon';
 import { rigidSkin } from '../render/batch';
 import type { Pig } from '../pig/pig';
 import { Prop, PROPS } from './props';
+import { SEATS } from './seats';
 
 /**
  * The smoking lounge (cannabis mode; user: "a smoking & chill room: the pigs come to sit on the couch and get high in
@@ -51,26 +52,19 @@ export class Lounge {
     props.push(new Prop(scene, PROPS.canBeans ?? PROPS.cigPack, L(0.25, 0.47, tz + 0.1), yaw));
     props.push(new Prop(scene, PROPS.canEnergy ?? PROPS.cigPack, L(0.6, 0.47, tz - 0.12), yaw));
     // sitting = RMB at a free seat (pig.ts asks seatFor); the TV: RMB at it = next channel
-    G.uses.push({ near: (p: Pig) => p.seat < 0 && this.seatFor(p) >= 0, icon: () => 'couch' });
     G.uses.push({ near: (p: Pig) => p.seat < 0 && !p.held && this.seatFor(p) < 0 && this.tvNear(p), icon: () => 'tv' });
   }
 
   /** A seat: room spot (x, z), cushion height, facing (room yaw: 0 = out of the room). */
   private seat(x: number, z: number, h: number, ly: number) {
-    this.seats.push(v1.set(x, h, z).applyAxisAngle(UP, this.yaw).add(this.center).clone());
-    this.seatYaws.push(this.yaw + ly);
+    const p = v1.set(x, h, z).applyAxisAngle(UP, this.yaw).add(this.center).clone();
+    this.seats.push(p); this.seatYaws.push(this.yaw + ly);
+    this.seatIds.push(SEATS.fixed(p, this.yaw + ly, h));
   }
-  /** The seat a pig standing here would sit on (free, close), or -1. */
-  seatFor(p: Pig) {
-    if (p.out || p.cage || p.heldBy || p.mode !== 'normal' || p.gulag) return -1;
-    let best = -1, bd: number = LOUNGE.sitR;
-    this.seats.forEach((s, i) => {
-      if ((G.pigs as Pig[]).some((o) => o.seat === i && o !== p)) return;
-      const d = Math.hypot(p.pos.x - s.x, p.pos.z - s.z);
-      if (d < bd) { bd = d; best = i; }
-    });
-    return best;
-  }
+  /** These seats' numbers in the shared registry. */
+  private seatIds: number[] = [];
+  /** The seat here a pig standing there would sit on (free, close), or -1. */
+  seatFor(p: Pig) { const i = SEATS.seatFor(p); return this.seatIds.includes(i) ? i : -1; }
   /** Which way a pig on this seat faces (world yaw). */
   seatYaw(i: number) { return this.seatYaws[i] ?? this.yaw; }
   /** Getting up: a step in front of the seat. */
