@@ -32,7 +32,7 @@ export class Gfx {
   opts: GfxOpts;
   /** Dynamic resolution multiplier (1 = the chosen resolution) and its frame-time bookkeeping. */
   dyn = 1;
-  private dynT = 0; private dynFrames = 0; private dynTime = 0; private dynBlockUntil = 0; private dynRaisedAt = -1; private clock = 0;
+  private dynT = 0; private dynFrames = 0; private dynTime = 0; private dynBlockUntil = 0; private clock = 0;
   /** Seconds spent at the lowest dynamic resolution while still slow (→ a "lower the graphics" tip). */
   slowFor = 0;
   private passes: Pass[] = [];
@@ -187,31 +187,33 @@ export class Gfx {
   }
 
   /**
-   * Dynamic resolution: below ~50 fps for a second → render 10 % fewer pixels (down to 55 %); steady at the
-   * target for a few seconds → step back up. A step up that makes it slow again blocks raising for a while.
+   * Dynamic resolution: a few fixed steps (100 / 80 / 65 / 55 % of the pixels). Each change resizes every render
+   * buffer, which stalls a frame (that was the "it froze for a moment" every few seconds when the fps hovered near
+   * the line) — so it changes rarely: down one step after 2 s below ~50 fps, up one step only after 8 s steady at the
+   * target, at most once every 6 s, and never up again for 45 s after a step down.
    */
   updateDynRes(dt: number) {
     this.clock += dt;
     if (!this.opts.dynRes || document.hidden || dt > 0.25) return;
     this.dynFrames++; this.dynTime += dt; this.dynT += dt;
-    if (this.dynT < 1) return;
+    if (this.dynT < 2) return;
     const fps = this.dynFrames / this.dynTime;
     this.dynFrames = 0; this.dynTime = 0; this.dynT = 0;
-    const target = this.opts.fpsCap === 30 ? 30 : 60;
-    const old = this.dyn;
-    if (fps < target * 0.83) {
-      if (this.dynRaisedAt >= 0 && this.clock - this.dynRaisedAt < 3) this.dynBlockUntil = this.clock + 30;
-      this.dyn = Math.max(0.55, this.dyn - 0.1);
-      this.slowFor = this.dyn <= 0.55 && fps < target * 0.6 ? this.slowFor + 1 : 0;
+    const target = this.opts.fpsCap === 30 ? 30 : 60, STEPS = [1, 0.8, 0.65, 0.55];
+    let i = STEPS.findIndex((x) => x <= this.dyn + 1e-6); if (i < 0) i = STEPS.length - 1;
+    const old = this.dyn, since = this.clock - this.dynChangedAt;
+    if (fps < target * 0.8) {
+      this.goodFor = 0;
+      this.slowFor = i === STEPS.length - 1 && fps < target * 0.6 ? this.slowFor + 2 : 0;
+      if (i < STEPS.length - 1 && since > 6) { this.dyn = STEPS[i + 1]; this.dynBlockUntil = this.clock + 45; }
     } else {
       this.slowFor = 0;
-      if (fps > target * 0.95 && this.dyn < 1 && this.clock > this.dynBlockUntil) {
-        this.dynT = -3;                       // wait a few seconds at each step before raising again
-        this.dyn = Math.min(1, this.dyn + 0.05); this.dynRaisedAt = this.clock;
-      }
+      this.goodFor = fps > target * 0.95 ? this.goodFor + 2 : 0;
+      if (this.goodFor >= 8 && i > 0 && since > 6 && this.clock > this.dynBlockUntil) { this.dyn = STEPS[i - 1]; this.goodFor = 0; }
     }
-    if (this.dyn !== old) this.resize();
+    if (this.dyn !== old) { this.dynChangedAt = this.clock; this.resize(); }
   }
+  private goodFor = 0; private dynChangedAt = -100;
 
   resize() {
     this.renderer.setPixelRatio(this.pixelRatio());
