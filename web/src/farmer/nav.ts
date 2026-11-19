@@ -75,8 +75,9 @@ export class Nav {
           A.fromArray(v, idx[k] * 3).applyQuaternion(q).add(t);
           B.fromArray(v, idx[k + 1] * 3).applyQuaternion(q).add(t);
           C.fromArray(v, idx[k + 2] * 3).applyQuaternion(q).add(t);
-          const ymin = Math.min(A.y, B.y, C.y), ymax = Math.max(A.y, B.y, C.y);
-          if (ymax < -1 || ymin > 3) continue;
+          // (relative to the ground under it: buildings on the hills stand well above 3 m — s25 fix, their walls were missing)
+          const ymin = Math.min(A.y, B.y, C.y), ymax = Math.max(A.y, B.y, C.y), gh = this.terrain.height((A.x + B.x + C.x) / 3, (A.z + B.z + C.z) / 3);
+          if (ymax < gh - 1 || ymin > gh + 3) continue;
           const n = steps(Math.max(A.distanceTo(B), B.distanceTo(C), C.distanceTo(A)));
           for (let a = 0; a <= n; a++) for (let b = 0; b <= n - a; b++) {
             const u = a / n, w = b / n, z = 1 - u - w;

@@ -62,7 +62,9 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // s23: the TV / radio lure, oven pies, the bubble bath
   | 'radioLure' | 'pieBob' | 'bubbleBath'
   // s24: the record player (Bob can't help dancing to it)
-  | 'discoBob';
+  | 'discoBob'
+  // s25: a sink left running floods the floor (Bob slips), fart + fire = fireball
+  | 'floodSlip' | 'fireball' | 'fireballBob';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -72,9 +74,9 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
-  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob'];
+  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob', 'floodSlip', 'fireballBob'];
 const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
-  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', ...REQ_POOL];
+  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', 'fireball', ...REQ_POOL];
 /** Bonus pranks per round (user: "add more missions"; was 2). */
 const BONUS_N = 3;
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
@@ -116,6 +118,8 @@ export const missionColor = (i: number) => (i <= 0 ? MISSION_COLORS[0] : MISSION
 export const arrowSvg = (c: string, w = 14) => `<svg class="marr" viewBox="0 0 14 14" width="${w}" height="${w}"><path d="M2 2.5h10L7 12z" fill="${c}" stroke="#3b2412" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 /** Pranks done to Bob himself: the arrow sits over him. */
 const ON_BOB = new Set<MissionId>(['mineBob', 'knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade', 'bobSoak', 'danceBob']);
+/** s25: fart next to something burning (the grill is on every farm). */
+const FIRE_MISSIONS: MissionId[] = ['fireball', 'fireballBob'];
 export interface MissionMark { at: THREE.Vector3; top: number; color: string; i: number }
 
 /** Waypoint icons (the place a held thing goes). */
@@ -247,7 +251,8 @@ export class Round {
       ...(this.game.interiors?.radios.length || this.game.interiors?.tvs.length ? ['radioLure'] as MissionId[] : []),
       ...(this.game.interiors?.ovens.length ? ['pieBob'] as MissionId[] : []),
       ...(this.game.interiors?.gramos.length ? ['discoBob'] as MissionId[] : []),
-      ...(this.game.interiors?.baths.length ? ['bubbleBath'] as MissionId[] : [])];
+      ...(this.game.interiors?.baths.length ? ['bubbleBath'] as MissionId[] : []),
+      ...(this.game.interiors?.sinks.length ? ['floodSlip'] as MissionId[] : []), ...FIRE_MISSIONS];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
@@ -323,7 +328,9 @@ export class Round {
     if (type === 'milkSpilled') this.count('spillMilk');
     if (type === 'bullBob') this.done('bullBob');
     if (type === 'cheeseBob') this.done('cheeseBob');
-    if (type === 'bobSlipped') this.done(text === 'ice' ? 'bobIce' : 'milkSlip');
+    if (type === 'bobSlipped') this.done(text === 'ice' ? 'bobIce' : text === 'water' ? 'floodSlip' : 'milkSlip');
+    if (type === 'fireball') this.done('fireball');
+    if (type === 'bobFireball') { this.done('fireball'); this.done('fireballBob'); }
     if (type === 'bobDunked') this.done('bobIce');
     if (type === 'bigSnowballBob') this.done('bigSnowball');
     if (type === 'snowmanDown') this.done('snowmanDown');
@@ -573,6 +580,9 @@ export class Round {
     if (x.id === 'toiletFlush') return IC.rmb + IC.loo;
     if (x.id === 'radioLure') return IC.fist + IC.note + IC.bob;
     if (x.id === 'discoBob') return IC.rmb + IC.note + IC.bob;
+    if (x.id === 'floodSlip') return IC.rmb + IC.water + IC.bob;
+    if (x.id === 'fireball') return kc('Q') + IC.flame;
+    if (x.id === 'fireballBob') return kc('Q') + IC.flame + IC.bob;
     if (x.id === 'pieBob') return L.held?.kind === 'prop' && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie' ? IC.lmb + IC.throw + IC.bob : IC.rmb + IC.oven;
     if (x.id === 'bubbleBath') return IC.rmb + IC.water;
     if (x.id === 'highUp') return kc('Q') + IC.cloud + IC.house;
@@ -650,14 +660,21 @@ export class Round {
         // s22: the furnished buildings (nearest bed / fridge / toilet / piece), the peak, the terrace walls
         case 'pieBob': if (L.held && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie') { atBob(i); return; }   // falls through: the nearest oven
         // eslint-disable-next-line no-fallthrough
-        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': case 'radioLure': case 'bubbleBath': case 'discoBob': {
+        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': case 'radioLure': case 'bubbleBath': case 'discoBob': case 'floodSlip': {
           const it = g.interiors; if (!it) return;
           const want = m.id === 'bedNap' ? ['f_bed', 'f_bedKing', 'f_bunk'] : m.id === 'toiletFlush' ? ['f_toilet'] : m.id === 'fridgeRaid' ? ['f_fridge']
-            : m.id === 'radioLure' ? ['f_radio', 'f_tvSet'] : m.id === 'discoBob' ? ['f_gramo'] : m.id === 'pieBob' ? ['f_oven'] : m.id === 'bubbleBath' ? ['f_bathtub'] : null;
+            : m.id === 'radioLure' ? ['f_radio', 'f_tvSet'] : m.id === 'discoBob' ? ['f_gramo'] : m.id === 'pieBob' ? ['f_oven'] : m.id === 'bubbleBath' ? ['f_bathtub']
+            : m.id === 'floodSlip' ? ['f_kSink', 'f_bSink'] : null;
           const list = it.pieces.filter(({ pr, home }) => !pr.banked && !pr.heldBy && (!want || want.includes(pr.def.id ?? ''))
             && (m.id !== 'yardSale' || Math.hypot(pr.synced.currP.x - home.x, pr.synced.currP.z - home.z) <= home.r));
           const pc = near(list, (x) => x.pr.obj.position);
           if (pc) mark(i, pc.pr.obj.position, pc.pr.half);
+          return;
+        }
+        case 'fireball': case 'fireballBob': {   // the nearest thing burning (the grill is always lit)
+          let best: THREE.Vector3 | null = null, bd = Infinity;
+          for (const fl of G.flames) { const p = fl.at(new THREE.Vector3()); if (!p) continue; const d = p.distanceToSquared(L.pos); if (d < bd) { bd = d; best = p; } }
+          if (best) mark(i, best.setY(best.y + 0.6));
           return;
         }
         case 'peakClimb': { const pk = P.peak; if (pk) mark(i, new THREE.Vector3(pk.x, G.terrain.height(pk.x, pk.z) + 1, pk.z)); return; }

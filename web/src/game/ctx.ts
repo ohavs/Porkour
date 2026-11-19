@@ -29,7 +29,11 @@ export interface Carrier {
 
 export interface Noise { x: number; y: number; z: number; radius: number; t: number }
 /** Fart / stink cloud (Bob coughs, animals run) or a cherry bomb's bang (`kind` 'bang': animals run, no cough). */
-export interface Cloud { x: number; y: number; z: number; r: number; until: number; kind?: 'bang' | 'stink' }
+export interface Cloud { x: number; y: number; z: number; r: number; until: number; kind?: 'bang' | 'stink';
+  /** A fart (s25): who let it go and when — a fresh one next to a flame goes up in a fireball (`world/fireball.ts`). */
+  by?: any; born?: number; lit?: boolean }
+/** Something burning (s25): where it is now (null = not burning), how far it reaches (m). Fart + flame = fireball. */
+export interface Flame { at(out: THREE.Vector3): THREE.Vector3 | null; r: number }
 /** Things the HUD / round logic react to. */
 export interface GameEvent { type: string; why?: string; who?: any; text?: string }
 
@@ -79,6 +83,8 @@ export const G = {
   props: [] as any[],
   noises: [] as Noise[],
   clouds: [] as Cloud[],
+  /** Flames a fart can catch (the BBQ grill, lit fireplaces, ovens baking, jack-o'-lanterns, cigarettes…). */
+  flames: [] as Flame[],
   localPig: null as any,
   pigs: [] as any[],
   farmer: null as any,

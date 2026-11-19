@@ -33,6 +33,7 @@ import { EmoteWheel } from './emotes';
 import { Lounge } from '../world/lounge';
 import { SEATS } from '../world/seats';
 import { Interiors } from '../world/interiors';
+import { Fireballs } from '../world/fireball';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -99,6 +100,8 @@ export class Game {
   interiors!: Interiors;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
+  /** Fart + fire = fireball (s25). */
+  fireballs = new Fireballs();
   /** My gadget count changed (a round used one): tell the host what I bring next. */
   onLoadout?: () => void;
   /** What the lock-pick puzzle is open on (the cage or a gate's padlock). */
@@ -226,6 +229,8 @@ export class Game {
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
     G.cam = this.gfx.camera;
     this.gadgets = new Gadgets(scene, this.farm.props);
+    // the BBQ grill's coals burn all round: a fart next to it goes up in a fireball
+    { const cg = this.farm.cage; G.flames.push({ r: 1.0, at: (o) => o.copy(cg.grillPos).setY(cg.grillPos.y + 0.95) }); }
     // snacks: food cans (boosts) and cigarette packs scattered around (same spots on every machine)
     scatterSnacks(scene, this.farm.props, this.nav, FARM_IDS.indexOf(farmId()) + 1, this.farm.inWater, this.farm.places.stash);
     this.stage = new LobbyStage(scene, this.farm.props);
@@ -467,6 +472,7 @@ export class Game {
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
       if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
+      this.fireballs.step();
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
@@ -498,6 +504,8 @@ export class Game {
         // mines, HP, the gulag
         case 'mined': H.emote(e.who, 'bang', 1.6, 1.6); break;
         case 'mineBob': H.emote(bob, 'bang', 1.6, 2.4); break;
+        case 'fireball': if (e.who) H.emote(e.who, 'flame', 1.6, 1.6); break;
+        case 'bobFireball': H.emote(bob, 'flame', 1.8, 2.4); break;
         case 'bacon': H.emote(e.who, 'flame', 1.6, 1.0); if (me) H.toast(t('e.baconMe'), 1.6, '', 'flame'); break;
         case 'hurt': if (me) H.hurtFlash(Number(e.why ?? 20)); break;
         case 'died': H.toast(me ? t('e.diedMe') : t('e.diedOther', { who }), 2, '', 'lock'); break;
@@ -727,7 +735,11 @@ export class Game {
       case 'tp:loo': { const o = this.nearLoo(L.pos); if (o) tp(o.doorstep.x + o.front.x * 1.2, o.doorstep.z + o.front.z * 1.2); this.menu.toggleAdmin(); break; }
       // s23: furnished buildings (next room · nearest radio on / off, TV channel, bake now, fill the bath · Bob comes to switch it off)
       case 'int:room': { const it = this.interiors, rs = it.rooms; if (!rs.length) break; this.intRoom = (this.intRoom + 1) % rs.length; tp(rs[this.intRoom].x, rs[this.intRoom].z); this.menu.toggleAdmin(); break; }
-      case 'int:radio': case 'int:tv': case 'int:bake': case 'int:bath': case 'int:gramo': this.interiors.admin(a.slice(4), L.pos); break;
+      case 'int:radio': case 'int:tv': case 'int:bake': case 'int:bath': case 'int:gramo': case 'int:sink': case 'int:fire': this.interiors.admin(a.slice(4), L.pos); break;
+      case 'int:tap': { const j = this.interiors.lureJob(L.pos, f ?? undefined, false, true); if (f && j) f.jobNow(j); break; }
+      case 'fireball:me': { const fw = L.forward; this.fireballs.boom(null, tmpV.set(L.pos.x - fw.x * 0.6, L.pos.y, L.pos.z - fw.z * 0.6), L); break; }
+      case 'fireball:bob': { if (f) this.fireballs.boom(null, tmpV.copy(f.pos).setY(f.pos.y + 0.6).addScaledVector(f.forward, 1.2), null); break; }
+      case 'tp:grill': { const gp = this.farm.cage.grillPos, c = this.farm.cage.center; const dx = gp.x - c.x, dz = gp.z - c.z, d = Math.hypot(dx, dz) || 1; tp(gp.x + (dx / d) * 2.2, gp.z + (dz / d) * 2.2); this.menu.toggleAdmin(); break; }
       case 'int:disco': { const j = this.interiors.lureJob(L.pos, f ?? undefined, true); if (f && j) f.jobNow(j); break; }
       case 'int:lure': { const j = this.interiors.lureJob(L.pos, f ?? undefined); if (f && j) f.jobNow(j); break; }
       case 'gates:lock': this.gates.all('locked'); break;

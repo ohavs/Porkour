@@ -75,6 +75,10 @@ export const EN_X = {
   'cx.move': 'Move', 'cx.look': 'Look', 'cx.jump': 'Jump', 'cx.hit': 'Hit · throw', 'cx.oink': 'Oink', 'cx.tilt': 'Pour', 'cx.reach': 'Reach',
   'cx.view': 'View', 'cx.dance': 'Dance', 'cx.pass': 'Pass',
   'm.discoBob': 'Put a record on and make Bob dance to it', 'a.intGramo': 'Record player on / off', 'a.intDisco': 'Bob: dance to the record',
+  'm.floodSlip': 'Leave a tap running: Bob slips on the flooded floor', 'm.fireball': 'Fart next to a fire: FIREBALL',
+  'm.fireballBob': 'Blow Bob up with a fart fireball', 'bob.tapOff': 'Bob is turning the tap off',
+  'a.intSink': 'Flood: the nearest sink', 'a.intFire': 'Light the fireplace', 'a.intTap': 'Bob: turn the tap off',
+  'a.fire': 'Fire', 'a.fireballMe': 'Fireball on me', 'a.fireballBob': 'Fireball on Bob', 'a.tpGrill': 'Teleport: the BBQ grill',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -143,4 +147,8 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'cx.move': 'Moverse', 'cx.look': 'Mirar', 'cx.jump': 'Saltar', 'cx.hit': 'Golpe · lanzar', 'cx.oink': 'Oink', 'cx.tilt': 'Verter', 'cx.reach': 'Alcance',
   'cx.view': 'Vista', 'cx.dance': 'Bailar', 'cx.pass': 'Pasar',
   'm.discoBob': 'Pon un disco y haz que Bob baile', 'a.intGramo': 'Tocadiscos sí / no', 'a.intDisco': 'Bob: baila con el disco',
+  'm.floodSlip': 'Deja un grifo abierto: Bob resbala en el suelo inundado', 'm.fireball': 'Tírate un pedo junto al fuego: ¡BOLA DE FUEGO!',
+  'm.fireballBob': 'Haz volar a Bob con una bola de fuego de pedo', 'bob.tapOff': 'Bob está cerrando el grifo',
+  'a.intSink': 'Inundar: el fregadero más cercano', 'a.intFire': 'Encender la chimenea', 'a.intTap': 'Bob: cerrar el grifo',
+  'a.fire': 'Fuego', 'a.fireballMe': 'Bola de fuego en mí', 'a.fireballBob': 'Bola de fuego en Bob', 'a.tpGrill': 'Teletransporte: la barbacoa',
 };

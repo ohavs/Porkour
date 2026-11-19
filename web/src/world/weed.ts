@@ -361,6 +361,10 @@ export class Weed extends Chain {
       moved: (v, _d, p) => { G.audio.play('rustle', { pos: this.matC, vol: 0.25, pitch: 1.8, minGap: 0.35 }); if (v >= 0.999) this.rolled(p); } });
     HANDS.socket({ icon: 'joint', p: ashP.clone().setY(ashP.y + 0.035), q: qs, on: null, r: 0.2, dock: true, anyYaw: true, accepts: (it) => it.def.item === 'joint' });
     this.lighters = [P('lighter', L(2.7, top + 0.02, 1.15)), P('lighter', L(-0.95, TOP + 0.02, FZ - 0.12))]; this.flame = [0, 0];
+    // flames a fart can catch (s25): the lighters' flames, lit joints' tips, the bong's burning bowl
+    this.lighters.forEach((l, i) => G.flames.push({ r: 0.3, at: (o) => (this.flame[i] > G.time && !l.banked ? this.flamePos(l, o) : null) }));
+    this.joints.forEach((j, i) => G.flames.push({ r: 0.25, at: (o) => (this.lit[i] > G.time && !j.banked ? this.jointTip(j, o) : null) }));
+    G.flames.push({ r: 0.3, at: (o) => (this.bowlLit > G.time ? o.copy(this.bongBowl) : null) });
     P('seedBag', L(4.4, 0, 1.4));
     this.spot({ at: L(3.2, 0, 2.3), r: 1.3, markPos: L(3.2, 1.7, 1.42), needs: () => need('paper', this.paperIn ? 1 : 0) + need('filter', this.filterIn ? 1 : 0) + need('leaf', this.fill >= WEED.paperMin ? 1 : 0) });
 

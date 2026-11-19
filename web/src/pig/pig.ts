@@ -359,7 +359,7 @@ export class Pig implements Holdable {
   /** 0..1 jab progress (visual). */
   /** Snacks (world/snacks.ts): boost end times; eating since; smoking until; last puff. */
   boostUntil: Record<SnackId, number> = { beans: 0, spinach: 0, energy: 0, dogfood: 0 };
-  eatAt = -10; cigUntil = 0; puffAt = -10;
+  eatAt = -10; cigUntil = 0; puffAt = -10; private sootFx = 0;
   private eatProp: Prop | null = null; private nextPuff = 0; private puffFx = -10; private cigFx = 0;
   boosted(id: SnackId) { return this.now < this.boostUntil[id]; }
   get smoking() { return this.now < this.cigUntil; }
@@ -799,7 +799,7 @@ export class Pig implements Holdable {
       this.escape += this.heldBy.kind === 'farmer' ? 3 : 5;
       const b = v1.copy(this.pos);
       G.fx.puff(b, { count: 40, color: 0x9ccf4f, spread: 0.5, speed: 2.5, up: 0.3, life: 3, size: 1.8, grow: 2.2, drag: 2.2, alpha: 0.8 });
-      G.clouds.push({ x: b.x, y: b.y, z: b.z, r: 3, until: this.now + 6 });
+      G.clouds.push({ x: b.x, y: b.y, z: b.z, r: 3, until: this.now + 6, by: this, born: G.time });
       G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1 });
       G.noise(this.pos, 22);
       this.heldBy.fartedOn(this);
@@ -820,7 +820,7 @@ export class Pig implements Holdable {
     const vis = big * (G.lobby ? 0.55 : 1);   // the lobby camera is close: a smaller cloud
     G.fx.puff(butt, { count: Math.round(46 * vis), color: 0x9ccf4f, spread: 0.45 * vis, speed: 3.2 * vis, up: -0.8, life: 3.2, size: 1.9 * vis, grow: 2.4, drag: 2.0, alpha: 0.8, dir: v3.copy(f).negate().setY(-0.5) });
     G.fx.puff(butt, { count: 14, color: 0xe2f58a, spread: 0.2, speed: 6, up: -1, life: 0.7, size: 0.9, grow: 3, drag: 4, alpha: 0.95 });
-    G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3 * big, until: this.now + 6 });
+    G.clouds.push({ x: butt.x, y: butt.y, z: butt.z, r: 3 * big, until: this.now + 6, by: this, born: G.time });
     G.audio.play('fart', { pos: this.pos, vol: 1, rand: 0.18, minGap: 0.1, pitch: beans ? 0.75 : 1 });
     G.shakeFor(this, 0.3 * big);
     G.noise(this.pos, 22);
@@ -1590,6 +1590,11 @@ export class Pig implements Holdable {
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,
       leanF: this.leanX * Math.sin(this.yaw) + this.leanZ * Math.cos(this.yaw), leanS: this.leanX * Math.cos(this.yaw) - this.leanZ * Math.sin(this.yaw),
     });
+    // fresh soot (a fireball, the fireplace): a little smoke rises off the pig
+    if (this.burntUntil - this.now > 5 && !this.out && this.now > this.sootFx) {
+      this.sootFx = this.now + 0.3;
+      G.fx.puff(v2.copy(this.pos).setY(this.pos.y + 0.45), { count: 1, color: 0x5a5652, spread: 0.2, speed: 0.25, up: 1, life: 1.3, size: 0.32, grow: 1.2, drag: 1, alpha: 0.4 });
+    }
     // smoking: a wisp off the ember, and a puff of smoke out of the snout after each drag
     if (this.smoking) {
       const tip = this.visual.cigTip(v2);

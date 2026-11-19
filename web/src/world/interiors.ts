@@ -12,6 +12,7 @@ import type { BobJob } from '../farmer/farmer';
 import { makeTV, makePie } from './funProps';
 import { drawChannel } from './lounge';
 import type { Loop } from '../core/audio';
+import { raycast, L, world } from '../core/physics';
 
 /**
  * Furniture inside the buildings (user: "the maps are full, but the insides of buildings feel empty: furniture and lots
@@ -26,9 +27,14 @@ import type { Loop } from '../core/audio';
  * off: chatter Bob hears), a radio (a hit = on / off; carry it anywhere while it plays: music Bob hears from far —
  * he walks over and switches it off = a lure), the oven (RMB = bake: 16 s later a pie pops out on top, 2 per oven —
  * throw it in Bob's face), the bathtub (sit in it: the taps fill it, a bubble bath washes the mud off).
+ * s25 (user: "more interior pieces: sinks…"): sinks (kitchen + bathroom; barns get a utility one) — RMB = the tap on /
+ * off; left running it overflows and the floor floods (a growing puddle): Bob hears the water, comes to shut it and
+ * slips on the wet floor (pigs sprinting slip too); a can / bucket held under the tap fills. The fireplace (houses):
+ * RMB = light it (2½ min): things dropped in the fire burn up, a pig shoved in hops out black with soot, smoke out of
+ * the chimney — and like every flame, a fart next to it goes up in a fireball (`world/fireball.ts`; ovens baking too).
  * Deterministic (seeded by the building's spot): every machine furnishes the same; lamps / the spin are synced.
  */
-type Use = 'lamp' | 'fridge' | 'wash' | 'tv' | 'radio' | 'oven' | 'bath' | 'gramo';
+type Use = 'lamp' | 'fridge' | 'wash' | 'tv' | 'radio' | 'oven' | 'bath' | 'gramo' | 'sink' | 'hearth';
 interface Kind {
   /** Quaternius model name (or `make` = built in code), its height (m), mass (kg), loot value; against a wall (`wall`) or free-standing. */
   m: string; h: number; mass: number; value: number; wall?: boolean; make?: () => THREE.Object3D;
@@ -50,18 +56,18 @@ const K: Record<string, Kind> = {
   toilet: { m: 'Bathroom_Toilet', h: 0.85, mass: 28, value: 20, wall: true, seats: [[0, 0.46, 0.15, 0]] },
   bathtub: { m: 'Bathroom_Bathtub', h: 0.65, mass: 85, value: 35, wall: true, seats: [[0, 0.32, 0, 0]], use: 'bath' },
   washer: { m: 'Bathroom_WashingMachine', h: 1.0, mass: 70, value: 45, wall: true, use: 'wash' },
-  bSink: { m: 'Bathroom_Sink', h: 1.0, mass: 22, value: 15, wall: true },
+  bSink: { m: 'Bathroom_Sink', h: 1.0, mass: 22, value: 15, wall: true, use: 'sink' },
   shelf: { m: 'Bookshelf', h: 2.0, mass: 70, value: 30, wall: true },
   shelf2: { m: 'Shelf_1', h: 1.7, mass: 30, value: 20, wall: true },
   drawer1: { m: 'Drawer_1', h: 1.0, mass: 40, value: 25, wall: true },
   drawer3: { m: 'Drawer_3', h: 1.1, mass: 45, value: 25, wall: true },
-  fireplace: { m: 'Fireplace', h: 1.4, mass: 140, value: 0, wall: true },
+  fireplace: { m: 'Fireplace', h: 1.4, mass: 140, value: 0, wall: true, use: 'hearth' },
   fridge: { m: 'Kitchen_Fridge', h: 1.9, mass: 80, value: 50, wall: true, use: 'fridge' },
   oven: { m: 'Kitchen_Oven', h: 1.0, mass: 70, value: 40, wall: true, use: 'oven' },
   tvSet: { m: '', h: 0.85, mass: 30, value: 40, wall: true, make: makeTV, use: 'tv' },
   radio: { m: '', h: 0.3, mass: 2.5, value: 25, make: makeRadio, use: 'radio' },
   gramo: { m: '', h: 1.35, mass: 18, value: 45, wall: true, make: makeGramo, use: 'gramo' },
-  kSink: { m: 'Kitchen_Sink', h: 1.0, mass: 50, value: 25, wall: true },
+  kSink: { m: 'Kitchen_Sink', h: 1.0, mass: 50, value: 25, wall: true, use: 'sink' },
   kDrawers: { m: 'Kitchen_2Drawers', h: 1.0, mass: 45, value: 20, wall: true },
   kCab: { m: 'Kitchen_Cabinet1', h: 1.0, mass: 45, value: 20, wall: true },
   floorLamp: { m: 'Light_Floor1', h: 1.7, mass: 5, value: 15, use: 'lamp', shape: 'cyl' },
@@ -82,12 +88,12 @@ export const INTERIOR_MODELS = [...new Set(Object.values(K).filter((k) => k.m).m
 /** What goes in a building, by kind, in order (the first ones get the best wall spots). Groups: a table + seats round it. */
 const HOUSE = ['couchL', 'tvSet', 'fireplace', 'gramo', 'shelf', 'fridge', 'oven', 'kSink', 'kDrawers', 'bedKing', 'nightstand', 'washer', 'toilet', 'bathtub', 'drawer1', 'kCab',
   'shelf2', 'bSink', 'couchS', 'bed', '@table', 'floorLamp', 'plant4', 'plant2', 'standLamp', 'trash', 'plant7', 'radio'];
-const BARN = ['couchS', 'tvSet', 'gramo', 'shelf2', 'fridge', 'radio', 'oven', 'bathtub', 'bunk', 'drawer3', 'couchM', 'shelf', 'kCab', '@stools', 'standLamp', 'trash', 'plant7', 'bed'];
+const BARN = ['couchS', 'tvSet', 'fireplace', 'gramo', 'shelf2', 'fridge', 'kSink', 'radio', 'oven', 'bathtub', 'bunk', 'drawer3', 'couchM', 'shelf', 'kCab', '@stools', 'standLamp', 'trash', 'plant7', 'bed'];
 const isHouse = (m: string) => /Inn|House|Silo_House/.test(m);
 /** Small things put on tables / shelves / by the toilet afterwards. */
 const SMALL_ON_TABLE = ['plate', 'radio', 'deskLamp'];
 
-const v1 = new THREE.Vector3(), q1 = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q1 = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 const LIT = new WeakSet<THREE.Material>(), WARM = new THREE.Color(0xfff1d8);
 const rnd = (seed: number) => () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
@@ -134,6 +140,13 @@ const BAKE = { secs: 16, pies: 2 };
 /** The host's fixed step (s). */
 const STEP_DT = 1 / 60;
 const LURE = { radio: 22, tv: 12 };
+/**
+ * Sinks: the tap runs `over` s before the basin overflows, then the flood grows to `max` m round in `grow` s (dries in
+ * `dry` s once off); Bob hears it ≤ `lure` m; slips: Bob walking > `bobSlip` m/s, pigs sprinting / standing (as milk).
+ */
+export const SINK = { over: 8, grow: 26, dry: 50, max: 2.6, lure: 16, noise: 10, bobSlip: 0.7, pigSlip: 3.4, standSlip: 1.4, bobAgain: 20 };
+/** Fireplaces: a fire burns `secs` s; things ≤ `burnKg` kg in it for `burnT` s burn up. */
+export const HEARTH = { secs: 150, burnKg: 15, burnT: 1.1 };
 
 interface Tv { pr: Prop; ch: number; canvas: HTMLCanvasElement; tex: THREE.CanvasTexture; screen: THREE.Mesh | null; on: THREE.Material; off: THREE.Material; loop: Loop | null; drawT: number; noiseT: number }
 interface Radio { pr: Prop; on: boolean; hitT: number; dial: THREE.Mesh | null; loop: Loop | null; noiseT: number }
@@ -144,11 +157,17 @@ interface Bath { pr: Prop; seat: number; fill: number; water: THREE.Mesh; idleT:
 interface Lamp { pr: Prop; bulb: THREE.Mesh; mat: THREE.MeshBasicMaterial; on: boolean; hitT: number }
 interface Fridge { pr: Prop; cans: Prop[] }
 interface Washer { pr: Prop; until: number }
+/** `run` = s the tap has run; `flood` 0..1 = the puddle on the floor at (cx, cy, cz); `slipT` = Bob can't slip here again before. */
+interface Sink { pr: Prop; on: boolean; run: number; flood: number; cx: number; cy: number; cz: number; puddle: THREE.Mesh; slipT: number; noiseT: number; loop: Loop | null; drip: number }
+/** A fireplace: lit until; the fire (logs + flames, a child of the piece); things lying in it since. */
+interface Hearth { pr: Prop; until: number; fire: THREE.Group; flames: THREE.Mesh[]; loop: Loop | null; burnT: Map<Prop, number>; pigT: Map<Pig, number>; smokeT: number }
 
 export class Interiors {
   kind = 'interiors' as const;
   lamps: Lamp[] = []; fridges: Fridge[] = []; washers: Washer[] = [];
   tvs: Tv[] = []; radios: Radio[] = []; ovens: Oven[] = []; baths: Bath[] = []; gramos: Gramo[] = [];
+  sinks: Sink[] = []; hearths: Hearth[] = [];
+  private slipAt = new Map<Pig, number>();
   /** The toilets' seat numbers (getting up off one flushes it). */
   private toiletSeats = new Set<number>(); private sat = new Map<Pig, number>();
   /** Seats on beds / bunks (mission: nap in Bob's bed). */
@@ -164,14 +183,18 @@ export class Interiors {
   constructor(private scene: THREE.Scene, private props: Prop[], nav: Nav, buildings: { model: string; x: number; z: number; yaw: number; sx: number; sz: number }[], start: THREE.Vector3) {
     if (!buildings.length) return;
     const reach = this.flood(nav, start);
+    world.updateSceneQueries();   // (the buildings' colliders were just made: rays find them only after this)
     for (const b of buildings) {
       if (/ChickenCoop|Well|WaterTower|Silo$|Windmill|TowerWindmill/.test(b.model)) continue;
       this.furnish(nav, reach, b);
     }
     G.hittables.push({ hit: (x, y, z, r) => this.hitLamp(x, y, z, r) || this.hitRadio(x, y, z, r) });
-    G.uses.push({ near: (p: Pig) => !p.held && !!this.useNear(p), icon: (p: Pig) => { const k = this.useNear(p)?.kind; return k === 'fridge' ? 'eat' : k === 'tv' ? 'tv' : k === 'oven' ? 'oven' : k === 'gramo' ? 'note' : 'gear'; } });
-    // Bob hears a radio / TV left on: he walks over and switches it off (a lure)
-    if (this.radios.length || this.tvs.length || this.gramos.length) G.jobs.push({ spot: (bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean }) => this.jobFor(bob) });
+    G.uses.push({ near: (p: Pig) => !p.held && !!this.useNear(p), icon: (p: Pig) => { const k = this.useNear(p)?.kind; return k === 'fridge' ? 'eat' : k === 'tv' ? 'tv' : k === 'oven' ? 'oven' : k === 'gramo' ? 'note' : k === 'sink' ? 'water' : k === 'hearth' ? 'flame' : 'gear'; } });
+    // flames a fart can catch: lit fireplaces, ovens baking
+    for (const h of this.hearths) G.flames.push({ r: 0.9, at: (o) => (h.until > G.time && !h.pr.banked ? h.fire.getWorldPosition(o).setY(o.y + 0.25) : null) });
+    for (const o of this.ovens) G.flames.push({ r: 0.7, at: (out) => (o.until > 0 && !o.pr.banked ? out.copy(this.front(o.pr, 0.05)) : null) });
+    // Bob hears a radio / TV left on / a tap running: he walks over and switches it off (a lure)
+    if (this.radios.length || this.tvs.length || this.gramos.length || this.sinks.length) G.jobs.push({ spot: (bob: { pos: THREE.Vector3; looksAt(pt: THREE.Vector3, range?: number): boolean }) => this.jobFor(bob) });
   }
 
   /** Every nav cell the yard reaches (from the pigs' sty). */
@@ -204,7 +227,19 @@ export class Interiors {
     const j0 = Math.max(0, Math.floor((b.z - Math.max(b.sx, b.sz) / 1.4 - N.z0) / cs)), j1 = Math.min(N.h - 1, Math.ceil((b.z + Math.max(b.sx, b.sz) / 1.4 - N.z0) / cs));
     const cx = (i: number) => N.x0 + (i + 0.5) * cs, cz = (j: number) => N.z0 + (j + 0.5) * cs;
     const room = new Set<number>();
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * N.w + i; if (reach[k] && inside(cx(i), cz(j))) { room.add(k); cells.push(k); } }
+    // indoors = a roof overhead and walls on at least 3 sides (a ray each way along the building's axes): the yard round
+    // a closed house (inside its footprint, under the eaves) or its porch isn't a room (s25: once the nav grid had the
+    // hillside farms' walls, the space round their closed farmhouses was being "furnished")
+    const gy = (x: number, z: number) => G.terrain.height(x, z);
+    const axes = [[cos, -sin], [-cos, sin], [sin, cos], [-sin, -cos]], span = Math.max(b.sx, b.sz);
+    const indoors = (x: number, z: number) => {
+      const y = gy(x, z);
+      if (!raycast(v1.set(x, y + 0.6, z), v2.set(0, 1, 0), 14, L.STATIC)) return false;
+      let walls = 0;
+      for (const [ax, az] of axes) if (raycast(v1.set(x, y + 1.0, z), v2.set(ax, 0, az), span, L.STATIC)) walls++;
+      return walls >= 3;
+    };
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * N.w + i; if (reach[k] && inside(cx(i), cz(j)) && indoors(cx(i), cz(j))) { room.add(k); cells.push(k); } }
     if (cells.length < 40) return;   // < 10 m²: not a room
     // the doorway(s): walkable cells in the wall band (openings) → keep 1.4 m round them clear
     const door: THREE.Vector3[] = [];
@@ -383,6 +418,25 @@ export class Interiors {
       for (let i = 0; i < BAKE.pies; i++) { const pp = new Prop(this.scene, PROPS.ovenPie, v1.set(x, -50, z), 0); pp.pooled = true; pp.bank(); this.props.push(pp); pies.push(pp); }
       this.ovens.push({ pr, until: 0, pies, glow, loop: null });
     }
+    if (kd.use === 'sink') {
+      const pm = this.puddleMat ??= (() => { const m = new THREE.MeshBasicMaterial({ color: 0x9fd6f5, transparent: true, opacity: 0.72, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }); return m; })();
+      const geo = new THREE.CircleGeometry(1, 22).rotateX(-Math.PI / 2), pa = geo.attributes.position;
+      for (let i = 1; i < pa.count; i++) { const a = Math.atan2(pa.getZ(i), pa.getX(i)), k = 1 + Math.sin(a * 3 + x) * 0.13 + Math.sin(a * 5 + z) * 0.08; pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * k); }
+      const puddle = new THREE.Mesh(geo, pm); puddle.visible = false; puddle.renderOrder = 2; this.scene.add(puddle);
+      this.sinks.push({ pr, on: false, run: 0, flood: 0, cx: x, cy: y, cz: z, puddle, slipT: 0, noiseT: 0, loop: null, drip: 0 });
+    }
+    if (kd.use === 'hearth') {
+      // the fire: two crossed logs + three flames, in the firebox (front, low)
+      const fire = new THREE.Group(); fire.position.set(0, -sz.y / 2 + 0.1, sz.z * 0.08); pr.obj.add(fire);
+      const wood = toonMat(0x5a3820);
+      for (const a of [-0.5, 0.5]) { const lg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.55, 8), wood); lg.rotation.set(0, a, Math.PI / 2); lg.position.y = 0.06; fire.add(lg); }
+      const flames: THREE.Mesh[] = [];
+      [[0, 0.42, 0.13, 0xff7a1a], [-0.11, 0.3, 0.1, 0xffa733], [0.11, 0.32, 0.1, 0xffd23a]].forEach(([fx, h, r, c]) => {
+        const fl = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.92 }));
+        fl.position.set(fx, 0.1 + h / 2, 0); fl.visible = false; fire.add(fl); flames.push(fl);
+      });
+      this.hearths.push({ pr, until: 0, fire, flames, loop: null, burnT: new Map(), pigT: new Map(), smokeT: 0 });
+    }
     if (kd.use === 'bath') {
       const water = new THREE.Mesh(new THREE.BoxGeometry(sz.x * 0.78, 0.02, sz.z * 0.62), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.85 }));
       water.position.set(0, -sz.y / 2 + 0.12, 0); water.visible = false; pr.obj.add(water);
@@ -426,15 +480,19 @@ export class Interiors {
     return false;
   }
   /** RMB things next to a pig: the washing machine (a fridge's can is a dispenser). */
-  useNear(p: Pig): { kind: 'wash'; w: Washer } | { kind: 'tv'; tv: Tv } | { kind: 'oven'; o: Oven } | { kind: 'gramo'; gr: Gramo } | { kind: 'fridge' } | null {
+  useNear(p: Pig): { kind: 'wash'; w: Washer } | { kind: 'tv'; tv: Tv } | { kind: 'oven'; o: Oven } | { kind: 'gramo'; gr: Gramo } | { kind: 'sink'; s: Sink } | { kind: 'hearth'; h: Hearth } | { kind: 'fridge' } | null {
     if (p.seat >= 0 || p.out || p.heldBy) return null;
     const ok = (pr: Prop) => !pr.banked && !pr.heldBy && this.upright(pr);
     for (const w of this.washers) if (ok(w.pr) && w.until < G.time && this.frontOf(w.pr, 0.6, p.pos) < 1.0) return { kind: 'wash', w };
     for (const tv of this.tvs) if (ok(tv.pr) && this.frontOf(tv.pr, 0.7, p.pos) < 0.9) return { kind: 'tv', tv };
     for (const gr of this.gramos) if (ok(gr.pr) && this.frontOf(gr.pr, 0.6, p.pos) < 1.0) return { kind: 'gramo', gr };
     for (const o of this.ovens) if (ok(o.pr) && o.until <= 0 && o.pies.some((k) => k.banked) && this.frontOf(o.pr, 0.6, p.pos) < 1.0) return { kind: 'oven', o };
+    for (const s of this.sinks) if (ok(s.pr) && this.frontOf(s.pr, 0.5, p.pos) < 0.9) return { kind: 'sink', s };
+    for (const h of this.hearths) if (ok(h.pr) && h.until <= G.time && this.frontOf(h.pr, 0.6, p.pos) < 1.1) return { kind: 'hearth', h };
     return null;
   }
+  private puddleMat: THREE.MeshBasicMaterial | null = null;
+  private hearthTick = 0;
   private upright(pr: Prop) { const r = pr.body.rotation(); return v1.set(0, 1, 0).applyQuaternion(q1.set(r.x, r.y, r.z, r.w)).y > 0.7; }
   /** A hit on a radio: on / off. */
   private hitRadio(x: number, y: number, z: number, reach: number) {
@@ -459,11 +517,14 @@ export class Interiors {
     if (what === 'tv') { const tv = near(this.tvs); if (tv) { tv.ch = (tv.ch + 1) % 5; tv.noiseT = G.time + 2; } }
     if (what === 'bake') { const o = near(this.ovens); if (o) o.until = G.time + 1; }
     if (what === 'bath') { const b = near(this.baths); if (b) { b.fill = 1; b.idleT = 0; } }
+    if (what === 'sink') { const sk = near(this.sinks); if (sk) { this.setTap(sk, true); sk.run = SINK.over; sk.flood = Math.max(sk.flood, 0.7); this.floodSpot(sk); } }
+    if (what === 'fire') { const h = near(this.hearths); if (h) this.light(h); }
   }
   /** Admin: Bob's job for the nearest playing radio / TV (switched on first if none is). */
-  lureJob(at: THREE.Vector3, bob?: { pos: THREE.Vector3; danceFor?(secs: number, at?: THREE.Vector3): void }, gramo = false) {
+  lureJob(at: THREE.Vector3, bob?: { pos: THREE.Vector3; danceFor?(secs: number, at?: THREE.Vector3): void }, gramo = false, sink = false) {
     if (!bob) return null;
-    if (gramo) { if (!this.gramos.some((g) => g.on)) this.admin('gramo', at); }
+    if (sink) { if (!this.sinks.some((k) => k.on)) this.admin('sink', at); }
+    else if (gramo) { if (!this.gramos.some((g) => g.on)) this.admin('gramo', at); }
     else if (!this.radios.some((r) => r.on) && !this.tvs.some((tv) => tv.ch)) this.admin(this.radios.length ? 'radio' : 'tv', at);
     return this.jobFor({ pos: bob.pos, looksAt: () => true, danceFor: bob.danceFor?.bind(bob) });
   }
@@ -499,15 +560,57 @@ export class Interiors {
       const d = at(tv.pr).distanceTo(bob.pos);
       if (d < bd && (d < LURE.tv || bob.looksAt(at(tv.pr), 20))) { bd = d; best = { pr: tv.pr, off: () => { tv.ch = 0; }, still: () => tv.ch > 0 && !tv.pr.banked }; }
     }
+    // a tap left running: he hears the water (the flood makes it louder), comes to shut it — through the puddle
+    for (const sk of this.sinks) {
+      if (!sk.on || sk.pr.banked || sk.pr.heldBy) continue;
+      const d = at(sk.pr).distanceTo(bob.pos);
+      if (d < bd && (d < SINK.lure + sk.flood * 6 || bob.looksAt(at(sk.pr), 20))) {
+        bd = d;
+        best = { pr: sk.pr, off: () => { this.setTap(sk, false); G.events.push({ type: 'tapOff' }); }, still: () => sk.on && !sk.pr.banked && !sk.pr.heldBy };
+      }
+    }
     if (!best) return null;
     const b = best, p = at(b.pr), dx = bob.pos.x - p.x, dz = bob.pos.z - p.z, d = Math.hypot(dx, dz) || 1;
-    // wall pieces (TV, record player): he stands in front of it, not on his side (that can be behind the wall)
-    const wall = this.tvs.some((tv) => tv.pr === b.pr) || this.gramos.some((g) => g.pr === b.pr);
+    // wall pieces (TV, record player, a sink): he stands in front of it, not on his side (that can be behind the wall)
+    const tap = this.sinks.some((k) => k.pr === b.pr);
+    const wall = tap || this.tvs.some((tv) => tv.pr === b.pr) || this.gramos.some((g) => g.pr === b.pr);
+    if (tap) return {
+      at: this.front(b.pr, 0.75), look: p.clone(), dur: 1.3, activity: 'bob.tapOff', still: b.still,
+      done: () => { b.off(); G.audio.play('clunk', { pos: at(b.pr), vol: 0.5, pitch: 1.5 }); },
+    };
     return {
       at: wall ? this.front(b.pr, 1.0) : new THREE.Vector3(p.x + (dx / d) * 0.9, p.y, p.z + (dz / d) * 0.9), look: p.clone(), dur: 1.6, activity: 'bob.radioOff',
       still: b.still,
       done: () => { b.off(); G.audio.play('clunk', { pos: at(b.pr), vol: 0.6, pitch: 1.2 }); G.events.push({ type: 'radioOff' }); },
     };
+  }
+
+  /** A tap on / off (host). */
+  private setTap(sk: Sink, on: boolean) {
+    if (sk.on === on) return;
+    sk.on = on; sk.noiseT = G.time + 1.5;
+    if (!on) sk.run = 0;
+    G.audio.play('clunk', { pos: sk.pr.synced.currP, vol: 0.45, pitch: on ? 1.7 : 1.4 });
+  }
+  /** Where the flood spreads from: the floor in front of the sink (set when it starts to overflow). */
+  private floodSpot(sk: Sink) {
+    const f = this.front(sk.pr, 0.45);
+    sk.cx = f.x; sk.cz = f.z; sk.cy = sk.pr.synced.currP.y - sk.pr.half;
+  }
+  /** The spout (over the basin, a little back) and the basin's front rim (where it spills over). */
+  private spout(sk: Sink, out: THREE.Vector3, rim = false) {
+    const pr = sk.pr, t = pr.synced.currP, q = pr.obj.quaternion;
+    return out.set(0, pr.size.y / 2 + (rim ? -0.04 : 0.08), rim ? pr.size.z / 2 : -pr.size.z * 0.12).applyQuaternion(q).add(t);
+  }
+  /** The flood's reach now (m). */
+  floodR(sk: Sink) { return 0.4 + sk.flood * (SINK.max - 0.4); }
+  /** A fireplace lit (host). */
+  private light(h: Hearth) {
+    h.until = G.time + HEARTH.secs;
+    const at = h.fire.getWorldPosition(new THREE.Vector3());
+    G.audio.play('flint', { pos: at, vol: 0.7 }); G.audio.play('fire', { pos: at, vol: 0.6 });
+    G.fx.bits(at, { count: 12, color: 0xffa733, speed: 1.2, up: 1.6, life: 0.6, size: 0.08, grow: 0, alpha: 1 });
+    G.events.push({ type: 'hearthLit' });
   }
 
   // ================================================================== host step
@@ -541,6 +644,8 @@ export class Interiors {
         G.audio.play('clunk', { pos: gr.pr.synced.currP, vol: 0.5, pitch: gr.on ? 1.7 : 1.3 });
         p.touch(v1.copy(gr.pr.synced.currP).setY(gr.pr.synced.currP.y + 0.3));
       }
+      if (u.kind === 'sink') { this.setTap(u.s, !u.s.on); p.touch(this.spout(u.s, v1)); if (u.s.on) G.events.push({ type: 'sinkOn', who: p }); }
+      if (u.kind === 'hearth') { this.light(u.h); p.touch(u.h.fire.getWorldPosition(v1)); }
       if (u.kind === 'oven') {
         u.o.until = G.time + BAKE.secs;
         G.audio.play('flint', { pos: u.o.pr.synced.currP, vol: 0.7 }); G.audio.play('fire', { pos: u.o.pr.synced.currP, vol: 0.5 });
@@ -588,6 +693,8 @@ export class Interiors {
       }
       if (Math.random() < 0.05) G.noise(w.pr.synced.currP, 14);
     }
+    this.stepSinks();
+    this.stepHearths();
     // a lamp knocked over goes out
     for (const l of this.lamps) {
       if (!l.on) continue;
@@ -603,6 +710,75 @@ export class Interiors {
       }
     }
   }
+  /** Taps that run: water out of the spout (into a can / bucket held under it), overflow → the flood; slips. */
+  private stepSinks() {
+    const now = G.time, dt = STEP_DT;
+    for (const sk of this.sinks) {
+      if (sk.on && (sk.pr.banked || sk.pr.heldBy || !this.upright(sk.pr))) this.setTap(sk, false);   // carried off / knocked over: the pipe's cut
+      if (sk.on) {
+        sk.run += dt;
+        HANDS.emit(this.spout(sk, v1), 'water', 0.5 * dt, null);
+        if (sk.run > SINK.over) {
+          if (sk.flood <= 0) this.floodSpot(sk);
+          sk.flood = Math.min(1, sk.flood + dt / SINK.grow);
+        }
+        if (now > sk.noiseT) { sk.noiseT = now + 4; G.noise(sk.pr.synced.currP, SINK.noise + sk.flood * 6); }
+      } else if (sk.flood > 0) sk.flood = Math.max(0, sk.flood - dt / SINK.dry);
+      if (sk.flood < 0.1) continue;
+      // the wet floor: Bob walking through it / pigs sprinting (or standing) slip
+      const r = this.floodR(sk) * 0.88;
+      const inIt = (q: { x: number; y: number; z: number }) => Math.hypot(q.x - sk.cx, q.z - sk.cz) < r && Math.abs(q.y - sk.cy) < 1.6;
+      const f = G.farmer;
+      if (f && now > sk.slipT && Math.hypot(f.vel.x, f.vel.z) > SINK.bobSlip && inIt(f.pos) && f.slip('water')) {
+        sk.slipT = now + SINK.bobAgain;   // he gets up and wades over carefully
+        G.audio.play('splash', { pos: f.pos, vol: 0.9, pitch: 1.2 });
+      }
+      for (const pig of G.pigs as Pig[]) {
+        if (pig.out || pig.cage || pig.heldBy || pig.mode === 'ragdoll' || now < (this.slipAt.get(pig) ?? 0)) continue;
+        const sp = Math.hypot(pig.vel.x, pig.vel.z);
+        if (sp < (pig.standing ? SINK.standSlip : SINK.pigSlip) || !inIt(pig.pos)) continue;
+        this.slipAt.set(pig, now + 2.5);
+        pig.knock(v1.set(pig.vel.x * 0.5, 4, pig.vel.z * 0.5), true);
+        G.audio.play('whoosh', { pos: pig.pos, vol: 0.9, pitch: 0.9 });
+        G.audio.play('splash', { pos: pig.pos, vol: 0.6, pitch: 1.3 });
+        G.events.push({ type: 'pigSlipped', who: pig });
+      }
+    }
+  }
+  /** Fireplaces: burning out; things in the fire burn up; a pig in it hops out sooty. */
+  private stepHearths() {
+    if (!this.hearths.length || (++this.hearthTick % 6) !== 0) return;   // 10 times a second is plenty
+    const now = G.time;
+    for (const h of this.hearths) {
+      if (h.until <= now) { if (h.burnT.size) h.burnT.clear(); continue; }
+      if (h.pr.banked || !this.upright(h.pr)) { h.until = 0; continue; }   // knocked over: the fire's out
+      const at = h.fire.getWorldPosition(v2);
+      for (const pr of G.props as Prop[]) {
+        if (pr.banked || pr.heldBy || pr.pooled || pr === h.pr || pr.mass > HEARTH.burnKg) { h.burnT.delete(pr); continue; }
+        const q = pr.body.translation();
+        if (Math.hypot(q.x - at.x, q.z - at.z) > 0.52 || Math.abs(q.y - at.y - 0.15) > 0.5) { h.burnT.delete(pr); continue; }
+        const t0 = h.burnT.get(pr) ?? now; h.burnT.set(pr, t0);
+        if (now - t0 < HEARTH.burnT) continue;
+        h.burnT.delete(pr);
+        const bp = v1.set(q.x, q.y, q.z);
+        G.fx.puff(bp, { count: 14, color: 0x4a4542, spread: 0.2, speed: 1, up: 2, life: 2, size: 0.6, grow: 1.4, drag: 1, alpha: 0.6 });
+        G.fx.bits(bp, { count: 16, color: 0xff8a2a, spread: 0.15, speed: 2, up: 3, grav: 4, life: 0.8, size: 0.07, grow: 0, alpha: 1 });
+        G.audio.play('fire', { pos: bp, vol: 0.8, pitch: 1.2 }); G.audio.play('crackle', { pos: bp, vol: 0.6, minGap: 0.5 });
+        pr.smashed = true; pr.bank();
+        G.events.push({ type: 'burned', text: pr.def.id ?? '' });
+      }
+      for (const pig of G.pigs as Pig[]) {
+        if (pig.out || pig.heldBy || now < (h.pigT.get(pig) ?? 0)) continue;
+        if (Math.hypot(pig.pos.x - at.x, pig.pos.z - at.z) > 0.55 || Math.abs(pig.pos.y - at.y) > 0.9) continue;
+        h.pigT.set(pig, now + 2.5);
+        const f = this.front(h.pr, 1).sub(at).setY(0).normalize();
+        pig.knock(v1.set(f.x * 4, 6, f.z * 4), false);
+        pig.burntUntil = Math.max(pig.burntUntil, pig.now + 10);
+        G.audio.play('squeal', { pos: pig.pos, vol: 1 }); G.audio.play('sizzle', { pos: pig.pos, vol: 0.7 });
+        G.events.push({ type: 'hotSeat', who: pig });
+      }
+    }
+  }
   /** New round: lamps back on, fridges full, no spin. */
   reset() {
     for (const l of this.lamps) this.setLamp(l, true);
@@ -613,6 +789,9 @@ export class Interiors {
     for (const b of this.baths) b.fill = 0;
     for (const f of this.fridges) for (const c of f.cans) { c.bank(); }
     for (const w of this.washers) w.until = 0;
+    for (const sk of this.sinks) { sk.on = false; sk.run = 0; sk.flood = 0; sk.slipT = 0; }
+    for (const h of this.hearths) { h.until = 0; h.burnT.clear(); }
+    this.slipAt.clear();
   }
 
   // ================================================================== network
@@ -624,6 +803,9 @@ export class Interiors {
     for (const o of this.ovens) n.push(o.until > 0 ? Math.round(o.until * 10) / 10 : 0);
     for (const b of this.baths) n.push(Math.round(b.fill * 100) / 100);
     let gb = 0; this.gramos.forEach((g, i) => { if (g.on && i < 30) gb |= 1 << i; }); n.push(gb);
+    let sb = 0; this.sinks.forEach((k, i) => { if (k.on && i < 30) sb |= 1 << i; }); n.push(sb);
+    for (const k of this.sinks) n.push(Math.round(k.flood * 100) / 100, Math.round(k.cx * 100) / 100, Math.round(k.cy * 100) / 100, Math.round(k.cz * 100) / 100);
+    for (const h of this.hearths) n.push(h.until > G.time ? Math.round(h.until * 10) / 10 : 0);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -635,6 +817,9 @@ export class Interiors {
     for (const o of this.ovens) o.until = n[k++] ?? 0;
     for (const b of this.baths) b.fill = n[k++] ?? 0;
     const gb = n[k++] ?? 0; this.gramos.forEach((g, i) => { g.on = i < 30 && !!(gb & (1 << i)); });
+    const sb = n[k++] ?? 0; this.sinks.forEach((s, i) => { s.on = i < 30 && !!(sb & (1 << i)); });
+    for (const s of this.sinks) { s.flood = n[k++] ?? 0; s.cx = n[k++] ?? s.cx; s.cy = n[k++] ?? s.cy; s.cz = n[k++] ?? s.cz; }
+    for (const h of this.hearths) h.until = n[k++] ?? 0;
   }
   /** A positional loop that runs while `on` (started / stopped / moved here). */
   private sound(l: Loop | null, on: boolean, name: string, at: THREE.Vector3, vol: number, ref: number) {
@@ -684,6 +869,41 @@ export class Interiors {
       b.water.children.forEach((c, i) => { c.visible = b.fill > 0.6; c.scale.setScalar(0.8 + Math.sin(t * 2 + i) * 0.15); });
       const filling = b.fill > 0 && b.fill < 1 && b.idleT === 0;
       b.loop = this.sound(b.loop, filling && near(b.pr, 20), 'pour', b.pr.obj.position, 0.5, 2);
+    }
+    // sinks: the tap's stream, water spilling over the rim, the flood on the floor, running water
+    for (const sk of this.sinks) {
+      const on = sk.on && !sk.pr.banked;
+      if (on) {
+        HANDS.streamFx(this.spout(sk, v1), 0xbfe6ff, dt, 0.045);
+        if (sk.run > SINK.over || sk.flood > 0.05) { sk.drip -= dt; if (sk.drip <= 0) { sk.drip = 0.07; G.fx.bits(this.spout(sk, v1, true), { count: 1, color: 0xbfe6ff, spread: 0.18, speed: 0.4, up: -0.2, grav: 9, life: 0.5, size: 0.05, grow: 0, alpha: 1 }); } }
+      }
+      if (G.net === 'client' && on) sk.run += dt;   // (players: only the look of it)
+      const r = this.floodR(sk);
+      sk.puddle.visible = sk.flood > 0.02;
+      if (sk.puddle.visible) {
+        sk.puddle.position.set(sk.cx, sk.cy + 0.075, sk.cz);
+        sk.puddle.scale.set(r, 1, r * 0.92);
+        sk.puddle.rotation.y = Math.sin(t * 0.3 + sk.cx) * 0.05;
+      }
+      sk.loop = this.sound(sk.loop, on && near(sk.pr, 22), 'pour', sk.pr.obj.position, 0.42, 2);
+      if (sk.loop && on) sk.loop.setRate(0.82);
+    }
+    // fireplaces: flames flicker, sparks, smoke out of the chimney, the fire crackles
+    for (const h of this.hearths) {
+      const on = h.until > t && !h.pr.banked;
+      h.flames.forEach((fl, i) => {
+        fl.visible = on;
+        if (on) { fl.scale.set(1 + Math.sin(t * 13 + i * 2) * 0.12, 1 + Math.sin(t * 9.5 + i) * 0.22, 1); fl.rotation.y = t * (i - 1) * 1.5; }
+      });
+      if (!on) { h.loop = this.sound(h.loop, false, 'fire', h.pr.obj.position, 0, 1); continue; }
+      h.smokeT -= dt;
+      if (h.smokeT <= 0 && near(h.pr, 70)) {
+        h.smokeT = 0.32;
+        const top = v1.set(0, h.pr.size.y / 2 + 0.1, -h.pr.size.z * 0.1).applyQuaternion(h.pr.obj.quaternion).add(h.pr.obj.position);
+        G.fx.puff(top, { count: 1, color: 0x8d8a86, spread: 0.12, speed: 0.3, up: 1.4, life: 2.6, size: 0.45, grow: 1.4, drag: 0.6, alpha: 0.4 });
+        if (Math.random() < 0.5) G.fx.bits(h.fire.getWorldPosition(v2).setY(v2.y + 0.25), { count: 1, color: 0xffa733, spread: 0.12, speed: 0.3, up: 1.2, grav: -1, life: 0.6, size: 0.05, grow: 0, alpha: 1 });
+      }
+      h.loop = this.sound(h.loop, near(h.pr, 18), 'fire', h.fire.getWorldPosition(v2), 0.45, 2);
     }
     void UP;
   }
