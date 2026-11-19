@@ -34,12 +34,16 @@ const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab', 'attack', 'ti
 const AIM = 50;
 const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR', 'oinkP', 'attackP', 'attackR', 'pickP', 'pickFailP'] as const;
 
+/** A synced entity's physics body (a field called `body` that isn't one — a mesh — must not count: s20 mines broke online). */
+const rb = (e: NetEnt) => (e.body && typeof (e.body as { translation?: unknown }).translation === 'function' ? e.body : undefined);
 export function entities(game: Game): NetEnt[] {
   const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy, game.farm.pumpkins, game.farm.winter, game.farm.chain, game.farm.chain?.visions].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
   return [...game.pigs, game.farmer!, game.farm.cage, game.round, game.traps, ...game.gates.list, ...game.loos, ...(game.phones ? [game.phones] : []), ...(game.hammock ? [game.hammock] : []), ...(game.porch ? [game.porch] : []), game.mines, ...(game.gulag ? [game.gulag] : []), ...(game.lounge ? [game.lounge] : []), game.interiors, ...extra, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
+/** Change-mask words for n numbers (one 32-bit word per 32). */
+const maskWords = (n: number) => new Array<number>((n + 31) >> 5).fill(0);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), qq = new THREE.Quaternion();
 
 // ====================================================================== host
@@ -131,32 +135,33 @@ export class NetHost {
       e.netState?.(n, s);
       let bits = 0;
       let p: RAPIER.Vector | null = null, q: RAPIER.Rotation | null = null;
-      if (e.body) {
-        p = e.body.translation(); q = e.body.rotation();
+      const body = rb(e);
+      if (body) {
+        p = body.translation(); q = body.rotation();
         const bp = this.bp, bq = this.bq;
         if (!(Math.abs(p.x - bp[i * 3]) < 5e-4 && Math.abs(p.y - bp[i * 3 + 1]) < 5e-4 && Math.abs(p.z - bp[i * 3 + 2]) < 5e-4)) bits |= 1;
         if (!(Math.abs(q.x - bq[i * 4]) < 3e-4 && Math.abs(q.y - bq[i * 4 + 1]) < 3e-4 && Math.abs(q.z - bq[i * 4 + 2]) < 3e-4 && Math.abs(q.w - bq[i * 4 + 3]) < 3e-4)) bits |= 2;
       }
       const bn = this.bn[i], bs = this.bs[i];
-      let nlo = 0, nhi = 0, smask = 0;
-      for (let k = 0; k < n.length; k++) if (bn.length !== n.length || !(Math.abs(n[k] - bn[k]) < 1e-4 || n[k] === bn[k])) {
-        if (k < 32) nlo |= 1 << k; else nhi |= 1 << (k - 32);
-      }
-      for (let k = 0; k < s.length; k++) if (bs[k] !== s[k]) smask |= 1 << k;
-      const nmask = nlo || nhi;
-      if (nmask) bits |= 4;
-      if (nhi) bits |= 16;
+      // which numbers / strings changed (any count: a mask word per 32 — s26: the furnished buildings' state passed
+      // 64 numbers and the old two-word mask scrambled every snapshot after it)
+      const nm = maskWords(n.length);
+      let nAny = false, smask = 0;
+      for (let k = 0; k < n.length; k++) if (bn.length !== n.length || !(Math.abs(n[k] - bn[k]) < 1e-4 || n[k] === bn[k])) { nm[k >> 5] |= 1 << (k & 31); nAny = true; }
+      if (bs.length !== s.length) smask = s.length ? -1 : 0, bits |= 8;
+      else for (let k = 0; k < s.length; k++) if (bs[k] !== s[k]) smask |= 1 << k;
+      if (nAny || (bn.length !== n.length)) bits |= 4;
       if (smask) bits |= 8;
       if (bits) {
-        this.writeEnt(w, i, bits, p, q, n, s, nlo, nhi, smask);
+        this.writeEnt(w, i, bits, p, q, n, s, nm, smask);
         if (bits & 1) { this.bp[i * 3] = p!.x; this.bp[i * 3 + 1] = p!.y; this.bp[i * 3 + 2] = p!.z; }
         if (bits & 2) { this.bq[i * 4] = q!.x; this.bq[i * 4 + 1] = q!.y; this.bq[i * 4 + 2] = q!.z; this.bq[i * 4 + 3] = q!.w; }
-        if (nmask) this.bn[i] = n.slice();
-        if (smask) this.bs[i] = s.slice();
+        if (bits & 4) this.bn[i] = n.slice();
+        if (bits & 8) this.bs[i] = s.slice();
       }
       if (wantKey) {
-        const lo = n.length >= 32 ? -1 : (1 << n.length) - 1, hi = n.length <= 32 ? 0 : n.length >= 64 ? -1 : (1 << (n.length - 32)) - 1;
-        this.writeEnt(kw, i, (e.body ? 3 : 0) | (n.length ? 4 : 0) | (s.length ? 8 : 0) | (hi ? 16 : 0), p, q, n, s, lo, hi, (1 << s.length) - 1);
+        const all = maskWords(n.length); for (let k = 0; k < n.length; k++) all[k >> 5] |= 1 << (k & 31);
+        this.writeEnt(kw, i, (body ? 3 : 0) | (n.length ? 4 : 0) | (s.length ? 8 : 0), p, q, n, s, all, -1);
       }
     });
     w.u16(0xffff); if (wantKey) kw.u16(0xffff);
@@ -178,15 +183,16 @@ export class NetHost {
     w.u8w(T.SNAP).u32(this.seq).u8w(key ? 1 : 0).f64(G.time).f32(G.hour).u16(G.day).u8w(Math.min(255, G.grills)).u8w(ADMIN.bob ? 1 : 0);
   }
   /** Entity record: index, bits (1 pos, 2 rot, 4 numbers, 8 strings, 16 numbers past the 32nd), then the changed fields. */
-  private writeEnt(w: Writer, i: number, bits: number, p: RAPIER.Vector | null, q: RAPIER.Rotation | null, n: number[], s: string[], nlo: number, nhi: number, smask: number) {
+  private writeEnt(w: Writer, i: number, bits: number, p: RAPIER.Vector | null, q: RAPIER.Rotation | null, n: number[], s: string[], nm: number[], smask: number) {
     w.u16(i).u8w(bits);
     if (bits & 1) w.f32(p!.x).f32(p!.y).f32(p!.z);
     if (bits & 2) { const k = q!.w < 0 ? -32767 : 32767; w.i16(q!.x * k).i16(q!.y * k).i16(q!.z * k).i16(q!.w * k); }
     if (bits & 4) {
-      w.u32(nlo); if (bits & 16) w.u32(nhi);
-      for (let k = 0; k < n.length; k++) if (((k < 32 ? nlo >>> k : nhi >>> (k - 32)) & 1) === 1) w.f32(n[k]);
+      // the count, a mask word per 32 numbers, then the changed ones
+      w.u16(n.length); for (const m of nm) w.u32(m);
+      for (let k = 0; k < n.length; k++) if ((nm[k >> 5] >>> (k & 31)) & 1) w.f32(n[k]);
     }
-    if (bits & 8) { w.u8w(smask); for (let k = 0; k < s.length; k++) if (smask & (1 << k)) w.str(s[k]); }
+    if (bits & 8) { w.u8w(s.length).u32(smask); for (let k = 0; k < s.length; k++) if ((smask >>> k) & 1) w.str(s[k]); }
   }
   /** Wolves come and go: always sent whole (there are only a few). */
   private writeWolves(w: Writer) {
@@ -231,7 +237,7 @@ export class NetClient {
   constructor(private game: Game, private on: Online) {
     this.ents = entities(game);
     // here only my own pig is simulated (prediction): everything else is placed from snapshots
-    for (const e of this.ents) if (e.body && e !== (game.local as unknown as NetEnt)) e.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    for (const e of this.ents) if (rb(e) && e !== (game.local as unknown as NetEnt)) rb(e)!.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
     on.onData = (from, u8) => { if (from === on.hostId) this.onData(u8); };
     on.onDirect = () => {};
     installRecorders();
@@ -270,13 +276,15 @@ export class NetClient {
       if (bits & 1) { f.p[i * 3] = r.f32(); f.p[i * 3 + 1] = r.f32(); f.p[i * 3 + 2] = r.f32(); }
       if (bits & 2) { for (let k = 0; k < 4; k++) f.q[i * 4 + k] = r.i16() / 32767; }
       if (bits & 4) {
-        const lo = r.u32(), hi = bits & 16 ? r.u32() : 0, arr = f.n[i].slice();
-        for (let k = 0; k < 64; k++) if (((k < 32 ? lo >>> k : hi >>> (k - 32)) & 1) === 1) arr[k] = r.f32();
+        const len = r.u16(), words: number[] = [];
+        for (let k = 0; k < (len + 31) >> 5; k++) words.push(r.u32());
+        const arr = f.n[i].slice(0, len); while (arr.length < len) arr.push(0);
+        for (let k = 0; k < len; k++) if ((words[k >> 5] >>> (k & 31)) & 1) arr[k] = r.f32();
         f.n[i] = arr;
       }
       if (bits & 8) {
-        const mask = r.u8r(), arr = f.s[i].slice();
-        for (let k = 0; k < 8; k++) if (mask & (1 << k)) arr[k] = r.str();
+        const len = r.u8r(), mask = r.u32(), arr = f.s[i].slice(0, len); while (arr.length < len) arr.push('');
+        for (let k = 0; k < len; k++) if ((mask >>> k) & 1) arr[k] = r.str();
         f.s[i] = arr;
       }
     }
@@ -351,8 +359,9 @@ export class NetClient {
           s.prevQ.set(A.q[i * 4], A.q[i * 4 + 1], A.q[i * 4 + 2], A.q[i * 4 + 3]).normalize();
           s.currQ.set(B.q[i * 4], B.q[i * 4 + 1], B.q[i * 4 + 2], B.q[i * 4 + 3]).normalize();
           s.pos(alpha, v1);
-          e.body?.setTranslation(v1, false);
-          if (e.body && e !== me) e.body.setRotation(s.rot(alpha, qq), false);
+          const body = rb(e);
+          body?.setTranslation(v1, false);
+          if (body && e !== me) body.setRotation(s.rot(alpha, qq), false);
           e.netPose?.(v1);
         }
         e.netApply?.(A.n[i], A.s[i], B.n[i], alpha);

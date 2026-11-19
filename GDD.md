@@ -87,6 +87,16 @@ will-o'-wisps, frogs), farm 5 a big frozen lake + a snowy mountain (the crown ne
 - **Fireplace** (in the barns): RMB = light it; things thrown in burn up; smoke out of the top.
 - Bob can step up onto low floors now (he couldn't get into the barns).
 
+## Session 26 additions (2026-11-19)
+- **Bob's farmhouse you can walk into** (every farm, a look per farm: yellow clapboard, cream orchard cottage, blue
+  dairy house, dusky pumpkin-night house, red log cabin under snow): living room with a fireplace (smoke out of the
+  chimney), an open kitchen, Bob's bedroom, a bathroom — all furnished, everything grab-able. Windows are open: jump
+  in / out (Bob has to go round by the door). The roof lifts off while you're inside so you can see.
+- **Bob sleeps in his bed** at night (no longer hidden indoors): sneak in quietly — a sprint, a crash, an oink wakes
+  him (he's groggy for a second, then he comes looking). Shove / tip his bed = he rolls out (mission), a muddy pig paints
+  his face (mission), his **piggy bank** on the nightstand is loot (mission). Lights in the windows at night = he's up;
+  dark = he's asleep.
+
 ## Active hands (2026-11-18, user: "not mini-games — the pig physically takes the filter, the paper, puts the filter on the paper, pours the stuff in and rolls it; like Burglin' Gnomes / Grr Grr Gnomes: the hands reach out, the thing sticks to them, you move it and it snaps where it goes — everywhere in the game")
 - **Aim**: what you hold goes where your crosshair is (within reach); it stays upright and faces where you face.
   **Mouse wheel** = reach further (arms stretch when standing, the neck stretches on four legs), back = normal.

@@ -108,6 +108,10 @@ export const G = {
   jail: null as null | import('../world/jail').Jail,
   /** Bob's hammock (world/hammock.ts: his siesta), when the farm has one. */
   hammock: null as any,
+  /** Bob's walk-in farmhouse (world/farmhouse.ts), when the farm has one. */
+  house: null as any,
+  /** Colliders the camera passes through (the farmhouse roof while my pig is inside). */
+  camSkip: new Set<number>(),
   /** Bob's coffee break (world/porch.ts: side table, mug, hot sauce), when the farm has one. */
   porch: null as any,
   /** Land mines (world/mines.ts) and the pigs' gulag (world/gulag.ts: dead pigs work their way out). */

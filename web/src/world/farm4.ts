@@ -18,7 +18,7 @@ export const FARM4_MODELS = [
     'tree_pine_orange_medium', 'tree_pine_yellow_large', 'tree_pine_yellow_medium', 'gravestone', 'grave_A', 'grave_B', 'gravemarker_A',
     'gravemarker_B', 'fence', 'arch_gate', 'crypt', 'candle_triple', 'skull_candle', 'bench_decorated'].map((n) => 'halloween/' + n),
   'kaykit/pumpkin_orange_small', 'kaykit/jar_A_large',
-  ...['House_1', 'Bench_2', 'Cart'].map((n) => 'village/' + n),
+  ...['Bench_2', 'Cart'].map((n) => 'village/' + n),
   'nature/Willow_1', 'crops/Pumpkin_4',
 ];
 
@@ -129,6 +129,10 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
   terrain.mud(-6, -54, 2.2, 1.6); terrain.mud(24, -40, 2, 1.5); terrain.mud(-44, -16, 2.4, 1.8); terrain.mud(30, -66, 2.2, 1.6);
   const POND = { x: -48, z: -8, r: 6 };
 
+  // Bob's walk-in farmhouse (s26; was a closed village house): the ground under it is flattened first
+  const HOUSE = { x: 0, z: -91.5, yaw: 0, style: 'spooky' as const };
+  terrain.pad(HOUSE.x, HOUSE.z, HOUSE.yaw, 14, 17, 3);
+
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     const garden = { x0: 14, x1: 26, z0: -102, z1: -92 };
     const out: FarmBuild = {
@@ -159,7 +163,7 @@ export function buildFarm4(scene: THREE.Scene): FarmDef {
     out.pumpkins = pumpkins;
 
     // ---------------------------------------------------------------- buildings
-    building('village/House_1', 0, -91, 9, 0);                           // the farmhouse
+    kit.farmhouse(HOUSE, daynight);                                       // Bob's walk-in farmhouse (s26)
     building('farm/BigBarn', 22, -14, 8.5, -Math.PI / 2);
     building('farm/Silo', 31, -26, 11);
     building('farm/ChickenCoop', -31, -3, 3.4, Math.PI / 2);

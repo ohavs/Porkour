@@ -64,7 +64,9 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   // s24: the record player (Bob can't help dancing to it)
   | 'discoBob'
   // s25: a sink left running floods the floor (Bob slips), fart + fire = fireball
-  | 'floodSlip' | 'fireball' | 'fireballBob';
+  | 'floodSlip' | 'fireball' | 'fireballBob'
+  // s26: Bob's walk-in farmhouse (his piggy bank on the nightstand, tip him out of his bed at night)
+  | 'piggyBank' | 'bedTumble';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -74,9 +76,9 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
-  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob', 'floodSlip', 'fireballBob'];
+  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale', 'radioLure', 'pieBob', 'discoBob', 'floodSlip', 'fireballBob', 'piggyBank'];
 const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
-  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', 'fireball', ...REQ_POOL];
+  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', 'bubbleBath', 'fireball', 'bedTumble', ...REQ_POOL];
 /** Bonus pranks per round (user: "add more missions"; was 2). */
 const BONUS_N = 3;
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
@@ -104,6 +106,7 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   safeSteal: { props: ['safe'], to: 'stash' }, tvSteal: { props: ['tv'], to: 'stash' }, clockSteal: { props: ['clock'], to: 'stash' },
   snowballBob: { props: ['snowball'], to: 'bob', noArrow: true }, bigSnowball: { props: ['snowboulder'], to: 'bob' }, bigPresent: { props: ['bigPresent'], to: 'stash' },
   cheeseRiver: { props: ['cheeseWheel', 'prizeCheese'], to: 'river' },
+  piggyBank: { props: ['piggyBank'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
@@ -252,7 +255,10 @@ export class Round {
       ...(this.game.interiors?.ovens.length ? ['pieBob'] as MissionId[] : []),
       ...(this.game.interiors?.gramos.length ? ['discoBob'] as MissionId[] : []),
       ...(this.game.interiors?.baths.length ? ['bubbleBath'] as MissionId[] : []),
-      ...(this.game.interiors?.sinks.length ? ['floodSlip'] as MissionId[] : []), ...FIRE_MISSIONS];
+      ...(this.game.interiors?.sinks.length ? ['floodSlip'] as MissionId[] : []), ...FIRE_MISSIONS,
+      // s26: the farmhouse — his piggy bank, his bed (tip him out; mud on his face works in bed too)
+      ...(this.game.farm.props.some((p) => p.def === PROPS.piggyBank) ? ['piggyBank'] as MissionId[] : []),
+      ...(this.game.farm.house?.bed && this.game.farm.chores.some((c) => c.id === 'bed') ? ['bedTumble', 'mudFace'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
@@ -313,6 +319,7 @@ export class Round {
     if (type === 'splatBob') { if (text === 'ovenPie') this.done('pieBob'); else this.count(text === 'apple' ? 'appleBob' : text === 'snowball' ? 'snowballBob' : 'eggBob'); }
     if (type === 'radioOff') this.done('radioLure');
     if (type === 'bobDisco') this.done('discoBob');
+    if (type === 'bedTumble') this.done('bedTumble');
     if (type === 'bath') this.done('bubbleBath');
     if (type === 'treeShaken') this.count('shakeTrees');
     if (type === 'pressed') this.count('ciderPress');
@@ -493,6 +500,7 @@ export class Round {
     if (pr.def === PROPS.safe) this.done('safeSteal');
     if (pr.def === PROPS.tv && !pr.broken) this.done('tvSteal');
     if (pr.def === PROPS.clock) this.done('clockSteal');
+    if (pr.def === PROPS.piggyBank) this.done('piggyBank');
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
@@ -574,6 +582,7 @@ export class Round {
     if (x.id === 'wallJump') return kc('Q') + IC.cloud + IC.feet;
     if (x.id === 'danceBob') return kc('B') + IC.note + IC.bob;
     if (x.id === 'bedNap') return IC.rmb + IC.zzz;
+    if (x.id === 'bedTumble') return IC.zzz + IC.fist + IC.bob;
     if (x.id === 'fridgeRaid') return IC.rmb + IC.can;
     if (x.id === 'yardSale') return IC.rmb + IC.couch + IC.walk;
     if (x.id === 'sofaSwim') return IC.couch + IC.water;
@@ -655,7 +664,8 @@ export class Round {
         case 'looLock': case 'looTip': { const o = near(G.loos as Outhouse[], (x) => x.base); mark(i, o?.markPos); return; }
         case 'hangUp': { const ph = g.phones; mark(i, ph?.off && ph.ring === 1 ? ph.jackMark : ph?.phoneMark); return; }
         case 'prankCall': mark(i, g.phones?.payMark); return;
-        case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
+        case 'bedTumble': mark(i, g.farm.house?.markPos); return;
+        case 'hammockFlip': case 'mudFace': mark(i, m.id === 'mudFace' && (g.farmer?.inBed || !g.hammock) ? g.farm.house?.markPos : g.hammock?.markPos); return;
         case 'couchSesh': mark(i, g.lounge?.markPos); return;
         // s22: the furnished buildings (nearest bed / fridge / toilet / piece), the peak, the terrace walls
         case 'pieBob': if (L.held && (L.held as { def?: { id?: string } }).def?.id === 'ovenPie') { atBob(i); return; }   // falls through: the nearest oven
@@ -863,7 +873,11 @@ export class Round {
       if (G.net === 'host') online.setRoom({ farm: next, save: saveLabel() });
       else { SETTINGS.farm = next; saveSettings(); reloadOnFarm(next); }
     });
-    this.res.querySelector('[data-r=menu]')?.addEventListener('click', () => { location.href = G.net === 'solo' ? location.pathname : location.pathname + '?lobby=1'; });
+    // 🏠: solo = the lobby; the host = everyone back to the room's lobby together (s26); a player = leaves the room
+    this.res.querySelector('[data-r=menu]')?.addEventListener('click', () => {
+      if (G.net === 'host' && online.room) { online.regroup(); return; }
+      location.href = G.net === 'solo' ? location.pathname : location.pathname + '?lobby=1';
+    });
   }
 }
 

@@ -79,6 +79,8 @@ export const EN_X = {
   'm.fireballBob': 'Blow Bob up with a fart fireball', 'bob.tapOff': 'Bob is turning the tap off',
   'a.intSink': 'Flood: the nearest sink', 'a.intFire': 'Light the fireplace', 'a.intTap': 'Bob: turn the tap off',
   'a.fire': 'Fire', 'a.fireballMe': 'Fireball on me', 'a.fireballBob': 'Fireball on Bob', 'a.tpGrill': 'Teleport: the BBQ grill',
+  'net.regroup': 'Back to the room — all together', 'a.bobBedNow': 'Bob: into his bed now', 'a.bedroom': "Bob's bedroom", 'item.piggyBank': 'Piggy bank',
+  'm.piggyBank': "Steal Bob's piggy bank from his nightstand", 'm.bedTumble': 'Tip Bob out of his bed while he sleeps',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -151,4 +153,6 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'm.fireballBob': 'Haz volar a Bob con una bola de fuego de pedo', 'bob.tapOff': 'Bob está cerrando el grifo',
   'a.intSink': 'Inundar: el fregadero más cercano', 'a.intFire': 'Encender la chimenea', 'a.intTap': 'Bob: cerrar el grifo',
   'a.fire': 'Fuego', 'a.fireballMe': 'Bola de fuego en mí', 'a.fireballBob': 'Bola de fuego en Bob', 'a.tpGrill': 'Teletransporte: la barbacoa',
+  'net.regroup': 'Volvemos a la sala — todos juntos', 'a.bobBedNow': 'Bob: a su cama ya', 'a.bedroom': 'Dormitorio de Bob', 'item.piggyBank': 'Hucha de cerdito',
+  'm.piggyBank': 'Roba la hucha de cerdito de la mesita de Bob', 'm.bedTumble': 'Tira a Bob de la cama mientras duerme',
 };

@@ -202,6 +202,7 @@ export class Game {
     this.loos = this.farm.loos ?? []; G.loos = this.loos;
     this.phones = this.farm.phones ?? null; G.phones = this.phones;
     this.hammock = this.farm.hammock ?? null; G.hammock = this.hammock;
+    G.house = this.farm.house ?? null;
     this.porch = this.farm.porch ?? null; G.porch = this.porch;
     if (this.porch) this.porch.troughs = this.farm.troughs ?? [];
     this.mines = new Mines(scene, this.nav, bounds, () => [this.farm.places.stash, this.farm.cage.center, this.farm.farmerSpawn, ...this.farmSpawns,
@@ -222,7 +223,7 @@ export class Game {
       }
       G.lounge = this.lounge;
       // furniture inside every building a pig can walk into
-      this.interiors = new Interiors(scene, f.props, this.nav, f.buildings ?? [], f.places.stash);
+      this.interiors = new Interiors(scene, f.props, this.nav, f.buildings ?? [], f.places.stash, f.house ?? null);
       G.uses.push({ near: (p: Pig) => p.seat < 0 && SEATS.seatFor(p) >= 0, icon: () => 'couch' });   // RMB at any free seat: sit
     }
     G.chain = this.farm.chain ?? null;
@@ -471,7 +472,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.farm.house?.step(); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
       this.fireballs.step();
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
@@ -550,6 +551,7 @@ export class Game {
         // Bob's siesta
         case 'bobNap': H.emote(bob, 'zzz', 2, 2.4); break;
         case 'hammockFlip': H.emote(bob, 'stars', 1.6, 1.4); break;
+        case 'bedTumble': H.emote(bob, 'stars', 1.6, 1.4); break;
         case 'mudFace': H.emote(bob, 'mud', 1.4, 0.6); break;
         // Bob's coffee break
         case 'bobCoffee': H.emote(bob, 'mug', 1.8, 2.4); break;
@@ -781,6 +783,7 @@ export class Game {
       case 'slap': if (f && ADMIN.bob) { f.slapMe(L); } break;
       case 'mow': f?.forceMow(); break;
       case 'bed': f?.forceBed(); break;
+      case 'bedNow': f?.bedNow(); break;
       case 'day': this.daynight.setHour(7); this.wolves.clear(); break;
       case 'night': this.daynight.setHour(21.3); break;
       case 'wolves': for (let i = 0; i < 2; i++) this.wolves.spawn(); break;
@@ -1101,6 +1104,7 @@ export class Game {
     this.phones?.render(dt);
     this.heavy.render();
     this.hammock?.render();
+    this.farm.house?.render(dt, this.mode === 'play' ? this.local : null, this.fpNow(), !!this.farmer && !this.farmer.asleep && this.farmer.state !== 'off');
     this.porch?.render(dt);
     if (this.mode === 'play') this.mines.render(dt);
     this.gulag?.render();
@@ -1132,6 +1136,10 @@ export class Game {
       eye.addScaledVector(f, 0.12); eye.y += 0.08;
       this.cam.updateFP(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, eye);
     } else this.cam.update(dt, look ? this.input.lookX : 0, look ? this.input.lookY : 0, lp, this.local.standing, work);
+    {   // test hook (headless screenshots): a fixed camera, `window.__camShot = { p: [x, y, z], at: [x, y, z] }`
+      const cs = (window as unknown as { __camShot?: { p: number[]; at: number[] } }).__camShot;
+      if (cs) { this.gfx.camera.position.fromArray(cs.p); this.gfx.camera.lookAt(cs.at[0], cs.at[1], cs.at[2]); }
+    }
     const fp = this.fpNow();
     this.local.visual.root.visible = !fp && !this.local.out;
     this.fpHands.update(dt, this.local, fp);

@@ -86,6 +86,14 @@ export class Terrain {
   /** A dead-flat round spot (a frozen pond's ice lies on it): the ground there is the noise height at its centre. */
   flatten(x: number, z: number, r: number, edge = 3) { this.flats.push({ x, z, r, edge, h: this.noiseH(x, z) }); }
   private flats: { x: number; z: number; r: number; edge: number; h: number }[] = [];
+  /**
+   * A dead-flat rectangle (a house stands on it: s26 farmhouse), turned by `yaw`, at the ground height its centre had,
+   * blending back over `edge` m. Before build(), after the hills / terraces it sits on.
+   */
+  pad(x: number, z: number, yaw: number, w: number, d: number, edge = 3) {
+    this.pads.push({ x, z, c: Math.cos(yaw), s: Math.sin(yaw), hw: w / 2, hd: d / 2, edge, h: this.base(x, z) });
+  }
+  private pads: { x: number; z: number; c: number; s: number; hw: number; hd: number; edge: number; h: number }[] = [];
   private noiseH(x: number, z: number) { return (fbm(x * 0.035 + 3, z * 0.035 - 7, 3) - 0.5) * 0.7; }
   /**
    * A river / stream through the points (smoothed, w = water width, depth = bank → bed). Before build().
@@ -213,6 +221,11 @@ export class Terrain {
       if (d < hl.r) h += d <= hl.flat ? hl.h : hl.h * 0.5 * (1 + Math.cos((Math.PI * (d - hl.flat)) / (hl.r - hl.flat)));
     }
     for (const st of this.steps) h += st.rise * this.stepK(st, x, z);
+    for (const pd of this.pads) {
+      const dx = x - pd.x, dz = z - pd.z, lx = Math.abs(dx * pd.c - dz * pd.s) - pd.hw, lz = Math.abs(dx * pd.s + dz * pd.c) - pd.hd;
+      const d = Math.hypot(Math.max(lx, 0), Math.max(lz, 0));
+      if (d < pd.edge) h += (pd.h - h) * (1 - smoothstep(0, pd.edge, d));
+    }
     return h;
   }
   /** 0 (below) … 1 (above) a terrace step: a 1 m wall band, or a ramp cut into the upper level. */

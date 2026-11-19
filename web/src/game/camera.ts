@@ -12,6 +12,12 @@ export class CamRig {
   private first = true;
   /** Working with the hooves: the focus slides a little past the pig (0..1, smoothed). */
   private workK = 0;
+  /**
+   * First and third person keep their own up / down angle (s26, user: "for the other player, switching to third person
+   * the camera looks from right above the pig, far"): looking down at the hooves in first person (pitch ~1) carried
+   * over = a third-person camera straight overhead. Back in third person = the angle it had before.
+   */
+  private fpWas = false; private tpPitch = 0.32;
   constructor(public camera: THREE.PerspectiveCamera) {}
 
   /** Camera forward / right on the ground plane (for movement input). */
@@ -24,6 +30,7 @@ export class CamRig {
   /** First person (admin test): the camera is the pig's eyes — same yaw / pitch, so turning feels the same. */
   updateFP(dt: number, lookX: number, lookY: number, eye: THREE.Vector3) {
     void dt;
+    if (!this.fpWas) { this.fpWas = true; this.tpPitch = this.pitch; this.pitch = clamp(this.pitch - 0.25, -0.3, 0.6); }   // eyes level-ish
     this.yaw -= lookX;
     this.pitch = clamp(this.pitch + lookY, -1.35, 1.35);
     this.camera.position.copy(eye);
@@ -35,6 +42,7 @@ export class CamRig {
   }
 
   update(dt: number, lookX: number, lookY: number, target: THREE.Vector3, standing: boolean, work = 0) {
+    if (this.fpWas) { this.fpWas = false; this.pitch = clamp(this.tpPitch, 0.05, 0.75); this.cur = this.dist; }
     this.yaw -= lookX;
     this.pitch = clamp(this.pitch + lookY, -0.5, 1.25);
     this.workK = damp(this.workK, work, 4, dt);
@@ -47,7 +55,7 @@ export class CamRig {
     this.focus.y = damp(this.focus.y, fy, 9, dt);
     const want = (this.dist + (standing ? 0.4 : 0)) * (1 - 0.32 * wk);
     const dir = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
-    const hit = raycast(this.focus, dir, want + 0.3, L.STATIC, undefined, (c) => owners.get(c.handle)?.kind !== 'cage');
+    const hit = raycast(this.focus, dir, want + 0.3, L.STATIC, undefined, (c) => owners.get(c.handle)?.kind !== 'cage' && !G.camSkip.has(c.handle));
     const d = hit ? Math.max(0.6, hit.dist - 0.3) : want;
     this.cur = d < this.cur ? d : damp(this.cur, d, 4, dt);
     this.camera.position.copy(this.focus).addScaledVector(dir, this.cur);

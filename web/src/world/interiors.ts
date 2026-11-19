@@ -13,6 +13,7 @@ import { makeTV, makePie } from './funProps';
 import { drawChannel } from './lounge';
 import type { Loop } from '../core/audio';
 import { raycast, L, world } from '../core/physics';
+import type { Farmhouse } from './farmhouse';
 
 /**
  * Furniture inside the buildings (user: "the maps are full, but the insides of buildings feel empty: furniture and lots
@@ -160,7 +161,7 @@ interface Washer { pr: Prop; until: number }
 /** `run` = s the tap has run; `flood` 0..1 = the puddle on the floor at (cx, cy, cz); `slipT` = Bob can't slip here again before. */
 interface Sink { pr: Prop; on: boolean; run: number; flood: number; cx: number; cy: number; cz: number; puddle: THREE.Mesh; slipT: number; noiseT: number; loop: Loop | null; drip: number }
 /** A fireplace: lit until; the fire (logs + flames, a child of the piece); things lying in it since. */
-interface Hearth { pr: Prop; until: number; fire: THREE.Group; flames: THREE.Mesh[]; loop: Loop | null; burnT: Map<Prop, number>; pigT: Map<Pig, number>; smokeT: number }
+interface Hearth { pr: Prop; until: number; fire: THREE.Group; flames: THREE.Mesh[]; loop: Loop | null; burnT: Map<Prop, number>; pigT: Map<Pig, number>; smokeT: number; chimney?: THREE.Vector3; home?: THREE.Vector3 }
 
 export class Interiors {
   kind = 'interiors' as const;
@@ -180,12 +181,13 @@ export class Interiors {
   /** Furnished rooms (for the admin teleports / tests): centre + kind. */
   rooms: { x: number; z: number; model: string; pieces: number }[] = [];
 
-  constructor(private scene: THREE.Scene, private props: Prop[], nav: Nav, buildings: { model: string; x: number; z: number; yaw: number; sx: number; sz: number }[], start: THREE.Vector3) {
+  constructor(private scene: THREE.Scene, private props: Prop[], nav: Nav, buildings: { model: string; x: number; z: number; yaw: number; sx: number; sz: number }[], start: THREE.Vector3, house: Farmhouse | null = null) {
     if (!buildings.length) return;
     const reach = this.flood(nav, start);
     world.updateSceneQueries();   // (the buildings' colliders were just made: rays find them only after this)
     for (const b of buildings) {
       if (/ChickenCoop|Well|WaterTower|Silo$|Windmill|TowerWindmill/.test(b.model)) continue;
+      if (b.model === 'farmhouse') { if (house) this.furnishHouse(house); continue; }
       this.furnish(nav, reach, b);
     }
     G.hittables.push({ hit: (x, y, z, r) => this.hitLamp(x, y, z, r) || this.hitRadio(x, y, z, r) });
@@ -319,6 +321,62 @@ export class Interiors {
       }
     }
     this.rooms.push({ x: b.x, z: b.z, model: b.model, pieces });
+  }
+  /**
+   * Bob's farmhouse (s26): its rooms are furnished from fixed spots (farmhouse.ts `layout`, local frame): wall pieces
+   * stand out from the wall by half their depth, a row goes side by side along a wall (the kitchen counter), a table
+   * gets chairs round it, small things go on top of a tagged piece (his lamp + piggy bank on the nightstands).
+   */
+  private furnishHouse(h: Farmhouse) {
+    this.cur = { x: h.x, z: h.z, r: Math.max(h.w, h.d) / 2 + 1.5 };
+    const y = h.y0, tags = new Map<string, { pr: Prop; top: number; lx: number; lz: number; ly: number }>();
+    let n = 0;
+    const put = (id: string, lx: number, lz: number, ly: number, wall = false, tag?: string, lift = 0) => {
+      const kd = K[id]; if (!kd || (!kd.make && !has('interior/' + kd.m))) return null;
+      const sz = this.sizeOf(kd);
+      if (wall) { lx += Math.sin(ly) * (sz.z / 2 + 0.03); lz += Math.cos(ly) * (sz.z / 2 + 0.03); }
+      const p = h.toWorld(lx, lz, v2);
+      const pr = this.place(id, kd, p.x, y + lift, p.z, h.yaw + ly);
+      n++;
+      tags.set(tag ?? id, { pr, top: sz.y, lx, lz, ly });
+      if (tag === 'bobBed') h.bed = pr;
+      if (kd.use === 'hearth') { const hh = this.hearths[this.hearths.length - 1], t = pr.body.translation(); hh.chimney = h.chimneyTop.clone(); hh.home = new THREE.Vector3(t.x, t.y, t.z); }
+      return pr;
+    };
+    for (const it of h.layout) {
+      if ('row' in it) {
+        let acc = 0;
+        for (const id of it.row) {
+          const kd = K[id]; if (!kd) continue;
+          const sz = this.sizeOf(kd), along = acc + sz.x / 2;
+          put(id, it.x + it.dir[0] * along, it.z + it.dir[1] * along, it.yaw, true);
+          acc += sz.x + 0.02;
+        }
+      } else if ('rug' in it) {
+        if (!has('interior/' + it.rug)) continue;
+        const rug = fitted('interior/' + it.rug, { width: it.width }), p = h.toWorld(it.x, it.z, v2);
+        rug.position.set(p.x, y + 0.012, p.z); rug.rotation.y = h.yaw + it.yaw;
+        rug.traverse((o) => { o.castShadow = false; }); this.scene.add(rug);
+      } else if ('table' in it) {
+        put(it.table, it.x, it.z, it.yaw);
+        it.chairs.forEach((c, i) => {
+          const a = it.yaw + (i / it.chairs.length) * Math.PI * 2 + Math.PI / 4, d = 0.95;
+          put(c, it.x + Math.sin(a) * d, it.z + Math.cos(a) * d, a + Math.PI);   // facing the table
+        });
+        const top = this.sizeOf(K[it.table]).y;
+        put('plate', it.x + 0.2, it.z - 0.1, 0, false, undefined, top + 0.01);
+        put('plate', it.x - 0.25, it.z + 0.15, 0, false, undefined, top + 0.01);
+      } else if ('top' in it) {
+        const t = tags.get(it.top); if (!t) continue;
+        const dx = it.dx ?? 0, lx = t.lx + Math.cos(t.ly) * dx, lz = t.lz - Math.sin(t.ly) * dx;
+        if (it.id) put(it.id, lx, lz, t.ly, false, undefined, t.top + 0.01);
+        if (it.prop && PROPS[it.prop]) {
+          const p = h.toWorld(lx, lz, v2);
+          this.props.push(new Prop(this.scene, PROPS[it.prop], v1.set(p.x, y + t.top + 0.02, p.z), h.yaw + t.ly + 0.4));
+        }
+      } else put(it.id, it.x, it.z, it.yaw, it.wall, it.tag);
+    }
+    this.rooms.push({ x: h.x, z: h.z, model: 'farmhouse', pieces: n });
   }
   /** A table with chairs round it (house) / stools (barn), in the free middle. */
   private group(id: string, free: (x: number, z: number) => boolean, fits: (x: number, z: number, w: number, d: number, yaw: number) => boolean,
@@ -899,8 +957,10 @@ export class Interiors {
       h.smokeT -= dt;
       if (h.smokeT <= 0 && near(h.pr, 70)) {
         h.smokeT = 0.32;
-        const top = v1.set(0, h.pr.size.y / 2 + 0.1, -h.pr.size.z * 0.1).applyQuaternion(h.pr.obj.quaternion).add(h.pr.obj.position);
-        G.fx.puff(top, { count: 1, color: 0x8d8a86, spread: 0.12, speed: 0.3, up: 1.4, life: 2.6, size: 0.45, grow: 1.4, drag: 0.6, alpha: 0.4 });
+        // (the farmhouse's fireplace smokes out of its chimney — if it's still standing at its wall)
+        const home = h.chimney && h.home && h.home.distanceToSquared(h.pr.synced.currP) < 1.5 ? h.chimney : null;
+        const top = home ? v1.copy(home) : v1.set(0, h.pr.size.y / 2 + 0.1, -h.pr.size.z * 0.1).applyQuaternion(h.pr.obj.quaternion).add(h.pr.obj.position);
+        G.fx.puff(top, { count: 1, color: 0x8d8a86, spread: home ? 0.25 : 0.12, speed: 0.3, up: 1.4, life: home ? 3.6 : 2.6, size: home ? 0.8 : 0.45, grow: 1.4, drag: 0.6, alpha: 0.4 });
         if (Math.random() < 0.5) G.fx.bits(h.fire.getWorldPosition(v2).setY(v2.y + 0.25), { count: 1, color: 0xffa733, spread: 0.12, speed: 0.3, up: 1.2, grav: -1, life: 0.6, size: 0.05, grow: 0, alpha: 1 });
       }
       h.loop = this.sound(h.loop, near(h.pr, 18), 'fire', h.fire.getWorldPosition(v2), 0.45, 2);

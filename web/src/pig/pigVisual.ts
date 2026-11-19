@@ -6,7 +6,7 @@ import { buildPig, PIVOT, STAND_POS, STAND_ANGLE, NECK, SNOUT_TIP, ARM, type Pig
 import { HEAD_TILT } from './pigBody';
 import { dress, defaultOutfit, type Outfit } from './cosmetics';
 import { makeCigarette } from '../world/snacks';
-import { toonMat } from '../render/toon';
+import { toonMat, RAMP } from '../render/toon';
 
 const DOWN = new THREE.Vector3(0, -1, 0);
 const SNOUT_DIR = SNOUT_TIP.clone().sub(NECK).normalize();
@@ -17,9 +17,28 @@ const _pole = new THREE.Vector3(), _uq = new THREE.Quaternion(), _pp = new THREE
 const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3(), _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion();
 const MUD = new THREE.Color(0x6b4423), BURNT = new THREE.Color(0x3a2620), SNOW_COAT = new THREE.Color(0xf6f9ff);
 
+/**
+ * Mud on the pig (s26, user: "real mud on me until it's gone"): lumpy splotches on the body, head and legs (one
+ * InstancedMesh per moving part). Fresh = big, dark and wet; drying = paler, cracked; then they flake off one by one
+ * (each has its own moment) until the pig is clean. Farm 5: clumps of snow instead.
+ */
+const MUD_WET = new THREE.Color(0x4a2c14), MUD_DRY = new THREE.Color(0xa88760), SNOW_CLUMP = new THREE.Color(0xf4f8ff);
+const MUD_GEO = (() => {
+  const g = new THREE.IcosahedronGeometry(1, 2), pa = g.attributes.position;
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i), n = 1 + 0.22 * Math.sin(x * 5.1 + z * 3.3) * Math.cos(z * 4.7 - x * 2.1) + 0.1 * Math.sin(y * 9 + x * 7);
+    pa.setXYZ(i, x * n, y * (y > 0 ? 1 : 0.4) * n, z * n);   // a lumpy pancake, flatter underneath (it sits on the skin)
+  }
+  g.computeVertexNormals();
+  return g;
+})();
+interface MudSplat { m: THREE.InstancedMesh; i: number; pos: THREE.Vector3; q: THREE.Quaternion; s: THREE.Vector3; t: number }
+
 export interface PigPose {
   speed: number; grounded: boolean; vy: number; standing: boolean; mode: string;
-  sprinting: boolean; muddy: number; holding: boolean; charging: number; dt: number; t: number; burnt?: number;
+  sprinting: boolean; muddy: number; holding: boolean;
+  /** 0..1 of the mud coat left (fresh → flaked off): the splotches. */
+  mudLeft?: number; charging: number; dt: number; t: number; burnt?: number;
   /** 0..1 how close a standing pig is to falling over; punch 0..1 (jab progress). */
   wobble?: number; punch?: number;
   /** Standing balance lean (radians): forward / sideways (+ = toward the pig's left), from the physics. */
@@ -275,6 +294,72 @@ export class PigVisual {
     this.headRest.copy(this.rig.head.position);
     this.neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 1, 14, 1, true), this.rig.bodyMat);
     this.neck.visible = false; this.neck.castShadow = true; this.rig.upper.add(this.neck);
+    this.buildMud();
+  }
+
+  // ---------------------------------------------------------------- mud splotches
+  private mudMat = new THREE.MeshToonMaterial({ color: MUD_WET.clone(), gradientMap: RAMP });
+  private splats: MudSplat[] = [];
+  private mudMeshes: THREE.InstancedMesh[] = [];
+  private mudShown = -1;
+  private buildMud() {
+    const R = this.rig;
+    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const UP = new THREE.Vector3(0, 1, 0);
+    const group = (parent: THREE.Object3D, list: { pos: THREE.Vector3; n: THREE.Vector3; size: number }[]) => {
+      const m = new THREE.InstancedMesh(MUD_GEO, this.mudMat, list.length);
+      m.castShadow = false; m.frustumCulled = false; m.visible = false; m.name = 'mud';
+      parent.add(m); this.mudMeshes.push(m);
+      list.forEach((l, i) => {
+        const q = new THREE.Quaternion().setFromUnitVectors(UP, l.n).multiply(new THREE.Quaternion().setFromAxisAngle(UP, rnd() * 6.28));
+        // flakes off at its own moment (bigger ones last longer); a few go early
+        this.splats.push({ m, i, pos: l.pos.clone().addScaledVector(l.n, -0.012), q, s: new THREE.Vector3(l.size, l.size * 0.55, l.size * (0.7 + rnd() * 0.5)), t: 0.04 + rnd() * 0.55 * (1.2 - l.size * 3) });
+      });
+    };
+    // body: the pear-shaped ellipsoid (centre (0, 0.5, −0.02), radii 0.37 / 0.34 / 0.55) in `upper` space
+    const c = new THREE.Vector3(0, 0.5, -0.02).sub(PIVOT), body: { pos: THREE.Vector3; n: THREE.Vector3; size: number }[] = [];
+    for (let k = 0; body.length < 22 && k < 400; k++) {
+      const d = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1); if (d.lengthSq() > 1 || d.lengthSq() < 0.05) continue; d.normalize();
+      if (d.y < -0.55 || d.z > 0.8) continue;   // not under the belly, not inside the neck
+      const kk = 1 + Math.max(0, -d.z) * 0.09 - Math.max(0, d.z) * 0.04;
+      const pt = new THREE.Vector3(d.x * kk * 0.37, (d.y * kk - (d.y < 0 ? 0.04 : 0)) * 0.34, d.z * 0.55);
+      const n = new THREE.Vector3(pt.x / 0.137, pt.y / 0.116, pt.z / 0.3).normalize();
+      body.push({ pos: pt.add(c), n, size: 0.06 + rnd() * 0.09 });
+    }
+    group(R.upper, body);
+    // head (sphere r 0.28 at (0, 0.63, 0.42), in head space): the forehead, the cheeks, the top — not the eyes / snout
+    const hc = new THREE.Vector3(0, 0.63, 0.42).sub(NECK), head: { pos: THREE.Vector3; n: THREE.Vector3; size: number }[] = [];
+    for (const [x, y, z, sz] of [[0, 0.95, 0.15, 0.07], [0.75, 0.3, 0.45, 0.06], [-0.8, 0.1, 0.4, 0.055], [0.45, 0.85, -0.2, 0.05], [-0.55, 0.7, -0.35, 0.06], [0.2, -0.6, 0.55, 0.045]]) {
+      const n = new THREE.Vector3(x, y, z).normalize();
+      head.push({ pos: n.clone().multiplyScalar(0.28).add(hc), n, size: sz });
+    }
+    group(R.head, head);
+    // legs: mud socks (round the lower leg) on the hind legs, a couple on each forearm
+    const sock = (r: number, y0: number, n: number) => {
+      const out: { pos: THREE.Vector3; n: THREE.Vector3; size: number }[] = [];
+      for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + rnd(), nn = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)); out.push({ pos: nn.clone().multiplyScalar(r).setY(y0 + (rnd() - 0.5) * 0.08), n: nn, size: 0.045 + rnd() * 0.025 }); }
+      return out;
+    };
+    group(R.hindL, sock(0.08, -0.22, 4)); group(R.hindR, sock(0.08, -0.22, 4));
+    for (const a of R.arms) group(a.segL, sock(0.072, -0.06, 3));
+  }
+  /** Mud left 0..1: wet and dark → pale and cracked → each splotch falls off at its moment (snow: white clumps). */
+  private updateMud(left: number) {
+    const k = Math.round(left * 200) / 200;
+    if (k === this.mudShown) return;
+    this.mudShown = k;
+    const on = k > 0.001;
+    for (const m of this.mudMeshes) m.visible = on;
+    if (!on) return;
+    if (G.snowy) this.mudMat.color.copy(SNOW_CLUMP);
+    else this.mudMat.color.copy(MUD_WET).lerp(MUD_DRY, clamp((1 - k) * 1.6 - 0.15, 0, 1));
+    const fresh = 1 + Math.max(0, k - 0.9) * 2.5;   // just rolled: a bit puffier
+    for (const sp of this.splats) {
+      const f = clamp((k - sp.t) / 0.08, 0, 1) * fresh;
+      _bm.compose(sp.pos, sp.q, _v.copy(sp.s).multiplyScalar(Math.max(f, 1e-4)));
+      sp.m.setMatrixAt(sp.i, _bm);
+    }
+    for (const m of this.mudMeshes) m.instanceMatrix.needsUpdate = true;
   }
   /** World position of the cigarette's ember (null when not smoking). */
   cigTip(out: THREE.Vector3) { return this.cig.visible && this.cig.parent ? this.ember.getWorldPosition(out) : null; }
@@ -539,8 +624,9 @@ export class PigVisual {
       else a.rotation.y = (a.name === 'wingL' ? -1 : 1) * (0.15 + Math.sin(p.t * (moving || air ? 18 : 3)) * (moving || air ? 0.45 : 0.1));
     }
 
-    // mud / burnt tint
-    const m = clamp(p.muddy, 0, 1) * 0.8;
+    // mud / burnt tint (the splotches carry the mud now: the skin only gets a dusty tinge)
+    this.updateMud(p.mudLeft ?? 0);
+    const m = clamp(p.muddy, 0, 1) * 0.35;
     const b = clamp(p.burnt ?? 0, 0, 1) * 0.75;
     for (const s of R.skin) s.mat.color.copy(s.base).lerp(G.snowy ? SNOW_COAT : MUD, m).lerp(BURNT, b);
     if (b > 0 && Math.random() < p.dt * 6 * b) G.fx.puff(this.root.position, { count: 1, color: 0x555555, spread: 0.2, speed: 0.2, up: 0.8, life: 1.2, size: 0.4, grow: 0.6, alpha: 0.35 });

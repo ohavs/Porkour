@@ -277,7 +277,8 @@ export class Menu {
       if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2, '', 'check'));
       if (k === 'exitNo') { this.page = 'settings'; this.renderMenu(); }
       if (k === 'exitYes') {
-        if (online.room) this.onLeave?.();
+        if (online.room && online.isHost && this.game.mode === 'play') { online.regroup(); this.close(false); }   // end the game: the room stays together
+        else if (online.room) this.onLeave?.();
         else location.href = location.pathname;   // solo: back to the lobby (the world is rebuilt fresh)
       }
     }));
@@ -371,7 +372,7 @@ export class Menu {
         body = grid(tog('bob', 'a.bob'), tog('chill', 'a.chill'), tog('showSight', 'a.showSight')) + rng('bbqTime', 'a.bbq', ADMIN.bbqTime, 5, 120, 5) +
           sec('a.alert') + `<div class="tiles" style="grid-template-columns:repeat(4,1fr)">${[0, 1, 2, 3].map((l) => `<button data-a="alert:${l}" class="tile${g.farmer?.level === l ? ' on' : ''}" title="${tip(('alert.' + l) as Key)}"><b>${['😴', '🤨', '😠', '🤬'][l]}</b>${l}</button>`).join('')}</div>` +
           grid(btn('catch', 'a.catchMe'), btn('bobCarry', 'a.bobCarry'), btn('slap', 'a.bobSlap'), btn('bobDown', 'a.bobDown'), btn('bobHunt', 'a.bobHunt'),
-            btn('dance', 'a.bobDance'), btn('danceNear', 'a.bobDanceNear'), btn('mow', 'a.bobMow'), btn('bed', 'a.bobSleep'),
+            btn('dance', 'a.bobDance'), btn('danceNear', 'a.bobDanceNear'), btn('mow', 'a.bobMow'), btn('bed', 'a.bobSleep'), g.farm.house?.bed ? btn('bedNow', 'a.bobBedNow') : '',
             g.loos.length ? btn('loo:go', 'a.looGo') : '', g.phones?.wall ? btn('phone:ring', 'a.phoneRing') : '', g.hammock ? btn('nap:go', 'a.napGo') : '', g.porch ? btn('coffee:go', 'a.coffeeGo') : '',
             btn('grill', 'a.grillNow'), btn('free', 'a.freeAll'), btn('dogMe', 'a.dogMe'), btn('trapMe', 'a.trapMe'), btn('roosterMe', 'a.roosterMe'), btn('turkeyMe', 'a.turkeyMe'));
         break;
