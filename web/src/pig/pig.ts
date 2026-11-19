@@ -547,6 +547,8 @@ export class Pig implements Holdable {
       }
     }
     if (this.standing) { tx += this.stumbleX; tz += this.stumbleZ; }   // staggering steps (balance)
+    // wading through a river / stream / marsh channel: slower
+    if (this.grounded && G.terrain?.waters.length && G.terrain.waterAt(this.pos.x, this.pos.z) > 0.18) { tx *= 0.68; tz *= 0.68; }
     let acc = this.grounded ? PIG.accel : PIG.airAccel;
     if (this.grounded && G.iceAt?.(this.pos.x, this.pos.z)) acc *= this.sprinting ? PIG.iceSprint : PIG.ice;   // farm 5: hooves on ice
     if (!this.grounded && !moving && this.ownJump) acc = PIG.airBrake;

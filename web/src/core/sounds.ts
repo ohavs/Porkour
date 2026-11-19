@@ -30,6 +30,7 @@ export const SOUND_SETS: Record<string, string[]> = {
   // ambience
   rooster: ['rooster'], night: ['night'], cricket: n('cricket', 3), bird: ['bird3', 'bird4', 'bird5'],
   amb_day: ['amb_day'], amb_farm: ['amb_farm'], rain: ['rain'], thunder: n('thunder', 2),
+  river: ['river'], waterfall: ['waterfall'], frog: ['frog'], owl: ['owl'],
   buzz: ['buzz'],
   // farm 3: the bull, a tipped cow, milking + spilled milk
   bull: ['bull4', 'bull5', 'bull7'], charge: ['charge'], cowhurt: ['cowhurt'], milk: ['milk'], splash: ['splash'],

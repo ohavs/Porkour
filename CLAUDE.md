@@ -16,6 +16,10 @@ Dead by Daylight, Party Animals.
 - **Pending checks (user 2026-11-13)**: the user `/clear`s and forgets. EVERY final reply of an update ends with the full
   list from "Pending user checks" below (in Hebrew), until the user reports on an item → then remove it from the list.
 - **Work autonomously** — the user downloads things only when at a PC; do everything possible without them.
+- **Performance first (user 2026-11-19)**: "it must run smooth and never get stuck". Measure what new content costs
+  (`perf.cjs`-style: triangles, `height()` µs, nav build ms); "Auto" graphics measures the real FPS while playing and
+  steps the preset down (`Game.autoTune`, settings "⚡ Test my PC" = measure again). **Hebrew** (3rd language, RTL): later,
+  once the game is close to finished (user's choice) — keep every string in `t()` so it's one pass then.
 - **Languages: English + Spanish, full support, forever.** Every new UI string goes through `t()` (`web/src/i18n.ts`) with an
   `en` AND an `es` entry in the same change (`es` is typed `Record<Key, string>`, so a missing entry fails `tsc`).
 - **GitHub: Claude handles it** (user 2026-11-12): push the session branch, open the PR (GitHub MCP), merge it when it is ready,
@@ -134,6 +138,7 @@ Dead by Daylight, Party Animals.
 | `game/fullscreen.ts` | Full screen toggle (+ Keyboard Lock on Esc so Esc opens the menu). Buttons: HUD top-right, lobby top bar, settings. |
 | `world/outhouse.ts` | **Bob's outhouse (s14)** — one per farm (decor kit `outhouse()` → `FarmBuild.loos`, `G.loos`, synced entity after the gates). Bob's toilet breaks (`LOO`): first ~70–120 s into the round, then every 150–210 s, taken between two chores (`nextChore`, not at night / market) → state `loo` (walks over) → `inLoo` (hidden like sleep, sees nothing ~18 s; a noise ≤14 m / a knock on the hut = he comes out within 5 s and looks there). Pigs: grab the **bolt**'s handle (outside, door side; a `slider` handle, s18) and slide it across (LMB = headbutt = a knock) → he bangs (hut jolts, noise) then bursts the door off after 20 s and searches angrily (prank `looLock`). **Rocking** (`rock` 0..1: ram 0.62, headbutt / punch 0.3 × strength, thrown things by momentum) → at 1 it **tips** (kinematic body turns about a bottom edge, snapped to the hut's 4 sides): with Bob inside = prank `looTip` — door up / sideways: he's flung out (knock-down), onto its door: stuck banging 10 s, then heaves it back up. Bob fixes a tipped hut / missing door when he sees it (`G.jobs`, `bob.fixLoo`). Admin → "Outhouse & safe". |
 | `world/phone.ts`, `world/heavyLoot.ts` | **Bob's phone (s15)** = breathing window #2, one synced entity per farm (decor kit `phone(x, z, yaw, jx, jz)` + `payphone(x, z, yaw)` → `FarmBuild.phones`, `G.phones`). Old crank wall phone on a post by the porch: real calls (`PHONE.first` 110–160 s, then every 170–230 s, when `Farmer.phoneFree()`) ring (2 bursts / 3 s, ≤30 s) → Bob state `phone` (hurries over) → `onPhone` (16–24 s facing the box, view `phone` = narrow 12 m, glances over his shoulder every 6–10 s, hears only noises ≤9 m, `onPhoneHand` puts the receiver at his ear; coiled cord). Its wire runs to a **jack** on a stake: grab the plug (a `slider` handle, s18) and yank it out → mid-call = line dead (static) → he rattles the hook 2.4 s, then searches from the jack (prank `hangUp`); he plugs it back when he sees it (`G.jobs`). **Payphone** by the road gate: take a coin from the cup (dispenser), drop it in the slot (socket) → after 1.6 s Bob's phone rings (prank call) → he answers "Hello?" for 7 s; the caller takes the handset off its hook (a handle: it rides at the snout, its cord yanks it back past 3.6 m) and presses F = oink down the line (`phoneoink`) → furious (prank `prankCall`); 2 prank calls within 150 s = `wise`: the next prank ring sends him to the payphone. Payphone cooldown 40 s. **Heavy loot (s15)**: Bob's old TV (`tv`, 85 kg, 220 → 30 once the screen cracks: `PropDef.screen` 5.2 m/s or a punch, `Prop.crack()` / `broken`, synced) + the grandfather clock (`clock`, 110 kg, tall: topples when dragged hard (clang + noise); `HeavyLoot`: hands show `G.hour`, pendulum, ticking loop, BONG on every full hour (3 on 6 / 12) = noise 22 m wherever it is). Missions `hangUp` (bonus), `prankCall`, `tvSteal`, `clockSteal` (bonus) added per farm in `Round.start`. Admin → "Phone, TV & clock". |
+| `world/waterworks.ts`, `world/swamp.ts` | **The shape of the land (s22, user: "the maps are the same with other colours")**: `Terrain.river(pts, w, depth)` carves a channel (water `LEVEL` 0.25 under the banks; one point = a round pool), `Terrain.terrace(z, rise, ramps)` = a full-width step (1 m wall band, ramps cut into the upper level; needs `fine` = 1 m grid), `Terrain.outside` = the relief past the fence (farm 5 mountains, farm 4 flat marsh), `waterTint`. `height()` / `waterAt()` / `nearWater()` read a precomputed 0.5 m water grid (`wgrid`: same cost as dry ground). Ground mesh = variable grid (fine inside the farm, 2 m near, 4 m on the hills: ~half the triangles). `Waterworks` (farmKit `kit.water`): flowing ribbons (streaks scroll downstream), falls (foam + `waterfall` loop) where a stream drops over a terrace, dry-stone walls along steps + ramp side walls (one box collider per ~5 m), `walkway(pts)` (arched plank bridge / boardwalk on posts; deck colliders in `WALKABLE` = nav ignores them), `steppingStones`, wading splashes, `river` loop. Nav: steep ground (> 0.95) blocked, `wet` cells cost ×6 and break line of sight (Bob prefers bridges, wades if he must); pigs wade at ×0.68. `swamp.ts` (farm 4 bog): lily pads, will-o'-wisps (night), mist, frogs, an owl. |
 | `world/hammock.ts` | **Bob's siesta (s16)** = breathing window #3, farms 1–3 (decor kit `hammock(x, z, yaw)` → `FarmBuild.hammock`, `G.hammock`, synced entity after the phones). Once a round by day after `NAP.hour` 12.5–13.5 (between two chores) Bob walks over (`toHammock`) and naps ~28 s (`hammock`: body off, lies in the bed via `bobPose` + anim `hammock`, straw hat over his face, Zzz): blind, a noise ≤8 m wakes him after a groggy 1.2 s, noises made by shoving the hammock itself don't (`pushT`). Swing physics (`swing`/`omega`, k 9, damp 0.35): a ram on a post +3.6 rad/s, hits (`G.hittables`) +2.4 × strength (headbutt 0.6, punch 1) → past 1.05 rad he's flung out (`Farmer.hammockFlipped` = knock-down, then `afterStun` = angry search; prank `hammockFlip`): one ram, 2 punches or ~4–5 headbutts timed with the swing; swinging > 0.7 rad for 3 s rouses him. A muddy pig RMB at his head (`G.uses`, icon mud) = `Farmer.mudFace` → `mudMarks` 1–3 (mud spectacles, pig snout, whiskers on `FarmerVisual.setMud`; synced in Bob's numbers; 20 % he stirs and gets up 3 s later; prank `mudFace`). Admin → "Siesta (hammock)". |
 | `world/porch.ts` | **Bob's coffee break (s20)** = breathing window #4, the `paper` chore (farms 1, 2, 3, 5; 30 s, view `paper` = blind to the front, hears ≤10 m): side table by his rocker (decor kit `rocker()`), his real mug (`coffeeMug` prop, docked socket) — every 5.5–8.5 s he lowers the paper and really lifts it (it rides in his right hand, anim `sip`, view busy). Hot sauce bottle (`hotSauce`, pour stuff `hot`) on a crate by the grill: tip it over the mug (receiver) → at the next sip: spit-take, fire breath (state `hot`), runs to the nearest water (pond / `FarmBuild.troughs`, `cool`) and dunks his head (`dunk`), then hunts (prank `coffeeSpike`). A muddy pig RMB at the mug = mud in it (spit, `bob.yuck`). Mug gone at sip time = he searches the porch; the mug is loot (15, counts for `mugPond`). Admin → Bob "coffee break now", Farm → "Coffee break". |
 | `world/mines.ts` | **Land mines (s20)**: 6–8 random spots each round (host, synced positions; not near the sty / cage / porch / spawns; `ADMIN.mines`), one instanced mesh + blinking LEDs, a beep when my pig is ≤2.8 m. Step on = CLICK, 0.32 s later BOOM (noise 36 m): the one on it launched + `baconSoon` (lands as a sizzling bacon strip with googly eyes for 5.5 s, `Pig.baconUntil`) + 60 HP; splash 25; Bob on it = launched, knock-down (`Farmer.mined`, prank `mineBob`); animals / props fly. Admin → World "Land mines". |
@@ -244,6 +249,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    ✅ physics NaN fix + watchdog (likely the "freeze"), lock-pick / Bob's aim / snack prompt tweaks.
    Session 21: ✅ furnished interiors (walk-in houses / barns get furniture you can sit on, drag, steal; lamps, fridge,
    washer, toilet), seats shared registry, dynamic-resolution hitch fix.
+   Session 22: ✅ **maps that differ in shape** (farm 2 = terraced hillside, 3 levels, stone walls, ramps, a stream with
+   2 waterfalls; farm 3 = a river splitting off the bull's corner, cart bridge + stepping stones, valley hills; farm 4 =
+   a bog with murky pools, boardwalk, wisps, frogs; farm 5 = a big frozen lake + a snowy mountain + mountains around),
+   ✅ **11 new missions** + 3 bonus per round, ✅ **performance** (lighter ground mesh, water lookup grid, measured Auto
+   graphics), bull's giant nose ring fixed, beds easier to sit on.
    **Next (user 2026-11-19)**: more interiors (open up the closed barns / farm 1's farmhouse, more pieces with something
    to do: TV, radio, oven, bathroom), **full controller support** (menus, lobby, wardrobe, lock-pick, every action); the
    early-access entry code (waiting for the user's choice).
@@ -431,10 +441,26 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   (house 5, barns 6–10), farm 1 (barns 8–9), farm 5 (house 4, barns 9–11); sit on a furniture couch, fridge → can, lamp
   headbutt on / off; a 0.6-game-hour profile after the dyn-res change: no resize spikes. Farm 1's farmhouse (Silo_House)
   and its SmallBarn / Barn are closed models (no way in) → no furniture there yet. PR #50 merged (session 20).
+- 2026-11-19 (session 22, user: "more missions; the maps look the same — I want a wider change; continue"): see Roadmap
+  s22 + the waterworks row. New missions (`round.ts`): `wallJump` (farm 2: up a terrace wall away from the ramps),
+  `cheeseRiver` (farm 3), `peakClimb` (farm 5), `bobSoak` (Bob down in water), `danceBob` (dance ≤ 8 m in his view
+  1.5 s), `highUp` (hooves 2.4 m over the ground 1 s), `bedNap` (6 s), `fridgeRaid` (3 cans), `yardSale` (3 pieces
+  moved out of their building), `sofaSwim` (furniture in the water), `toiletFlush` (2); bonus per round 2 → 3.
+  Checked headless: every new mission completes (fart-jump up the wall, dance at Bob, bed, fridge, yard sale, cheese
+  in the river, Bob knocked down in the pond, peak, a roof); Bob's paths to every chore / place on farms 2–4 (bridge
+  used); 6 mission lines fit; farms 1 / 6 / 7 unchanged, no errors; Auto graphics High → Medium on a slow machine.
+  Perf: ground 36k → 22k verts (farm 2 with the 1 m grid: 49k), `height()` 0.2–0.45 µs on every farm, nav 300–400 ms.
+  Sounds: 0 A.D. river / waterfall (CC BY-SA 3.0), Veloren frog / owl (GPL-3, replace before a commercial release).
+  Not run online with 2 browsers this session (terrain is built from code: same on every machine).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 22 (new)**: the reshaped maps — farm 2 terraces (ramps + fart-jumps up the walls), farm 3 river + bridge,
+  farm 4 bog at night, farm 5 frozen lake + mountain: different enough? Which farm next (farm 1 is still the classic)?
+  · New missions (dance at Bob, nap in a bed, raid the fridge, drag furniture out / into the water, up a wall, the
+  peak…) fun? 3 bonus per round OK? · "Auto" graphics: does it pick well on your PC (Esc → Settings → ⚡ Test my PC)?
+  Smooth now? · the bull's nose ring is normal size now?
 - **Session 21 (new)**: furniture inside the barns / houses (walk in on farms 2, 3, 5; barns everywhere): sit on couches /
   chairs / beds / the toilet, drag the big pieces out (two pigs), steal them, headbutt a lamp, RMB at the fridge — fun?
   Which buildings / things next? The lounge now: 4-seat couch, armchair, beanbags, TV (RMB = channel) — right?
@@ -509,6 +535,10 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- s22: Bob wades through rivers when no bridge is near (by design, slower for pigs only); the farm fence segments
+  float / sink a little where they cross a terrace step; the bog's wisps are per-browser decoration (not synced);
+  stepping stones / boardwalk planks are walkable for Bob's nav but he mostly uses bridges; farm 1 has no new
+  geography yet (it's also the base of the chain modes).
 - s20: the gulag and the lounge find their spot automatically (open flat ground): on some farm the spot may look odd —
   tell Claude where. Dances are procedural (no music: real recordings only). Lounge seats hold the pig with a velocity
   spring (it can be shoved a little). A pig's HP / bacon / dance / seat are synced, but no 2-browser test this session.

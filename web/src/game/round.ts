@@ -18,6 +18,8 @@ import { profile } from '../net/auth';
 import { MOD, MOD_IDS, MOD_SVG, rollMod, type ModId } from './modifiers';
 import type { Spot } from '../world/pumpkins';
 import { IC, kc, type IconId } from './icons';
+import type { Pig } from '../pig/pig';
+import { wrapAngle } from '../core/util';
 
 /**
  * M5 round loop (Burglin' Gnomes / Untitled Goose Game to-do list): steal loot into the stash in the sty (each item
@@ -52,7 +54,10 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   | 'couchSesh'
   // chain modes: farm 6 (cannabis), farm 7 (beer), and the challenges you do high / drunk
   | 'rollJoint' | 'bongRip' | 'bakeCookies' | 'everyoneHigh' | 'brewBeer' | 'drinkUp'
-  | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade';
+  | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade'
+  // s22 (user: "add more missions"): the new ground (terrace walls, the river, the mountain), the furnished buildings, Bob
+  | 'wallJump' | 'cheeseRiver' | 'peakClimb' | 'bobSoak' | 'danceBob' | 'highUp'
+  | 'bedNap' | 'fridgeRaid' | 'yardSale' | 'sofaSwim' | 'toiletFlush';
 /** Chain-mode challenges (done buzzed): the cannabis farm's pool and the beer farm's pool. */
 const HIGH_POOL: MissionId[] = ['beamWalk', 'visions', 'munchies', 'hugBob', 'cloudGaze', 'couchSesh'];
 const DRUNK_POOL: MissionId[] = ['beamWalk', 'visions', 'hugBob', 'tableDance', 'serenade', 'cloudGaze'];
@@ -61,13 +66,17 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'shakeTrees', 'appleBob', 'ciderPress', 'beeBob', 'honeySteal', 'goldApple',
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
-  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike'];
-const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace', ...REQ_POOL];
+  'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike',
+  'wallJump', 'cheeseRiver', 'peakClimb', 'danceBob', 'fridgeRaid', 'yardSale'];
+const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace',
+  'bobSoak', 'highUp', 'bedNap', 'sofaSwim', 'toiletFlush', ...REQ_POOL];
+/** Bonus pranks per round (user: "add more missions"; was 2). */
+const BONUS_N = 3;
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
-export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
+export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole' | 'river';
 /** Counted pranks (progress shown as n / need). */
-const NEED: Partial<Record<MissionId, number>> = { visions: 6, munchies: 5, smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5, snowballBob: 4, iceHole: 3 };
+const NEED: Partial<Record<MissionId, number>> = { fridgeRaid: 3, yardSale: 3, toiletFlush: 2, visions: 6, munchies: 5, smashPots: 4, melonSmash: 3, eggBob: 2, shakeTrees: 5, appleBob: 3, ciderPress: 6, cowTip: 3, spillMilk: 3, lanternsOut: 6, pumpkinSmash: 5, snowballBob: 4, iceHole: 3 };
 /** Which props / critters a prank is about, and where they go. */
 /** Big pasture animals (they walk out on their own when the pasture gate is open). */
 const BIG = ['cow', 'horse', 'horse2', 'donkey', 'reindeer', 'doe'];
@@ -87,6 +96,7 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   giantPumpkin: { props: ['giantPumpkin'], to: 'stash' }, pumpkinSmash: { props: ['patchPumpkin', 'patchPumpkinY'] },
   safeSteal: { props: ['safe'], to: 'stash' }, tvSteal: { props: ['tv'], to: 'stash' }, clockSteal: { props: ['clock'], to: 'stash' },
   snowballBob: { props: ['snowball'], to: 'bob', noArrow: true }, bigSnowball: { props: ['snowboulder'], to: 'bob' }, bigPresent: { props: ['bigPresent'], to: 'stash' },
+  cheeseRiver: { props: ['cheeseWheel', 'prizeCheese'], to: 'river' },
 };
 type Phase = 'play' | 'escape' | 'end';
 const PHASES: Phase[] = ['play', 'escape', 'end'];
@@ -100,11 +110,11 @@ export const missionColor = (i: number) => (i <= 0 ? MISSION_COLORS[0] : MISSION
 /** Little down arrow in a mission's colour (mission list, waypoints). */
 export const arrowSvg = (c: string, w = 14) => `<svg class="marr" viewBox="0 0 14 14" width="${w}" height="${w}"><path d="M2 2.5h10L7 12z" fill="${c}" stroke="#3b2412" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 /** Pranks done to Bob himself: the arrow sits over him. */
-const ON_BOB = new Set<MissionId>(['mineBob', 'knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade']);
+const ON_BOB = new Set<MissionId>(['mineBob', 'knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade', 'bobSoak', 'danceBob']);
 export interface MissionMark { at: THREE.Vector3; top: number; color: string; i: number }
 
 /** Waypoint icons (the place a held thing goes). */
-const WHERE_IC: Record<Where, IconId> = { pond: 'water', well: 'well', stash: 'stash', porch: 'house', bob: 'bob', press: 'apple', hole: 'water' };
+const WHERE_IC: Record<Where, IconId> = { pond: 'water', well: 'well', stash: 'stash', porch: 'house', bob: 'bob', press: 'apple', hole: 'water', river: 'water' };
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number } | null, p: { x: number; z: number }) => !!r && p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1;
 const v1 = new THREE.Vector3();
@@ -203,9 +213,11 @@ export class Round {
 
   // ================================================================== host
   /** New round: fresh mission list (2 required pranks + 2 bonus), clock + loot back to zero. */
-  private couchT = 0;
+  private couchT = 0; private napT = 0; private danceT = 0; private highT = 0;
+  /** Per pig: the terrace level it last stood on (wallJump: up a wall without a ramp). */
+  private lvl = new Map<unknown, number>();
   start() {
-    this.couchT = 0;
+    this.couchT = 0; this.napT = 0; this.danceT = 0; this.highT = 0; this.lvl.clear();
     this.no++;
     this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false;
     this.secs = ADMIN.roundMins * 60;
@@ -219,7 +231,14 @@ export class Round {
       ...(this.game.phones?.wall ? ['hangUp'] as MissionId[] : []), ...(this.game.phones?.pay ? ['prankCall'] as MissionId[] : []),
       ...(this.game.hammock ? ['hammockFlip', 'mudFace'] as MissionId[] : []),
       ...(this.game.porch?.sauce && this.game.farm.chores.some((c) => c.id === 'paper') ? ['coffeeSpike'] as MissionId[] : []),
-      ...(ADMIN.mines ? ['mineBob'] as MissionId[] : [])];
+      ...(ADMIN.mines ? ['mineBob'] as MissionId[] : []),
+      // s22: everywhere (dance at Bob, get up high), the water (not the winter farm's ice), the furnished buildings
+      'danceBob', 'highUp', ...(!G.snowy ? ['bobSoak'] as MissionId[] : []),
+      ...(this.game.interiors?.bedSeats.size ? ['bedNap'] as MissionId[] : []),
+      ...(this.game.interiors?.fridges.length ? ['fridgeRaid'] as MissionId[] : []),
+      ...((this.game.interiors?.pieces.length ?? 0) >= 6 ? ['yardSale'] as MissionId[] : []),
+      ...(this.game.interiors?.pieces.length && !G.snowy ? ['sofaSwim'] as MissionId[] : []),
+      ...(this.game.interiors?.hasToilet ? ['toiletFlush'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick((ch.kind === 1 ? HIGH_POOL : DRUNK_POOL).filter((m) => m !== 'couchSesh' || this.game.lounge), 3);
@@ -235,7 +254,7 @@ export class Round {
     // a farm with its own pranks: one of the two required ones is always one of them
     const first = own.length ? pick(own.filter((m) => REQ_POOL.includes(m)), 1) : [];
     const req = [...first, ...pick(REQ_POOL.filter((m) => can.includes(m) && !first.includes(m)), 2 - first.length)];
-    const bonus = pick(BONUS_POOL.filter((m) => can.includes(m) && !req.includes(m)), 2);
+    const bonus = pick(BONUS_POOL.filter((m) => can.includes(m) && !req.includes(m)), BONUS_N);
     this.missions = [{ id: 'quota', req: true, done: false, n: 0 }, ...req.map((id) => ({ id, req: true, done: false, n: 0 })), ...bonus.map((id) => ({ id, req: false, done: false, n: 0 }))];
     this.handOut();
   }
@@ -309,6 +328,8 @@ export class Round {
     if (type === 'mudFace') this.done('mudFace');
     if (type === 'coffeeSpit') this.done('coffeeSpike');
     if (type === 'mineBob') this.done('mineBob');
+    if (type === 'fridge') this.count('fridgeRaid');
+    if (type === 'flush') this.count('toiletFlush');
   }
 
   step(dt: number) {
@@ -355,6 +376,7 @@ export class Round {
       const door = this.game.farm.zones.door;
       this.check('mudPorch', pigs.some((p) => p.muddy > 0 && !p.out && Math.hypot(p.pos.x - door.x, p.pos.z - door.z) < 2.6));
     }
+    this.newChecks(dt, pigs);
     this.check('quota', this.banked >= this.quota);
     // phases
     const reqDone = this.missions.every((m) => !m.req || m.done);
@@ -368,6 +390,54 @@ export class Round {
     if (!this.lastMin && this.timeLeft < 60) { this.lastMin = true; G.events.push({ type: 'lastMinute' }); }
     const sf = STAGE.floor[stageOf(farmId()) - 1] ?? 0;
     G.farmer?.setFloor(this.timeLeft < 120 ? 2 : Math.max(sf, this.mod === 'grumpy' ? MOD.grumpy.floor : 0));   // the last 2 minutes: at least "on alert"
+  }
+
+  /** s22 missions that are places / states (host, every step). */
+  private newChecks(dt: number, pigs: Pig[]) {
+    const g = this.game, f = G.farmer, T = G.terrain, inWater = g.farm.inWater, it = g.interiors;
+    // Bob down in the water (knocked into the pond / river / bog)
+    if (this.wants('bobSoak') && f && f.state === 'down' && inWater(f.pos.x, f.pos.z)) this.done('bobSoak');
+    // a cheese wheel rolled / thrown into the river
+    if (this.wants('cheeseRiver')) this.check('cheeseRiver', g.farm.props.some((p) => (p.def === PROPS.cheeseWheel || p.def === PROPS.prizeCheese) && !p.banked && !p.heldBy
+      && T.waterAt(p.synced.currP.x, p.synced.currP.z) > 0.15));
+    // the mountain's peak (farm 5)
+    const pk = g.farm.places.peak;
+    if (this.wants('peakClimb') && pk) this.check('peakClimb', pigs.some((p) => !p.out && !p.heldBy && Math.hypot(p.pos.x - pk.x, p.pos.z - pk.z) < pk.r));
+    // up a terrace wall without a ramp (a fart-jump, a crate, a catapult…): a pig lands a level higher, away from the ramps
+    if (this.wants('wallJump') && T.steps.length) for (const p of pigs) {
+      if (p.out || p.heldBy || !p.grounded) continue;
+      let lv = 0; for (const st of T.steps) if (p.pos.z < st.z - 1.2) lv++;
+      const was = this.lvl.get(p);
+      this.lvl.set(p, lv);
+      if (was === undefined || lv <= was) continue;
+      const st = T.steps.slice().sort((a, b) => b.z - a.z)[lv - 1];
+      if (st && !st.ramps.some(([r0, r1]) => p.pos.x > r0 - 2 && p.pos.x < r1 + 2)) this.done('wallJump');
+    }
+    // dancing right in front of Bob (he's awake and looking your way)
+    if (this.wants('danceBob') && f && !f.asleep && f.state !== 'down') {
+      const fw = f.yaw as number;
+      const ok = pigs.some((p) => p.danceId && !p.out && Math.hypot(p.pos.x - f.pos.x, p.pos.z - f.pos.z) < 8
+        && Math.abs(wrapAngle(Math.atan2(p.pos.x - f.pos.x, p.pos.z - f.pos.z) - fw)) < 1.2);
+      this.danceT = ok ? this.danceT + dt : 0;
+      this.check('danceBob', this.danceT >= 1.5);
+    }
+    // up high: hooves 2.4 m over the ground (a roof, the top of a stack, the catapult's landing…)
+    if (this.wants('highUp')) {
+      const ok = pigs.some((p) => !p.out && !p.heldBy && p.grounded && p.seat < 0 && p.pos.y - 0.4 - T.height(p.pos.x, p.pos.z) > 2.4);
+      this.highT = ok ? this.highT + dt : 0;
+      this.check('highUp', this.highT >= 1);
+    }
+    if (!it) return;
+    // a nap in a bed (6 s)
+    if (this.wants('bedNap')) { if (pigs.some((p) => p.seat >= 0 && it.bedSeats.has(p.seat))) this.napT += dt; this.check('bedNap', this.napT >= 6); }
+    // furniture dragged out of its building (3) / a piece in the water
+    if (this.wants('yardSale')) {
+      const m = this.missions.find((x) => x.id === 'yardSale')!;
+      m.n = it.pieces.filter(({ pr, home, x0, z0 }) => pr.banked || (!pr.heldBy && Math.hypot(pr.synced.currP.x - home.x, pr.synced.currP.z - home.z) > home.r
+        && Math.hypot(pr.synced.currP.x - x0, pr.synced.currP.z - z0) > 3)).length;   // (moved, not just a piece that sits by a wall)
+      this.check('yardSale', m.n >= (NEED.yardSale ?? 3));
+    }
+    if (this.wants('sofaSwim')) this.check('sofaSwim', it.pieces.some(({ pr }) => !pr.banked && !pr.heldBy && inWater(pr.synced.currP.x, pr.synced.currP.z)));
   }
 
   private atWell(p: THREE.Vector3) { const w = this.game.farm.places.well; return !!w && Math.hypot(p.x - w.x, p.z - w.z) < 1.6 && p.y > G.terrain.height(w.x, w.z) + 0.9; }
@@ -481,6 +551,18 @@ export class Round {
     if (ch) { const h = ch.stepIcons(x.id, L); if (h) return h; }
     if (x.id === 'mudPorch') return L.muddy > 0 ? IC.house : kc('C') + IC.mud;
     if (x.id === 'couchSesh') return IC.leaf + IC.rmb + IC.couch;
+    // s22
+    if (x.id === 'wallJump') return kc('Q') + IC.cloud + IC.feet;
+    if (x.id === 'danceBob') return kc('B') + IC.note + IC.bob;
+    if (x.id === 'bedNap') return IC.rmb + IC.zzz;
+    if (x.id === 'fridgeRaid') return IC.rmb + IC.can;
+    if (x.id === 'yardSale') return IC.rmb + IC.couch + IC.walk;
+    if (x.id === 'sofaSwim') return IC.couch + IC.water;
+    if (x.id === 'toiletFlush') return IC.rmb + IC.loo;
+    if (x.id === 'highUp') return kc('Q') + IC.cloud + IC.house;
+    if (x.id === 'bobSoak') return IC.fist + IC.bob + IC.water;
+    if (x.id === 'cheeseRiver') return IC.grab + IC.water;
+    if (x.id === 'peakClimb') return IC.feet + IC.stars;
     if (x.id === 'coffeeSpike') {
       const pc = this.game.porch;
       if (pc?.sauce && L.held === pc.sauce) return kc('R') + IC.pour + IC.mug;
@@ -549,6 +631,22 @@ export class Round {
         case 'prankCall': mark(i, g.phones?.payMark); return;
         case 'hammockFlip': case 'mudFace': mark(i, g.hammock?.markPos); return;
         case 'couchSesh': mark(i, g.lounge?.markPos); return;
+        // s22: the furnished buildings (nearest bed / fridge / toilet / piece), the peak, the terrace walls
+        case 'bedNap': case 'toiletFlush': case 'fridgeRaid': case 'yardSale': case 'sofaSwim': {
+          const it = g.interiors; if (!it) return;
+          const want = m.id === 'bedNap' ? ['f_bed', 'f_bedKing', 'f_bunk'] : m.id === 'toiletFlush' ? ['f_toilet'] : m.id === 'fridgeRaid' ? ['f_fridge'] : null;
+          const list = it.pieces.filter(({ pr, home }) => !pr.banked && !pr.heldBy && (!want || want.includes(pr.def.id ?? ''))
+            && (m.id !== 'yardSale' || Math.hypot(pr.synced.currP.x - home.x, pr.synced.currP.z - home.z) <= home.r));
+          const pc = near(list, (x) => x.pr.obj.position);
+          if (pc) mark(i, pc.pr.obj.position, pc.pr.half);
+          return;
+        }
+        case 'peakClimb': { const pk = P.peak; if (pk) mark(i, new THREE.Vector3(pk.x, G.terrain.height(pk.x, pk.z) + 1, pk.z)); return; }
+        case 'wallJump': {   // the nearest bit of terrace wall (not a ramp)
+          const st = G.terrain.steps.slice().sort((a, b) => Math.abs(a.z - L.pos.z) - Math.abs(b.z - L.pos.z))[0];
+          if (st) { let x = L.pos.x; for (const [r0, r1] of st.ramps) if (x > r0 - 3 && x < r1 + 3) x = r1 + 6; mark(i, new THREE.Vector3(x, G.terrain.base(x, st.z - 2), st.z - 0.5)); }
+          return;
+        }
         case 'coffeeSpike': {   // hot sauce in hand (or a muddy pig): his mug; else the bottle by the grill
           const pc = g.porch; if (!pc) return;
           const sauce = pc.sauce && !pc.sauce.banked && pc.sauce.left > 0.01 ? pc.sauce : null;
@@ -605,6 +703,8 @@ export class Round {
       if (d.props && pr.def && d.props.includes(pr.def.id ?? '')) return { where: d.to, id: m.id };
       if (d.critters && cr.kind === 'critter' && d.critters.includes(cr.def.kind)) return { where: d.to, id: m.id };
     }
+    // a piece of Bob's furniture: into the water
+    if (pr.kind === 'prop' && this.wants('sofaSwim') && pr.def?.id?.startsWith('f_')) return { where: G.terrain.waters.length ? 'river' : 'pond', id: 'sofaSwim' };
     // farm 5: anything you carry can go down Bob's ice-fishing hole
     const hole = this.missions.find((m) => m.id === 'iceHole' && !m.done);
     if (hole && pr.kind === 'prop' && this.game.farm.winter?.hole) return { where: 'hole', id: 'iceHole' };
@@ -617,6 +717,11 @@ export class Round {
     else if (w === 'press' && this.game.farm.orchard?.pressAt) out.copy(this.game.farm.orchard.pressAt);
     else if (w === 'hole' && this.game.farm.winter?.hole) { const h = this.game.farm.winter.hole; out.set(h.x, h.y + 0.3, h.z); }
     else if (w === 'porch') out.copy(this.game.farm.zones.door);
+    else if (w === 'river') {   // the nearest bit of river / stream to me
+      const L = this.game.local; let bd = Infinity;
+      for (const wt of G.terrain.waters) for (const [x, z] of wt.pts) { const d = (x - L.pos.x) ** 2 + (z - L.pos.z) ** 2; if (d < bd && G.terrain.inFarm(x, z, 2)) { bd = d; out.set(x, G.terrain.surfaceAt(x, z), z); } }
+      if (bd === Infinity) out.set(pond.x, G.terrain.height(pond.x, pond.z), pond.z);
+    }
     else if (w === 'bob' && G.farmer) out.copy(G.farmer.pos).setY(G.farmer.pos.y + 1);
     else out.copy(this.stash);
     return out;

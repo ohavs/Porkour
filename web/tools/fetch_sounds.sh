@@ -58,7 +58,8 @@ pack https://github.com/0ad/0ad 0ad "/$A/actor/fauna/animal/pig_*" "/$A/actor/fa
   "/$A/attack/impact/shield_wood_0*" "/$A/attack/impact/shield_metal_0[1-4]*" "/$A/attack/impact/arrow_dirt_0[1-6]*" \
   "/$A/attack/fire/c_1[1-3]*" "/$A/attack/fire/sz1[1-3]*" "/$A/ambient/dayscape/day_temperate_1*" "/$A/ambient/building/amb_farm_1*" \
   "/$A/ambient/weather/rain_1*" "/$A/ambient/weather/thunder_1*" "/$A/LICENSE.txt" \
-  "/$A/ambient/weather/wind_11.ogg" "/$A/ambient/weather/windgust_11.ogg" "/$A/actor/singlesteps/fs_snow_1*"
+  "/$A/ambient/weather/wind_11.ogg" "/$A/ambient/weather/windgust_11.ogg" "/$A/actor/singlesteps/fs_snow_1*" \
+  "/$A/ambient/water/river_slow_21.ogg" "/$A/ambient/water/waterfall_31.ogg"
 pack https://github.com/wesnoth/wesnoth wesnoth '/data/core/sounds/ambient/night.ogg' '/data/core/sounds/ambient/morning.ogg' \
   '/data/core/sounds/bite-small.ogg' '/data/core/sounds/club.ogg' '/data/core/sounds/dwarf-laugh.wav' '/data/core/sounds/fanfare-short.wav' \
   '/data/core/sounds/fist.ogg' '/data/core/sounds/gold.ogg' '/data/core/sounds/groan.wav' '/data/core/sounds/human-old-*' \
@@ -72,7 +73,8 @@ pack https://github.com/Fris0uman/CDDA-Soundpacks cdda "/$CC/speech/ferals/old_m
 pack https://github.com/AntumMT/mod-sounds antum '/sounds/sounds_doorbell_03.ogg' '/sounds/sounds_clock_tick.ogg' '/sounds/sounds_coin.ogg' \
   '/sounds/sounds_door_knock_02.ogg' '/sources.md'
 pack https://github.com/hedgewars/hw hedgewars '/share/hedgewars/Data/Sounds/voices/HillBilly/'
-pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg'
+pack https://github.com/veloren/veloren veloren '/assets/voxygen/audio/sfx/ambient/crickets_*' '/assets/voxygen/audio/sfx/ambient/birdcall_0[1-5]*' '/assets/voxygen/audio/sfx/ambient/bees_1.ogg' \
+  '/assets/voxygen/audio/sfx/ambient/frog_croak_1.ogg' '/assets/voxygen/audio/sfx/ambient/owl_1.ogg'
 
 VL=$CACHE/VoxeLibre/mods/ENTITIES/mobs_mc/sounds; VS=$CACHE/VoxeLibre/mods/CORE/mcl_sounds/sounds
 OA=$CACHE/0ad/$A; WS=$CACHE/wesnoth/data/core/sounds; VE=$CACHE/veloren/assets/voxygen/audio/sfx/ambient
@@ -162,6 +164,11 @@ for i in 3 4 5; do snd "$VE/birdcall_0$i.ogg" bird$i -10 0 "$VEc"; done
 snd "$VE/bees_1.ogg" buzz -4 0 "Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown)"
 snd "$OA/ambient/dayscape/day_temperate_11.ogg" amb_day -10 0 "$OAc"
 snd "$OA/ambient/building/amb_farm_11.ogg" amb_farm -12 0 "$OAc"
+# rivers / streams / waterfalls (farms 2, 3, 4): 0 A.D. water ambience; the swamp at night: a frog, an owl (Veloren)
+snd "$OA/ambient/water/river_slow_21.ogg" river -10 0 "$OAc"
+snd "$OA/ambient/water/waterfall_31.ogg" waterfall -9 0 "$OAc"
+snd "$VE/frog_croak_1.ogg" frog -6 0 "Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown)"
+snd "$VE/owl_1.ogg" owl -6 0 "Veloren (veloren.net), GPL-3.0 (credits.ron: author unknown)"
 # weather (round modifier "rain")
 snd "$OA/ambient/weather/rain_11.ogg" rain -8 0 "$OAc"
 snd "$OA/ambient/weather/thunder_10.ogg" thunder1 -2 0 "$OAc"; snd "$OA/ambient/weather/thunder_11.ogg" thunder2 -2 0 "$OAc"

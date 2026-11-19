@@ -1,7 +1,7 @@
 import type { Game } from './game';
 import { G, ADMIN } from './ctx';
 import { SETTINGS, saveSettings, setPreset } from './settings';
-import { PRESETS, PRESET_ORDER, detectPreset, presetOf, type GfxOpts, type PresetChoice } from '../render/quality';
+import { PRESETS, PRESET_ORDER, detectPreset, presetOf, setTuned, type GfxOpts, type PresetChoice } from '../render/quality';
 import { t, setLang, lang, LANGS, onLang, type Lang, type Key } from '../i18n';
 import { SVG } from './hud';
 import { online } from '../net/online';
@@ -115,7 +115,7 @@ export class Menu {
     this.game.hud.toast(t('toast.preset', { p: this.presetName(c) }), 1.4);
     if (this.menuOpen) this.renderMenu();
   }
-  private presetName(c: PresetChoice) { return c === 'auto' ? t('g.auto', { p: t(('g.' + detectPreset().preset) as Key) }) : t(('g.' + c) as Key); }
+  private presetName(c: PresetChoice) { return c === 'auto' ? t('g.auto', { p: t(('g.' + (presetOf('auto') ?? detectPreset().preset)) as Key) }) : t(('g.' + c) as Key); }
   /** One advanced option changed: the preset becomes "custom" (or the preset it now matches). */
   private setGfx<K extends keyof GfxOpts>(k: K, v: GfxOpts[K]) {
     SETTINGS.gfx = { ...SETTINGS.gfx, [k]: v };
@@ -153,6 +153,7 @@ export class Menu {
     this.panel.innerHTML = `<h2>${t('menu.settings')}</h2>` +
       row(ROW.lang, 'menu.language', langs) +
       row(ROW.gfx, 'menu.quality', seg('preset', presets, G0)) +
+      `<div class="btns"><button class="chip small" data-b="tune" title="${t('g.tuneD').replace(/"/g, '&quot;')}">⚡ ${t('g.tune')}${G0 === 'auto' ? ` · ${t(('g.' + presetOf('auto')) as Key)}` : ''}</button></div>` +
       row(ROW.sound, 'menu.sound', slider('sound', SETTINGS.sfx)) +
       row(ROW.music, 'menu.musicS', slider('music', SETTINGS.music)) +
       row(ROW.mouse, 'menu.mouse', slider('sens', SETTINGS.sens, 3, 0.1)) +
@@ -197,6 +198,10 @@ export class Menu {
       const k = b.dataset.b;
       if (k === 'resume') this.close();
       if (k === 'advanced') { this.advanced = !this.advanced; this.renderMenu(); }
+      if (k === 'tune') {   // measure again from the graphics card's guess (while playing)
+        SETTINGS.tuned = null; setTuned(null); this.choosePreset('auto'); this.game.retune();
+        this.game.hud.toast(t('toast.tuneStart'), 2.4, '', 'gear');
+      }
       if (k === 'wardrobe') { this.close(false); this.onWardrobe?.(); }
       if (k === 'admin') { this.close(false); this.toggleAdmin(); }
       if (k === 'invite') navigator.clipboard?.writeText(inviteLink()).then(() => this.game.hud.toast(t('net.copied'), 1.2));

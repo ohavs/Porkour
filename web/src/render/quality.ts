@@ -64,5 +64,13 @@ export function detectPreset(): { preset: Preset; gpu: string } {
   return detected;
 }
 
-/** The preset in use for a choice ("auto" → detected, "custom" → none). */
-export const presetOf = (c: PresetChoice): Preset | null => (c === 'auto' ? detectPreset().preset : c === 'custom' ? null : c);
+/**
+ * "Auto" measured on this machine (user: "it must run smooth — recommended settings?"): while you play on Auto, the
+ * game watches the real frame rate and steps the preset down when it struggles (Game.autoTune); the result is kept
+ * per device (settings `tuned`). The GPU-name guess is only the starting point.
+ */
+let tuned: Preset | null = null;
+export const setTuned = (p: Preset | null) => { tuned = p; };
+export const tunedPreset = () => tuned;
+/** The preset in use for a choice ("auto" → measured / detected, "custom" → none). */
+export const presetOf = (c: PresetChoice): Preset | null => (c === 'auto' ? tuned ?? detectPreset().preset : c === 'custom' ? null : c);

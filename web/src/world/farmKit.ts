@@ -23,6 +23,7 @@ import type { Porch } from './porch';
 import type { ModId } from '../game/modifiers';
 import { G } from '../game/ctx';
 import { instanceStatic } from '../render/batch';
+import { Waterworks } from './waterworks';
 
 /** Named spots of a farm the game logic needs (pranks, Bob's trips, the dog's patrol, admin teleports). */
 export interface Places {
@@ -37,6 +38,8 @@ export interface Places {
   roadGate: THREE.Vector3;
   /** Where the guard dog patrols off the leash. */
   dogPatrol: { x: number; z: number; r: number };
+  /** Farm 5: the mountain's top (mission: climb it). */
+  peak?: { x: number; z: number; r: number };
   /** Admin teleports: [label key suffix (a.<key>), x, z]. */
   tp: [string, number, number][];
 }
@@ -79,6 +82,8 @@ export interface FarmBuild {
   porch?: Porch;
   /** Chain modes (farms 6 / 7): the production chain (world/chain.ts; one synced entity + its visions). */
   chain?: import('./chain').Chain;
+  /** Rivers / streams / terrace walls + their bridges (waterworks.ts). */
+  water?: Waterworks;
   /** The round's clock (farm 4: starts at dusk, slow hours so the round stays at night); default 7:00, 25 s / hour. */
   clock?: { start: number; secsPerHour: number };
   /** 0..1 darker nights (farm 4). */
@@ -106,6 +111,17 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
   const blocked: Rect[] = [];
   const y = (x: number, z: number) => t.height(x, z);
   const forest = new Forest();
+  // rivers / streams / terrace walls carved into this farm's ground (its bridges / boardwalks are added by the farm)
+  const water = new Waterworks(scene, t, F);
+  water.waters(); water.terraceWalls();
+  for (const st of t.steps) {   // nothing scattered on a terrace wall or a ramp, no grass through the stones
+    blocked.push({ x0: F.x0 - 30, x1: F.x1 + 30, z0: st.z - 2.2, z1: st.z + 1.2 });
+    t.noGrass({ x0: F.x0 - 30, x1: F.x1 + 30, z0: st.z - 1.15, z1: st.z + 0.2 });
+    for (const [r0, r1, len] of st.ramps) {
+      blocked.push({ x0: r0 - 1.6, x1: r1 + 1.6, z0: st.z - len - 1, z1: st.z + 1 });
+      t.noGrass({ x0: r0 - 1.1, x1: r0 + 0.1, z0: st.z - len, z1: st.z }); t.noGrass({ x0: r1 - 0.1, x1: r1 + 1.1, z0: st.z - len, z1: st.z });
+    }
+  }
 
   /** Building: collider follows its real mesh (open barns / sheds can be walked into). */
   const building = (model: string, x: number, z: number, height: number, yaw = 0, collide = true) => {
@@ -177,7 +193,7 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
     const b = o.getObjectByName(name); if (b) out.spinners.push({ obj: b, speed });
   };
   const free = (x: number, z: number, pad = 0) =>
-    !blocked.some((r) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad) && !t.isBare(x, z);
+    !blocked.some((r) => x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad) && !t.isBare(x, z) && !t.nearWater(x, z, 1.4 + pad);
   const tree = (kind: TreeKind, x: number, z: number, s: number, collide: boolean) => {
     forest.add(kind, x, y(x, z), z, s);
     if (collide) staticCylinder(V3(x, y(x, z) + 1.5, z), 1.5, 0.3 * s);
@@ -254,10 +270,13 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
   };
   /** Last step: one draw call per repeated static part instead of hundreds (same look). */
   const finish = () => {
+    water.finish();
+    if (t.waters.length) out.updaters.push((dt) => water.update(dt));
+    out.water = water;
     const n = instanceStatic(scene, out.statics, new Set(out.spinners.map((s) => s.obj)));
     console.log(`static meshes instanced: ${n}`);
     return out;
   };
-  return { rng, blocked, y, forest, building, decor, fence, pen, prop, critter, spinner, free, tree, outerFence, hedgeRing, surroundings, scatter, finish };
+  return { rng, blocked, y, forest, water, building, decor, fence, pen, prop, critter, spinner, free, tree, outerFence, hedgeRing, surroundings, scatter, finish };
 }
 export type Kit = ReturnType<typeof farmKit>;

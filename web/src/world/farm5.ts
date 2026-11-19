@@ -32,8 +32,11 @@ export const FARM5_MODELS = [
  * and Bob's prize snowman (north) · cage by the porch · woodshed (north-west) · Bob's winter garden (north).
  */
 export const FARM5: Rect = { x0: -60, x1: 60, z0: -104, z1: 16 };
-const RINK = { x: -34, z: -40, r: 10 };
-const HOLE = { x: -25.8, z: -41.6 };
+/** The frozen lake (west) — user: "the maps should differ more": much bigger than the old pond, Bob fishes out on it. */
+const RINK = { x: -38, z: -40, r: 15 };
+const HOLE = { x: -30, z: -45 };
+/** The mountain in the north-east corner (snowy pines, the crown near the top, snowballs to send rolling down). */
+const MOUNT = { x: 50, z: -92, r: 26, h: 10, flat: 4 };
 const HILL = { x: 36, z: -70, r: 15, h: 4.4, flat: 3 };
 const PADDOCK: Rect = { x0: 34, x1: 54, z0: -48, z1: -28 };
 const SNOWMAN = { x: -9, z: -75 };
@@ -63,7 +66,7 @@ const CHORES: Chore[] = [
 ];
 
 /** Pranks that work here: the shared ones whose places / things exist + the winter farm's own (featured). */
-const FEATURED: MissionId[] = ['snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent'];
+const FEATURED: MissionId[] = ['snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'peakClimb'];
 const MISSIONS: MissionId[] = [...FEATURED, 'knockBob', 'staggerBob', 'fartBob', 'hensOut', 'wolfScare', 'loseBob', 'whackBob', 'eggBob',
   'undiesWell', 'pieSteal', 'gateBreak', 'smashPots', 'cowsOut'];
 
@@ -91,6 +94,8 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
   terrain.flatten(RINK.x, RINK.z, RINK.r + 0.6, 3);
   for (const [x, z, r] of PUDDLES) terrain.flatten(x, z, r + 0.4, 1.5);
   terrain.hill(HILL.x, HILL.z, HILL.r, HILL.h, HILL.flat);
+  terrain.hill(MOUNT.x, MOUNT.z, MOUNT.r, MOUNT.h, MOUNT.flat);
+  terrain.outside = { base: 9, amp: 44, freq: 0.011 };   // snowy mountains all round
 
   const build = (t: Terrain, daynight: DayNight): FarmBuild => {
     snowyForest(true);
@@ -107,11 +112,11 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
       inWater: (x, z) => Math.hypot(x - HOLE.x, z - HOLE.z) < 0.7,
       gates: [],
       places: {
-        pond: { x: RINK.x, z: RINK.z, r: RINK.r }, well: { x: -6, z: -58 },
+        pond: { x: RINK.x, z: RINK.z, r: RINK.r }, peak: { x: MOUNT.x, z: MOUNT.z, r: MOUNT.flat + 1.5 }, well: { x: -6, z: -58 },
         coop: { x0: -34, x1: -22, z0: -8, z1: 4 }, sheepPen: null, pasture: PADDOCK,
         stash: V3(41.5, t.height(41.5, 1), 1), roadGate: V3(0, t.height(0, 12.5), 12.5), dogPatrol: { x: 0, z: -44, r: 46 },
         tp: [['sty', 40, 1], ['cage', 16, -75], ['house', 0, -80], ['rink', RINK.x + RINK.r + 1.5, RINK.z], ['hole', HOLE.x + 2.6, HOLE.z + 0.6],
-          ['snowman', SNOWMAN.x + 2.5, SNOWMAN.z + 2], ['tree', TREE.x - 2, TREE.z + 4], ['sled', HILL.x - 1, HILL.z + 2], ['paddock', PADDOCK.x0 - 2, -38],
+          ['snowman', SNOWMAN.x + 2.5, SNOWMAN.z + 2], ['tree', TREE.x - 2, TREE.z + 4], ['sled', HILL.x - 1, HILL.z + 2], ['paddock', PADDOCK.x0 - 2, -38], ['peak', MOUNT.x - 3, MOUNT.z + 4],
           ['woodshed', -20, -80], ['garden', 12, -96]],
       },
       missions: MISSIONS,
@@ -191,7 +196,16 @@ export function buildFarm5(scene: THREE.Scene): FarmDef {
       blocked.push({ x0: x - 1.2, x1: x + 1.2, z0: z - 1.2, z1: z + 1.2 });
     };
     pile(7, -9); pile(-20, -44); pile(-13, -71); pile(HILL.x + 0.6, HILL.z - 0.8); pile(31, 7); pile(12, -40);
-    for (const [x, z] of [[HILL.x - 1.6, HILL.z - 1.2], [-16, -22], [24, -50]] as const) winter.addBoulder(prop('snowboulder', x, z, 0));
+    for (const [x, z] of [[HILL.x - 1.6, HILL.z - 1.2], [-16, -22], [24, -50], [MOUNT.x - 2.4, MOUNT.z + 1.4], [MOUNT.x + 1.6, MOUNT.z + 2.6]] as const)
+      winter.addBoulder(prop('snowboulder', x, z, 0));   // (the two on the peak: push one off and it grows all the way down)
+    // the mountain: snowy pines on its flanks, a flag on the peak, a sled waiting up there
+    for (let i = 0; i < 22; i++) {
+      const a = rng.range(0, 6.28), d = rng.range(MOUNT.flat + 4, MOUNT.r - 2), x = MOUNT.x + Math.cos(a) * d, z = MOUNT.z + Math.sin(a) * d;
+      if (!t.inFarm(x, z, 3) || Math.hypot(x - 26, z + 95) < 6) continue;
+      kit.tree('pine', x, z, rng.range(1.1, 1.6), true);
+    }
+    decor('kenney/sign', MOUNT.x - 2.6, MOUNT.z + 3.2, { height: 1.2, yaw: -0.8 });
+    prop('sled', MOUNT.x + 2.4, MOUNT.z - 0.6, 2.2, 0.1);
 
     // ---------------------------------------------------------------- woodshed + garden
     decor('kenney/log_stackLarge', -23.5, -88, { height: 1.2, yaw: 0, collide: 'box' });

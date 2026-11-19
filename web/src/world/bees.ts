@@ -101,7 +101,7 @@ export class Bees {
     const p = t as Pig;
     return !ignored(p) && !p.out && !p.cage && !(p.heldBy?.kind === 'farmer') && p.muddy <= 0 && !this.inWater(p) && !p.smoking;   // smoke calms bees
   }
-  private inWater(p: Pig) { const w = G.places?.pond; return !!w && Math.hypot(p.pos.x - w.x, p.pos.z - w.z) < w.r - 0.3; }
+  private inWater(p: Pig) { const w = G.places?.pond; return (!!w && Math.hypot(p.pos.x - w.x, p.pos.z - w.z) < w.r - 0.3) || G.terrain.waterAt(p.pos.x, p.pos.z) > 0.15; }
   private tpos(t: Pig | { kind: 'farmer' }, out: THREE.Vector3) {
     if (t.kind === 'farmer') return out.copy(G.farmer.pos).setY(G.farmer.pos.y + 1.7);
     const p = t as Pig; return out.copy(p.pos).setY(p.pos.y + (p.standing ? 1.1 : 0.55));
