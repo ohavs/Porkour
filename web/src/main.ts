@@ -23,6 +23,7 @@ import { FARM2_MODELS } from './world/farm2';
 import { FARM3_MODELS } from './world/farm3';
 import { FARM4_MODELS } from './world/farm4';
 import { FARM5_MODELS } from './world/farm5';
+import { INTERIOR_MODELS } from './world/interiors';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
 import { FLAGS } from './game/flags';
 
@@ -39,7 +40,7 @@ const MODELS = [
   ...['Flower_3_Group', 'Flower_4_Group', 'Mushroom_Common'].map((n) => 'nature/' + n), 'kenney/rock_largeA', 'kenney/rock_smallA',
   ...GLB_MODELS, ...LOOT_MODELS, 'loot/Coin',
   ...['Carrot_4', 'Lettuce_4', 'Tomato_4', 'Beet_4', 'BushBerries_4', 'Watermelon_4'].map((n) => 'crops/' + n),
-  ...COVER_MODELS, ...LANDMARK_MODELS,
+  ...COVER_MODELS, ...LANDMARK_MODELS, ...INTERIOR_MODELS,
 ];
 /** + the models only the farm this page plays needs. */
 /** The chain modes' shed kitchen + brewing bits (KayKit Restaurant, Quaternius; CC0). */

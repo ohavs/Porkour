@@ -30,6 +30,8 @@ import { Mines } from '../world/mines';
 import { Gulag } from '../world/gulag';
 import { EmoteWheel } from './emotes';
 import { Lounge } from '../world/lounge';
+import { SEATS } from '../world/seats';
+import { Interiors } from '../world/interiors';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -92,6 +94,8 @@ export class Game {
   wheel = new EmoteWheel(); private pendingEmote = 0;
   /** Cannabis mode: the smoking lounge (the couch); my seat last frame (the camera swings round when I sit). */
   lounge: Lounge | null = null; private seatWas = -1;
+  /** Furniture inside the buildings (seats, lamps, fridges, the washer). */
+  interiors!: Interiors;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -179,6 +183,9 @@ export class Game {
         if (ls) { this.lounge = new Lounge(scene, f.props, ls.at, ls.yaw); f.places.tp.push(['lounge', ls.at.x + Math.sin(ls.yaw) * 4, ls.at.z + Math.cos(ls.yaw) * 4]); }
       }
       G.lounge = this.lounge;
+      // furniture inside every building a pig can walk into
+      this.interiors = new Interiors(scene, f.props, this.nav, f.buildings ?? [], f.places.stash);
+      G.uses.push({ near: (p: Pig) => p.seat < 0 && SEATS.seatFor(p) >= 0, icon: () => 'couch' });   // RMB at any free seat: sit
     }
     G.chain = this.farm.chain ?? null;
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
@@ -201,7 +208,7 @@ export class Game {
     this.markers = new Markers(scene, this);
     (window as any).__G = G;
     (window as any).__ADMIN = ADMIN;
-    (window as any).__HANDS = HANDS;
+    (window as any).__HANDS = HANDS; (window as any).__SEATS = SEATS;
     (window as any).__world = () => world;
     this.local.yaw = Math.PI;
     this.hud = new Hud();
@@ -411,7 +418,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); this.lounge?.step(); this.interiors.step(); }
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
@@ -566,6 +573,7 @@ export class Game {
     this.porch?.reset();
     this.mines.reset();
     this.gulag?.reset();
+    this.interiors.reset();
     for (const p of this.pigs) p.resetHealth();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
@@ -1032,6 +1040,7 @@ export class Game {
     if (this.mode === 'play') this.mines.render(dt);
     this.gulag?.render();
     this.lounge?.render(dt);
+    this.interiors.render();
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);
@@ -1047,7 +1056,7 @@ export class Game {
     const L0 = this.local, work = this.mode === 'play' && ((!!L0.held && L0.held.mass <= L0.liftMax) || !!L0.handle) ? 1 : 0;
     // sitting down on the couch: the camera swings round in front of me (I see my pig's face); up again: back behind
     if (L0.seat !== this.seatWas) {
-      if (L0.seat >= 0 && this.lounge) { this.cam.yaw = this.lounge.seatYaw(L0.seat) + Math.PI; this.cam.pitch = 0.1; this.cam.dist = 3.4; }
+      if (L0.seat >= 0) { this.cam.yaw = SEATS.yaw(L0.seat) + Math.PI; this.cam.pitch = 0.1; this.cam.dist = 3.4; }
       else if (this.seatWas >= 0) { this.cam.yaw = L0.yaw; this.cam.dist = 4.8; }
       this.seatWas = L0.seat;
     }

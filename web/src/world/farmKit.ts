@@ -71,6 +71,8 @@ export interface FarmBuild {
   phones?: Phones;
   /** Bob's hammock (his siesta; synced entity, decor kit). */
   hammock?: Hammock;
+  /** Every building placed by the kit (model, centre, turn, its model size before turning): interiors.ts looks inside. */
+  buildings?: { model: string; x: number; z: number; yaw: number; sx: number; sz: number; sy: number }[];
   /** Water troughs (Bob cools his mouth in one after a spiked coffee). */
   troughs?: { x: number; z: number; yaw: number }[];
   /** Bob's coffee break: the side table by his rocker, his mug, the hot sauce by the grill (synced entity, decor kit). */
@@ -116,6 +118,7 @@ export function farmKit(scene: THREE.Scene, t: Terrain, out: FarmBuild, F: Rect,
     const hz = (Math.abs(Math.sin(yaw)) * s.x + Math.abs(Math.cos(yaw)) * s.z) / 2;
     const r = { x0: x - hx - 1, x1: x + hx + 1, z0: z - hz - 1, z1: z + hz + 1 };
     t.noGrass(r); blocked.push({ x0: r.x0 - 2, x1: r.x1 + 2, z0: r.z0 - 2, z1: r.z1 + 2 });
+    (out.buildings ??= []).push({ model, x, z, yaw, sx: s.x, sz: s.z, sy: s.y });   // (world/interiors.ts furnishes the ones you can walk into)
     return o;
   };
   const decor = (model: string, x: number, z: number, o: DecorOpts = {}) => {

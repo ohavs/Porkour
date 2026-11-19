@@ -15,6 +15,7 @@ import { PIVOT, STAND_POS, STAND_ANGLE } from './pigModel';
 import { SNACK, SNACK_IDS, type SnackId } from '../world/snacks';
 import type { Prop } from '../world/props';
 import { Wheelbarrow } from '../world/barrow';
+import { SEATS } from '../world/seats';
 import { HANDS, type Handle } from '../world/hands';
 
 /** What a player (local or remote) sends to their pig each physics step. World-space move, camera aim. */
@@ -187,33 +188,32 @@ export class Pig implements Holdable {
   /** 1 = high, 2 = drunk, 0 = sober. Level (0..1.3) kicks in over 5 s from buzzFrom, fades over 25 s after buzzUntil. */
   buzzKind = 0; buzzLvl = 0; buzzFrom = 0; buzzUntil = 0;
   private lagX = 0; private lagZ = 0;
-  // ---- the lounge couch (world/lounge.ts): the seat I sit on (-1 = none); synced
+  // ---- seats (world/seats.ts: the lounge, furniture in buildings): the seat I sit on (-1 = none); synced
   seat = -1;
-  /** RMB at a free seat: sit down (with whatever I hold), facing out of the room. */
+  /** RMB at a free seat: sit down (with whatever I hold), facing where the seat faces. */
   private sitDown(i: number) {
-    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(i: number): number } | null;
-    if (!lg) return;
+    const s = SEATS.at(i, v1); if (!s) return;
     this.seat = i; this.danceId = 0;
     if (!this.standing) this.setStanding(true);
-    this.yaw = lg.seatYaw(i);
-    G.audio.play('thud', { pos: lg.seats[i], vol: 0.6, pitch: 0.7 });
+    this.yaw = SEATS.yaw(i);
+    G.audio.play('thud', { pos: s, vol: 0.6, pitch: 0.7 });
     G.events.push({ type: 'sat', who: this });
   }
   /** Sitting: held on the cushion (host and my own prediction); WASD / jump / sprint / C = up again. */
   private seatStep(inp: PigInput): boolean {
     if (this.seat < 0) return false;
-    const lg = G.lounge as { seats: THREE.Vector3[]; seatYaw(i: number): number; standSpot(i: number, o: THREE.Vector3): THREE.Vector3 } | null;
-    const s = lg?.seats[this.seat];
-    if (!lg || !s || this.mode !== 'normal' || this.heldBy || this.out || Math.hypot(inp.mx, inp.mz) > 0.3 || inp.jumpP || inp.sprintP || inp.wallowP || inp.standP) {
+    const s = SEATS.at(this.seat, v2);
+    if (!s || this.mode !== 'normal' || this.heldBy || this.out || Math.hypot(inp.mx, inp.mz) > 0.3 || inp.jumpP || inp.sprintP || inp.wallowP || inp.standP) {
       const i = this.seat; this.seat = -1;
-      if (lg && i >= 0 && this.mode === 'normal' && !this.heldBy) { const o = lg.standSpot(i, v1); this.vel.set((o.x - this.pos.x) * 4, 2.5, (o.z - this.pos.z) * 4); }   // hop off the cushion
+      const o = s && this.mode === 'normal' && !this.heldBy ? SEATS.standSpot(i, v1) : null;
+      if (o) this.vel.set((o.x - this.pos.x) * 4, 2.5, (o.z - this.pos.z) * 4);   // hop off the cushion
       return false;
     }
     if (!this.standing) this.setStanding(true);
     // a soft spring onto the cushion (velocity, not teleports: a body yanked about every step upsets the solver)
     const ty = s.y + CENTER[this.shape] - 0.12;
     this.vel.set(clamp((s.x - this.pos.x) * 12, -4, 4), clamp((ty - this.pos.y) * 12, -4, 4), clamp((s.z - this.pos.z) * 12, -4, 4));
-    this.yaw = lg.seatYaw(this.seat); this.grounded = true;
+    this.yaw = SEATS.yaw(this.seat); this.grounded = true;
     this.wobble = 0; this.leanX = this.leanZ = 0;
     return true;
   }
@@ -1006,7 +1006,7 @@ export class Pig implements Holdable {
    * and throw it on release.
    */
   private grabStep(inp: PigInput) {
-    const sitI = inp.grabP && this.mode === 'normal' && this.seat < 0 ? ((G.lounge as { seatFor(p: Pig): number } | null)?.seatFor(this) ?? -1) : -1;
+    const sitI = inp.grabP && this.mode === 'normal' && this.seat < 0 ? SEATS.seatFor(this) : -1;
     if (sitI >= 0) this.sitDown(sitI);   // RMB at a free seat: sit (keep what I hold)
     else if (inp.grabP && this.mode === 'normal') {
       if (this.handle) this.letGo();
@@ -1511,7 +1511,7 @@ export class Pig implements Holdable {
     }
     if (inp.wallowP && normal && this.grounded) { this.predWallow = this.now + PIG.wallowDur; this.setStanding(false); }
     // the couch: sit at once on my side (the host does the same with my RMB), held on the cushion
-    if (inp.grabP && normal && this.seat < 0) { const i = (G.lounge as { seatFor(p: Pig): number } | null)?.seatFor(this) ?? -1; if (i >= 0) this.sitDown(i); }
+    if (inp.grabP && normal && this.seat < 0) { const i = SEATS.seatFor(this); if (i >= 0) this.sitDown(i); }
     if (this.seatStep(inp)) { /* on the couch */ }
     else if (this.mode === 'wallow' || this.now < this.predWallow) {
       if (inp.wallow) this.predWallow = Math.max(this.predWallow, this.now + 0.15);

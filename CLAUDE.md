@@ -139,6 +139,7 @@ Dead by Daylight, Party Animals.
 | `world/mines.ts` | **Land mines (s20)**: 6–8 random spots each round (host, synced positions; not near the sty / cage / porch / spawns; `ADMIN.mines`), one instanced mesh + blinking LEDs, a beep when my pig is ≤2.8 m. Step on = CLICK, 0.32 s later BOOM (noise 36 m): the one on it launched + `baconSoon` (lands as a sizzling bacon strip with googly eyes for 5.5 s, `Pig.baconUntil`) + 60 HP; splash 25; Bob on it = launched, knock-down (`Farmer.mined`, prank `mineBob`); animals / props fly. Admin → World "Land mines". |
 | `world/gulag.ts` | **Pig HP + the gulag (s20)**: `HP` in pig.ts (100, regen 5/s after 9 s unhurt; rock salt 34 × falloff, mines 60 / 25, cherry bomb 20, bull 25; HUD heart bar + red edge flash). 0 HP = `die` → the gulag: a barred cabin on open ground (`Gulag.findSpot`: deterministic, free nav, flat, 14–40 m from the stash; not in chain modes) — inside: turn the big wheel 4 times (crank handle) and / or 3 potatoes from the crate into the sack (dispenser + bin); 1st death = one job, later = both; done → the sty. Gulag pigs are `ignored` by Bob / animals. Admin → Me "Hurt me / Kill me", World "Teleport: gulag". |
 | `world/lounge.ts` | **The smoking lounge (s20, cannabis mode)**: an open-front room near the shed (`Gulag.findSpot` near the shed): 4-seat velvet couch, an armchair + 2 beanbags turned to an old TV (RMB = next channel, synced), coffee table (cigs + cans), bookshelf, floor lamp, lava lamp, string lights; roof hides while I'm inside. RMB at a free seat = sit (`Pig.seat`, synced; held there by a velocity spring — never teleport a body every step, it blew the solver up) facing the seat's way, my camera swings in front of me (forced third person); WASD / jump = up; G = pass what I hold to the nearest pig (`passHeld`). Challenge `couchSesh` (high on the couch 8 s). |
+| `world/interiors.ts`, `world/seats.ts` | **Furnished interiors (s21, user: "the insides of buildings feel empty")**: every building a pig can walk into (nav-grid flood fill from the sty: reachable free floor inside its footprint ≥ 10 m², `FarmBuild.buildings` recorded by `farmKit.building`) is furnished deterministically (seeded by its spot): houses (Inn / House_*: + a plank floor) = living room / kitchen / bedroom / bathroom pieces, barns / stable / mill = old couch, table + stools, shelves, beer fridge, bunk. Quaternius Ultimate House Interior (CC0, `assets/interior`, 42 models, colours warmed ×0.28). Wall pieces back onto walls (doorways kept clear), free ones on open floor, a table group, a rug; existing props' floor is skipped. Every piece is a prop (`f_*`, loot; big = heavy → drag with two / spinach). **Seats** (`SEATS` registry: the lounge's fixed seats + `onProp` seats that follow their furniture; knocked over / carried = no seat): couches 2 / 4, chairs, stools, beds, bathtub, toilet (getting up flushes = noise 12 m). Lamps: a hit toggles (bulb), knocked over = off. Fridge: RMB = a can (dispenser, 3 per round). Washing machine: RMB = 6 s rattling spin (noise). Synced: lamps bitmask, spins. |
 | `game/emotes.ts` | **Emote wheel (s20)**: hold B (pad D-pad left), steer with mouse / stick (lobby: pointer), let go = dance (`PigInput.emote`, 3 bits in the press word; `Pig.startDance`, synced `danceId/danceAt`; any move / action stops it). 6 dances in pigVisual.ts `danceFrame` (Hula Hog, Robo Pork, Pork Fever, Bacon Spin = on its back, Cluck Strut, Wiggle) with beat sounds; tiles = offscreen snapshots of my own pig in each pose (`icons`, drawn at idle). Seated dances stay seated. |
 | `world/snacks.ts` | **Snacks (s13)**: 3 cigarette packs (5 each) + 8 food cans scattered per farm (seeded, walkable, not water / stash). Grab + LMB click = eat / light up (`Pig.useSnack`; the grip brings the can to the mouth, `MOUTH`). Boosts (`Pig.boostUntil`, synced): beans = fart cd ×0.3 + launch ×1.3 + bigger cloud, spinach = punches / whacks / rams / throws / lift stronger + Popeye arms, energy = speed ×1.3 + sprint cd ×0.35, dog food = guard dog ignores you. Cigarette 14 s: a puff every 3.2 s (hoof to mouth, ember glows, smoke out of the snout), wobble ×0.5, bees ignore you, Bob finds a smoking pig suspicious (0.5), 35 % coughing fit (noise) at the end. HUD: LMB + eat / cig prompt, badges with seconds. |
 | `net/` | `online.ts` (server link, rooms, WebRTC P2P + relay), `sync.ts` (NetHost / NetClient snapshots + inputs), `codec.ts`, `refs.ts` (who-holds-what ids), `lobby.ts` (UI), `auth.ts` (Google / guest), `config.ts`. |
@@ -241,9 +242,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 20: ✅ Bob's coffee break (spike his coffee), ✅ land mines → bacon, ✅ pig HP + the gulag, ✅ emote wheel + 6
    dances, ✅ smoking lounge (couch / armchair / beanbags facing the camera, pass, TV), ✅ vomiting (beer), ✅ living eyes,
    ✅ physics NaN fix + watchdog (likely the "freeze"), lock-pick / Bob's aim / snack prompt tweaks.
-   **Next (user 2026-11-19)**: **fill building interiors** with furniture and lots of things (all grabbable / throwable,
-   some with extra interactions — "the maps are full, the insides of buildings feel empty"); **full controller support**
-   (menus, lobby, wardrobe, lock-pick, every action); the early-access entry code (waiting for the user's choice).
+   Session 21: ✅ furnished interiors (walk-in houses / barns get furniture you can sit on, drag, steal; lamps, fridge,
+   washer, toilet), seats shared registry, dynamic-resolution hitch fix.
+   **Next (user 2026-11-19)**: more interiors (open up the closed barns / farm 1's farmhouse, more pieces with something
+   to do: TV, radio, oven, bathroom), **full controller support** (menus, lobby, wardrobe, lock-pick, every action); the
+   early-access entry code (waiting for the user's choice).
 
 ## Status / next step
 - 2026-11-12: M3 built & checked headless (see the PR). User to do: drop missing sounds (`web/sfx_user/README.md`), feedback on
@@ -422,10 +425,19 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   with no crosshair (idle extra pigs, the pass) holding a thing gave a NaN aim → grip hand NaN → the whole physics world
   NaN (camera, every body) = frozen; aim falls back to the snout + `Game.nanWatch` resets any body that blows up; angle
   `while` wraps (animals / bull) replaced (an infinite angle = infinite loop). Not run online with 2 browsers this session.
+- 2026-11-19 (session 21, "continue" + user: 2- or 4-seat couches, armchairs, beanbags, a TV, fill the buildings, full
+  controller support → plan): lounge refurnished (4-seat couch, armchair, 2 beanbags facing a TV with 4 channels,
+  bookshelf, floor lamp); furnished interiors (see Structure). Checked headless: farm 2 (Inn 7 pieces, barns 2–7), farm 3
+  (house 5, barns 6–10), farm 1 (barns 8–9), farm 5 (house 4, barns 9–11); sit on a furniture couch, fridge → can, lamp
+  headbutt on / off; a 0.6-game-hour profile after the dyn-res change: no resize spikes. Farm 1's farmhouse (Silo_House)
+  and its SmallBarn / Barn are closed models (no way in) → no furniture there yet. PR #50 merged (session 20).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 21 (new)**: furniture inside the barns / houses (walk in on farms 2, 3, 5; barns everywhere): sit on couches /
+  chairs / beds / the toilet, drag the big pieces out (two pigs), steal them, headbutt a lamp, RMB at the fridge — fun?
+  Which buildings / things next? The lounge now: 4-seat couch, armchair, beanbags, TV (RMB = channel) — right?
 - **Session 20 (new)**: Bob's coffee break (hot sauce by the grill → his mug; mud works too) fun? · mines → bacon: how
   many (6–8), too hidden / too visible (blinking light + beep)? · HP: 3 close rock-salt shots = the gulag — fair? gulag
   jobs (wheel / potatoes) too short / long? · dance wheel (B): are the dances funny, which to add? · lounge: sitting
