@@ -26,6 +26,8 @@ import { HeavyLoot } from '../world/heavyLoot';
 import { Jail } from '../world/jail';
 import type { Hammock } from '../world/hammock';
 import type { Porch } from '../world/porch';
+import { Mines } from '../world/mines';
+import { Gulag } from '../world/gulag';
 import { Gadgets, type PoolId } from '../world/gadgets';
 import { scatterSnacks, SNACK_IDS } from '../world/snacks';
 import { LobbyStage, STAGE } from './lobbyStage';
@@ -80,6 +82,10 @@ export class Game {
   hammock: Hammock | null = null;
   /** Bob's coffee break on the porch (side table, mug, hot sauce). */
   porch: Porch | null = null;
+  /** Land mines (a few each round). */
+  mines!: Mines;
+  /** The pigs' gulag (dead pigs work their way out), when the farm has room for it. */
+  gulag: Gulag | null = null;
   /** Shop gadgets in the world (cherry / stink bombs, bones: pooled props). */
   gadgets!: Gadgets;
   /** My gadget count changed (a round used one): tell the host what I bring next. */
@@ -150,6 +156,16 @@ export class Game {
     this.hammock = this.farm.hammock ?? null; G.hammock = this.hammock;
     this.porch = this.farm.porch ?? null; G.porch = this.porch;
     if (this.porch) this.porch.troughs = this.farm.troughs ?? [];
+    this.mines = new Mines(scene, this.nav, bounds, () => [this.farm.places.stash, this.farm.cage.center, this.farm.farmerSpawn, ...this.farmSpawns,
+      ...(this.porch ? [this.porch.chair] : [])], this.farm.inWater);
+    G.mines = this.mines;
+    {   // the gulag: a cabin on open ground (the same spot on every machine)
+      const f = this.farm, avoid = [f.cage.center, f.farmerSpawn, ...f.chores.map((c) => new THREE.Vector3(c.at[0], 0, c.at[1])),
+        ...this.loos.map((o) => o.base), ...(this.hammock ? [this.hammock.base] : []), ...(this.porch ? [this.porch.chair] : [])];
+      const gs = Gulag.findSpot(this.nav, bounds, f.places.stash, avoid, f.inWater);
+      if (gs && !f.chain) { this.gulag = new Gulag(scene, f.props, gs.at, gs.yaw); }
+      G.gulag = this.gulag;
+    }
     G.chain = this.farm.chain ?? null;
     if (G.chain) { ADMIN.chill = true; this.gfx.useBuzz(); }   // chain modes: Bob is laid-back by default (admin → Bob can switch it)
     G.cam = this.gfx.camera;
@@ -374,7 +390,7 @@ export class Game {
       this.farm.winter?.stepHost(FIXED);
       if (this.mode === 'play') this.farm.chain?.stepHost(FIXED);
       for (const o of this.loos) o.step(FIXED);
-      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); }
+      if (this.mode === 'play') { this.phones?.stepHost(); this.heavy.stepHost(); this.hammock?.step(FIXED); this.porch?.step(); this.mines.step(); this.gulag?.step(); }
       for (const pr of this.farm.props) pr.scrape();
       for (let i = ev0; i < G.events.length; i++) this.round.onEvent(G.events[i].type, G.events[i].text, G.events[i].why);
     }
@@ -402,6 +418,14 @@ export class Game {
         case 'knockdown': case 'stagger': case 'bobSlipped': case 'bullBob': case 'cheeseBob': case 'catapultBob': case 'bobDunked': case 'bigSnowballBob':
           H.emote(bob, 'stars', 1.4, 2.4); break;
         case 'slapped': H.emote(e.who, 'stars', 1.2, 1.2); break;
+        // mines, HP, the gulag
+        case 'mined': H.emote(e.who, 'bang', 1.6, 1.6); break;
+        case 'mineBob': H.emote(bob, 'bang', 1.6, 2.4); break;
+        case 'bacon': H.emote(e.who, 'flame', 1.6, 1.0); if (me) H.toast(t('e.baconMe'), 1.6, '', 'flame'); break;
+        case 'hurt': if (me) H.hurtFlash(Number(e.why ?? 20)); break;
+        case 'died': H.toast(me ? t('e.diedMe') : t('e.diedOther', { who }), 2, '', 'lock'); break;
+        case 'gulagOut': if (me) H.toast(t('e.gulagOut'), 1.6, '', 'check'); break;
+        case 'vomit': H.emote(e.who, 'vomit', 1.4, 1.4); break;
         case 'bobDance': H.emote(bob, 'note', 1.6, 2.4); break;
         case 'ate': H.emote(e.who, ('boost_' + e.text) as IconId, 1.8, 1.5); break;
         case 'lightUp': H.emote(e.who, 'cig', 1.4, 1.5); break;
@@ -518,6 +542,9 @@ export class Game {
     this.heavy.reset();
     this.hammock?.reset();
     this.porch?.reset();
+    this.mines.reset();
+    this.gulag?.reset();
+    for (const p of this.pigs) p.resetHealth();
     this.farm.orchard?.reset();
     this.farm.bees?.clear();
     this.farm.dairy?.reset();
@@ -630,6 +657,12 @@ export class Game {
       case 'catch': if (!L.cage && !L.out) { if (L.heldBy) L.heldBy.release(false); cage.lock(L); } break;
       case 'mud': L.muddyUntil = G.time + 60; break;
       case 'knock': if (!L.out && !L.heldBy) L.knock(new THREE.Vector3(Math.sin(L.yaw) * -3, 7, Math.cos(L.yaw) * -3), true); break;
+      case 'hurtMe': L.hurt(30, 'admin'); break;
+      case 'killMe': L.hurt(999, 'admin'); break;
+      case 'mine:me': { const fw = L.forward; this.mines.add(tmpV.set(L.pos.x + fw.x * 2.5, 0, L.pos.z + fw.z * 2.5)); this.menu.toggleAdmin(); break; }
+      case 'mines:new': this.mines.reset(); break;
+      case 'tp:gulag': { const g = this.gulag; if (g) { const p = g.center.clone().addScaledVector(new THREE.Vector3(Math.sin(g.yaw), 0, Math.cos(g.yaw)), 4.5); tp(p.x, p.z); } this.menu.toggleAdmin(); break; }
+      case 'mine:bob': { const f = this.farmer; if (f) { const fw = f.forward; this.mines.add(tmpV.set(f.pos.x + fw.x * 1.2, 0, f.pos.z + fw.z * 1.2)); } break; }
       case 'bringCrate': case 'bringPig': {
         // drop something to grab right in front of me
         const f = L.forward, at = new THREE.Vector3(L.pos.x + f.x * 1.3, L.pos.y + 0.6, L.pos.z + f.z * 1.3);
@@ -940,6 +973,8 @@ export class Game {
     this.heavy.render();
     this.hammock?.render();
     this.porch?.render(dt);
+    if (this.mode === 'play') this.mines.render(dt);
+    this.gulag?.render();
     this.farm.orchard?.render(dt);
     this.farm.bees?.render(dt);
     this.farm.dairy?.render(dt);

@@ -397,3 +397,15 @@ export function makeHotSauce() {
   add(g, new THREE.CylinderGeometry(0.004, 0.004, 0.02, 4), 0x2f8a35, 0.03, 0.1, 0.055, 0, 0, 1.2);
   return g;
 }
+
+/** A lumpy potato (the gulag's sack-filling job). */
+export function makePotato() {
+  const g = new THREE.Group();
+  const geo = new THREE.SphereGeometry(0.075, 10, 8);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), k = 1 + Math.sin(x * 60) * 0.08 + Math.cos(z * 50 + y * 30) * 0.07; pos.setXYZ(i, x * k * 1.25, y * k * 0.85, z * k); }
+  geo.computeVertexNormals();
+  add(g, geo, 0xc49a5a, 0, 0.065, 0);
+  for (const [x, z] of [[0.04, 0.03], [-0.05, -0.02], [0.0, -0.05]]) add(g, new THREE.SphereGeometry(0.008, 5, 4), 0x7a5a2a, x, 0.11, z);
+  return g;
+}

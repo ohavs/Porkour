@@ -38,6 +38,7 @@ export const ADMIN = {
   open: false,
   bob: true,            // Bob active
   bobSees: true,        // false = Bob ignores the local pig
+  mines: true,          // land mines each round (world/mines.ts)
   god: false,           // nothing can catch the local pig
   easyEscape: false,    // 1 mash frees you
   noCooldowns: false,
@@ -59,7 +60,7 @@ export const ADMIN = {
  * Admin "ghost" (user: Bob, the dog, the animals ignore the admin): nobody notices or catches this pig — Bob, the guard
  * dog, alarm birds, the bull, bees, wolves, traps. The admin's own pig (ADMIN.god) or any pig given the power (`pw.ghost`).
  */
-export const ignored = (p: any) => !!p?.pw?.ghost || (p === G.localPig && (ADMIN.god || !ADMIN.bobSees));
+export const ignored = (p: any) => !!p?.pw?.ghost || !!p?.gulag || (p === G.localPig && (ADMIN.god || !ADMIN.bobSees));
 
 /** Shared game context (set up once in Game). */
 export const G = {
@@ -103,6 +104,8 @@ export const G = {
   hammock: null as any,
   /** Bob's coffee break (world/porch.ts: side table, mug, hot sauce), when the farm has one. */
   porch: null as any,
+  /** Land mines (world/mines.ts) and the pigs' gulag (world/gulag.ts: dead pigs work their way out). */
+  mines: null as any, gulag: null as any,
   /** Spots where RMB does something instead of a grab (the phone jack, the payphone): `icon` = the HUD prompt's icon. */
   uses: [] as { near(p: any): boolean; icon(p: any): string }[],
   /** Static farm things a punch / headbutt / whack can hit (orchard trees, beehives): true = something was hit. */

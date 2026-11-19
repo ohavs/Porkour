@@ -8,7 +8,7 @@ import { hayBale } from './nature';
 import { carrierCode, carrierFrom } from '../net/refs';
 import { HANDS } from './hands';
 import { makeEgg, makeGnome, makeUndies, makePie, makeFlowerPot, makeApple, makeHoneyJar, makeHoneyPot, makeCiderJug, makeMilkChurn, makeCheeseWheel, makeRedRag, makeGiantPumpkin,
-  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe, makeTV, makeClock, makeCoffeeMug, makeHotSauce } from './funProps';
+  makeSnowball, makeSnowBoulder, makePresent, makeSnowmanBall, makeFishBucket, makeSafe, makeTV, makeClock, makeCoffeeMug, makeHotSauce, makePotato } from './funProps';
 import { makeBud, makeWeedBag, makeJoint, makeLighter, makeWateringCan, makeSeedBag, makeSickle, makeButter, makeSack, makeTray, makeWheelbarrow,
   makeHops, makeSheaf, makeBeerBarrel, makePaper, makeFilter, makeCookPot, makeMixBowl, makeEmptyTray, makeMugFill, makeCoin, makePlug, makeHandset } from './chainProps';
 
@@ -421,6 +421,8 @@ export const PROPS: Record<string, PropDef> = {
   coffeeMug: { make: makeCoffeeMug, mass: 0.6, shape: 'cyl', sound: 'metal', label: 'item.coffeeMug', value: 15 },
   hotSauce: { make: makeHotSauce, mass: 0.5, shape: 'cyl', sound: 'thud', label: 'item.hotSauce', servings: 1,
     pour: { stuff: 'hot', rate: 0.5, spout: [0, 0.15, 0], color: 0xe2352b, size: 0.03, sound: 'pour' } },
+  // the gulag (world/gulag.ts): potatoes for its sack
+  potato: { make: makePotato, mass: 0.3, shape: 'ball', sound: 'thud', label: 'item.potato' },
   stinkBomb: { model: 'kaykit/smokebomb', height: 0.26, mass: 0.8, shape: 'ball', sound: 'thud', label: 'item.stinkBomb', fragile: 4.2, bits: 0x9bd35a, smashSound: 'splat|squish' },
 };
 for (const k in PROPS) PROPS[k].id = k;

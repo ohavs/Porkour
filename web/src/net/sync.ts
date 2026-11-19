@@ -36,7 +36,7 @@ const PRESS = ['jumpP', 'sprintP', 'fartP', 'standP', 'wallowP', 'grabP', 'grabR
 
 export function entities(game: Game): NetEnt[] {
   const extra = [game.farm.orchard, game.farm.bees, game.farm.dairy, game.farm.pumpkins, game.farm.winter, game.farm.chain, game.farm.chain?.visions].filter((x) => !!x);   // farm 2's orchard + beehives, farm 3's dairy (same farm on every browser)
-  return [...game.pigs, game.farmer!, game.farm.cage, game.round, game.traps, ...game.gates.list, ...game.loos, ...(game.phones ? [game.phones] : []), ...(game.hammock ? [game.hammock] : []), ...(game.porch ? [game.porch] : []), ...extra, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
+  return [...game.pigs, game.farmer!, game.farm.cage, game.round, game.traps, ...game.gates.list, ...game.loos, ...(game.phones ? [game.phones] : []), ...(game.hammock ? [game.hammock] : []), ...(game.porch ? [game.porch] : []), game.mines, ...(game.gulag ? [game.gulag] : []), ...extra, ...game.farm.critters, ...game.farm.props] as unknown as NetEnt[];
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;

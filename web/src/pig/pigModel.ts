@@ -37,6 +37,9 @@ export interface PigRig {
   bodyMat: THREE.MeshToonMaterial; snoutMat: THREE.MeshToonMaterial;
 }
 
+/** Bloodshot eyes (smoking / high): one shared red glaze over the eye white. */
+const RED_EYE_G = new THREE.SphereGeometry(0.0705, 18, 12);
+const RED_EYE_M = new THREE.MeshToonMaterial({ color: 0xff3d3d, transparent: true, opacity: 0.5, depthWrite: false });
 const PINK = 0xffa9c2, SNOUT = 0xff8fb0, HOOF = 0x6b4048, DARK = 0x5b2234;
 
 /** A fat, round, long cartoon pig built from smooth shapes (cel shaded). Returns a rig for procedural animation. */
@@ -77,6 +80,8 @@ export function buildPig(base: THREE.Group): PigRig {
     mesh(new THREE.SphereGeometry(0.068, 20, 14), white, [0, 0, 0], e);
     mesh(new THREE.SphereGeometry(0.04, 16, 12), black, [s * 0.006, 0.004, 0.05], e);
     const hl = mesh(new THREE.SphereGeometry(0.014, 8, 6), white, [s * -0.012, 0.022, 0.085], e); hl.castShadow = false;
+    // bloodshot (smoking / high): a red glaze over the white, shown by the visual (named: stays its own mesh)
+    const red = new THREE.Mesh(RED_EYE_G, RED_EYE_M); red.name = 'redEye'; red.visible = false; red.castShadow = false; e.add(red);
     eyes.push(e);
   }
   for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.06, 14, 10), blush, H(s * 0.2, 0.6, 0.58), head, [1, 0.6, 0.35]).castShadow = false;

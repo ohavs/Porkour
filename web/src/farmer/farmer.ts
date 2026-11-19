@@ -55,7 +55,12 @@ export const ALERT = {
   hear: [1, 1.3, 1.45, 1.6], sight: [1, 1.08, 1.15, 1.22], sus: [1, 1.2, 1.35, 1.5], hunt: [1, 0.8, 0.65, 0.5], run: [1, 1, 1.06, 1.16],
   gain: { alarm: 22, suspect: 4, noise: 2, lost: 6, escaped: 10, caged: 4, cough: 6, splat: 5, down: 22, stagger: 9, prank: 10, loot: 6, trap: 6, gateOpen: 5, gateBroken: 14 },
   reach: 2.55, catchR: 1.4, catchAt: 1.15,                                                  // pitchfork (level 2+)
-  gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.3), gunPush: 11,   // shotgun (level 3)
+  gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.27), gunPush: 11,   // shotgun (level 3)
+  /** User: "almost never misses — soften it a tiny bit": the aim locks this long before the shot, a little wobble (rad),
+   * and far shots (past `gunFar` m) can scatter wide (up to `gunFarMiss` at max range). */
+  gunCommit: 0.2, gunWobble: 0.05, gunFar: 8, gunFarMiss: 0.3,
+  /** HP a rock-salt hit costs a pig at point-blank (× the falloff; 3 close hits = the gulag). */
+  gunDmg: 34,
   traps: 4, trapEvery: 25,
   /** Wary (1+): now and then he padlocks a gate that is only latched. */
   lockEvery: 18,
@@ -507,7 +512,7 @@ export class Farmer {
       case 'tidy': want = this.tidy(dt); break;
       case 'aim': {   // rock-salt shotgun (alert 3): a clear wind-up you can dodge
         const t = this.target;
-        if (t) this.face(t.pos, dt, 9);
+        if (t && this.now - this.stateT < ALERT.gunAim - ALERT.gunCommit) this.face(t.pos, dt, 9);   // the last moment: aim locked (dodge!)
         if (this.now - this.stateT > ALERT.gunAim) { this.fire(); this.go('shoot'); }
         break;
       }
@@ -1685,7 +1690,7 @@ export class Farmer {
   // ================================================================== shotgun (alert 3)
   /** Rock salt: a cone of knock-back (ragdoll, no damage) on every pig in front of the barrel, hens fly. */
   private fire() {
-    const f = this.forward.clone(), muzzle = v1.copy(this.pos).addScaledVector(f, 1.1).setY(this.pos.y + 1.35);
+    const f = this.forward.clone().applyAxisAngle(UP, (Math.random() - 0.5) * 2 * ALERT.gunWobble), muzzle = v1.copy(this.pos).addScaledVector(f, 1.1).setY(this.pos.y + 1.35);
     this.gunReady = this.now + ALERT.gunCool;
     G.audio.play('shot', { pos: muzzle, vol: 1.4 });
     G.noise(this.pos, 40);
@@ -1701,11 +1706,13 @@ export class Farmer {
     for (const p of this.pigs) {
       if (p.out || p.cage || p.heldBy?.kind === 'farmer' || ignored(p)) continue;
       const d = cone(p.pos.x, p.pos.z); if (d < 0) continue;
+      if (d > ALERT.gunFar && Math.random() < ALERT.gunFarMiss * (d - ALERT.gunFar) / (ALERT.gunMax - ALERT.gunFar)) continue;   // scattered wide
       const to = v2.set(p.pos.x - muzzle.x, p.pos.y + 0.3 - muzzle.y, p.pos.z - muzzle.z), len = to.length(); to.divideScalar(len);
       const wall = raycast(muzzle, to, len, L.STATIC, undefined, (c) => !SEE_THROUGH.has(c.handle));
       if (wall && wall.dist < len - 0.4) continue;
       const k = clamp(1.15 - d / (ALERT.gunMax + 3), 0.4, 1);
       p.knock(v3.copy(f).multiplyScalar(ALERT.gunPush * k).setY(5.5 * k), true);
+      p.hurt(ALERT.gunDmg * k, 'shot');
       G.audio.play('squeal', { pos: p.pos, vol: 1 });
       G.fx.bits(v2.copy(p.pos).setY(p.pos.y + 0.4), { count: 18, color: 0xffffff, speed: 4, up: 2, life: 0.5, size: 0.07, grow: 0, grav: 8, alpha: 1 });
       G.shakeFor(p, 0.6);
@@ -2058,6 +2065,22 @@ export class Farmer {
     return true;
   }
 
+  /** He stepped on a mine (world/mines.ts): sky-high, then flat on his back (a knock-down); close by: a stagger. */
+  mined(at: THREE.Vector3, onIt: boolean) {
+    if (this.asleep || this.state === 'off' || this.state === 'away') return;
+    if (!onIt) { this.startle(at); return; }
+    if (this.carrying) this.release(false);
+    this.voice('oops', 1);
+    this.raise('down');
+    G.events.push({ type: 'mineBob' });
+    const dir = v2.set(this.pos.x - at.x + (Math.random() - 0.5) * 0.4, 0, this.pos.z - at.z + (Math.random() - 0.5) * 0.4).normalize();
+    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone());
+    const lv = this.body.linvel();
+    this.body.setLinvel({ x: lv.x + dir.x * 2, y: 10, z: lv.z + dir.z * 2 }, true);
+    this.parts.matchVelocity?.();
+    const look = at.clone();
+    this.afterStun = () => { this.voice('grr'); this.startSearch(look, null, 3); };
+  }
   /** A cherry bomb went off (host): right next to him he jumps out of his boots (stagger: drops a pig he carries). */
   startle(at: THREE.Vector3) {
     if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'away') return false;
@@ -2068,6 +2091,15 @@ export class Farmer {
     return true;
   }
 
+  /** A drunk pig threw up on him (beer mode): disgusted, he staggers back wiping himself. */
+  vomitedOn(_p: Pig) {
+    if (this.asleep || this.state === 'down' || this.state === 'off' || this.state === 'stagger') return;
+    this.voice('oops', 1);
+    G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.2), { count: 14, color: 0xc9c24a, speed: 2, up: 1, life: 0.6, size: 0.08, grow: 0, alpha: 1 });
+    this.raise('splat');
+    G.events.push({ type: 'bobVomited' });
+    this.stun('stagger', BOB.staggerTime);
+  }
   /**
    * An angry bee swarm stings him (farm 2's hives): he yelps and flails (stagger: drops a pig he carries). Not again
    * for a moment, so a swarm on him is a run of stings, not a stun-lock.

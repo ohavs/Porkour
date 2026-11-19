@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Pig } from '../pig/pig';
+import { PIG, HP, type Pig } from '../pig/pig';
 import { clamp } from '../core/util';
 import { ALERT, type Farmer } from '../farmer/farmer';
 import { G, ADMIN } from './ctx';
@@ -33,6 +33,9 @@ const CSS = `
 #prompt .pr { display:flex; align-items:center; gap:14px; }
 .pp { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border-radius:12px; background: rgba(30,16,6,.55); }
 .pp.dim { opacity:.6; }
+.pp.go { background: rgba(255,209,102,.92); box-shadow: 0 0 0 2px #3b2412, 0 0 14px rgba(255,209,102,.7); animation: ppgo 1.1s ease-in-out infinite; }
+.pp.go .ic { width:36px; height:36px; }
+@keyframes ppgo { 50% { transform: scale(1.08); } }
 .ic { display:block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 .pp .ic { width:30px; height:30px; }
 #ret { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:#fff6e6; box-shadow:0 0 0 1.5px #3b2412; opacity:0; pointer-events:none; z-index:5; transition:opacity .15s; }
@@ -45,7 +48,12 @@ kbd.kc { font-family: Title; font-size:16px; color:#3b2412; background:#fff6e6; 
 .sb { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border-radius:12px; background: rgba(30,16,6,.5); font-family: Title; font-size:18px; color: var(--cream); }
 .sb .ic { width:28px; height:28px; }
 .pp.needs { gap: 8px; } .pp.needs .nd { display:inline-flex; align-items:center; opacity:.55; } .pp.needs .nd.ok { opacity: 1; } .pp.needs b { font-family: Title; font-size: 16px; margin-left: 2px; color: var(--gold); }
-.sb.buzz .mbar { width: 56px; height: 8px; } .sb.buzz .mbar i { background: linear-gradient(90deg, #8be04e, #b57bff, #ff6fa8); }
+.sb.buzz .mbar { width: 56px; height: 8px; position: relative; } .sb.buzz .mbar b { position:absolute; top:-3px; bottom:-3px; width:3px; margin-left:-1px; background:#3b2412; border-radius:2px; }
+.sb.hp .mbar { width: 56px; height: 8px; } .sb.hp .mbar i { background: linear-gradient(90deg, #ff4d5e, #ff8a8a); }
+#hurtFlash { position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 120px 40px rgba(255,40,40,.0); transition: box-shadow .5s; z-index: 5; }
+#hurtFlash.on { box-shadow: inset 0 0 120px 40px rgba(255,40,40,.55); transition: none; }
+.sb.buzz.sick .mbar i { background: linear-gradient(90deg, #c9c24a, #9bb03a); }
+.ab svg.abic { width: 30px; height: 30px; } .sb.buzz .mbar i { background: linear-gradient(90deg, #8be04e, #b57bff, #ff6fa8); }
 .sb.warn { animation: sbFlash .6s ease-in-out infinite alternate; }
 @keyframes sbFlash { from { background: rgba(30,16,6,.5); } to { background: rgba(255,90,60,.55); } }
 #bob.ico { padding:2px 8px; display:flex; gap:2px; } #bob.ico .ic { width:30px; height:30px; }
@@ -123,6 +131,14 @@ export class Hud {
     }
   }
 
+  /** A red flash round the screen edge when my pig gets hurt. */
+  hurtFlash(dmg: number) {
+    let el = document.getElementById('hurtFlash');
+    if (!el) { el = document.createElement('div'); el.id = 'hurtFlash'; document.body.appendChild(el); }
+    el.style.opacity = String(clamp(0.4 + dmg / 50, 0.4, 1));
+    el.classList.add('on'); void el.offsetWidth;
+    setTimeout(() => el!.classList.remove('on'), 60);
+  }
   toast(text: string, secs = 1.4, sub = '', icon?: IconId) {
     this.toastEl.innerHTML = (icon ? IC[icon] : '') + text + (sub ? `<small>${sub}</small>` : ''); this.toastEl.style.opacity = '1';
     this.toastUntil = performance.now() / 1000 + secs;
@@ -150,6 +166,14 @@ export class Hud {
       e.el.style.setProperty('--tr', tr); e.el.style.transform = tr;
       return true;
     });
+  }
+  private ringIc: Record<string, string> = {};
+  /** Swap an ability ring's icon (the fart ring becomes "throw up" when you're drunk enough). */
+  private ringIcon(id: string, svg: string) {
+    if ((this.ringIc[id] ?? ICONS[id]) === svg) return;
+    this.ringIc[id] = svg;
+    const a = this.ab[id], old = a.el.querySelector(':scope > svg');
+    if (old) old.outerHTML = svg.replace('class="ic"', 'class="ic abic"');
   }
   private ring(id: string, f: number, active = false) {
     const a = this.ab[id];
@@ -303,6 +327,7 @@ export class Hud {
   update(pig: Pig, fps: number, goal = '') {
     this.ring('sprint', pig.readiness('sprint'), pig.sprinting);
     this.ring('fart', pig.readiness('fart'));
+    this.ringIcon('fart', pig.queasy ? IC.vomit : ICONS.fart);   // drunk past the mark: Q throws up
     this.ring('wallow', 1, pig.mode === 'wallow');
     this.ring('stand', 1, pig.standing);
     this.ring('grab', 1, !!pig.held);
@@ -320,13 +345,17 @@ export class Hud {
     const dest = pig.held ? HANDS.destIcon(pig) : '';   // it has a place it goes (the hopper, the mat, the oven…): show it
     const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
     const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
+    const gl = pig.gulag ? (G.gulag as { jobs(p: Pig): { job: string; n: number; of: number }[] } | null) : null;
     if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
+    else if (gl && !pig.held && !pig.handle) p = row(P(IC.lock), ...gl.jobs(pig).map((j) => P(IC.rmb, j.job === 'wheel' ? IC.circle : IC.grab, `<b>${j.n}/${j.of}</b>`)));
     else if (pig.mode === 'held' && pig.heldBy?.kind === 'farmer') p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())), P(kc('Q'), ICONS.fart));
     else if (pig.mode === 'held' && (pig.heldBy?.kind === 'wolf' || pig.heldBy?.kind === 'trap')) p = row(P(SPACE, IC.mash, mashBar(pig.escape, pig.escapeNeed())));
+    else if (pig.bacon) p = row(P(IC.flame, `<span class="big">${Math.ceil(pig.baconUntil - pig.now)}</span>`));
     else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
     else if (G.phones?.oinkNow(pig)) p = row(P(kc('F'), IC.pig, IC.phone));
     else if (pig.handle) p = row(P(IC.rmb, IC.drop), P(IC.mouse, pig.handle.kind === 'crank' ? IC.circle : IC[pig.handle.icon]));
+    else if (pig.held && useIc && !chainIc && snack?.left) p = row(`<span class="pp go">${IC.lmb}${useIc}</span>`, P(IC.rmb, IC.drop), P(IC.lmb, IC.hold, IC.throw));   // a snack: the click comes first
     else if (pig.held) p = row(P(IC.rmb, IC.drop), pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
@@ -336,7 +365,11 @@ export class Hud {
       const pk = HANDS.target(pig), tg = pk?.h;
       if (pk?.handle) p = row(P(IC.rmb, IC[pk.handle.icon]));
       else if (pk?.disp) p = row(P(IC.rmb, IC[pk.disp.icon]));
-      else if (tg) p = row(P(IC.rmb, IC.grab, val(tg)), coop(tg) && !tg.heldBy ? P(IC.two) : '');
+      else if (tg) {   // a snack shows what it's for: grab it, then click (eat / light up)
+        const sd = (tg as { def?: { snack?: string; smokes?: boolean }; left?: number });
+        const sIc = sd.left && sd.def?.smokes ? IC.cig : sd.left && sd.def?.snack ? IC.eat : '';
+        p = row(P(IC.rmb, IC.grab, val(tg)), sIc ? P(IC.lmb, sIc) : '', coop(tg) && !tg.heldBy ? P(IC.two) : '');
+      }
       else if (HANDS.far) p = row(P(IC.reach));   // it's under the crosshair, but too far: roll the wheel / step closer
       else if (pig.standing && pig.wobble <= 0.55) p = `<div class="pr"><span class="pp dim">${IC.lmb}${IC.fist}</span></div>`;
     }
@@ -355,12 +388,14 @@ export class Hud {
     if (pig.mode === 'wallow') st.push(B(IC.dead));
     for (const k of SNACK_IDS) if (pig.boosted(k)) st.push(B(IC[`boost_${k}`], String(Math.ceil(pig.boostUntil[k] - pig.now))));
     if (pig.smoking) st.push(B(IC.cig, String(Math.ceil(pig.cigUntil - pig.now))));
+    // health: only when hurt (a heart + a bar)
+    if (pig.hp < HP.max - 0.5 && !pig.gulag) st.push(`<span class="sb hp${pig.hp < 35 ? ' warn' : ''}">${IC.heart}<span class="mbar"><i style="width:${Math.round(pig.hp)}%"></i></span></span>`);
     // the mouse wheel stretched my arms / neck: how far
     const rk = pig.input.reach ?? 0;
     if (rk > 0.02 && !pig.out) st.push(`<span class="sb">${IC.reach}<span class="mbar"><i style="width:${Math.round(rk * 100)}%"></i></span></span>`);
     // chain modes: how high / drunk (a little meter in the badge); jailed / frozen by the admin
     const bz = pig.buzz;
-    if (bz > 0.02) st.push(`<span class="sb buzz">${pig.buzzKind === 2 ? IC.beer : IC.leaf}<span class="mbar"><i style="width:${Math.round(bz * 100)}%"></i></span></span>`);
+    if (bz > 0.02) st.push(`<span class="sb buzz${pig.queasy ? ' sick' : ''}">${pig.buzzKind === 2 ? IC.beer : IC.leaf}<span class="mbar"><i style="width:${Math.round(bz * 100)}%"></i>${pig.buzzKind === 2 ? `<b style="left:${PIG.vomit * 100}%"></b>` : ''}</span>${pig.queasy ? IC.vomit : ''}</span>`);
     else if (pig.buzzKind && pig.now < pig.buzzFrom) st.push(B(IC.cookie, '…'));
     if (pig.jailed) st.push(B(IC.lock, String(Math.ceil(pig.jailUntil - pig.now)), true));
     if (pig.frozen) st.push(B(IC.snow, String(Math.ceil(pig.frozenUntil - pig.now)), true));

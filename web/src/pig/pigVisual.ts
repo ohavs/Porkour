@@ -6,11 +6,12 @@ import { buildPig, PIVOT, STAND_POS, STAND_ANGLE, NECK, SNOUT_TIP, ARM, type Pig
 import { HEAD_TILT } from './pigBody';
 import { dress, defaultOutfit, type Outfit } from './cosmetics';
 import { makeCigarette } from '../world/snacks';
+import { toonMat } from '../render/toon';
 
 const DOWN = new THREE.Vector3(0, -1, 0);
 const SNOUT_DIR = SNOUT_TIP.clone().sub(NECK).normalize();
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion();
-const _e = new THREE.Euler();
+const _e = new THREE.Euler(), _look = new THREE.Vector3();
 const _mi = new THREE.Matrix4(), _mouth = new THREE.Vector3(), _sh = new THREE.Vector3(), _t = new THREE.Vector3(), _v = new THREE.Vector3(), _off = new THREE.Vector3();
 const _pole = new THREE.Vector3(), _uq = new THREE.Quaternion(), _pp = new THREE.Vector3(), _el = new THREE.Vector3(), _u = new THREE.Vector3(), _w = new THREE.Vector3();
 const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3(), _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion();
@@ -37,6 +38,38 @@ export interface PigPose {
   cig?: boolean;
   /** Spinach: Popeye arms. */
   strong?: boolean;
+  /** Where its eyes look (world: another pig's head it glances at), or null = its own idle darting about. */
+  lookAt?: THREE.Vector3 | null;
+  /** Bloodshot, droopy eyes 0..1 (smoking / high). */
+  red?: number;
+  /** Blown up by a mine: a sizzling strip of bacon lies there instead of the pig. */
+  bacon?: boolean;
+}
+
+/** A strip of bacon with googly eyes and a curly tail (what a pig becomes when it lands after a mine). */
+function makeBacon() {
+  const g = new THREE.Group();
+  const geo = new THREE.BoxGeometry(0.44, 0.05, 1.3, 8, 1, 36);
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+  const meat = new THREE.Color(0xc23d33), dark = new THREE.Color(0x9a2a24), fat = new THREE.Color(0xf7dcc8), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    pos.setY(i, pos.getY(i) + Math.sin(z * 9) * 0.055 + Math.sin(x * 7 + z * 3) * 0.01);
+    const band = Math.cos(x * 34 + Math.sin(z * 5) * 0.8);
+    c.copy(band > 0.45 ? fat : (Math.abs(x) > 0.17 ? dark : meat));
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const strip = new THREE.Mesh(geo, toonMat(0xffffff, { vertexColors: true })); strip.castShadow = true; strip.receiveShadow = true;
+  strip.position.y = 0.07; g.add(strip);
+  const white = toonMat(0xffffff), black = toonMat(0x1b1010), pink = toonMat(0xffa9c2);
+  for (const s of [-1, 1]) {   // googly eyes at the front end
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 10), white); e.position.set(s * 0.09, 0.17, 0.56); g.add(e);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), black); p.position.set(s * 0.09 + s * 0.012, 0.16, 0.625); p.name = 'pupil'; g.add(p);
+  }
+  const tail = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.016, 6, 12, Math.PI * 1.6), pink); tail.position.set(0, 0.14, -0.66); tail.rotation.y = Math.PI / 2; g.add(tail);
+  return g;
 }
 
 /**
@@ -54,9 +87,58 @@ export class PigVisual {
   private animParts: THREE.Object3D[] = [];
   private phase = 0; private standT = 0; private rollT = 0; private squash = 0;
   private lastGrounded = true; private blinkAt = 2;
+  /** Eyes: the current idle dart (yaw / pitch, rad) and when the next one starts / this one ends; eyes' smoothed angles. */
+  private baconG: THREE.Group | null = null;
+  private dartAt = 1; private dartEnd = 0; private dartY = 0; private dartX = 0; private eyeY = 0; private eyeX = 0; private redOn = false;
   private limpT = 0; private lf = 0; private ls = 0;
   centerHeight = 0.36;
   outfit: Outfit = defaultOutfit();
+  /** Bacon: the pig hides, a strip of bacon lies flat under where it is (its heading), sizzling, eyes rolling. */
+  private baconStep(p: PigPose) {
+    const on = !!p.bacon;
+    if (!on && !this.baconG?.visible) return;
+    if (!this.baconG) { this.baconG = makeBacon(); }
+    if (!this.baconG.parent && this.root.parent) this.root.parent.add(this.baconG);
+    this.baconG.visible = on; this.sway.visible = !on;
+    if (!on) return;
+    const r = this.root.position, b = this.baconG;
+    b.position.set(r.x, G.terrain.height(r.x, r.z) + 0.02, r.z);
+    const f = _look.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+    b.rotation.y = Math.atan2(f.x, f.z);
+    b.scale.set(1, 1, 0.96 + Math.sin(p.t * 3) * 0.04);   // curling up in the heat
+    let k = 0; b.traverse((o) => { if (o.name === 'pupil') { o.position.x = (k++ ? 1 : -1) * 0.09 + Math.sin(p.t * 6 + k) * 0.025; } });
+    if (Math.random() < p.dt * 5) G.fx.puff(_look.set(b.position.x + (Math.random() - 0.5) * 0.3, b.position.y + 0.15, b.position.z + (Math.random() - 0.5) * 0.6), { count: 1, color: 0xffffff, spread: 0.05, speed: 0.2, up: 0.9, life: 0.9, size: 0.25, grow: 0.4, alpha: 0.45 });
+    if (Math.random() < p.dt * 0.9) G.audio.play('sizzle', { pos: b.position, vol: 0.5, pitch: 1.2 + Math.random() * 0.2, minGap: 0.6 });
+  }
+
+  /**
+   * Living eyes (user: "when a pig is next to me my eyes look at it now and then, and they dart about by themselves"):
+   * the eye groups turn about their centres (the pupils roll round the eyeballs), toward `p.lookAt`, else small random
+   * darts; red glaze on when smoking / high.
+   */
+  private lookStep(p: PigPose, dt: number, red: number) {
+    const R = this.rig;
+    let ty = 0, tx = 0;
+    if (p.lookAt && !p.limp) {
+      const l = R.head.worldToLocal(_look.copy(p.lookAt)), e0 = R.eyes[0].position;
+      l.y -= e0.y; l.z -= e0.z;
+      ty = clamp(Math.atan2(l.x, Math.max(l.z, 0.05)), -0.55, 0.55);
+      tx = clamp(-Math.atan2(l.y, Math.max(Math.hypot(l.x, l.z), 0.05)), -0.35, 0.35);
+    } else {
+      if (p.t > this.dartAt) {
+        if (Math.random() < 0.7) { this.dartY = (Math.random() - 0.5) * 1.0; this.dartX = (Math.random() - 0.5) * 0.4; }
+        else { this.dartY = 0; this.dartX = 0; }
+        this.dartEnd = p.t + 0.25 + Math.random() * 0.8; this.dartAt = p.t + 1.2 + Math.random() * 2.6;
+      }
+      if (p.t < this.dartEnd) { ty = this.dartY; tx = this.dartX; }
+    }
+    // eyes snap (saccades): fast toward the target
+    this.eyeY = damp(this.eyeY, ty, 22, dt); this.eyeX = damp(this.eyeX, tx, 22, dt);
+    for (const e of R.eyes) { e.rotation.y = this.eyeY; e.rotation.x = this.eyeX; }
+    const on = red > 0.1;
+    if (on !== this.redOn) { this.redOn = on; for (const e of R.eyes) { const m = e.getObjectByName('redEye'); if (m) m.visible = on; } }
+  }
+
   /** The lit cigarette: between the toes of the right hoof (standing, hooves free) or in the corner of the mouth. */
   private cig = makeCigarette();
   private ember: THREE.Mesh;
@@ -123,6 +205,7 @@ export class PigVisual {
 
   update(p: PigPose) {
     const dt = p.dt, R = this.rig;
+    this.baconStep(p);
     const standTarget = p.standing && p.mode !== 'ragdoll' && p.mode !== 'wallow' ? 1 : 0;
     this.standT = damp(this.standT, standTarget, 10, dt);
     this.rollT = damp(this.rollT, p.mode === 'wallow' ? 1 : 0, 9, dt);
@@ -303,8 +386,10 @@ export class PigVisual {
     set(R.earL, flop, -0.55 + (flail ? Math.sin(p.t * 13) * 0.3 : 0), 14); set(R.earR, flop, 0.55 - (flail ? Math.sin(p.t * 11) * 0.3 : 0), 14);
     R.tail.rotation.y = Math.sin(p.t * (moving ? 14 : 4)) * (moving ? 0.5 : 0.25);
     if (p.t > this.blinkAt) this.blinkAt = p.t + 2 + Math.random() * 3;
-    const blink = this.blinkAt - p.t < 0.12 ? 0.1 : 1;
+    const red = clamp(p.red ?? 0, 0, 1);
+    const blink = Math.min(this.blinkAt - p.t < 0.12 ? 0.1 : 1, 1 - red * 0.42);   // stoned: droopy lids
     for (const e of R.eyes) e.scale.y = flail ? 0.25 : damp(e.scale.y, blink, 30, dt);
+    this.lookStep(p, dt, red);
 
     // wallow: roll onto the back (around the body's middle, not the feet)
     this.roll.rotation.z = this.rollT * Math.PI * (1 + Math.sin(p.t * 9) * 0.04 * this.rollT);

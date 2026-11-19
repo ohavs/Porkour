@@ -11,6 +11,7 @@ import { isOwner, canAdmin } from '../net/auth';
 
 /** Admin tiles: an icon per action / switch (by its key or its key's prefix). */
 const AICON: Record<string, string> = {
+  hurtMe: '🩹', killMe: '💀', 'mine:me': '💣', 'mine:bob': '💣', 'mines:new': '🎲', mines: '💣',
   fp: '👁️', fly: '🕊️', god: '👻', noCooldowns: '⚡', easyEscape: '🔓', respawn: '🏠', mud: '🟤', knock: '💫', predict: '📡', netLag: '🐢',
   'jail:others': '🔒', 'jail:free': '🔓', jailSecs: '⏱️', bob: '👨‍🌾', chill: '😎', showSight: '👀', bbqTime: '🔥', catch: '🫳', bobCarry: '🧺',
   slap: '👋', bobDown: '💥', bobHunt: '🔎', dance: '💃', danceNear: '🕺', mow: '🚜', bed: '🛏️', 'loo:go': '🚽', 'phone:ring': '☎️', 'nap:go': '💤', 'coffee:go': '☕', 'coffee:hot': '🌶️', 'coffee:mud': '💩', 'coffee:sauce': '🌶️', 'coffee:sip': '☕',
@@ -276,7 +277,7 @@ export class Menu {
     switch (this.aTab) {
       case 'me':
         body = grid(tog('fly', 'a.fly'), tog('god', 'a.ghost'), tog('fp', 'a.fp'), tog('noCooldowns', 'a.cooldowns'), tog('easyEscape', 'a.escape')) +
-          grid(btn('respawn', 'a.respawn'), btn('mud', 'a.mud'), btn('knock', 'a.knockMe'), btn('tp:bush', 'a.tpBush'), hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : '') +
+          grid(btn('respawn', 'a.respawn'), btn('mud', 'a.mud'), btn('knock', 'a.knockMe'), btn('hurtMe', 'a.hurtMe'), btn('killMe', 'a.killMe'), btn('tp:bush', 'a.tpBush'), hasTp('wheat') ? btn('tp:wheat', 'a.tpWheat') : '') +
           sec('a.teleport') + `<div class="tp">${f.places.tp.filter(([k]) => k !== 'wheat').map(([k]) => `<button data-tp="${k}" title="${tip(('a.' + k) as Key)}"><b>📍</b>${short(t(('a.' + k) as Key))}</button>`).join('')}</div>` +
           (G.net !== 'solo' ? sec('a.online') + `<div id="aNet" class="hint"></div>` + rng('netLag', 'a.netLag', ADMIN.netLag, 0, 500, 25) + grid(tog('predict', 'a.predict')) : '');
         break;
@@ -299,6 +300,7 @@ export class Menu {
       case 'world':
         body = rng('hour', 'a.time', +G.hour.toFixed(1), 0, 23.9, 0.1) + rng('daySpeed', 'a.timeSpeed', ADMIN.daySpeed, 0, 20, 0.5) +
           grid(tog('freezeTime', 'a.freeze'), btn('day', 'a.toDay'), btn('night', 'a.toNight'), btn('wolves', 'a.wolves'), btn('nowolves', 'a.noWolves')) +
+          sec('a.mines') + grid(tog('mines', 'a.minesOn'), btn('mine:me', 'a.mineMe'), btn('mine:bob', 'a.mineBob'), btn('mines:new', 'a.minesNew'), g.gulag ? btn('tp:gulag', 'a.tpGulag') : '') +
           rng('gameSpeed', 'a.gameSpeed', ADMIN.gameSpeed, 0.25, 3, 0.25) +
           sec('a.mods') + grid(...(['none', 'rain', 'fog', 'grumpy', 'market'] as const).map((m) => `<button data-a="mod:${m}" class="tile${G.mod === m ? ' on' : ''}"><b>${adminIcon('mod:' + m)}</b>${m === 'none' ? t('menu.off') : short(t(('mod.' + m) as Key))}</button>`),
             `<button data-a="mod:random" class="tile${ADMIN.mod === 'random' ? ' on' : ''}" title="${tip('a.modRandom')}"><b>🎲</b>${short(t('a.modRandom'))}</button>`) +

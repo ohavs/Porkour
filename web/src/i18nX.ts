@@ -46,6 +46,11 @@ export const EN_X = {
   'item.coffeeMug': 'Bob\'s coffee mug', 'item.hotSauce': 'Hot sauce',
   'a.coffee': 'Coffee break (porch)', 'a.coffeeGo': 'Bob: coffee break now', 'a.coffeeSip': 'Bob: a sip now', 'a.coffeeHot': 'Hot sauce in his coffee',
   'a.coffeeMud': 'Mud in his coffee', 'a.coffeeSauce': 'Hot sauce in front of me', 'a.tpPorch': 'Teleport: porch',
+  // mines, HP, the gulag, throwing up
+  'm.mineBob': 'Lure Bob onto a land mine', 'item.potato': 'Potato',
+  'e.baconMe': 'BACON!', 'e.diedMe': 'Out of HP: the gulag!', 'e.diedOther': '{who} is in the gulag!', 'e.gulagOut': 'Free again!',
+  'a.mines': 'Land mines', 'a.minesOn': 'Mines each round', 'a.mineMe': 'Mine in front of me', 'a.mineBob': 'Mine in front of Bob',
+  'a.minesNew': 'New mines', 'a.tpGulag': 'Teleport: gulag', 'a.hurtMe': 'Hurt me (−30 HP)', 'a.killMe': 'Kill me (gulag)',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -88,4 +93,8 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'item.coffeeMug': 'La taza de café de Bob', 'item.hotSauce': 'Salsa picante',
   'a.coffee': 'Café (porche)', 'a.coffeeGo': 'Bob: a tomar café ya', 'a.coffeeSip': 'Bob: un sorbo ya', 'a.coffeeHot': 'Picante en su café',
   'a.coffeeMud': 'Barro en su café', 'a.coffeeSauce': 'Salsa picante delante de mí', 'a.tpPorch': 'Teletransporte: porche',
+  'm.mineBob': 'Haz que Bob pise una mina', 'item.potato': 'Patata',
+  'e.baconMe': '¡BEICON!', 'e.diedMe': 'Sin vida: ¡al gulag!', 'e.diedOther': '¡{who} está en el gulag!', 'e.gulagOut': '¡Libre otra vez!',
+  'a.mines': 'Minas', 'a.minesOn': 'Minas en cada ronda', 'a.mineMe': 'Mina delante de mí', 'a.mineBob': 'Mina delante de Bob',
+  'a.minesNew': 'Minas nuevas', 'a.tpGulag': 'Teletransporte: gulag', 'a.hurtMe': 'Hacerme daño (−30 PV)', 'a.killMe': 'Matarme (gulag)',
 };

@@ -41,15 +41,29 @@ export const emptyInput = (): PigInput => ({
 export interface RemotePose { x: number; y: number; z: number; vx: number; vy: number; vz: number; yaw: number; at: number }
 
 /** Tuning (all pigs are equal). */
+/**
+ * Health (user: "pigs get HP: shot too much = dead → the gulag; it slowly comes back when you're not getting hit").
+ * Bob's rock salt, mines, cherry bombs and the bull hurt. Back to full each round / after the gulag.
+ */
+export const HP = { max: 100, regenDelay: 9, regen: 5, shot: 34, bull: 25, bang: 20 };
+/** Mine victims land as a strip of bacon for … s. */
+export const BACON = { time: 5.5 };
+
 export const PIG = {
   mass: 30, walk: 4.8, standWalk: 3.5, sprint: 10.5, accel: 40, airAccel: 10, airBrake: 14,
   jump: 7.6, standJump: 7.0, fartUp: 9.8, fartFwd: 6, fartCd: 6, sprintCd: 5, sprintDur: 1.6,
+  /** Beer mode: drunk past `vomit` (the meter's mark), Q = throw up instead of a fart — it blasts you backward into the air
+   * (a fart the other way round); past `vomitAuto` it can come up by itself (per second). It sobers you up a bit. */
+  vomit: 0.7, vomitAuto: 0.95, vomitRate: 0.05, vomitUp: 8.6, vomitBack: 7.5, vomitSober: 0.35,
   wallowDur: 1.1, mudTime: 60, ice: 0.1, iceSprint: 0.16, hitSpeed: 9.5, landSpeed: 13, ragMin: 1.0, ragMax: 4,
   liftMax: 26, dragMax: 90, throwMin: 5, throwMax: 16, grabRange: 1.7,
   // standing on two legs: strong hooves (punch, lift, throw, latch) but wobbly
   liftMaxStand: 50, throwStand: 1.35, punchCd: 0.45, punchRange: 1.15, punchPoise: 34, wobbleFall: 1,
   /** LMB shorter than this = a hit, longer = wind up a throw. Headbutt (four legs) = this share of a punch on Bob. */
   clickTime: 0.22, headbutt: 0.6,
+  /** A snack in the hooves (cans, cigarette packs): a click up to this long uses it (user: "I couldn't find how to smoke") —
+   * a slow click mustn't throw the pack away. */
+  useClick: 0.45,
   // grip (real physics): lift force = liftMax × g × gripLift, drag force = dragMax × g × gripDrag; throw swing time
   gripLift: 1.2, gripDrag: 0.6, swing: 0.14,
 };
@@ -166,6 +180,33 @@ export class Pig implements Holdable {
   /** 1 = high, 2 = drunk, 0 = sober. Level (0..1.3) kicks in over 5 s from buzzFrom, fades over 25 s after buzzUntil. */
   buzzKind = 0; buzzLvl = 0; buzzFrom = 0; buzzUntil = 0;
   private lagX = 0; private lagZ = 0;
+  // ---- health (HP) and bacon
+  hp = HP.max; private hurtAt = -100;
+  /** Bacon (blown up by a mine): lying there as a sizzling strip until then; `baconArm` = it turns to bacon when it lands. */
+  baconUntil = 0; private baconArm = false;
+  /** In the gulag (dead: world/gulag.ts) — host + synced. */
+  gulag = false;
+  get bacon() { return this.now < this.baconUntil; }
+  /** Blown up: it lands as bacon (host). */
+  baconSoon() { this.baconArm = true; }
+  /** Host: lose HP (rock salt, a mine, a bang…); at 0 the pig is dead → the gulag. */
+  hurt(dmg: number, why: string) {
+    if (G.net === 'client' || this.out || this.gulag || this.absent || dmg <= 0) return;
+    if (ADMIN.god && this === G.localPig) return;
+    this.hp = Math.max(0, this.hp - dmg); this.hurtAt = this.now;
+    G.events.push({ type: 'hurt', who: this, why: String(Math.round(dmg)) });
+    if (this.hp <= 0) this.die(why);
+  }
+  /** Out of HP: off to the gulag (or, without one, out for a while like the grill). */
+  die(why: string) {
+    if (this.heldBy) this.heldBy.release(false);
+    if (this.held) this.release(false);
+    this.baconArm = false; this.baconUntil = 0;
+    G.events.push({ type: 'died', who: this, why });
+    const gl = G.gulag as { admit(p: Pig): void } | null;
+    if (gl) gl.admit(this);
+    else { this.grilled(); this.outReason = 'grill'; this.hp = HP.max; }
+  }
   /** Balance beam (world/beams.ts): sideways lean (rad) and its speed while walking a log. */
   beamLean = 0; private beamLeanV = 0; onBeam: unknown = null;
   get buzz() {
@@ -303,6 +344,9 @@ export class Pig implements Holdable {
     if (this.pos.y < -25) this.respawn();
     this.snackStep();
     this.jailStep();
+    if (this.hp < HP.max && this.now - this.hurtAt > HP.regenDelay) this.hp = Math.min(HP.max, this.hp + HP.regen / 60);
+    // way too much beer: it comes up by itself now and then
+    if (this.drunk >= PIG.vomitAuto && G.net !== 'client' && this.mode === 'normal' && !this.heldBy && this.now >= this.fartReady && Math.random() < PIG.vomitRate / 60) this.vomit();
 
     if (this.heldBy) {
       this.mode = 'held';
@@ -661,8 +705,11 @@ export class Pig implements Holdable {
     }
   }
 
+  /** Drunk enough that Q throws up (beer mode). */
+  get queasy() { return this.drunk >= PIG.vomit; }
   private tryFart() {
     if (this.now < this.fartReady || this.mode === 'wallow') return;
+    if (this.queasy && !this.heldBy) { this.vomit(); return; }
     const beans = this.boosted('beans'), big = beans ? 1.45 : 1;
     this.fartReady = this.now + (ADMIN.noCooldowns && this === G.localPig ? 0.3 : PIG.fartCd * (beans ? SNACK.fartCd : 1));
     if (this.heldBy?.fartedOn) {      // carried: stink in his face, wriggle
@@ -794,6 +841,22 @@ export class Pig implements Holdable {
 
   private ragdollStep(dt: number) {
     const t = this.now - this.ragSince;
+    // blown up by a mine: it lands as bacon (sizzling), lies there a few seconds, then pops back into a pig
+    if (this.baconArm && t > 0.45 && (this.vel.length() < 2.5 || t > 3.5)) {
+      this.baconArm = false; this.baconUntil = this.now + BACON.time;
+      G.audio.play('sizzle', { pos: this.pos, vol: 1, pitch: 1.1 });
+      G.audio.play('squeal', { pos: this.pos, vol: 0.8, pitch: 0.8 });
+      G.fx.puff(v1.copy(this.pos), { count: 10, color: 0xffffff, speed: 0.8, up: 1.4, life: 1.2, size: 0.6, grow: 0.8, alpha: 0.6 });
+      G.events.push({ type: 'bacon', who: this });
+    }
+    if (this.baconUntil) {
+      if (this.now < this.baconUntil) return;
+      this.baconUntil = 0;
+      G.fx.puff(v1.copy(this.pos), { count: 14, color: 0xffd6e0, speed: 2, up: 1, life: 0.7, size: 0.7, grow: 0.6, alpha: 0.8 });
+      G.audio.play('oink', { pos: this.pos, vol: 0.9, pitch: 1.2 });
+      this.getUp();
+      return;
+    }
     if (this.input.jumpP) this.ragSince -= 0.18; // mash to get up faster
     const sp = this.vel.length();
     this.still = sp < 1.2 ? this.still + dt : 0;
@@ -843,6 +906,8 @@ export class Pig implements Holdable {
     if (this.mode !== 'normal') { this.mode = 'normal'; this.setShape('four'); this.body.lockRotations(true, true); }
   }
 
+  /** New round: full HP, no bacon. */
+  resetHealth() { this.hp = HP.max; this.hurtAt = -100; this.baconArm = false; this.baconUntil = 0; }
   respawn() {
     if (this.held) this.release(false);
     if (this.mode === 'ragdoll') this.getUp();
@@ -877,7 +942,7 @@ export class Pig implements Holdable {
       else this.startHit();
     }
     if (inp.attackR && this.held && this.chargeStart >= 0) {
-      const quick = this.now - this.chargeStart < PIG.clickTime, c = this.charge();
+      const quick = this.now - this.chargeStart < this.clickT(), c = this.charge();
       this.chargeStart = -1;
       const snack = quick ? snackOf(this.held) : null;
       if (snack && !(snack.def.smokes && this.smoking)) this.useSnack(snack);
@@ -893,6 +958,72 @@ export class Pig implements Holdable {
       else if ((this.swingT += 1 / 60) >= PIG.swing) { this.swingT = -1; this.throwHeld(this.swingC); }
     }
   }
+  /**
+   * Who my eyes glance at now (render, every browser): now and then a pig close by (or Bob), for a moment; else null
+   * (the visual's own idle darting).
+   */
+  private glance(): THREE.Vector3 | null {
+    const t = this.now;
+    if (t > this.glanceNext) {
+      this.glanceNext = t + 1.4 + Math.random() * 2.8;
+      this.glanceAt = null;
+      if (Math.random() < 0.6 && !this.out) {
+        let best: { pos: THREE.Vector3 } | null = null, bd = 7;
+        for (const o of G.pigs as Pig[]) {
+          if (o === this || o.out || o.absent || !o.visual.root.visible) continue;
+          const d = o.pos.distanceTo(this.pos) * (0.7 + Math.random() * 0.6);   // not always the nearest
+          if (d < bd) { bd = d; best = o; }
+        }
+        const bob = G.farmer as { pos: THREE.Vector3; visual: { root: THREE.Object3D } } | null;
+        if (bob?.visual.root.visible && bob.pos.distanceTo(this.pos) < 9 && Math.random() < 0.35) best = bob;
+        if (best) { this.glanceAt = best; this.glanceEnd = t + 0.6 + Math.random() * 1.6; this.glanceY = best === bob ? 1.7 : 0.55; }
+      }
+    }
+    if (!this.glanceAt || t > this.glanceEnd) return null;
+    return this.glanceV.copy(this.glanceAt.pos).setY(this.glanceAt.pos.y + this.glanceY);
+  }
+  private glanceAt: { pos: THREE.Vector3 } | null = null; private glanceNext = Math.random() * 3; private glanceEnd = 0; private glanceY = 0.55;
+  private glanceV = new THREE.Vector3();
+
+  /**
+   * Throw up (drunk, beer mode): a gush out of the snout forward, the pig is blasted backward and up (a fart the other
+   * way round), whatever is in front gets splattered and shoved. Sobers it up a little. Host (players: predicted launch).
+   */
+  vomit() {
+    this.fartReady = this.now + PIG.fartCd;
+    if (this.held) this.release(false);
+    const f = this.forward.clone();
+    this.vel.y = Math.max(this.vel.y, PIG.vomitUp);
+    this.vel.x -= f.x * PIG.vomitBack; this.vel.z -= f.z * PIG.vomitBack;
+    this.ownJump = false;
+    if (this.mode === 'ragdoll') this.getUp();
+    this.body.setLinvel(this.vel, true); this.setVel.copy(this.vel);
+    this.buzzLvl = Math.max(0, this.buzzLvl - PIG.vomitSober);
+    const mouth = v1.copy(this.pos).addScaledVector(f, this.standing ? 0.35 : 0.75).setY(this.pos.y + (this.standing ? 0.55 : 0.25));
+    const d = v3.copy(f).setY(-0.25).normalize();
+    G.fx.bits(mouth, { count: 46, color: 0xc9c24a, spread: 0.1, speed: 6.5, up: 0.4, grav: 11, life: 0.9, size: 0.09, grow: 0, alpha: 1, dir: d });
+    G.fx.bits(mouth, { count: 22, color: 0x9bb03a, spread: 0.14, speed: 4.5, up: 0.8, grav: 11, life: 0.8, size: 0.12, grow: 0, alpha: 1, dir: d });
+    G.fx.puff(mouth, { count: 10, color: 0xd8d27a, spread: 0.2, speed: 2.5, up: 0.2, life: 0.9, size: 0.6, grow: 1.2, drag: 3, alpha: 0.6, dir: d });
+    G.audio.play('grunt', { pos: this.pos, vol: 1, pitch: 0.7 });
+    G.audio.play('vomit', { pos: mouth, vol: 1 });
+    G.audio.play('splash', { pos: mouth, vol: 0.8, pitch: 0.75 });
+    G.audio.play('splat', { pos: mouth, vol: 0.7, pitch: 0.8 });
+    G.shakeFor(this, 0.4);
+    G.noise(this.pos, 16);
+    // what's in front: splattered and shoved
+    for (const h of G.holdables) {
+      if (h === this) continue;
+      const hp = h.body.translation(), dx = hp.x - mouth.x, dz = hp.z - mouth.z, dist = Math.hypot(dx, dz);
+      if (dist > 3 || dist < 0.01 || (dx * f.x + dz * f.z) / dist < 0.5) continue;
+      const k = 1 - dist / 3, dv = Math.min(7, (k * 160) / Math.max(h.mass, 4));
+      const push = v2.set(dx / dist, 0.4, dz / dist).normalize().multiplyScalar(dv);
+      if (h.knock) h.knock(push, false); else h.body.applyImpulse(push.multiplyScalar(h.mass), true);
+    }
+    const bob = G.farmer as { pos: THREE.Vector3; vomitedOn?: (p: Pig) => void } | null;
+    if (bob) { const dx = bob.pos.x - mouth.x, dz = bob.pos.z - mouth.z, dist = Math.hypot(dx, dz); if (dist < 2.6 && (dx * f.x + dz * f.z) / Math.max(dist, 0.01) > 0.5) bob.vomitedOn?.(this); }
+    G.events.push({ type: 'vomit', who: this });
+  }
+
   /** Start a hit (lands a moment later in `punchHit`). */
   private startHit() {
     if (this.now - this.punchAt < PIG.punchCd) return;
@@ -917,7 +1048,9 @@ export class Pig implements Holdable {
   }
   /** At the cage latch / a closed gate's latch: RMB opens it there (lock-pick puzzle: game.ts), so the pig doesn't grab. */
   private cageLatchNear() { const c = this.cage ?? G.cage; return (!!c && c.canPick(this)) || !!G.gates?.latchOf(this) || G.uses.some((u) => u.near(this)); }
-  charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - PIG.clickTime) / 0.9, 0, 1); }
+  charge() { return this.chargeStart < 0 ? 0 : clamp((this.now - this.chargeStart - this.clickT()) / 0.9, 0, 1); }
+  /** How long a click may last and still count as a click (not a throw wind-up). */
+  private clickT() { return snackOf(this.held) ? PIG.useClick : PIG.clickTime; }
 
   /** Could this pig take hold of it at all (not counting distance)? */
   canGrab(h: Holdable) {
@@ -1171,6 +1304,7 @@ export class Pig implements Holdable {
     n.push(this.eatAt, this.cigUntil, this.puffAt, ...SNACK_IDS.map((k) => this.boostUntil[k]));
     n.push(this.jailUntil, this.frozenUntil, this.flying ? 1 : 0, ...this.buzzState());
     n.push(this.handle ? this.handle.id : -1, this.mouthAt, this.touchAt, Math.round(this.touchP.x * 100) / 100, Math.round(this.touchP.y * 100) / 100, Math.round(this.touchP.z * 100) / 100);
+    n.push(Math.round(this.hp * 10) / 10, this.baconUntil, this.gulag ? 1 : 0);
   }
   netApply(n: number[]) {
     if (!n.length) return;
@@ -1225,6 +1359,7 @@ export class Pig implements Holdable {
       this.mouthAt = n[j + 9];
       if (n[j + 10] !== undefined) { this.touchAt = n[j + 10]; this.touchP.set(n[j + 11], n[j + 12], n[j + 13]); }
     }
+    if (n[j + 14] !== undefined) { this.hp = n[j + 14]; this.baconUntil = n[j + 15]; this.gulag = n[j + 16] === 1; }
   }
   /** Player side: the host's pig is flying (admin). */
   netFly = false;
@@ -1276,7 +1411,12 @@ export class Pig implements Holdable {
       this.sprintUntil = this.predSprintUntil = this.now + PIG.sprintDur; this.sprintReady = this.predSprint = this.now + PIG.sprintCd * (this.boosted('energy') ? SNACK.sprintCd : 1);
       this.setStanding(false);
     }
-    if (inp.fartP && this.now >= this.fartReady && normal) {
+    if (inp.fartP && this.now >= this.fartReady && normal && this.queasy) {   // throwing up: blasted backward
+      this.fartReady = this.predFart = this.now + PIG.fartCd;
+      const f = this.forward;
+      this.vel.y = Math.max(this.vel.y, PIG.vomitUp); this.vel.x -= f.x * PIG.vomitBack; this.vel.z -= f.z * PIG.vomitBack;
+      this.ownJump = false;
+    } else if (inp.fartP && this.now >= this.fartReady && normal) {
       const beans = this.boosted('beans'), big = beans ? 1.45 : 1;
       this.fartReady = this.predFart = this.now + PIG.fartCd * (beans ? SNACK.fartCd : 1);
       const mvLen = Math.hypot(inp.mx, inp.mz), f = this.forward;
@@ -1354,6 +1494,7 @@ export class Pig implements Holdable {
       act: this.eating ? 'eat' : this.smoking && this.now - this.puffAt < SNACK.puff ? 'puff' : '',
       actK: this.eating ? (this.now - this.eatAt) / SNACK.eat : (this.now - this.puffAt) / SNACK.puff,
       cig: this.smoking, strong: this.boosted('spinach'),
+      lookAt: this.glance(), red: this.smoking ? 1 : clamp(this.high * 1.6, 0, 1), bacon: this.bacon,
       speed: sp, grounded: this.grounded, vy: this.vel.y, standing: this.standing, mode: this.mode,
       sprinting: this.sprinting, muddy: this.muddy, holding: !!this.held, charging: this.charge(), dt, t: this.now,
       burnt: clamp((this.burntUntil - this.now) / 5, 0, 1), wobble: this.wobble, punch: this.punchT, beam: !!this.onBeam,

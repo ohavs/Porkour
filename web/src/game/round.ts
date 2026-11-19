@@ -46,6 +46,8 @@ export type MissionId = 'quota' | 'knockBob' | 'staggerBob' | 'fartBob' | 'mugPo
   | 'hammockFlip' | 'mudFace'
   // farms with a porch coffee break: spike Bob's coffee (hot sauce / mud)
   | 'coffeeSpike'
+  // every farm: land mines
+  | 'mineBob'
   // chain modes: farm 6 (cannabis), farm 7 (beer), and the challenges you do high / drunk
   | 'rollJoint' | 'bongRip' | 'bakeCookies' | 'everyoneHigh' | 'brewBeer' | 'drinkUp'
   | 'beamWalk' | 'visions' | 'munchies' | 'hugBob' | 'cloudGaze' | 'tableDance' | 'serenade';
@@ -58,7 +60,7 @@ const REQ_POOL: MissionId[] = ['knockBob', 'fartBob', 'mugPond', 'hensOut', 'pum
   'bullBob', 'bullOut', 'cowTip', 'cheeseBob', 'prizeCheese', 'spillMilk', 'milkSlip',
   'lanternsOut', 'catapultBob', 'pigLaunch', 'giantPumpkin', 'pumpkinSmash',
   'snowballBob', 'bigSnowball', 'snowmanDown', 'bobIce', 'iceHole', 'bigPresent', 'looLock', 'looTip', 'prankCall', 'hammockFlip', 'coffeeSpike'];
-const BONUS_POOL: MissionId[] = ['catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace', ...REQ_POOL];
+const BONUS_POOL: MissionId[] = ['mineBob', 'catBath', 'wolfScare', 'staggerBob', 'henPond', 'melonSmash', 'mazeTrophy', 'safeSteal', 'hangUp', 'tvSteal', 'clockSteal', 'mudFace', ...REQ_POOL];
 interface Mission { id: MissionId; req: boolean; done: boolean; n: number }
 /** Places things get taken to (waypoint when you hold the thing). */
 export type Where = 'pond' | 'well' | 'stash' | 'porch' | 'bob' | 'press' | 'hole';
@@ -96,7 +98,7 @@ export const missionColor = (i: number) => (i <= 0 ? MISSION_COLORS[0] : MISSION
 /** Little down arrow in a mission's colour (mission list, waypoints). */
 export const arrowSvg = (c: string, w = 14) => `<svg class="marr" viewBox="0 0 14 14" width="${w}" height="${w}"><path d="M2 2.5h10L7 12z" fill="${c}" stroke="#3b2412" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 /** Pranks done to Bob himself: the arrow sits over him. */
-const ON_BOB = new Set<MissionId>(['knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade']);
+const ON_BOB = new Set<MissionId>(['mineBob', 'knockBob', 'staggerBob', 'fartBob', 'loseBob', 'beeBob', 'hugBob', 'serenade']);
 export interface MissionMark { at: THREE.Vector3; top: number; color: string; i: number }
 
 /** Waypoint icons (the place a held thing goes). */
@@ -212,7 +214,8 @@ export class Round {
       ...(this.game.farm.props.some((p) => p.def === PROPS.clock) ? ['clockSteal'] as MissionId[] : []),
       ...(this.game.phones?.wall ? ['hangUp'] as MissionId[] : []), ...(this.game.phones?.pay ? ['prankCall'] as MissionId[] : []),
       ...(this.game.hammock ? ['hammockFlip', 'mudFace'] as MissionId[] : []),
-      ...(this.game.porch?.sauce && this.game.farm.chores.some((c) => c.id === 'paper') ? ['coffeeSpike'] as MissionId[] : [])];
+      ...(this.game.porch?.sauce && this.game.farm.chores.some((c) => c.id === 'paper') ? ['coffeeSpike'] as MissionId[] : []),
+      ...(ADMIN.mines ? ['mineBob'] as MissionId[] : [])];
     const ch = this.game.farm.chain;
     if (ch) {   // chain modes: the chain's own goals + challenges done buzzed (no random pranks)
       const c3 = pick(ch.kind === 1 ? HIGH_POOL : DRUNK_POOL, 3);
@@ -301,6 +304,7 @@ export class Round {
     if (type === 'hammockFlip') this.done('hammockFlip');
     if (type === 'mudFace') this.done('mudFace');
     if (type === 'coffeeSpit') this.done('coffeeSpike');
+    if (type === 'mineBob') this.done('mineBob');
   }
 
   step(dt: number) {

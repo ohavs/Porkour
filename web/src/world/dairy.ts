@@ -176,6 +176,7 @@ export class Dairy implements CritterBrain {
       if (pig.out || pig.cage || this.hits.has(pig) || pig.heldBy?.kind === 'farmer' || !near(pig.pos, 0.2) || Math.abs(pig.pos.y - p.y) > 1.6) continue;
       this.hits.add(pig);
       pig.knock(v1.set(fwd.x * 10 + (Math.random() - 0.5) * 3, 7.5, fwd.z * 10 + (Math.random() - 0.5) * 3), true);
+      pig.hurt(25, 'bull');
       G.audio.play('body', { pos: pig.pos, vol: 1, pitch: 0.8 });
       G.audio.play('squeal', { pos: pig.pos, vol: 1, minGap: 0.2 });
       G.fx.bits(v1.copy(pig.pos).setY(pig.pos.y + 0.4), { count: 14, color: 0xfff1a8, speed: 4, up: 2, life: 0.5, size: 0.16, grow: 0, drag: 3, alpha: 1 });
