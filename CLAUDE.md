@@ -331,6 +331,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    the dog barked at (those: what it does when he gets there counts), hunts shorter (decay 0.05, max 35 s),
    sprinting weaker (0.15), a tumbling / flung pig isn't suspicious, ✅ **Bob's plate = loot to the stash**
    (mission `lunchSteal` ticks when it's banked, waypoint + icons show the stash).
+   s30 fix (user screenshot): **holding a pig / an animal in the cannabis / beer modes crashed the HUD every frame**
+   (⚠ "reading 'item'": `Chain.itemIcon` read the held thing as an item; lobby + play) → only items are asked now.
    **Later (user s29, "keep for later")**: guided steps everywhere (the game shows the next step of a mission as you
    go — "I watered it, now what?"; things you pick up must say what they do), the grinder turnable any way, food
    boosts = a visible temporary "rush mode" on screen (fast run, strong fart…), **loot pockets** (pick up and keep

@@ -103,7 +103,7 @@ export abstract class Chain {
   /** Host: a quick LMB click with an item in the hooves (eat, puff, lick, strike the lighter…). True = handled (no hit). */
   useItem(p: Pig, h: Prop): boolean { return this.selfUse(p, h); }
   /** HUD: what a click with this item does here (icon), or ''. */
-  itemIcon(p: Pig): IconId | '' { return p.held ? this.selfIcon(p, p.held as Prop) : ''; }
+  itemIcon(p: Pig): IconId | '' { const h = p.held as Prop | null; return h?.kind === 'prop' ? this.selfIcon(p, h) : ''; }   // (a held pig / animal has no item)
   protected abstract selfUse(p: Pig, h: Prop): boolean;
   protected abstract selfIcon(p: Pig, h: Prop): IconId | '';
   /** HUD: what the work place I stand at still needs (icons). */
