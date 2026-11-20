@@ -308,7 +308,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    throw a player to the lobby without the room** (the page's own socket close counted as "disconnected" → back to the
    lobby 2.5 s later, overtaking the reload; old bug), ✅ **duplicated tab** can't steal / fight over a seat,
    ✅ **shaders precompiled at load** (no first-sight hitches), ✅ 4-browser test of 18 cases + a no-duplicates check after each.
-   **Next**: the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
+   **Next**: **move the online server to Render Frankfurt** (user agreed 2026-11-20, after the s28 game night — not
+   before it: free plan, ~60 ms from Israel instead of ~200 from Oregon; region is set when a service is created → new
+   service `region: frankfurt` in `render.yaml`, new address in `BUILT_IN_SERVER` (config.ts), env vars copied, old one
+   deleted; Claude prepares the code, the user clicks in Render; later: Cloudflare TURN so fewer players go ☁ relay),
+   the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 
 ## Status / next step
