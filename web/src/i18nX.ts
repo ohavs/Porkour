@@ -3,6 +3,10 @@
  * AND a Spanish entry (ES_X is typed against EN_X, so a missing one fails `tsc`).
  */
 export const EN_X = {
+  'pw.drop': 'Drop', 'pw.throw': 'Throw', 'pw.holdThrow': 'Hold: throw', 'pw.grab': 'Grab', 'pw.pour': 'Pour', 'pw.pass': 'Pass',
+  'pw.eat': 'Eat', 'pw.smoke': 'Smoke', 'pw.hit': 'Hit', 'pw.punch': 'Punch', 'pw.harvest': 'Harvest', 'pw.fill': 'Fill',
+  'pw.two': 'Needs 2', 'pw.far': 'Too far', 'pw.light': 'Light', 'pw.lick': 'Lick', 'pw.turn': 'Turn', 'pw.holdTurn': 'Hold: turn',
+  'm.bonusLeft': 'bonus left', 'pw.mud': 'Mud', 'pw.lock': 'Pick', 'pw.dest': 'Goes here', 'pw.grow': 'Growing…', 'pw.holdOpen': 'Hold: open',
   // admin panel (tabs + powers + punishments)
   'at.me': 'Me', 'at.players': 'Players', 'at.bob': 'Bob', 'at.world': 'World', 'at.farm': 'Farm', 'at.items': 'Items',
   'a.fp': 'First person (V)', 'a.powers': 'Powers', 'a.fly': 'Fly (Space up · C down · Shift fast)', 'a.ghost': 'Ghost (Bob, dog, animals ignore me)',
@@ -91,6 +95,10 @@ export const EN_X = {
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
+  'pw.drop': 'Soltar', 'pw.throw': 'Lanzar', 'pw.holdThrow': 'Mantén: lanzar', 'pw.grab': 'Agarrar', 'pw.pour': 'Verter', 'pw.pass': 'Pasar',
+  'pw.eat': 'Comer', 'pw.smoke': 'Fumar', 'pw.hit': 'Golpear', 'pw.punch': 'Puñetazo', 'pw.harvest': 'Cosechar', 'pw.fill': 'Llenar',
+  'pw.two': 'Hacen falta 2', 'pw.far': 'Muy lejos', 'pw.light': 'Encender', 'pw.lick': 'Lamer', 'pw.turn': 'Girar', 'pw.holdTurn': 'Mantén: girar',
+  'm.bonusLeft': 'quedan extras', 'pw.mud': 'Barro', 'pw.lock': 'Forzar', 'pw.dest': 'Va aquí', 'pw.grow': 'Creciendo…', 'pw.holdOpen': 'Mantén: abrir',
   'at.me': 'Yo', 'at.players': 'Jugadores', 'at.bob': 'Bob', 'at.world': 'Mundo', 'at.farm': 'Granja', 'at.items': 'Objetos',
   'a.fp': 'Primera persona (V)', 'a.powers': 'Poderes', 'a.fly': 'Volar (Espacio sube · C baja · Mayús rápido)', 'a.ghost': 'Fantasma (Bob, el perro y los animales me ignoran)',
   'a.respawn': 'Volver a la pocilga', 'a.jail': 'Cárcel', 'a.unjail': 'Liberar', 'a.freezeP': 'Congelar', 'a.unfreeze': 'Descongelar',

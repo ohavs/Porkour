@@ -127,7 +127,9 @@ async function boot() {
   // online lobby (top bar "Online", invite links ?room=CODE, back from a game ?lobby=1): rooms modal; in a room your
   // party plays on the stage with you, the host's PLAY starts the round for everyone
   const lobby = new Lobby(game, {
-    start: () => { started = false; start(); },
+    // the host started: close whatever this player had open (wardrobe / shop, the rooms panel, the menu) — user s29:
+    // a player in the shop stayed stuck on it when the round began
+    start: () => { started = false; try { wardrobe.close(); } catch { /* */ } lobby.close(); try { if (game.menu.menuOpen) game.menu.close(false); } catch { /* */ } start(); },
     wardrobe: () => wardrobe.open(),
     outfit: () => outfitMsg(wardrobe.outfit),
     onRoom: () => ui.render(),

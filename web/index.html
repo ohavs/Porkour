@@ -8,7 +8,7 @@
   @font-face { font-family: Title; src: url(./fonts/TitleFont.ttf); font-display: block; }
   @font-face { font-family: Body; src: url(./fonts/BodyFont.ttf); font-display: block; }
   :root { --cream:#fff6e6; --ink:#3b2412; --pink:#ff8fb1; --gold:#ffd166; --mud:#7a4b25; --panel: rgba(40,22,8,.82); --panel2: rgba(255,246,230,.08); }
-  html, body { margin:0; height:100%; overflow:hidden; background:#9ccbe8; font-family: Body, system-ui, sans-serif; color: var(--cream); user-select:none; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#9ccbe8; font-family: Body, system-ui, sans-serif; font-synthesis: none; /* (user s29: the body font has no bold: fake bold smeared it) */ color: var(--cream); user-select:none; }
   #app { position:fixed; inset:0; }
   #app canvas { display:block; width:100%; height:100%; }
   .txt { text-shadow: 0 2px 0 rgba(40,20,5,.85), 0 0 6px rgba(40,20,5,.6); }
@@ -128,7 +128,7 @@
   .ab { position:relative; width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     background: rgba(40,22,8,.45); box-shadow: inset 0 0 0 3px rgba(255,246,230,.85); font-size:30px; }
   .ab .cd { position:absolute; inset:0; border-radius:50%; }
-  .ab .key { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); font-family: Title; font-size:13px; color: var(--gold);
+  .ab .key { position:absolute; bottom:-9px; left:50%; transform:translateX(-50%); font-family: system-ui, 'Segoe UI', sans-serif; font-weight:700; font-size:12px; color: var(--gold);
     background: rgba(40,22,8,.85); padding: 1px 7px 0; border-radius: 8px; white-space:nowrap; }
   body.padOn #topbtns .k { display:none; }
   /* user: "as many of the top-right icons as possible into the settings" — sound / controls live there (M / H keys still
@@ -150,7 +150,7 @@
   #clickHint { position:absolute; left:50%; top:40%; transform:translate(-50%,-50%); font-family: Title; font-size: 30px; color: var(--gold);
     padding: 10px 22px; border-radius: 14px; background: var(--panel); opacity:0; pointer-events:none; transition: opacity .2s; }
   #clickHint.show { opacity: 1; }
-  #prompt { position:absolute; left:50%; top:62%; transform:translateX(-50%); font-size:20px; text-align:center; }
+  #prompt { position:absolute; left:50%; bottom:104px; transform:translateX(-50%); font-size:20px; text-align:center; }   /* (user s29: above the ability rings, not over what I hold) */
   #prompt b { color: var(--gold); }
   #status { position:absolute; left:22px; bottom:22px; font-size:18px; line-height:1.35; }
   #toast { position:absolute; left:50%; top:18%; transform:translateX(-50%); font-family: Title; font-size: 40px; color: var(--gold); opacity:0; transition: opacity .3s; white-space:nowrap; text-align:center; }

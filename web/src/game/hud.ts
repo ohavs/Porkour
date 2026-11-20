@@ -31,6 +31,29 @@ export const SVG = {
 };
 
 /** Icon-first HUD (user: "too much text"): prompts are key + icon, status is a row of badges, events pop over heads. */
+/**
+ * A prompt pill: key / mouse + action icon + ONE short word (user s29: "make it clear what to do, without lots of
+ * text — your icons aren't always clear"). The word comes from the action icon in it; "hold" + an action = "Hold:
+ * throw" (the ring icon itself is dropped: nobody read it).
+ */
+const WORD: Partial<Record<IconId, string>> = {
+  drop: 'pw.drop', throw: 'pw.throw', grab: 'pw.grab', pour: 'pw.pour', pass: 'pw.pass', eat: 'pw.eat', cookie: 'pw.eat',
+  cig: 'pw.smoke', joint: 'pw.smoke', whack: 'pw.hit', fist: 'pw.punch', sickle: 'pw.harvest', water: 'pw.fill',
+  two: 'pw.two', reach: 'pw.far', lighter: 'pw.light', tongue: 'pw.lick', circle: 'pw.turn', mud: 'pw.mud', lock: 'pw.lock',
+};
+let wordOf: Map<string, string> | null = null;
+function pill(...xs: string[]) {
+  wordOf ??= new Map(Object.entries(WORD).map(([k, w]) => [IC[k as IconId], w as string]));
+  let w = '';
+  const hold = xs.includes(IC.hold);
+  if (hold && xs.includes(IC.throw)) w = 'pw.holdThrow';
+  else if (hold && xs.includes(IC.circle)) w = 'pw.holdTurn';
+  else if (xs[0] === IC.aim) w = 'pw.dest';
+  else for (let i = xs.length - 1; i >= 0 && !w; i--) w = wordOf.get(xs[i]) ?? '';
+  const shown = w && hold ? xs.filter((x) => x !== IC.hold) : xs;
+  return `<span class="pp">${shown.join('')}${w ? `<i class="pw">${t(w as Key)}</i>` : ''}</span>`;
+}
+
 const CSS = `
 #prompt { display:flex; flex-direction:column; align-items:center; gap:4px; }
 #prompt .pr { display:flex; align-items:center; gap:14px; }
@@ -41,9 +64,11 @@ const CSS = `
 @keyframes ppgo { 50% { transform: scale(1.08); } }
 .ic { display:block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 .pp .ic { width:30px; height:30px; }
+.pp .pw { font-style:normal; font-size:15px; color:#fff6e6; margin-left:4px; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.pp.go .pw { color:#3b2412; text-shadow:none; }
 #ret { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:#fff6e6; box-shadow:0 0 0 1.5px #3b2412; opacity:0; pointer-events:none; z-index:5; transition:opacity .15s; }
 #pick { position:fixed; left:0; top:0; width:30px; height:30px; margin:-15px 0 0 -15px; border:3px solid #ffd166; border-radius:50%; box-shadow:0 0 0 1.5px #3b2412, inset 0 0 0 1.5px #3b2412; opacity:0; pointer-events:none; z-index:5; transition:opacity .1s; }
-kbd.kc { font-family: Title; font-size:16px; color:#3b2412; background:#fff6e6; border-radius:6px; padding:1px 7px 2px; box-shadow: 0 2px 0 #c9b49a; line-height:1.25; }
+kbd.kc { font-family: system-ui, 'Segoe UI', sans-serif; font-weight:700; font-size:15px; color:#3b2412; background:#fff6e6; border-radius:6px; padding:1px 7px 2px; box-shadow: 0 2px 0 #c9b49a; line-height:1.25; }
 .mbar { width:120px; height:10px; border-radius:6px; background: rgba(0,0,0,.4); overflow:hidden; }
 .mbar i { display:block; height:100%; background: linear-gradient(90deg, var(--pink), var(--gold)); }
 .big { font-family: Title; font-size: 34px; color: var(--gold); }
@@ -134,7 +159,7 @@ export class Hud {
     } else this.help.innerHTML = `<h3>${t('help.title')}</h3>` +
       row('WASD', 'help.move') + row(t('key.mouse'), 'help.look') + row(t('key.space'), 'help.jump') +
       row(t('key.rmb'), 'help.grab') + row(t('key.lmb'), 'help.punch') + row(t('key.shift'), 'help.sprint') + row('Q', 'help.fart') +
-      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row(t('key.wheel'), 'help.reach') + row('V', 'help.view') + row('B', 'key.emote' as Key) + row('G', 'key.pass' as Key) + `<div class="keys">${t('help.keys')}</div>`;
+      row('C', 'help.wallow') + row('E', 'help.stand') + row('F', 'help.oink') + row('R', 'help.tilt') + row('V', 'help.view') + row('B', 'key.emote' as Key) + row('G', 'key.pass' as Key) + `<div class="keys">${t('help.keys')}</div>`;
     const labels: Record<string, Key> = { grab: 'ab.grab', sprint: 'ab.sprint', fart: 'ab.fart', wallow: 'ab.wallow', stand: 'ab.stand' };
     for (const k in this.ab) {
       this.ab[k].lbl.textContent = t(labels[k]);
@@ -347,7 +372,7 @@ export class Hud {
     this.ring('grab', 1, !!pig.held);
     this.updateClock();
     // prompt: key + icon pairs, no sentences (what a thing is and where it goes: the arrows / coin value show that)
-    const P = (...xs: string[]) => `<span class="pp">${xs.join('')}</span>`, row = (...xs: string[]) => `<div class="pr">${xs.join('')}</div>`;
+    const P = pill, row = (...xs: string[]) => `<div class="pr">${xs.join('')}</div>`;
     const SPACE = kc(t('key.space')), mashBar = (n: number, need: number) => `<span class="mbar"><i style="width:${Math.round(clamp(n / Math.max(need, 1), 0, 1) * 100)}%"></i></span>`;
     let p = '';
     const gate = G.gates?.latchOf(pig) as { state: string; padHp: number; label: string } | null | undefined;
@@ -358,7 +383,7 @@ export class Hud {
     const chainIc = pig.held && G.chain ? G.chain.itemIcon(pig) : '';
     const dest = pig.held ? HANDS.destIcon(pig) : '';   // it has a place it goes (the hopper, the mat, the oven…): show it
     const food = !chainIc && pig.buzz > 0.2 && (pig.held as { def?: { food?: boolean } } | null)?.def?.food;
-    const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? (pig.smoking ? '' : IC.cig) : snack.def?.snack ? IC.eat : '') : '';
+    const useIc = chainIc ? IC[chainIc] : food ? IC.eat : snack?.left && !pig.eating ? (snack.def?.smokes ? IC.cig : snack.def?.snack ? IC.eat : '') : '';
     const gl = pig.gulag ? (G.gulag as { jobs(p: Pig): { job: string; n: number; of: number }[] } | null) : null;
     if (p) { /* (a snack in the hooves, above) */ }
     else if (pig.out) p = row(P(IC[pig.outReason === 'wolf' ? 'wolf' : 'flame'], `<span class="big">${Math.ceil(pig.outUntil - pig.now)}</span>`));
@@ -369,10 +394,10 @@ export class Hud {
     else if (pig.mode === 'ragdoll' || pig.mode === 'held') p = row(P(SPACE, IC.mash));
     else if (pig.cage) p = G.cage?.canPick(pig) ? row(P(IC.rmb, IC.lock)) : '';
     else if (G.phones?.oinkNow(pig)) p = row(P(kc('F'), IC.pig, IC.phone));
-    else if (pig.handle) p = row(P(IC.rmb, IC.drop), P(IC.mouse, pig.handle.kind === 'crank' ? IC.circle : IC[pig.handle.icon]));
-    const passIc = pig.held && pig.held.kind !== 'pig' && (G.pigs as Pig[]).some((o) => o !== pig && !o.out && !o.absent && !o.held && o.pos.distanceTo(pig.pos) < 2.6) ? P(kc('G'), IC.pass) : '';
+    else if (pig.handle) p = row(P(IC.rmb, IC.drop), pig.handle.kind === 'crank' ? P(IC.lmb, IC.hold, IC.circle) : P(IC.mouse, IC[pig.handle.icon]));
+    const passIc = pig.held && pig.held.kind !== 'pig' && !coop(pig.held) && (G.pigs as Pig[]).some((o) => o !== pig && !o.out && !o.absent && !o.held && !o.heldBy && o.mode === 'normal' && !o.gulag && o.pos.distanceTo(pig.pos) - (o.seat >= 0 ? 0.6 : 0) < 2.6) ? P(kc('G'), IC.pass) : '';   // (only when G really passes: the same test as Pig.passHeld)
     if (pig.held && useIc && !chainIc && snack?.left && !pig.out) p = row(`<span class="pp go">${IC.lmb}${useIc}</span>`, P(IC.rmb, IC.drop), passIc, P(IC.lmb, IC.hold, IC.throw));   // a snack: the click comes first
-    else if (pig.held) p = row(P(IC.rmb, IC.drop), passIc, pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', P(IC.lmb, IC.hold, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
+    else if (pig.held) p = row(P(IC.rmb, IC.drop), passIc, pours(pig.held) ? P(kc('R'), IC.pour) : '', dest ? P(IC.aim, IC[dest]) : '', coop(pig.held) && !(pig.held as { helper?: unknown }).helper ? P(IC.two) : '', useIc ? P(IC.lmb, useIc) : '', useIc || weapon ? P(IC.lmb, IC.hold, IC.throw) : P(IC.lmb, IC.throw), weapon ? P(IC.lmb, IC.whack) : '', val(pig.held) ? P(val(pig.held)) : '',
       gate?.state === 'locked' && weapon ? P(IC.lmb, IC.whack, IC.lock, `<b>${gate.padHp}</b>`) : gate?.state === 'shut' ? P(IC.rmb, IC.gate) : '');
     else if (G.cage?.canPick(pig)) p = row(P(IC.rmb, IC.lock));
     else if (gate) p = gate.state === 'locked' ? row(P(IC.rmb, IC.lock), P(kc(t('key.shift')), ICONS.sprint)) : row(P(IC.rmb, IC.gate));
