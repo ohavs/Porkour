@@ -32,6 +32,13 @@ export class Lobby {
 
   /** This page is reloading / leaving (onto the room's farm, back into the room): no other redirect may overtake it. */
   private navigating = false;
+  private reloadAt = 0;
+  /** Reload this page into the room (on its farm) once, a moment from now (several messages can ask for it). */
+  private reloadInto(farm: Parameters<typeof reloadOnFarm>[0], code: string, ms: number) {
+    if (this.reloadAt) return;
+    this.reloadAt = performance.now() + ms;
+    setTimeout(() => reloadOnFarm(farm, { room: code }), ms);
+  }
   /** In a room that hasn't started: the party plays on the lobby stage (the game is already online). */
   private preGame = false;
   get inRoom() { return !!online.room && this.preGame && !this.inGame; }
@@ -97,17 +104,17 @@ export class Lobby {
         else this.chat = [];
         // the room plays another farm than the one this page built: reload on it, straight back into the room
         const rf = asFarm(m.room.farm);
-        if (rf && rf !== farmId()) { this.view = 'switching'; this.render(); setTimeout(() => reloadOnFarm(rf, { room: m.room.code }), 300); break; }
+        if (rf && rf !== farmId()) { this.view = 'switching'; this.render(); this.reloadInto(rf, m.room.code, 300); break; }
         if (m.room.state === 'playing') this.enterGame();   // late join: straight into the running game
         else this.enterRoom();
         break;
       }
       case 'room': {
         // the host ended the game: every page (the host's too) reloads straight back into the room's lobby, together
-        if (m.regroup && online.room && (this.inGame || this.preGame)) { g.hud.toast(t('net.regroup'), 3); const code = online.room.code; setTimeout(() => reloadOnFarm(farmId(), { room: code }), 700); break; }
+        if (m.regroup && online.room && (this.inGame || this.preGame)) { g.hud.toast(t('net.regroup'), 3); this.reloadInto(farmId(), online.room.code, 700); break; }
         // the host picked another farm: every page (the host's too) reloads onto it, straight back into the room
         const rf = asFarm(online.room?.farm ?? '');
-        if (rf && rf !== farmId() && (this.preGame || this.inGame)) { g.hud.toast(t('net.switching'), 3); setTimeout(() => reloadOnFarm(rf, { room: online.room!.code }), 600); break; }
+        if (rf && rf !== farmId() && (this.preGame || this.inGame) && online.room) { g.hud.toast(t('net.switching'), 3); this.reloadInto(rf, online.room.code, 600); break; }
         if (online.room?.state === 'playing' && !this.inGame && !online.isHost) this.enterGame();
         else if (this.inRoom) this.opts.onRoom();
         break;
