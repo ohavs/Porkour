@@ -280,7 +280,7 @@ export class Game {
       if (b === 'emote') { if (!this.lockpick.isOpen && !this.local.out) { this.wheel.icons(this.local.visual.color, this.local.visual.outfit); this.wheel.open(); } return; }
       if (this.wheel.isOpen && b === 'attack') { this.pendingEmote = this.wheel.close(); this.input.clearPresses(); return; }   // click = pick
       if (this.lockpick.isOpen) {
-        if (b === 'attack' || b === 'jump') this.lockpick.attempt(); else if (b === 'grab' || b === 'fart') this.lockpick.close();   // (pad B = back)
+        if (b === 'fart') this.lockpick.close();   // (holding RMB / LMB / Space opens it: update(); pad B = back)
         this.input.clearPresses();   // the puzzle ate it (no punch / jump when it closes)
         return;
       }
@@ -1041,16 +1041,17 @@ export class Game {
    */
   private nanT = 0;
   private nanWatch() {
-    const bad = (b: { translation(): { x: number; y: number; z: number }; linvel(): { x: number; y: number; z: number } }) => { const t = b.translation(), v = b.linvel(); return !Number.isFinite(t.x + t.y + t.z + v.x + v.y + v.z); };
+    const bad = (b: { translation(): { x: number; y: number; z: number }; linvel(): { x: number; y: number; z: number }; rotation(): { x: number; y: number; z: number; w: number } }) => { const t = b.translation(), v = b.linvel(), r = b.rotation(); return !Number.isFinite(t.x + t.y + t.z + v.x + v.y + v.z + r.x + r.y + r.z + r.w); };
     for (const p of this.pigs) {
       if (p.out || !p.body.isEnabled()) continue;
-      if (bad(p.body) || bad(p.grip.hand)) {
+      if (bad(p.body) || bad(p.grip.hand) || p.parts.parts.some((q) => bad(q.body))) {   // (a ragdoll part too: a held pig's head / legs)
+        if (p.heldBy) p.heldBy.release(false);
         console.warn('physics: pig went NaN — reset');
         if (p.held) p.release(false);
         p.grip.detach(); p.seat = -1;
         p.body.setLinvel({ x: 0, y: 0, z: 0 }, true); p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         if (p.mode === 'ragdoll') p.getUp();
-        p.respawn();
+        p.respawn(); p.parts.snap();
       }
     }
     for (const pr of this.farm.props) {
@@ -1079,14 +1080,21 @@ export class Game {
    * logged (and counted in the crash heartbeat) and the next frame runs anyway.
    */
   frame = () => {
-    try { this.frameInner(); } catch (e) {
-      this.frameErrors++;
+    try { this.frameInner(); this.frameErrRun = 0; } catch (e) {
+      this.frameErrors++; this.frameErrRun++;
       if (this.frameErrors < 5) console.error('frame', e);
       try { localStorage.setItem('porkour.lastError', String((e as Error)?.stack ?? e).slice(0, 600)); } catch { /* */ }
+      // the same error frame after frame = a frozen screen (user, s29: "it just freezes when I lift another player"):
+      // let go of everything held (the likeliest culprit), put broken bodies back, and say it on screen once so a
+      // screenshot tells us where it came from
+      if (this.frameErrRun === 15) {
+        try { for (const p of this.pigs) { if (p.held) p.release(false); if (p.handle) p.letGo(); } if (G.net !== 'client') this.nanWatch(); } catch { /* */ }
+        try { this.hud.toast('⚠ ' + String((e as Error)?.message ?? e).slice(0, 90), 8); } catch { /* */ }
+      }
       requestAnimationFrame(this.frame);
     }
   };
-  private frameErrors = 0;
+  private frameErrors = 0; private frameErrRun = 0;
   private frameInner() {
     const nowMs = performance.now();
     // frame-rate limit (battery / hot laptops): skip screen refreshes until the next frame is due
@@ -1109,7 +1117,7 @@ export class Game {
     if (pick.isOpen) {
       const still = this.pickOn ? this.pickOn.state === 'locked' && this.pickOn.atLatch(this.local, 0.6) : this.farm.cage.canPick(this.local, 0.6);
       if (Math.hypot(this.input.moveX, this.input.moveY) > 0.5 || !still || this.menu.blocking) pick.close();
-      else pick.update(dt);
+      else { const h = this.input.held; pick.update(dt, h.has('grab') || h.has('attack') || h.has('jump')); }
     }
     let alpha: number;
     if (this.net instanceof NetClient) {

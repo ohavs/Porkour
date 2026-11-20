@@ -43,7 +43,7 @@ Dead by Daylight, Party Animals.
   back, retry, plus, check…; fat fill + ink outline) on every menu button; on / off = switches (`sw`), not words; graphics
   presets = 1–4 red gems (`bars()`; bars looked like Wi-Fi). **Pause menu (s24)** = a rail of big icon tiles (▶ resume ·
   ⚙ settings · 🎮 controls page · 👕 wardrobe · 🔧 admin · 🔗 invite · 🏠 main menu / leave / end game → "are you sure" ✓ / ✕)
-  + the page; `#menu` z 11 (over the lobby screen). Font test sent (bold / not bold / Title font) — waiting for the user's pick.
+  + the page; `#menu` z 11 (over the lobby screen). Fonts (user s29): no bold body font (it smeared) — `font-synthesis: none`, key caps in system bold.
 - **Game-like design (user 2026-11-18)**: "get rid of the basic look" — wood cards (brown gradient, ink border, gold inner
   line, drop shadow), chunky cream buttons that press down, icon tiles with one or two words (full sentence in the
   tooltip). Use it for every new screen.
@@ -204,7 +204,7 @@ Dead by Daylight, Party Animals.
 | `world/decor.ts` | Lantern posts (lamps), duck pond (washes mud), laundry line, scarecrow + crow, beehives + bees, picnic table, outhouse, mailbox, rocking chair, pumpkin patch, trough. |
 | `world/daynight.ts` | Clock → sky / sun / moon / stars / fog / light palette, lamps, day birds ↔ night crickets, rooster at dawn, dusk/dawn events. |
 | `world/animalGlb.ts`, `render/googly.ts` | Pack animals (Quaternius Ultimate Animated Animals: cow, dog = Shiba, wolf, 2 horses, donkey, alpaca): one vertex-coloured SkinnedMesh each, mixer clips, neck + upper legs = ragdoll parts, goofy (`GLB_ANIMALS`: head scale, eye size, recolours). Googly eyes for every animal = 2 InstancedMeshes (pupils slide with gravity / inertia). |
-| `game/markers.ts`, `game/lockpick.ts` | **Markers** (2026-11-13 s4): bobbing arrows over loot (gold, value ≥ 25, bigger ≥ 60) and over what an open prank is about (pink), seen through walls, one `Points` draw call; waypoints (where the thing you hold goes) live in `round.ts` (`targetFor` / `wherePos`). **Lock-pick**: the cage latch is a pin-tumbler timing puzzle on the player's screen (RMB at the latch; LMB / Space when the pin hits the gold band; a slip = loud clank + `G.noise`); result → input press `pickP` / `pickFailP`, host opens (`Cage.canPick` / `pickOpts`: inside = 6 pins, standing = wider band). |
+| `game/markers.ts`, `game/lockpick.ts` | (s29: the lock = HOLD RMB / LMB / Space at the latch, a bar fills ~0.75 s per pin; no puzzle) **Markers** (2026-11-13 s4): bobbing arrows over loot (gold, value ≥ 25, bigger ≥ 60) and over what an open prank is about (pink), seen through walls, one `Points` draw call; waypoints (where the thing you hold goes) live in `round.ts` (`targetFor` / `wherePos`). **Lock-pick**: the cage latch is a pin-tumbler timing puzzle on the player's screen (RMB at the latch; LMB / Space when the pin hits the gold band; a slip = loud clank + `G.noise`); result → input press `pickP` / `pickFailP`, host opens (`Cage.canPick` / `pickOpts`: inside = 6 pins, standing = wider band). |
 | `world/landmarks.ts`, `world/funProps.ts` | Big places (s4): hedge maze NE (colliders, trophy on a plinth), sunflower field N (soft cover 2.4 m), junkyard SW (Kenney car kit sedan / van / delivery / truck + tyre stacks), greenhouse W (glass = `SEE_THROUGH`, 8 flower pots). Procedural prank props: egg, gnome, Bob's undies, pie, flower pot. Breakables: `PropDef.fragile` (m/s) → `Prop.smash()` (hidden like banked, `smashed` event). |
 | `game/round.ts` | **M5 round**: stash pit in the sty (loot dropped there is banked: `Prop.value`, hidden, synced), quota (400 + 200 / extra player; solo = you only), 2 required + 2 bonus pranks from a pool, escape phase (all pigs to the stash), timer (`ADMIN.roundMins`, 10), 3 grills = busted, results (stars, coins → `SETTINGS.coins/xp`), `Game.restartRound()` resets the farm. Synced as an entity (`entities()` after the cage). |
 | `world/animalModels.ts`, `animals.ts` | Procedural round animals (hen, chick, cow, dog, cat, bunny, wolf, sheep, duck) + `AnimalVisual` (walk/hop/peck/wag/flap). `Critter` (wander, flee pigs & wolves, hens roost at night, dog barks at wolves → wakes Bob), `DecorAnimal`. **Alarm birds** (`BIRD`, s6): rooster (coop) crows at a pig holding / standing / sprinting ≤9 m (any ≤3.5 m) → `G.noise` 34 m at the pig, every 10 s; 3 turkeys (garden, ×1.4 scale, fan tail pops up with `excite`) gobble at a pig ≤6 m and charge 4.3 m/s for 6 s, peck = shove + you drop what you hold; fart scares them, asleep at night; Animalia turkey sounds (MIT). **Guard dog** (`dogBrain`, `DOG`): alert 2+ = off the leash (patrols the farm), sniffs pigs (11 m open / 4 m in a bush, rail fences don't block), stands next to the pig barking, `Farmer.tipOff` every 3 s, gives up after 12 s; a fart scares it off; a **bone** prop a pig moved / carries → fetch + chew 14 s (take it → it follows you). |
@@ -223,7 +223,7 @@ Dead by Daylight, Party Animals.
 WASD move · mouse look · Space jump · **RMB grab / drop** (user 2026-11-13) · **LMB click = hit** (punch standing, headbutt on four legs,
 weapon whack, bash with what you hold) · **LMB hold = wind up + throw** what you hold · Shift sprint · Q fart · C wallow (hold = play dead) ·
 E stand · F oink · **V first / third person** · H controls · M sound · P next graphics preset · Esc menu / **closes any open overlay** · `` ` `` admin.
-**LMB click with a snack = eat it / light a cigarette** (a click up to 0.45 s; highlighted prompt). **B hold = dance wheel**, **G = pass what you hold**, **Q while very drunk = throw up** (blasts you backward). **R hold = tip what you hold (pour)**, **mouse wheel = reach further / back** (s18). The crosshair aims your hooves (what you hold goes there; RMB takes what it's on: things, machine parts — cranks, levers, the bolt, the plug —, dispensers). RMB at a latch = open it (no grab there). Lobby: WASD on the screen, the pointer aims (grab / hit / throw toward it).
+**s29: LMB click with something held = throw it (hold = further); hold LMB on a crank = it turns; padlocks = hold RMB / LMB / Space.** **LMB click with a snack = eat it / light a cigarette** (a click up to 0.45 s; highlighted prompt). **B hold = dance wheel**, **G = pass what you hold**, **Q while very drunk = throw up** (blasts you backward). **R hold = tip what you hold (pour)**, **mouse wheel = reach further / back** (s18). The crosshair aims your hooves (what you hold goes there; RMB takes what it's on: things, machine parts — cranks, levers, the bolt, the plug —, dispensers). RMB at a latch = open it (no grab there). Lobby: WASD on the screen, the pointer aims (grab / hit / throw toward it).
 Gamepad: A jump, B fart, X wallow, Y stand, LT grab, RT hit / throw, LB/L3 sprint, RB tip (pour), R3 oink, D-pad up / down reach, D-pad ← dances (hold), D-pad → pass, View = first / third person, Start = menu. Menus: D-pad / left stick + A / B, LB / RB tabs (`padNav.ts`); lobby: D-pad = menu ring, Start = PLAY, View = dances. Input `Button`s
 `grab` (RMB) + `attack` (LMB) + `tilt` (R); `PigInput` has `attack*` + `pickP` / `pickFailP` (12 press bits on the wire) + the aim / reach bytes.
 
@@ -308,7 +308,28 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    throw a player to the lobby without the room** (the page's own socket close counted as "disconnected" → back to the
    lobby 2.5 s later, overtaking the reload; old bug), ✅ **duplicated tab** can't steal / fight over a seat,
    ✅ **shaders precompiled at load** (no first-sight hitches), ✅ 4-browser test of 18 cases + a no-duplicates check after each.
-   **Next**: the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
+   Session 29 (user tested online, at 93 % of his week: "fix the freeze first, make the controls simple"): ✅ freeze
+   guards (NaN-proof controls, NaN watch also on ragdoll parts / rotations, a frame error 15× in a row = let go of
+   everything + an on-screen ⚠ line; the freeze itself did NOT reproduce here), ✅ **prompt pills = icon + one short
+   word** (`pill()` in hud.ts, `WORD` map, `pw.*` strings; "Hold: throw"), prompts moved to the bottom (above the
+   rings), key caps + ring labels in system bold, `font-synthesis: none` (the body font has no bold → fake bold smeared:
+   the font pick = not bold), ✅ **LMB click = throw** what you hold (weapon: click = whack), ✅ **hold LMB on a crank =
+   it turns by itself** (`Handle.auto`; no circling the mouse), ✅ arms / neck stretch by themselves to reach
+   (`HANDS.ext` = 1 with empty hooves; the wheel is optional, out of the help card), ✅ **padlocks = hold RMB / LMB /
+   Space** (the pin puzzle is gone), ✅ another cigarette from the pack while smoking, ✅ G pass shown only when it
+   works, ✅ weed: watered plants show a clock + seconds (not the can again), ✅ **round end = everyone back in the sty
+   for 5 s** (🏁 countdown, walk out = keep going for bonus), ✅ Bob can't re-grab a pig for 4 s after it gets free,
+   ✅ a player in the shop / menu when the host starts is pulled into the round.
+   **Later (user s29, "keep for later")**: guided steps everywhere (the game shows the next step of a mission as you
+   go — "I watered it, now what?"; things you pick up must say what they do), the grinder turnable any way, food
+   boosts = a visible temporary "rush mode" on screen (fast run, strong fart…), **loot pockets** (pick up and keep
+   cigarettes and other things), snow sleds you ride (a fart = boost), and generally interaction with many more things
+   ("one of the main problems").
+   **Next**: **move the online server to Render Frankfurt** (user agreed 2026-11-20, after the s28 game night — not
+   before it: free plan, ~60 ms from Israel instead of ~200 from Oregon; region is set when a service is created → new
+   service `region: frankfurt` in `render.yaml`, new address in `BUILT_IN_SERVER` (config.ts), env vars copied, old one
+   deleted; Claude prepares the code, the user clicks in Render; later: Cloudflare TURN so fewer players go ☁ relay),
+   the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 
 ## Status / next step
@@ -565,6 +586,11 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 29 (new)**: the **freeze** — did it happen again? If yes, is there a ⚠ line on screen (screenshot it)?
+  · prompts now = icon + a short word at the bottom (Drop / Throw / Hold: throw / Pour / Harvest…) — clear now?
+  · LMB click throws, hold LMB turns a crank, the cage lock = hold RMB (or Space) — easier? · end of round: everyone
+  in the sty 5 s (🏁 5…) — right? · Bob lets you go 4 s after you break free — enough? · the key letters (RMB, G…)
+  readable now? · several cigarettes from one pack now?
 - **Session 28 (new)**: **tonight's 4-player game** — did everyone get in? Anyone with ☁ instead of ⚡ next to their
   name in the room (= through the server, laggier)? Did anyone drop and come back by itself (📡)? Lag / stutters?
 - **Session 27 (new)**: **Bob's lunch** (~11:30, once a round; farm 4 = dinner): he cooks at the stove with his back
@@ -583,8 +609,7 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
   Admin tiles are all the same rectangles now — OK? · I found the farmhouses on all farms are closed models (the
   furniture "inside" them was behind walls nobody could reach): want real walk-in farmhouses? (I'd build them from
   modular pieces: kitchen, fireplace, Bob's bedroom — he could sleep in his bed where pigs can sneak in.)
-- **Session 24 (new)**: **fonts** — which look for the buttons: as now (bold), not bold, or the Title font (the 3 pictures)?
-  · The new pause menu (Esc): icon tiles on the left, 🏠 main menu asks first — clear? · Icons everywhere (settings rows,
+- **Session 24 (new)**: The new pause menu (Esc): icon tiles on the left, 🏠 main menu asks first — clear? · Icons everywhere (settings rows,
   switches, red gems for graphics, controls page, lobby tabs, online buttons) — better? anything still unclear?
   · Record player in houses / barns (RMB): Bob comes and dances 8 s (he can't see) — fun? long enough?
 - **Session 23 (new)**: **controller** (Xbox / PlayStation pad): play, menus (D-pad + A / B, LB / RB tabs), lobby

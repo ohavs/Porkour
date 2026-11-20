@@ -78,6 +78,8 @@ export interface Handle {
   ready(p: Pig): boolean;
   /** Host: the hoof wants to be at `goal`: the handle moves along its path toward it (rate-limited). */
   drive(goal: THREE.Vector3, p: Pig, dt: number): void;
+  /** Host: LMB held on it = it works by itself (a crank turns steadily — user: no circling the mouse). */
+  auto?(p: Pig, dt: number): void;
 }
 export interface Dispenser {
   at: THREE.Vector3; r: number; icon: IconId;
@@ -135,7 +137,9 @@ class Hands {
 
   // ------------------------------------------------------------------ reach
   /** How far the wheel stretches this pig's arms / neck (0..1). */
-  ext(p: Pig) { return clamp(p.input.reach ?? 0, 0, 1); }
+  /** How far the arms / neck stretch (0 … 1): reaching for something (empty hooves, a machine part) = all the way, by
+   *  itself (user: the mouse wheel did nothing he could see); holding a thing: the wheel (default: normal). */
+  ext(p: Pig) { return p.held ? clamp(p.input.reach ?? 0, 0, 1) : 1; }
   /** Reach centre (world) of a pig now; returns its radius (with the wheel's stretch). */
   reach(p: Pig, out: THREE.Vector3) {
     const R = p.standing ? REACH.two : REACH.four;
@@ -501,6 +505,7 @@ export function crank(o: { c: THREE.Vector3; axis: THREE.Vector3; r: number; ico
       this.v = wrapAngle(this.v + d);
       if (Math.abs(d) > 1e-4) o.turn?.(d, p);
     },
+    auto(p, dt) { const d = Math.min(o.max ?? 9, 4) * dt; this.v = wrapAngle(this.v + d); o.turn?.(d, p); },
   });
 }
 /** A lever / a door: turns about `axis` through `pivot`; `arm` = the knob at v = 0; v stays in [min, max]. */

@@ -111,6 +111,8 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   piggyBank: { props: ['piggyBank'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
+/** Seconds all pigs stand in the sty before the round ends (walk out = cancel, keep playing for the bonus). */
+const FINISH = 5;
 const PHASES: Phase[] = ['play', 'escape', 'end'];
 
 /**
@@ -195,6 +197,8 @@ export class Round {
   given: string[] = [];
   private paid = -1; private usedNo = -1;
   private lastMin = false;
+  /** Escape: seconds everyone has stood in the sty (host) / the countdown shown (every browser; 0 = none). */
+  private finishT = 0; private finishN = 0; private shownN = 0;
   private panel: HTMLElement; private mark: HTMLElement; private mark2: HTMLElement; private res: HTMLElement;
   private ring: THREE.Mesh; private coin: THREE.Object3D;
   private panelKey = ''; private resNo = -1;
@@ -233,7 +237,7 @@ export class Round {
   start() {
     this.couchT = 0; this.napT = 0; this.danceT = 0; this.highT = 0; this.lvl.clear();
     this.no++;
-    this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false;
+    this.phase = 'play'; this.elapsed = 0; this.banked = 0; this.won = false; this.reason = ''; this.lastMin = false; this.finishT = 0; this.finishN = 0;
     this.secs = ADMIN.roundMins * 60;
     this.events.clear();
     this.setMod(ADMIN.mod !== 'random' && MOD_IDS.includes(ADMIN.mod as ModId) ? ADMIN.mod as ModId : rollMod(this.game.farm.noMods));
@@ -415,8 +419,13 @@ export class Round {
     const reqDone = this.missions.every((m) => !m.req || m.done);
     if (this.phase === 'play' && reqDone) { this.phase = 'escape'; G.events.push({ type: 'roundEscape' }); }
     if (this.phase === 'escape') {
+      // everyone back in the sty = a 5 s countdown, then the round ends (user s29: it ended at once — you're standing
+      // in the sty when you bank the last loot — "let them choose": walk out = keep going for the bonus missions)
       const ready = pigs.filter((p) => !p.out);
-      if (ready.length && ready.every((p) => this.inStash(p.pos, 0.4) && !p.heldBy && !p.cage)) return this.end(true, 'win');
+      const all = ready.length > 0 && ready.every((p) => (this.inStash(p.pos, 2.5) || Math.hypot(p.pos.x - p.spawn.x, p.pos.z - p.spawn.z) < 2.5) && !p.heldBy && !p.cage);   // (back where they started: the sty)
+      this.finishT = all ? this.finishT + dt : 0;
+      this.finishN = this.finishT > 0 ? Math.max(1, Math.ceil(FINISH - this.finishT)) : 0;
+      if (this.finishT >= FINISH) return this.end(true, 'win');
     }
     if (G.grills >= 3) return this.end(false, 'grill');
     if (this.timeLeft <= 0) return this.end(reqDone, 'time');
@@ -530,7 +539,7 @@ export class Round {
   netState(n: number[], s: string[]) {
     let bits = 0; this.missions.forEach((m, i) => { if (m.done) bits |= 1 << i; });
     n.push(PHASES.indexOf(this.phase), Math.round(this.elapsed * 10) / 10, this.secs, this.banked, this.quota, this.won ? 1 : 0, bits, this.no, ...this.missions.map((m) => m.n));
-    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason, this.mod, this.given.join(','));
+    s.push(this.missions.map((m) => m.id + (m.req ? '!' : '')).join(','), this.reason, this.mod, this.given.join(','), String(this.finishN));
   }
   netApply(n: number[], s: string[]) {
     if (n.length < 8) return;
@@ -542,6 +551,7 @@ export class Round {
     } else this.missions.forEach((m, i) => { m.done = (n[6] & (1 << i)) !== 0; });
     this.missions.forEach((m, i) => { m.n = n[8 + i] ?? m.n; });
     if (s[1] !== undefined) this.reason = s[1];
+    if (s[4] !== undefined) this.finishN = +s[4] || 0;
     if (s[2] !== undefined) {
       const m = (MOD_IDS.includes(s[2] as ModId) ? s[2] : 'none') as ModId;
       if (m !== this.mod && m !== 'none') G.events.push({ type: 'mod', text: m });   // set outside the host's steps: not in its recorded events
@@ -818,7 +828,8 @@ export class Round {
     }).join('');
     const pct = Math.min(100, (this.banked / Math.max(1, this.quota)) * 100);
     this.panel.innerHTML = `<div class="mh"><span class="tm${left < 60 ? ' low' : ''}">⏱ ${mm}:${ss}</span><span><i class="coin"></i>${this.banked} / ${this.quota}</span></div>` +
-      `<div class="bar"><div style="width:${pct}%"></div></div>${this.modLine()}${rows}` + (this.phase === 'escape' ? `<div class="goal">${t('m.escape')}</div>` : '');
+      `<div class="bar"><div style="width:${pct}%"></div></div>${this.modLine()}${rows}` + (this.phase === 'escape' ? `<div class="goal">${t('m.escape')}${this.finishN ? ` 🏁 ${this.finishN}` : this.missions.some((m) => !m.req && !m.done) ? ` · ★ ${t('m.bonusLeft')}` : ''}</div>` : '');
+    if (this.finishN !== this.shownN) { this.shownN = this.finishN; if (this.finishN) this.game.hud.toast(`🏁 ${this.finishN}`, 0.9); }
   }
 
   /** Waypoints: where the thing you hold goes (a prank's place, the stash), Bob's porch when you're muddy for that prank. */

@@ -28,6 +28,8 @@ import { MEAL, PH, type Lunch } from '../world/lunch';
 /** Tuning. */
 export const BOB = {
   mass: 95, walk: 2.5, run: 5.7, carry: 3.6, mow: 2.2, accel: 22,
+  /** After a pig wriggles / is knocked free of his hands: seconds he can't grab that pig again (a head start). */
+  freeGrace: 4,
   grabReach: 1.9, windup: 0.42, lunge: 0.3, lungeSpeed: 7, catchR: 1.15, recover: 0.85,
   // grip: lots of mashing, progress drains fast, and he shakes the pig every few seconds
   escapeNeed: 24, escapeNeedMuddy: 14, shakeEvery: 2.2, shakeLoss: 4,
@@ -2077,7 +2079,7 @@ export class Farmer {
       return 0;
     }
     if (d < 3.2 && this.now - this.lastSeenT < 0.2 && this.danceNear(t, true)) return 0;
-    if (d < (this.level >= 2 ? ALERT.reach : BOB.grabReach) && dy < 1.7 && dy > -0.8) {
+    if (d < (this.level >= 2 ? ALERT.reach : BOB.grabReach) && dy < 1.7 && dy > -0.8 && this.now > (this.freeUntil.get(t) ?? 0)) {
       this.face(t.pos, dt, 16);
       // sometimes he doesn't bother grabbing: a big humiliating slap instead
       if (this.forceSlap || Math.random() < (G.mod === 'grumpy' ? MOD.grumpy.slap : BOB.slapChance)) { this.forceSlap = false; this.go('slapWind'); this.voice('grr', 0.7); }
@@ -2174,6 +2176,7 @@ export class Farmer {
     this.go('carry'); this.path = [];
   }
 
+  private freeUntil = new Map<unknown, number>();
   /** Pig wriggled free / he got hit: drop it. */
   release(_thrown: boolean) {
     const p = this.carrying; if (!p) return;
@@ -2185,6 +2188,7 @@ export class Farmer {
     p.body.setLinvel({ x: f.x * 3 + (Math.random() - 0.5) * 3, y: 5, z: f.z * 3 + (Math.random() - 0.5) * 3 }, true);
     p.startRagdoll(null, false);
     G.events.push({ type: 'escaped', who: p });
+    this.freeUntil.set(p, this.now + BOB.freeGrace);   // (user s29: he grabbed you straight back the moment you got free)
     if (this.state === 'carry') {
       this.raise('escaped');
       this.voice('oops'); this.sus.set(p, 1); this.target = p; this.lastSeenT = this.now; this.lastSeen.copy(p.pos);

@@ -405,6 +405,12 @@ export class Pig implements Holdable {
     this.stepT += dt;
     if (this.thrown && this.now > this.thrown.until) { if (this.thrown.h !== this.held) ignorePair(this.body, this.thrown.h.body, false); this.thrown = null; }
     const inp = this.input;
+    // a broken number in the controls (a NaN / infinite yaw, move or aim from any machine) would spread into the pig's
+    // facing, its grip hand and then the whole physics world = the game freezes: never let one in
+    if (!Number.isFinite(inp.yaw)) inp.yaw = Number.isFinite(this.yaw) ? this.yaw : 0;
+    if (!Number.isFinite(inp.pitch)) inp.pitch = 0;
+    if (!Number.isFinite(inp.mx) || !Number.isFinite(inp.mz)) { inp.mx = 0; inp.mz = 0; }
+    if (!Number.isFinite(this.yaw)) this.yaw = 0;
     let p = this.body.translation();
     if (!Number.isFinite(p.x + p.y + p.z)) {   // (a physics blow-up: never leave a pig — and the camera — at NaN)
       if (this.mode === 'ragdoll') this.getUp();
@@ -1037,13 +1043,14 @@ export class Pig implements Holdable {
       const quick = this.now - this.chargeStart < this.clickT(), c = this.charge();
       this.chargeStart = -1;
       const snack = quick ? snackOf(this.held) : null;
-      if (snack && !(snack.def.smokes && this.smoking)) this.useSnack(snack);
+      if (snack) this.useSnack(snack);   // (smoking already: a fresh one from the pack — user s29: only one came out)
       else if (quick && G.chain && (this.held as Prop).def?.item && G.chain.useItem(this, this.held as Prop)) { /* a chain item did its thing */ }
       else if (quick && this.buzz > 0.2 && (this.held as Prop).def?.food) { this.eatAt = this.now; this.eatProp = this.held as Prop; G.audio.play('munch', { pos: this.pos, vol: 0.9 }); }   // the munchies
-      else if (quick) this.startHit();
+      else if (quick && weaponOf(this.held)) this.startHit();   // a weapon: click = whack (hold = throw it)
+      // a click = a short throw, hold = further (user: "LMB throws" — the old click-to-bash was a mystery);
       // light things: a real swing (hand flies forward, the thing follows), then let go; heavy ones: a shove
-      else if (this.held.mass > this.liftMax || pushOf(this.held)) this.throwHeld(c);
-      else { this.swingT = 0; this.swingC = c; }
+      else if (this.held.mass > this.liftMax || pushOf(this.held)) this.throwHeld(quick ? 0.25 : c);
+      else { this.swingT = 0; this.swingC = quick ? 0.3 : c; }
     }
     if (this.swingT >= 0) {
       if (!this.held) this.swingT = -1;
@@ -1249,6 +1256,7 @@ export class Pig implements Holdable {
   private handleStep(dt: number) {
     const hd = this.handle; if (!hd) return;
     if (this.mode !== 'normal' || hd.heldBy !== this) { this.letGo(); return; }
+    if (hd.auto && this.input.attack) { hd.auto(this, dt); this.handleFar = 0; return; }   // LMB held: a crank turns by itself
     hd.drive(HANDS.aimGoal(this, v1, true, 0.3), this, dt);   // on a machine part: lean a little further
     const rr = HANDS.reach(this, v2), kd = hd.knob(v3).distanceTo(v2);
     this.handleFar = kd > rr + 0.5 ? this.handleFar + dt : 0;

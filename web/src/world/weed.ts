@@ -821,13 +821,20 @@ export class Weed extends Chain {
     }
     return false;
   }
+  /** Watered plants still growing (none ripe yet): seconds until the first is ripe, else 0 (user s29: "I watered it —
+   *  what now?": the step shows a clock instead of the watering can again). */
+  private growLeft() {
+    let best = 0;
+    for (const x of this.plants) if (x.g > 0 && x.g < 1 && x.w > 0.05 && x.w <= WEED.drown) { const s = (1 - x.g) / (WEED.grow * (x.w > 0.35 ? 1 : 0.5)); if (!best || s < best) best = s; }
+    return best;
+  }
   /** How to do the next step (mission list icons). */
   stepIcons(id: string, me: Pig): string {
     const I = (...k: (IconId | string)[]) => k.map((x) => (x in IC ? IC[x as IconId] : kc(x))).join('');
     const held = this.item(me.held), has = (item: string, full = false) => this.props.some((p) => !p.banked && p.def.item === item && (!full || p.left > 0.05));
     // (buds: into the wheelbarrow, push it to the intake by the grinder, R = lift the handles and dump them in)
     const toWeed = () => has('weed', true) ? I('rmb', 'leaf') : this.buds > 0 ? I('rmb', 'gear', 'circle') : held === 'bud' ? I('aim', 'gear')
-      : this.cargo > 0 ? (held === 'barrow' ? (me.standing ? I('aim', 'gear', 'R', 'pour') : I('E', 'aim', 'gear', 'R', 'pour')) : I('rmb', 'cart', 'aim', 'gear')) : has('bud') ? I('rmb', 'leaf', 'aim', 'cart') : this.plants.some((x) => x.g >= 1) ? I('sickle', 'lmb') : I('R', 'can', 'pour');
+      : this.cargo > 0 ? (held === 'barrow' ? (me.standing ? I('aim', 'gear', 'R', 'pour') : I('E', 'aim', 'gear', 'R', 'pour')) : I('rmb', 'cart', 'aim', 'gear')) : has('bud') ? I('rmb', 'leaf', 'aim', 'cart') : this.plants.some((x) => x.g >= 1) ? I('rmb', 'sickle', 'lmb') : this.growLeft() > 0 ? I('clock') + `<b>${Math.ceil(this.growLeft())}s</b>` : I('R', 'can', 'pour');
     switch (id) {
       case 'rollJoint': {
         if (held === 'joint') { const i = this.joints.indexOf(me.held as Prop); return !this.sealed[i] ? I('lmb', 'tongue') : this.lit[i] < G.time ? I('lighter', 'lmb', 'aim', 'joint') : I('lmb', 'joint'); }
