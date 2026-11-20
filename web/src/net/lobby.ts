@@ -30,6 +30,8 @@ export class Lobby {
   private pendingCode = '';
   isOpen = false;
 
+  /** This page is reloading / leaving (onto the room's farm, back into the room): no other redirect may overtake it. */
+  private navigating = false;
   /** In a room that hasn't started: the party plays on the lobby stage (the game is already online). */
   private preGame = false;
   get inRoom() { return !!online.room && this.preGame && !this.inGame; }
@@ -38,8 +40,8 @@ export class Lobby {
     this.el = document.getElementById('lobby')!;
     online.on('*', (m) => this.onMsg(m));
     // leaving this page (a reload onto the room's farm): out of the room first, so the server doesn't seat a clone
-    onBeforeReload(() => online.bye());
-    addEventListener('pagehide', () => online.bye());
+    onBeforeReload(() => { this.navigating = true; online.bye(); });
+    addEventListener('pagehide', () => { this.navigating = true; online.bye(); });
     onProfile(() => this.onProfileChange());
     onLang(() => { if (this.isOpen) this.render(); });
   }
@@ -160,6 +162,7 @@ export class Lobby {
         setTimeout(() => { this.err = ''; if (this.view === 'browse') this.render(); }, 4000);
         break;
       case 'closed': case 'kicked': case 'disconnected': case 'replaced':
+        if (this.navigating) break;   // this page is already on its way somewhere (a reload into the room): don't redirect it
         if (this.preGame && !this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : m.op === 'replaced' ? 'net.replaced' : 'net.closed'), 3); setTimeout(() => { location.href = location.pathname; }, 1500); break; }
         if (this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : m.op === 'replaced' ? 'net.replaced' : 'net.closed'), 3); setTimeout(() => backToLobby(), 2500); }
         else if (m.op === 'disconnected') { this.view = 'error'; this.err = 'unreachable'; if (this.isOpen) this.render(); }

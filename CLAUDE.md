@@ -304,7 +304,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 28 (user: "polish, performance, 4 of us online tonight — cover every case"): ✅ **reconnect** (seats held
    40 s, auto-rejoin, the host's blip, server restart → room comes back, host F5 = regroup), ✅ **lag guards** (stale
    inputs, send backpressure), ✅ found + fixed: **two regroups / farm switches within 45 s closed the room** (an
-   earlier switch's timer), ✅ **shaders precompiled at load** (no first-sight hitches), ✅ 4-browser test of 16 cases.
+   earlier switch's timer), ✅ found + fixed: **a slow reload into the room (end game / farm switch / host F5) could
+   throw a player to the lobby without the room** (the page's own socket close counted as "disconnected" → back to the
+   lobby 2.5 s later, overtaking the reload; old bug), ✅ **duplicated tab** can't steal / fight over a seat,
+   ✅ **shaders precompiled at load** (no first-sight hitches), ✅ 4-browser test of 18 cases + a no-duplicates check after each.
    **Next**: the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 

@@ -111,7 +111,8 @@ export class Online {
       ws.onclose = (ev) => {
         fail('unreachable');
         if (this.ws !== ws) return;   // an older socket
-        if (ev.code === 4001) this.leaving = true;   // (our seat was taken by this same tab open twice: no reconnect)
+        // our seat was taken by this same tab open twice: no reconnect, back to the lobby
+        if (ev.code === 4001 && this.room) { this.leaving = true; this.ws = null; this.me = null; clearInterval(this.pingTimer); this.dropAll(); this.emit('replaced', { op: 'replaced' }); return; }
         this.ws = null; this.me = null;
         clearInterval(this.pingTimer);
         // in a room and we didn't say goodbye: keep the seat, the game and the direct connections — reconnect
@@ -126,7 +127,9 @@ export class Online {
     const wasIn = !!this.room;
     this.reconnecting = false; clearTimeout(this.retryTimer);
     this.room = null; this.peers.clear(); this.closeAllRtc();
-    this.emit('disconnected', { op: 'disconnected', wasIn });
+    // (a close we asked for — this page reloading onto the room's farm / back into the room — is not "disconnected":
+    // that used to send a slow-reloading page to the lobby without its room, 2.5 s later)
+    if (!this.leaving) this.emit('disconnected', { op: 'disconnected', wasIn });
   }
 
   /** The link to the server dropped mid-room: try again (the server holds the seat ~40 s; the host brings the room
