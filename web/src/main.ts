@@ -61,6 +61,19 @@ const bar = document.querySelector('#bar > div') as HTMLElement;
 const go = document.getElementById('go')!;
 const title = document.getElementById('title')!;
 
+/**
+ * Compile every material's shaders now, behind the loading screen, instead of mid-game the first time each kind of
+ * thing comes into view (each one a hitch of 50–500 ms on Windows — "it got stuck for a moment"). The farm is far from
+ * the lobby stage, so none of it is drawn before PLAY. Uses the GPU's parallel compile where it has one.
+ */
+async function precompile(gfx: Gfx) {
+  const q = new URLSearchParams(location.search);
+  if (q.get('draw') === '0' || q.get('pre') === '0') return;   // (tests: no drawing / compare without it)
+  const t0 = performance.now(), n0 = gfx.renderer.info.programs?.length ?? 0;
+  try { await Promise.race([gfx.renderer.compileAsync(gfx.scene, gfx.camera), new Promise((r) => setTimeout(r, 15000))]); } catch (e) { console.warn('precompile', e); }
+  (window as any).__precompile = { ms: Math.round(performance.now() - t0), programs: (gfx.renderer.info.programs?.length ?? 0) - n0 };
+}
+
 async function boot() {
   const audio = new Audio();
   audio.setMuted(SETTINGS.muted);
@@ -80,6 +93,7 @@ async function boot() {
   const input = new Input(gfx.renderer.domElement);
   const game = new Game(gfx, audio, input);
   game.build();
+  await precompile(gfx);
   watchHealth(game, gfx);
   (window as any).__game = game;
   requestAnimationFrame(game.frame);

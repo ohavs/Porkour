@@ -29,6 +29,8 @@ export interface NetEnt {
 
 const T = { SNAP: 1, INPUT: 2, KEYREQ: 3, PING: 5, PONG: 6 } as const;
 export const SNAP_EVERY = 2;          // fixed steps per snapshot (60 Hz sim → 30 Hz snapshots)
+/** Bytes waiting to go out to a player past which its snapshots are skipped (it's sent a full one once that drains). */
+const BACKLOG = 96 * 1024;
 const HELD = ['jump', 'sprint', 'fart', 'stand', 'wallow', 'grab', 'attack', 'tilt'] as const;
 /** The crosshair offset travels as 3 signed bytes of 2 cm (±2.54 m). */
 const AIM = 50;
@@ -47,7 +49,7 @@ const maskWords = (n: number) => new Array<number>((n + 31) >> 5).fill(0);
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), qq = new THREE.Quaternion();
 
 // ====================================================================== host
-interface Remote { inp: PigInput; presses: number; seq: number; pose: RemotePose | null }
+interface Remote { inp: PigInput; presses: number; seq: number; pose: RemotePose | null; at: number }
 
 export class NetHost {
   private ents: NetEnt[];
@@ -59,6 +61,8 @@ export class NetHost {
   private evStart = 0;
   private w = new Writer(); private kw = new Writer();
   lastSize = 0;
+  /** Stats (admin / tests): snapshots sent, bytes queued, snapshots skipped for a backed-up peer, last keyframe size. */
+  sent = 0; bytes = 0; skipped = 0; keySize = 0;
 
   constructor(private game: Game, private on: Online) {
     this.ents = entities(game);
@@ -75,6 +79,8 @@ export class NetHost {
     for (const [id, r] of this.remote) {
       if (this.on.peers.get(id)?.slot !== slot) continue;
       const inp = { ...r.inp };
+      // their controls stopped coming (a connection blip): the pig stands still instead of running on with the last keys
+      if (performance.now() - r.at > 500) { inp.mx = inp.mz = 0; HELD.forEach((k) => (inp[k] = false)); }
       PRESS.forEach((k, i) => (inp[k] = !!(r.presses & (1 << i))));
       inp.emote = (r.presses >> 12) & 7; inp.passP = !!(r.presses & (1 << 15));   // (the press word's top bits: an emote, the couch's pass)
       r.presses = 0;
@@ -97,9 +103,9 @@ export class NetHost {
     if (type !== T.INPUT) return;
     const seq = r.u32();
     let rm = this.remote.get(from);
-    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1, pose: null }; this.remote.set(from, rm); }
+    if (!rm) { rm = { inp: emptyInput(), presses: 0, seq: -1, pose: null, at: 0 }; this.remote.set(from, rm); }
     if (seq <= rm.seq) return;
-    rm.seq = seq;
+    rm.seq = seq; rm.at = performance.now();
     const inp = rm.inp;
     inp.mx = r.i8() / 127; inp.mz = r.i8() / 127; inp.yaw = r.f32(); inp.pitch = r.f32();
     const held = r.u8r(); HELD.forEach((k, i) => (inp[k] = !!(held & (1 << i))));
@@ -170,12 +176,19 @@ export class NetHost {
     w.str(ev); if (wantKey) kw.str(ev);
     this.clearRec();
     const delta = w.bytes(), key = wantKey ? kw.bytes() : null;
-    this.lastSize = delta.length;
-    for (const id of this.on.peers.keys()) {
+    this.lastSize = delta.length; if (key) this.keySize = key.length;
+    const behind: number[] = [];
+    for (const [id, peer] of this.on.peers) {
       if (id === this.on.myId) continue;
+      if (peer.away && !this.on.direct(id)) { behind.push(id); continue; }   // (its connection dropped: a full snapshot once it's back)
+      // their link can't keep up (a slow upload here, a slow connection there): skip rather than queue seconds of lag;
+      // they get a full snapshot as soon as it drains
+      if (this.on.backlog(id) > BACKLOG) { behind.push(id); this.skipped++; continue; }
       if (this.needKey.has(id) && key) this.on.sendData(id, key); else this.on.sendData(id, delta);
     }
     this.needKey.clear();
+    for (const id of behind) this.needKey.add(id);
+    this.sent++; this.bytes += delta.length * (this.on.peers.size - 1);
   }
   private clearRec() { this.rec.sounds.length = 0; this.rec.fx.length = 0; this.rec.ev.length = 0; this.rec.shakes.length = 0; }
 
@@ -230,6 +243,8 @@ export class NetClient {
   started = false;
   onFirstFrame?: () => void;
   private pingT = 0;
+  /** When the last snapshot arrived (performance.now): nothing for a while = the host's link is down. */
+  lastRecv = performance.now();
 
   /** Interpolated snapshot position of my own pig (to carry what I hold along with my predicted pig). */
   ownSnap = new THREE.Vector3();
@@ -256,6 +271,7 @@ export class NetClient {
     const type = r.u8r();
     if (type === T.PONG) { this.rtt = performance.now() - r.f64(); return; }
     if (type !== T.SNAP) return;
+    this.lastRecv = performance.now();
     const seq = r.u32(), key = r.u8r() === 1;
     const prev = this.last;
     if (!key) {

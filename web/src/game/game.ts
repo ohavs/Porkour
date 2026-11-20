@@ -159,6 +159,7 @@ export class Game {
   private intRoom = -1;
   /** Online: host simulation + snapshots, or player view of the host's world. */
   net: NetHost | NetClient | null = null;
+  private hostQuiet = false;
   private bgWorker: Worker | null = null;
   /** Online player: my own pig's prediction clock and presses that haven't had a step yet. */
   private pacc = 0; private pendP: PigInput | null = null;
@@ -970,8 +971,15 @@ export class Game {
         pig.label = peer.name;
         if (pig !== this.local) { const o = parseOutfit(peer.outfit); if (o) pig.visual.setOutfit(o); pig.gadget = gadgetOfMsg(peer.outfit); }
       }
-      if (G.net === 'host') pig.setPresent(!!peer || pig === this.local);
+      if (G.net === 'host') pig.setPresent(!!peer || pig === this.local || (this.seatHold.get(i) ?? 0) > performance.now());
     });
+  }
+  /** Host: after the server restarted, the seats of players still on their way back keep their pigs a while
+   *  (instead of the pig vanishing and respawning in the sty). */
+  private seatHold = new Map<number, number>();
+  holdSeats(slots: number[], secs: number) {
+    for (const s of slots) this.seatHold.set(s, performance.now() + secs * 1000);
+    if (slots.length) setTimeout(() => this.syncPeers(), secs * 1000 + 100);
   }
   peerLeft(id: number) { if (this.net instanceof NetHost) this.net.dropPeer(id); this.syncPeers(); }
 
@@ -1113,6 +1121,9 @@ export class Game {
         if (this.scripted) { for (const k of PRESSES) if (this.scripted[k]) this.scripted[k] = false; this.scripted.emote = 0; this.scripted.passP = false; }   // test hook: a press is one frame
       }
       alpha = Math.max(0, this.net.frame(dt));
+      // nothing from the host for a while (its link is down / reconnecting): say so instead of a silent freeze
+      if (this.net.started && performance.now() - this.net.lastRecv > 2500 && !online.reconnecting) { if (!this.hostQuiet) { this.hostQuiet = true; this.hud.toast(t('net.noHost'), 30); } }
+      else if (this.hostQuiet && performance.now() - this.net.lastRecv < 500) { this.hostQuiet = false; this.hud.toast(t('net.reconnected'), 1.4); }
       this.carryAlong();
       this.farm.cage.animate(dt);
     } else {

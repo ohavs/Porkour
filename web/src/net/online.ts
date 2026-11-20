@@ -3,7 +3,7 @@ import { ICE_SERVERS, serverUrl } from './config';
 import { profile } from './auth';
 import { ADMIN } from '../game/ctx';
 
-export interface Peer { id: number; uid: string; name: string; picture: string; google: boolean; slot: number; outfit: string }
+export interface Peer { id: number; uid: string; name: string; picture: string; google: boolean; slot: number; outfit: string; away?: boolean }
 export interface RoomInfo { code: string; name: string; public: boolean; state: 'lobby' | 'playing'; players: number; max: number; host: string; farm: string; save?: string }
 
 type Handler = (m: any) => void;
@@ -15,10 +15,23 @@ type Handler = (m: any) => void;
 export function tabId() {
   try {
     let id = sessionStorage.getItem('porkour.tab');
-    if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('porkour.tab', id); }
+    if (!id) { id = newTabId(); sessionStorage.setItem('porkour.tab', id); }
     return id;
   } catch { return ''; }
 }
+const newTabId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+// "Duplicate tab" copies sessionStorage, id included: two live tabs with one id would keep taking each other's seat.
+// Each tab asks on load; a tab already using that id answers, and the newcomer picks a fresh one.
+try {
+  const bc = new BroadcastChannel('porkour.tab');
+  bc.onmessage = (e) => {
+    const id = sessionStorage.getItem('porkour.tab');
+    if (e.data?.q && e.data.q === id) bc.postMessage({ taken: id });
+    else if (e.data?.taken && e.data.taken === id && !online.room) sessionStorage.setItem('porkour.tab', newTabId());
+  };
+  const mine = sessionStorage.getItem('porkour.tab');
+  if (mine) bc.postMessage({ q: mine });
+} catch { /* no BroadcastChannel: fine */ }
 
 /**
  * Connection to the Porkour server: identity, rooms, chat, and game data.
@@ -43,6 +56,12 @@ export class Online {
   onDirect?: (peer: number, open: boolean) => void;
   stats = { up: 0, down: 0, upRate: 0, downRate: 0, t: performance.now() };
   private pingTimer = 0;
+  private outfit = '';
+  /** Said goodbye on purpose (leave / reload): a close is not a drop. */
+  private leaving = false;
+  /** The server link dropped while in a room and we're getting it back. */
+  reconnecting = false;
+  private retryTimer = 0; private retryUntil = 0; private retryN = 0;
 
   get isHost() { return !!this.room && this.myId === this.hostId; }
   get connected() { return this.ws?.readyState === WebSocket.OPEN; }
@@ -54,19 +73,29 @@ export class Online {
 
   /** Connect + say hello. Resolves with the welcome (or rejects: no server / unreachable / old version). */
   connect(outfit: string): Promise<void> {
-    const url = serverUrl();
-    if (!url) return Promise.reject(new Error('noserver'));
+    this.outfit = outfit;
+    if (!serverUrl()) return Promise.reject(new Error('noserver'));
     if (this.connected && this.me) return Promise.resolve();
+    this.leaving = false;
+    return this.dial(75_000);   // free hosting wakes up slowly
+  }
+
+  /** Open the socket + hello; resolves on the welcome. A drop later while in a room = reconnect (seat kept). */
+  private dial(timeoutMs: number): Promise<void> {
+    const url = serverUrl();
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
       try { ws = new WebSocket(url); } catch { reject(new Error('unreachable')); return; }
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
-      const timer = setTimeout(() => { reject(new Error('timeout')); ws.close(); }, 75_000);   // free hosting wakes up slowly
+      let done = false;
+      const fail = (e: string) => { if (done) return; done = true; clearTimeout(timer); reject(new Error(e)); };
+      const timer = setTimeout(() => { fail('timeout'); ws.close(); }, timeoutMs);
       ws.onopen = () => {
-        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit, tab: tabId() });
+        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit: this.outfit, tab: tabId() });
       };
       ws.onmessage = (ev) => {
+        if (this.ws !== ws) return;
         if (typeof ev.data !== 'string') {
           const u8 = new Uint8Array(ev.data as ArrayBuffer);
           this.stats.down += u8.length;
@@ -74,21 +103,53 @@ export class Online {
           return;
         }
         let m: any; try { m = JSON.parse(ev.data); } catch { return; }
-        if (m.op === 'welcome') { clearTimeout(timer); this.me = m.you; this.googleOnServer = !!m.googleEnabled; resolve(); }
-        if (m.op === 'error' && m.code === 'version') { clearTimeout(timer); reject(new Error('version')); }
+        if (m.op === 'welcome') { done = true; clearTimeout(timer); this.me = m.you; this.googleOnServer = !!m.googleEnabled; resolve(); }
+        if (m.op === 'error' && m.code === 'version') { fail('version'); }
         this.control(m);
       };
-      ws.onerror = () => { clearTimeout(timer); reject(new Error('unreachable')); };
-      ws.onclose = () => {
-        clearTimeout(timer);
-        const wasIn = !!this.room;
-        this.ws = null; this.me = null; this.room = null; this.peers.clear(); this.closeAllRtc();
+      ws.onerror = () => fail('unreachable');
+      ws.onclose = (ev) => {
+        fail('unreachable');
+        if (this.ws !== ws) return;   // an older socket
+        // our seat was taken by this same tab open twice: no reconnect, back to the lobby
+        if (ev.code === 4001 && this.room) { this.leaving = true; this.ws = null; this.me = null; clearInterval(this.pingTimer); this.dropAll(); this.emit('replaced', { op: 'replaced' }); return; }
+        this.ws = null; this.me = null;
         clearInterval(this.pingTimer);
-        this.emit('disconnected', { op: 'disconnected', wasIn });
+        // in a room and we didn't say goodbye: keep the seat, the game and the direct connections — reconnect
+        if (this.room && !this.leaving) { this.lost(); return; }
+        this.dropAll();
       };
       clearInterval(this.pingTimer);
       this.pingTimer = window.setInterval(() => this.send({ op: 'ping', t: performance.now() }), 3000);
     });
+  }
+  private dropAll() {
+    const wasIn = !!this.room;
+    this.reconnecting = false; clearTimeout(this.retryTimer);
+    this.room = null; this.peers.clear(); this.closeAllRtc();
+    // (a close we asked for — this page reloading onto the room's farm / back into the room — is not "disconnected":
+    // that used to send a slow-reloading page to the lobby without its room, 2.5 s later)
+    if (!this.leaving) this.emit('disconnected', { op: 'disconnected', wasIn });
+  }
+
+  /** The link to the server dropped mid-room: try again (the server holds the seat ~40 s; the host brings the room
+   *  back itself if the server restarted). Players connected peer-to-peer keep playing meanwhile. */
+  private lost() {
+    if (!this.reconnecting) {
+      this.reconnecting = true; this.retryUntil = performance.now() + 50_000; this.retryN = 0;
+      this.emit('reconnecting', { op: 'reconnecting' });
+    }
+    clearTimeout(this.retryTimer);
+    if (performance.now() > this.retryUntil) { this.dropAll(); return; }
+    const wait = Math.min(3000, 400 * 2 ** this.retryN++);
+    this.retryTimer = window.setTimeout(() => {
+      if (!this.reconnecting) return;
+      this.dial(8000).then(() => this.rejoin(), () => { if (!this.ws) this.lost(); });
+    }, wait);
+  }
+  private rejoin() {
+    const r = this.room; if (!r) return;
+    this.send({ op: 'rejoin', code: r.code, pid: this.myId, slot: this.mySlot(), host: this.isHost, farm: r.farm, state: r.state, name: r.name, public: r.public, save: r.save });
   }
 
   send(m: object) { if (this.connected) this.ws!.send(JSON.stringify(m)); }
@@ -97,21 +158,41 @@ export class Online {
     switch (m.op) {
       case 'pong': this.rtt = performance.now() - m.t; break;
       case 'rooms': this.rooms = m.rooms; break;
-      case 'joined':
+      case 'joined': {
+        const back = this.reconnecting && this.room?.code === m.room.code;
+        const had = [...this.peers.values()].map((p) => p.slot);
         this.room = m.room; this.myId = m.you; this.hostId = m.host;
         this.peers.clear(); for (const p of m.peers) this.peers.set(p.id, p);
-        this.closeAllRtc();
-        if (!this.isHost && this.hostId) this.startRtc(this.hostId);   // (0 = the host is reloading onto a new farm: wait for it)
+        if (back) {
+          // the same room again after a drop: direct connections that still work stay (the game never stopped on them)
+          // (an open link to a player not back in the list yet — this server restarted — stays too)
+          for (const [id, e] of [...this.rtc]) if (!e.open) this.closeRtc(id);
+          if (!this.isHost && this.hostId && !this.rtc.has(this.hostId)) this.startRtc(this.hostId);
+          this.reconnecting = false; clearTimeout(this.retryTimer);
+          m.rejoined = true;
+          // seats not (yet) in the room again (the server restarted: they're on their way back too)
+          m.missing = had.filter((s) => ![...this.peers.values()].some((p) => p.slot === s));
+        } else {
+          this.closeAllRtc();
+          if (!this.isHost && this.hostId) this.startRtc(this.hostId);   // (0 = the host is reloading onto a new farm: wait for it)
+        }
+        break;
+      }
+      case 'error':
+        // a rejoin the server can't place yet (it restarted and the host hasn't brought the room back): try again
+        if (m.rejoin && this.reconnecting) { clearTimeout(this.retryTimer); this.retryTimer = window.setTimeout(() => { if (performance.now() > this.retryUntil) { const w = this.ws; this.ws = null; w?.close(); this.dropAll(); } else this.rejoin(); }, 2000); return; }
         break;
       case 'host':   // the host is back (it switched farms)
         this.hostId = m.id;
         if (!this.isHost) { this.closeRtc(m.id); this.startRtc(m.id); }
         break;
       case 'room': this.room = m.room; break;
-      case 'peer_join': this.peers.set(m.peer.id, m.peer); break;
-      case 'peer_update': this.peers.set(m.peer.id, m.peer); break;
+      case 'peer_join': case 'peer_update': case 'peer_back': this.peers.set(m.peer.id, m.peer); break;
+      case 'peer_away': { const p = this.peers.get(m.id); if (p) p.away = true; break; }
       case 'peer_leave': this.peers.delete(m.id); this.closeRtc(m.id); break;
       case 'closed': case 'kicked': this.room = null; this.peers.clear(); this.closeAllRtc(); break;
+      // this tab's seat was taken by the same tab id elsewhere (the tab duplicated): stop here, no reconnect war
+      case 'replaced': this.leaving = true; this.reconnecting = false; clearTimeout(this.retryTimer); this.room = null; this.peers.clear(); this.closeAllRtc(); break;
       case 'signal': this.onSignal(m.from, m.data); break;
     }
     this.emit(m.op, m);
@@ -122,17 +203,26 @@ export class Online {
   create(name: string, isPublic: boolean) { this.send({ op: 'create', name, public: isPublic, farm: farmId() }); }
   join(code: string) { this.send({ op: 'join', code }); }
   quick() { this.send({ op: 'quick', farm: farmId() }); }
-  leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); }
-  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string; save?: string }) { this.send({ op: 'room', ...m }); }
+  leave() { this.send({ op: 'leave' }); this.room = null; this.peers.clear(); this.closeAllRtc(); this.reconnecting = false; clearTimeout(this.retryTimer); }
+  setRoom(m: { state?: 'lobby' | 'playing'; public?: boolean; name?: string; farm?: string; save?: string }) { if (m.farm && m.farm !== this.room?.farm) this.switching = true; this.send({ op: 'room', ...m }); }
   /** Host: the game's over — the whole room back to its lobby together (s26, user: "keep us together"). */
-  regroup() { this.send({ op: 'room', regroup: true }); }
+  regroup() { this.switching = true; this.send({ op: 'room', regroup: true }); }
+  /** The host already sent everyone to a reload (farm switch / regroup). */
+  private switching = false;
   kick(id: number) { this.send({ op: 'kick', id }); }
   chat(text: string) { this.send({ op: 'chat', text }); }
   setOutfit(outfit: string) { this.send({ op: 'outfit', outfit }); }
   setName(name: string) { this.send({ op: 'name', name }); }
-  close() { this.ws?.close(); }
+  close() { this.leaving = true; this.reconnecting = false; clearTimeout(this.retryTimer); this.ws?.close(); }
   /** Leaving this page (a reload onto another farm, closing the tab): out of the room at once, no lingering clone. */
-  bye() { if (this.room) this.send({ op: 'leave' }); this.ws?.close(); }
+  bye() {
+    this.leaving = true;
+    // the host's page goes (F5, the tab closed by mistake): the room isn't closed on everyone — it goes back to its
+    // lobby together and waits ~45 s for the host's tab to come back
+    if (this.room && this.isHost && !this.switching) this.send({ op: 'room', regroup: true });
+    if (this.room) this.send({ op: 'leave' });
+    this.ws?.close();
+  }
   /** Owner: who's online / give coins + levels. */
   users() { this.send({ op: 'users' }); }
   gift(to: number, coins: number, levels = 0) { this.send({ op: 'gift', to, coins, levels }); }
@@ -149,6 +239,12 @@ export class Online {
       return;
     }
     for (const id of this.peers.keys()) if (id !== this.myId) this.sendData(id, payload, true);
+  }
+  /** Bytes still queued for that peer (its direct channel, or the server link for the relay). */
+  backlog(to: number) {
+    const r = this.rtc.get(to);
+    if (r?.open && r.dc && r.dc.readyState === 'open') return r.dc.bufferedAmount;
+    return this.ws?.bufferedAmount ?? 0;
   }
   private relay(to: number, payload: Uint8Array) {
     if (!this.connected) return;
@@ -208,8 +304,16 @@ export class Online {
     this.rtc.delete(peer);
     const was = e.open; e.open = false;
     try { e.dc?.close(); e.pc.close(); } catch { /* ignore */ }
-    if (was) this.onDirect?.(peer, false);
+    if (was) {
+      this.onDirect?.(peer, false);
+      // a player's direct link to the host broke mid-game (a network switch): the relay carries on, try direct again
+      if (!this.isHost && peer === this.hostId && this.room && this.rtcRetries++ < 4) {
+        const room = this.room.code;
+        setTimeout(() => { if (this.room?.code === room && !this.isHost && this.hostId === peer && !this.rtc.has(peer)) this.startRtc(peer); }, 4000);
+      }
+    }
   }
+  private rtcRetries = 0;
   private closeAllRtc() { for (const id of [...this.rtc.keys()]) this.closeRtc(id); }
 }
 

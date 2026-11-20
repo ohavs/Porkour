@@ -234,8 +234,10 @@ export class Gfx {
     this.sun.position.copy(f).addScaledVector(this.sunDir, 110);
   }
 
+  /** Tests only (`?draw=0`): run everything but skip drawing (several headless browsers on one machine). */
+  private noDraw = new URLSearchParams(location.search).get('draw') === '0';
   render(dt: number) {
-    if (this.lost) return;
+    if (this.lost || this.noDraw) return;
     this.clouds.rotation.y += dt * 0.004;
     this.sky.position.copy(this.camera.position); this.clouds.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.composer.render(dt);
