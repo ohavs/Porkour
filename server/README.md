@@ -49,5 +49,13 @@ Text frames are JSON `{op: …}`: `hello` → `welcome`, `list` → `rooms`, `cr
 `room` (host: state / public / name), `kick`, `chat`, `outfit`, `name`, `signal` (WebRTC handshake), `ping` → `pong`.
 Server pushes `peer_join`, `peer_leave`, `peer_update`, `room`, `closed` (host left), `kicked`, `error`.
 
+**Connection drops** (Wi-Fi blip, a phone switching networks, a laptop lid, this server restarting): a connection that
+closes without a `leave` keeps its seat for `GRACE_MS` (40 s) — the others get `peer_away`, the game goes on (players
+connected peer-to-peer keep playing, the host included). The browser reconnects by itself and sends
+`rejoin {code, pid, slot, host, …}`: the same tab takes its seat back (same id + slot → `joined {back: true}`, the others
+get `peer_back`). If the server restarted (the room is gone), the host's `rejoin` brings the room back with the same code
+and state, and the players' `rejoin`s retry until it's there. A player whose connection can't keep up gets relayed game
+data dropped past a 256 kB backlog (it asks for a full snapshot once it catches up) instead of piling up lag.
+
 Binary frames: `[u8 target peer id (0 = everyone else)] + payload`, delivered as `[u8 sender id] + payload`.
 Payloads are defined in `web/src/net/sync.ts` (snapshots, inputs, keyframe requests, pings).

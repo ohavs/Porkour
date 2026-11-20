@@ -85,6 +85,8 @@ export const EN_X = {
   'm.lunchSpike': "Spike Bob's lunch (hot sauce or mud)", 'bob.lunch': 'Bob is having lunch in his kitchen', 'bob.cook': 'Bob is frying sausages',
   'a.lunch': 'Lunch (kitchen)', 'a.lunchGo': 'Bob: lunch now', 'a.lunchHot': 'Hot sauce on his lunch', 'a.lunchMud': 'Mud on his lunch',
   'a.lunchChair': "Pull Bob's chair away", 'a.tpKitchen': 'Teleport: the kitchen',
+  'net.reconnecting': '📡 Connection lost — reconnecting…', 'net.reconnected': '📡 Back online', 'net.peerAway': '📡 {name} lost connection…',
+  'net.hostAway': '📡 The host lost connection — waiting…', 'net.peerBack': '📡 {name} is back', 'net.noHost': '📡 Waiting for the host…',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -163,4 +165,6 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'm.lunchSpike': 'Échale algo al almuerzo de Bob (salsa picante o barro)', 'bob.lunch': 'Bob está almorzando en su cocina', 'bob.cook': 'Bob está friendo salchichas',
   'a.lunch': 'Almuerzo (cocina)', 'a.lunchGo': 'Bob: a almorzar ya', 'a.lunchHot': 'Picante en su almuerzo', 'a.lunchMud': 'Barro en su almuerzo',
   'a.lunchChair': 'Quitarle la silla a Bob', 'a.tpKitchen': 'Teletransporte: la cocina',
+  'net.reconnecting': '📡 Conexión perdida: reconectando…', 'net.reconnected': '📡 Conectado de nuevo', 'net.peerAway': '📡 {name} perdió la conexión…',
+  'net.hostAway': '📡 El anfitrión perdió la conexión: esperando…', 'net.peerBack': '📡 {name} volvió', 'net.noHost': '📡 Esperando al anfitrión…',
 };

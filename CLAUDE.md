@@ -75,7 +75,7 @@ Dead by Daylight, Party Animals.
   (`--use-angle=swiftshader`, `?auto=1&q=low`; software GL ≈ 10 fps so the sim runs slower than real time — wait on
   `window.__G.time`, not wall time). Test hooks: `window.__game` (`scripted` input override, `cam`, `local`, `pigs`, `farmer`,
   `daynight`, `adminAction(...)`, `mode` 'lobby' | 'play', `stage`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`, `__online`, `__lobby`, `__lobbyUI`.
-  URL: `?auto=1` (skips the lobby: straight into a round), `?hour=21.5`, `?bob=0`, `?admin=1`.
+  URL: `?auto=1` (skips the lobby: straight into a round), `?hour=21.5`, `?bob=0`, `?admin=1`, `?draw=0` (no drawing: many browsers), `?pre=0` (no shader precompile).
   Online tests: `cd server && npm test` (protocol); `DEBUG=1 PORT=8080 node server.js` + two Playwright contexts
   (host: `#tOnline` → `[data-a=create]` (force) → wait `__lobby.inRoom`; player opens `?room=CODE`; host clicks `#lPlay` = start). Software GL is
   very slow with 2 pages (first frame compiles shaders for a minute+): use small viewports and generous timeouts.
@@ -116,6 +116,19 @@ Dead by Daylight, Party Animals.
   simulating in a hidden tab (worker ticks). Leaving = reload to `?lobby=1`. Invite link `?room=CODE`. **Regroup (s26, user: "keep us
   together")**: the host's "end game" / results 🏠 = `online.regroup()` (server `room` op `regroup`: state lobby, the room waits
   `SWITCH_GRACE` for the host) → every page reloads with `?room=CODE` back into the room's lobby; a player's own "leave" still leaves.
+  **Reconnect (s28, user: "4 of us tonight, no connection problems")**: a socket that closes without `leave` keeps its seat
+  `GRACE_MS` 40 s (server `away` → `peer_away`, 📡 in the party); `online.ts` `lost()` redials (backoff ≤ 3 s, 50 s) and sends
+  `rejoin {code, pid, slot, host…}` → the same tab takes its seat back (`joined.back`, others `peer_back`; same id = same pig),
+  direct (P2P) links that still work stay open (the game never stops on them, the host's own blip included). Server
+  restarted (room gone) → the host's `rejoin` re-creates the room with the same code / state / farm, players retry until
+  it's there (`Game.holdSeats` keeps their pigs 30 s). Host F5 / tab closed = `bye()` sends a regroup first (room back to
+  its lobby, waits 45 s) — never closes the room on everyone; the room code + farm live in the address bar (`markUrl`) so
+  F5 comes straight back. Host: stale inputs (> 0.5 s, a dropped / alt-tabbed player) = the pig stands still; snapshots
+  skipped for a peer whose channel backlog > 96 kB (`online.backlog`) → keyframe once drained (server drops relay past
+  256 kB). Player: no snapshot for 2.5 s = "waiting for the host" toast. P2P to the host retried after a mid-game drop.
+  Tests: `server/test.js` (grace, rejoin, restart, 2 regroups in a row), scratchpad `mp4.cjs` = 4 browsers (`?draw=0` =
+  skip drawing, test only). Measured (farm 1, 4 players): delta ≈ 0.85–1.3 kB / snapshot / player (≈ 30 kB/s each,
+  host upload ≈ 0.9 Mbps for 3), keyframe ≈ 16 kB, P2P RTT 6–15 ms locally, interpolation delay 70–90 ms.
 - **Performance (2026-11-13)** — scale by *kinds*, not copies; keep it this way when adding content:
   static models MUST be placed through farm helpers (`building` / `decor` / `fence`, or push to `out.statics`) →
   `instanceStatic` turns every repeated part into chunked (36 m) InstancedMeshes; procedural models MUST call
@@ -284,6 +297,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 27: ✅ **Bob's lunch in his kitchen** (pull his chair, steal / spike his plate, the stove = a fireball
    flame), ✅ kitchen / barn tables: the 2.65 m oval table had a round 2.65 m collider that shoved its chairs away
    (box now, chairs along its long sides), ✅ Bob ignores his own clatter (bumped furniture, his clock at home).
+   Session 28 (user: "polish, performance, 4 of us online tonight — cover every case"): ✅ **reconnect** (seats held
+   40 s, auto-rejoin, the host's blip, server restart → room comes back, host F5 = regroup), ✅ **lag guards** (stale
+   inputs, send backpressure), ✅ found + fixed: **two regroups / farm switches within 45 s closed the room** (an
+   earlier switch's timer), ✅ **shaders precompiled at load** (no first-sight hitches), ✅ 4-browser test of 16 cases.
    **Next**: the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 
@@ -524,10 +541,24 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   sees Bob's meal phases in sync, no errors); close-up of Bob seated eating. Found + fixed on the way: the
   farmhouse table's chairs were shoved 0.6 m out at load (round collider on an oval table: barns too), Bob left lunch
   for noises he made himself (chairs he bumped, his clock's bong), a vector alias in the plate check.
+- 2026-11-20 (session 28, user: "polish everything, mainly performance; 4 of us play online tonight — check every
+  possible case"): reconnect + lag guards (see the Online paragraph), shader precompile at load (`precompile` in main.ts:
+  ~25 programs that used to compile mid-game the first time each thing showed up; `?pre=0` compares). Found + fixed: a
+  second regroup / farm switch within 45 s of the first closed the room on everyone (the first switch's timer); an
+  alt-tabbed / dropped player's pig kept running with its last keys; host F5 closed the room. Checked: `server/test.js`
+  (grace, rejoin, server restart, 2 switches in a row) + 4 headless browsers (scratchpad `mp4.cjs`, host + 2 P2P + 1
+  relay-only): room of 4, a 5th refused, start, everyone moves and sees the others in place, a P2P player's / the relay
+  player's / the host's link drops and comes back (same seat, game goes on), the server restarts (same room, same seats,
+  4 s), a player F5 (same seat), leave + late join, kick + come back, end game → room lobby → new round, farm switch,
+  host F5 (room kept, still host), host leaves → players to their lobby. Real-world limits: P2P needs both routers to
+  allow it (STUN only, no TURN) — else ☁ relay through Render (Oregon: + ~150–250 ms from Israel); Render free ≈ 5 GB / month
+  out (relay ≈ 110 MB / hour per relayed player).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 28 (new)**: **tonight's 4-player game** — did everyone get in? Anyone with ☁ instead of ⚡ next to their
+  name in the room (= through the server, laggier)? Did anyone drop and come back by itself (📡)? Lag / stutters?
 - **Session 27 (new)**: **Bob's lunch** (~11:30, once a round; farm 4 = dinner): he cooks at the stove with his back
   to the room, then eats at the kitchen table. Pull his chair away as he sits (RMB, drag it) · steal his plate when he
   goes to the fridge · hot sauce from his table (R = pour) or mud on his food → spit-take. Fun? Long enough (~50 s)?
@@ -633,6 +664,10 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
   as the default OK, or should the title remember one farm?
 
 ## Known issues / TODO
+- s28 online: snapshots ride a reliable ordered channel (a lost packet holds the next ones ~1 RTT; the interpolation delay
+  hides most of it) — an unreliable channel + acked deltas would be the next step; no TURN server (a player behind a strict
+  NAT / CGNAT goes through the relay); a seat is held 40 s (longer drop = rejoin as a new seat); if the host is away > 40 s
+  the room closes for the players (the host's page re-creates it, they must rejoin with the link).
 - s27: Bob's lunch: walking in the house he still nudges other furniture (only his own chair / table / plate pass
   through him); he arrives "close enough" when wedged (≤ 1.2 m after 6 s) and slides onto the seat; the pan is a tool
   in his hand (no pan on the stove when he's not cooking); farm 4's dinner keeps the word "lunch"; lunch waits for the

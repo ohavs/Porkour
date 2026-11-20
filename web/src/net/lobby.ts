@@ -91,7 +91,8 @@ export class Lobby {
     switch (m.op) {
       case 'rooms': if (this.view === 'browse') this.renderRooms(); break;
       case 'joined': {
-        this.chat = [];
+        if (m.rejoined) { if (this.inGame || this.preGame) { g.hud.toast(t('net.reconnected'), 1.6); g.holdSeats(m.missing ?? [], 30); if (online.isHost && g.net && 'needKey' in g.net) for (const id of online.peers.keys()) if (id !== online.myId) g.net.needKey.add(id); g.syncPeers(); } if (this.inRoom) this.opts.onRoom(); if (m.room.state !== 'playing' || this.inGame) break; }
+        else this.chat = [];
         // the room plays another farm than the one this page built: reload on it, straight back into the room
         const rf = asFarm(m.room.farm);
         if (rf && rf !== farmId()) { this.view = 'switching'; this.render(); setTimeout(() => reloadOnFarm(rf, { room: m.room.code }), 300); break; }
@@ -131,6 +132,22 @@ export class Lobby {
         break;
       }
       case 'peer_update': if (this.inGame || this.preGame) g.syncPeers(); if (!this.inGame) this.opts.onRoom(); break;
+      // connection blips (the seat is held ~40 s): who dropped, who's back, my own link
+      case 'reconnecting': if (this.inGame || this.preGame) g.hud.toast(t('net.reconnecting'), 50); break;
+      case 'peer_away': {
+        const p = online.peers.get(m.id);
+        if (this.inGame) g.hud.toast(m.host ? t('net.hostAway') : t('net.peerAway', { name: esc(p?.name ?? '') }), m.host ? 6 : 2.5);
+        else if (this.preGame) this.opts.onRoom();
+        break;
+      }
+      case 'peer_back':
+        if (this.inGame || this.preGame) {
+          // the same seat again: a reloaded page starts its inputs over (fresh), a reconnect just needs a full snapshot
+          if (online.isHost && g.net && 'needKey' in g.net) { if (m.fresh) g.peerLeft(m.peer.id); g.net.needKey.add(m.peer.id); }
+          g.syncPeers();
+          if (this.inGame) g.hud.toast(t('net.peerBack', { name: esc(m.peer.name) }), 1.6); else this.opts.onRoom();
+        }
+        break;
       case 'chat':
         this.chat.push({ name: m.name, text: m.text });
         if (this.chat.length > 60) this.chat.shift();
@@ -158,7 +175,18 @@ export class Lobby {
     this.enterGame();
   }
   /** Joined a room that hasn't started: online right away, the party on the lobby stage, the menu closes. */
+  /** The room's code in the address bar: a reload (F5) — the host's too — comes straight back into the room. */
+  private markUrl() {
+    try {
+      const u = new URL(location.href);
+      if (online.room && (u.searchParams.get('room') !== online.room.code || u.searchParams.get('farm') !== farmId())) {
+        u.searchParams.set('room', online.room.code); u.searchParams.set('farm', farmId()); u.searchParams.delete('lobby');
+        history.replaceState(null, '', u.toString());
+      }
+    } catch { /* */ }
+  }
   private enterRoom() {
+    this.markUrl();
     if (!this.preGame) {
       this.preGame = true;
       this.game.goOnline(online.isHost ? 'host' : 'client');
@@ -168,6 +196,7 @@ export class Lobby {
     this.opts.onRoom();
   }
   private enterGame() {
+    this.markUrl();
     if (this.inGame) return;
     this.inGame = true;
     if (this.preGame) { this.close(); this.opts.start(); return; }   // already online on the lobby stage
@@ -246,7 +275,7 @@ export class Lobby {
     const me = p.id === online.myId, isHost = p.id === online.hostId;
     const av = p.picture ? `<img class="lav s" src="${esc(p.picture)}" referrerpolicy="no-referrer" alt="">` : '';
     const link = !me && host ? (online.direct(p.id) ? ' <span class="dim small" title="P2P">⚡</span>' : ' <span class="dim small">☁</span>') : '';
-    return `${av}<span>${esc(p.name)}${isHost ? ' 👑' : ''}${p.google ? ' <span class="dim small">✔</span>' : ''}${me ? ` <span class="dim">(${t('net.you')})</span>` : ''}${link}</span>
+    return `${av}<span>${esc(p.name)}${isHost ? ' 👑' : ''}${p.google ? ' <span class="dim small">✔</span>' : ''}${me ? ` <span class="dim">(${t('net.you')})</span>` : ''}${link}${p.away ? ' 📡' : ''}</span>
       ${host && !me ? `<button class="chip small kick" data-kick="${p.id}">✕</button>` : ''}`;
   }
   private renderRooms() {

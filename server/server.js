@@ -25,7 +25,14 @@ const OWNER_HASHES = new Set(['6b8626b254d97cb0dc01f56029abc7abdef3970048c911283
   ...(process.env.OWNER_EMAIL_SHA256 || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)]);
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 /** A host switching farms reloads its page: the room waits this long (ms) for it to come back. */
-const SWITCH_GRACE = 45000;
+const SWITCH_GRACE = Number(process.env.SWITCH_MS || 45000);
+/** A connection that drops without saying goodbye (Wi-Fi blip, a laptop lid, a phone switching networks, this server
+ *  restarting) keeps its seat this long: the same tab coming back takes it again (same id, same pig). The host too —
+ *  the game lives in its browser, and players connected peer-to-peer keep playing meanwhile. */
+const GRACE = Number(process.env.GRACE_MS || 40000);
+/** A player whose connection can't keep up: relayed game data is dropped past this backlog (it asks for a fresh
+ *  snapshot once it catches up) instead of piling up seconds of lag. */
+const BACKLOG = 256 * 1024;
 
 const googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 /** code → room */
@@ -42,7 +49,7 @@ function newCode() {
 }
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max);
 function send(ws, obj) { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); }
-const peerInfo = (ws) => ({ id: ws.pid, uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, slot: ws.slot, outfit: ws.outfit });
+const peerInfo = (ws) => ({ id: ws.pid, uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, slot: ws.slot, outfit: ws.outfit, away: !!ws.gone });
 function roomInfo(r) {
   const host = r.peers.get(r.hostId);
   return { code: r.code, name: r.name, public: r.public, state: r.state, players: r.peers.size, max: r.max, host: host?.user.name ?? '?', farm: r.farm, save: r.save ?? '' };
@@ -73,15 +80,29 @@ async function identify(m) {
   return { uid: 'guest:' + crypto.randomUUID(), google: false, name: guestName, picture: '' };
 }
 
-function join(ws, r) {
-  // the same browser tab again (its page reloaded — onto the room's farm, say — and the old connection can linger on
-  // the server for a while): that old one goes, the tab gets its seat back (no "clone" of the player in the room)
-  if (ws.tab) for (const p of [...r.peers.values()]) if (p !== ws && p.tab === ws.tab && p.pid !== r.hostId) { leave(p, 'replaced'); try { p.terminate(); } catch { /* gone */ } }
+function join(ws, r, want = {}, fresh = true) {
+  // the same browser tab again: its connection dropped (it reconnects) or its page reloaded while the old connection
+  // lingers — it takes its own seat back (same id, same slot, same pig; still the host if it was): no "clone"
+  const old = ws.tab ? [...r.peers.values()].find((p) => p !== ws && p.tab === ws.tab) : null;
+  if (old) {
+    clearTimeout(old.graceTimer); old.room = null; try { old.terminate(); } catch { /* gone */ }
+    ws.pid = old.pid; ws.slot = old.slot; ws.room = r;
+    r.peers.set(ws.pid, ws);
+    send(ws, { op: 'joined', room: roomInfo(r), you: ws.pid, host: r.hostId, peers: [...r.peers.values()].map(peerInfo), back: true });
+    broadcast(r, { op: 'peer_back', peer: peerInfo(ws), fresh }, ws);
+    if (fresh && ws.pid === r.hostId) broadcast(r, { op: 'host', id: ws.pid }, ws);   // a new page: new direct connections
+    broadcast(r, { op: 'room', room: roomInfo(r) }, ws);
+    return;
+  }
   // the host is away switching farms: its tab gets seat 0 back and becomes the host again; seat 0 waits for it
   const returning = !r.hostId && r.hostTab && ws.tab === r.hostTab;
   const used = new Set([...r.peers.values()].map((p) => p.slot));
+  const wSlot = Number(want.slot), wPid = Number(want.pid);
   let slot = returning ? 0 : !r.hostId && r.hostTab ? 1 : 0; while (used.has(slot)) slot++;
+  // (the room came back after a server restart: everyone asks for the seat they had)
+  if (Number.isInteger(wSlot) && wSlot >= 0 && wSlot < r.max && !used.has(wSlot) && (wSlot !== 0 || !r.hostTab || returning || want.host)) slot = wSlot;
   let pid = 1; while (r.peers.has(pid)) pid++;
+  if (Number.isInteger(wPid) && wPid > 0 && wPid < 250 && !r.peers.has(wPid)) pid = wPid;
   ws.pid = pid; ws.slot = slot; ws.room = r;
   r.peers.set(pid, ws);
   if (returning || (!r.hostId && !r.hostTab)) { r.hostId = pid; r.hostTab = ws.tab; r.switchUntil = 0; }
@@ -90,6 +111,13 @@ function join(ws, r) {
   if (returning) broadcast(r, { op: 'host', id: pid }, ws);
   broadcast(r, { op: 'room', room: roomInfo(r) }, ws);
 }
+/** The connection dropped without a goodbye: the seat waits GRACE for the same tab to come back. */
+function away(ws) {
+  const r = ws.room; if (!r || ws.gone) return;
+  ws.gone = Date.now();
+  broadcast(r, { op: 'peer_away', id: ws.pid, host: ws.pid === r.hostId }, ws);
+  ws.graceTimer = setTimeout(() => { if (ws.room === r) leave(ws, 'lost'); }, GRACE);
+}
 function closeRoom(r, reason) {
   for (const p of r.peers.values()) { p.room = null; send(p, { op: 'closed', reason }); }
   rooms.delete(r.code);
@@ -97,18 +125,20 @@ function closeRoom(r, reason) {
 
 function leave(ws, reason = 'left') {
   const r = ws.room; if (!r) return;
-  ws.room = null;
+  ws.room = null; clearTimeout(ws.graceTimer);
   r.peers.delete(ws.pid);
   // the host is switching farms (its page reloads): the room waits for it
   if (r.switchUntil > Date.now() && (ws.pid === r.hostId || !r.hostId)) {
     if (ws.pid === r.hostId) {
       r.hostId = 0;
-      setTimeout(() => { if (!r.hostId && rooms.get(r.code) === r) closeRoom(r, 'host_left'); }, r.switchUntil - Date.now());
+      // (only if the host is still away when THIS wait ends: an earlier switch's timer must not close the room during a
+      // later one — two farm switches / regroups within 45 s closed the room on everyone)
+      setTimeout(() => { if (!r.hostId && Date.now() >= r.switchUntil - 100 && rooms.get(r.code) === r) closeRoom(r, 'host_left'); }, r.switchUntil - Date.now());
     }
     broadcast(r, { op: 'peer_leave', id: ws.pid, reason });
     return;
   }
-  if (ws.pid === r.hostId || r.peers.size === 0) {
+  if (ws.pid === r.hostId || r.peers.size === 0 || ![...r.peers.values()].some((p) => !p.gone)) {
     // the game lives in the host's browser: no host, no game
     closeRoom(r, 'host_left');
     return;
@@ -117,14 +147,14 @@ function leave(ws, reason = 'left') {
   broadcast(r, { op: 'room', room: roomInfo(r) });
 }
 
-function createRoom(ws, m) {
+function createRoom(ws, m, code = newCode(), want = {}) {
   const r = {
-    code: newCode(), name: clean(m.name, 28) || `${ws.user.name}'s farm`, public: m.public !== false,
-    max: Math.min(MAX_PLAYERS, Math.max(1, Number(m.max) || MAX_PLAYERS)), state: 'lobby', farm: clean(m.farm, 16) || 'farm1',
-    peers: new Map(), hostId: 0, created: Date.now(),
+    code, name: clean(m.name, 28) || `${ws.user.name}'s farm`, public: m.public !== false,
+    max: Math.min(MAX_PLAYERS, Math.max(1, Number(m.max) || MAX_PLAYERS)), state: m.state === 'playing' ? 'playing' : 'lobby', farm: clean(m.farm, 16) || 'farm1',
+    peers: new Map(), hostId: 0, created: Date.now(), save: typeof m.save === 'string' ? clean(m.save, 40) : '',
   };
   rooms.set(r.code, r);
-  join(ws, r);
+  join(ws, r, want, false);
 }
 
 // ------------------------------------------------------------------ control messages
@@ -149,7 +179,8 @@ async function control(ws, m) {
       const room = rooms.get(clean(m.code, 4).toUpperCase());
       if (!room) return send(ws, { op: 'error', code: 'notfound' });
       if (room === r) return;
-      if (room.peers.size >= room.max) return send(ws, { op: 'error', code: 'full' });
+      const mine = ws.tab && [...room.peers.values()].some((p) => p.tab === ws.tab);   // (its own seat, held for it)
+      if (!mine && room.peers.size >= room.max) return send(ws, { op: 'error', code: 'full' });
       if (r) leave(ws);
       return join(ws, room);
     }
@@ -158,6 +189,18 @@ async function control(ws, m) {
       const open = [...rooms.values()].filter((x) => x.public && x.peers.size < x.max)
         .sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1) || b.peers.size - a.peers.size)[0];
       return open ? join(ws, open) : createRoom(ws, { public: true, farm: m.farm });
+    }
+    case 'rejoin': {   // the connection dropped and came back: the same seat (or the room itself, if this server restarted)
+      const code = clean(m.code, 4).toUpperCase();
+      let room = rooms.get(code);
+      const want = { pid: m.pid, slot: m.slot, host: m.host === true };
+      if (!room && m.host === true && /^[A-Z]{4}$/.test(code)) { if (r) leave(ws); return createRoom(ws, m, code, want); }
+      if (!room) return send(ws, { op: 'error', code: 'notfound', rejoin: true });
+      if (room === r) return;
+      const mine = ws.tab && [...room.peers.values()].some((p) => p.tab === ws.tab);
+      if (!mine && room.peers.size >= room.max) return send(ws, { op: 'error', code: 'full', rejoin: true });
+      if (r) leave(ws);
+      return join(ws, room, want, false);
     }
     case 'leave': return leave(ws);
     case 'room': {   // host changes the room (state lobby / playing, name, public, farm, story save label)
@@ -257,10 +300,11 @@ wss.on('connection', (ws, req) => {
     const r = ws.room; if (!r || data.length < 2) return;
     const to = data[0];
     data[0] = ws.pid;
-    if (to === 0) { for (const p of r.peers.values()) if (p !== ws && p.readyState === p.OPEN) p.send(data, { binary: true }); }
-    else { const p = r.peers.get(to); if (p && p.readyState === p.OPEN) p.send(data, { binary: true }); }
+    const ok = (p) => p.readyState === p.OPEN && p.bufferedAmount < BACKLOG;
+    if (to === 0) { for (const p of r.peers.values()) if (p !== ws && ok(p)) p.send(data, { binary: true }); }
+    else { const p = r.peers.get(to); if (p && ok(p)) p.send(data, { binary: true }); }
   });
-  ws.on('close', (code) => { if (DEBUG) console.log('close', ws.cid, code); leave(ws, 'left'); });
+  ws.on('close', (code) => { if (DEBUG) console.log('close', ws.cid, code); away(ws); });
   ws.on('error', () => {});
 });
 

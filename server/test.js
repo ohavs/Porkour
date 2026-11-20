@@ -4,8 +4,15 @@ import WebSocket from 'ws';
 import assert from 'node:assert/strict';
 
 const PORT = 8099;
-const srv = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(PORT) }, stdio: ['ignore', 'pipe', 'inherit'] });
-await new Promise((r) => srv.stdout.once('data', r));
+async function startServer() {
+  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(PORT), GRACE_MS: '1500', SWITCH_MS: '1500' }, stdio: ['ignore', 'pipe', 'inherit'] });
+  await new Promise((r) => p.stdout.once('data', r));
+  return p;
+}
+let srv = await startServer();
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/** A connected + greeted client with a tab id. */
+async function hello(name, tab) { const c = client(); await c.open; c.send({ op: 'hello', v: 1, name, tab }); await c.next('welcome'); return c; }
 
 function client() {
   const ws = new WebSocket(`ws://localhost:${PORT}`);
@@ -51,8 +58,8 @@ try {
   a.send({ op: 'room', state: 'playing' }); assert.equal((await b.next('room')).room.state, 'playing');
   a.send({ op: 'room', save: '💾 2 · ★★☆☆☆<b>' }); assert.equal((await b.next('room')).room.save, '💾 2 · ★★☆☆☆b');   // the host's story save, shown to the players
   b.send({ op: 'join', code: 'ZZZZ' }); assert.equal((await b.next('error')).code, 'notfound');
-  // host leaves → room closes
-  a.ws.close();
+  // host leaves (says goodbye) → room closes
+  a.send({ op: 'leave' }); a.ws.close();
   assert.equal((await b.next('closed')).reason, 'host_left');
   b.send({ op: 'list' }); assert.equal((await b.next('rooms')).rooms.length, 0);
   // quick play creates a room when none is open
@@ -100,6 +107,64 @@ try {
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(h3.ws.readyState, 1);
   h3.ws.close(); p3.ws.close(); p1.ws.close();
+  // ---- two regroups / farm switches in a row (within the wait): the first one's timer must not close the room
+  {
+    const H = await hello('Host', 'sH'), A = await hello('A', 'sA');
+    H.send({ op: 'create', name: 'Twice', public: false, farm: 'farm1' });
+    const code = (await H.next('joined')).room.code;
+    A.send({ op: 'join', code }); await A.next('joined');
+    H.send({ op: 'room', regroup: true }); H.send({ op: 'leave' }); H.ws.close();
+    await wait(300);
+    const H2 = await hello('Host', 'sH'); H2.send({ op: 'join', code }); assert.equal((await H2.next('joined')).host, 1);
+    await wait(500);
+    H2.send({ op: 'room', farm: 'farm2' }); H2.send({ op: 'leave' }); H2.ws.close();
+    await wait(1200);   // the first wait ends here (1.5 s after the first regroup) — the host is away again
+    const H3 = await hello('Host', 'sH'); H3.send({ op: 'join', code });
+    const j3 = await H3.next('joined'); assert.equal(j3.room.code, code, 'the room survived'); assert.equal(j3.host, j3.you);
+    for (const c of [H3, A]) { c.send({ op: 'leave' }); c.ws.close(); }
+  }
+  // ---- reconnects: a dropped connection keeps its seat (GRACE_MS 1.5 s here), the same tab takes it back
+  {
+    const H = await hello('Host', 'tH'), A = await hello('A', 'tA'), B = await hello('B', 'tB'), C = await hello('C', 'tC');
+    H.send({ op: 'create', name: 'Four', public: true, farm: 'farm2' });
+    const jH = await H.next('joined'), code = jH.room.code;
+    for (const c of [A, B, C]) { c.send({ op: 'join', code }); await c.next('joined'); }
+    H.send({ op: 'room', state: 'playing' }); await A.next('room');
+    const D = await hello('D', 'tD'); D.send({ op: 'join', code }); assert.equal((await D.next('error')).code, 'full', '5th player: full');
+    // B's Wi-Fi drops: everyone hears it's away, its seat stays
+    B.ws.terminate();
+    const pa = await H.next('peer_away'); assert.equal(pa.host, false);
+    D.send({ op: 'join', code }); assert.equal((await D.next('error')).code, 'full', 'the dropped seat is held');
+    const B2 = await hello('B', 'tB'); B2.send({ op: 'rejoin', code, pid: pa.id, slot: 2 });
+    const jb2 = await B2.next('joined');
+    assert.equal(jb2.you, pa.id, 'same id'); assert.equal(jb2.back, true); assert.equal(jb2.room.state, 'playing');
+    const pb = await H.next('peer_back'); assert.equal(pb.peer.id, pa.id); assert.equal(pb.fresh, false);
+    await A.next('peer_away'); await A.next('peer_back');
+    // relay still works to the seat it took back
+    H.ws.send(Buffer.from([pa.id, 9])); assert.deepEqual([...(await B2.next('bin')).data], [1, 9]);
+    // the HOST drops: the room waits, the host's tab comes back as host
+    H.ws.terminate();
+    assert.equal((await A.next('peer_away')).host, true);
+    const H2 = await hello('Host', 'tH'); H2.send({ op: 'rejoin', code, pid: 1, slot: 0, host: true, farm: 'farm2', state: 'playing' });
+    const jh2 = await H2.next('joined'); assert.equal(jh2.you, 1); assert.equal(jh2.host, 1, 'still the host');
+    assert.equal((await A.next('peer_back')).peer.id, 1);
+    // C never comes back: after the grace its seat frees up
+    C.ws.terminate(); await H2.next('peer_away');
+    assert.equal((await H2.next('peer_leave')).reason, 'lost');
+    // the server restarts (a deploy, a crash): the host brings its room back with the same code, players their seats
+    srv.kill(); await wait(300); srv = await startServer();
+    const H3 = await hello('Host', 'tH');
+    const A2 = await hello('A', 'tA'); A2.send({ op: 'rejoin', code, pid: 2, slot: 1 });
+    assert.equal((await A2.next('error')).code, 'notfound', 'a player first: not there yet (it retries)');
+    H3.send({ op: 'rejoin', code, pid: 1, slot: 0, host: true, farm: 'farm2', state: 'playing', name: 'Four', public: true });
+    const jh3 = await H3.next('joined'); assert.equal(jh3.room.code, code); assert.equal(jh3.room.state, 'playing'); assert.equal(jh3.room.farm, 'farm2'); assert.equal(jh3.you, 1);
+    A2.send({ op: 'rejoin', code, pid: 2, slot: 1 });
+    const ja2 = await A2.next('joined'); assert.equal(ja2.you, 2); assert.equal(ja2.host, 1); assert.equal(ja2.peers.find((x) => x.id === 2).slot, 1);
+    // a player can't grab the host's seat or make a room by "rejoining"
+    const E = await hello('E', 'tE'); E.send({ op: 'rejoin', code: 'QQQQ', pid: 1, slot: 0 }); assert.equal((await E.next('error')).code, 'notfound');
+    E.send({ op: 'rejoin', code, pid: 1, slot: 0 }); const je = await E.next('joined'); assert.notEqual(je.you, 1); assert.notEqual(je.peers.find((x) => x.id === je.you).slot, 0);
+    for (const c of [H3, A2, E, D, A, B2, H2]) c.ws.close();
+  }
   console.log('server test: OK');
 } catch (e) {
   console.error('server test FAILED', e); process.exitCode = 1;
