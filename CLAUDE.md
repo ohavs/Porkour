@@ -320,6 +320,17 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    works, ✅ weed: watered plants show a clock + seconds (not the can again), ✅ **round end = everyone back in the sty
    for 5 s** (🏁 countdown, walk out = keep going for bonus), ✅ Bob can't re-grab a pig for 4 s after it gets free,
    ✅ a player in the shop / menu when the host starts is pulled into the round.
+   Session 30 (user: "Bob latches onto a pig that does nothing; he must calm down with time"): ✅ **blame** — a hit is
+   pinned only on a pig right next to him (≤ 2.8 m) or one he saw ≤ 2.5 s ago up to something (`Farmer.culprit`);
+   nobody = he looks round where it came from (mines / fireballs blame nobody; before: the nearest pig within 6–12 m,
+   even for his own step on a mine), ✅ **chase limit** — `BOB.chaseMax` 26 s (+6 / alert level) of chasing one pig
+   (tally fades 0.5 s/s) → pants, gives up (`bobGaveUp` = counts for loseBob), that pig gets a **breather**
+   (`calmUntil`, 20 s: its suspicion capped under the "?" line; hitting him / his trap / a catch breaks it); every
+   give-up (search over, fist, slap taunt) = a short breather + low suspicion (was 0.45 = straight back to "?"),
+   ✅ **"recognises you" only for a pig he chased and lost** (`huntKnown`) — not one he only glimpsed being odd or
+   the dog barked at (those: what it does when he gets there counts), hunts shorter (decay 0.05, max 35 s),
+   sprinting weaker (0.15), a tumbling / flung pig isn't suspicious, ✅ **Bob's plate = loot to the stash**
+   (mission `lunchSteal` ticks when it's banked, waypoint + icons show the stash).
    **Later (user s29, "keep for later")**: guided steps everywhere (the game shows the next step of a mission as you
    go — "I watered it, now what?"; things you pick up must say what they do), the grinder turnable any way, food
    boosts = a visible temporary "rush mode" on screen (fast run, strong fart…), **loot pockets** (pick up and keep
@@ -582,10 +593,19 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   no duplicate player / seat / pig on any page, in the lobby party or on the server. Real-world limits: P2P needs both routers to
   allow it (STUN only, no TURN) — else ☁ relay through Render (Oregon: + ~150–250 ms from Israel); Render free ≈ 5 GB / month
   out (relay ≈ 110 MB / hour per relayed player).
+- 2026-11-20 (session 30): Bob's suspicion / blame / chase limit + lunch plate (see Roadmap s30). Checked headless
+  (scratchpad `bobtest.cjs`, `bobtest2.cjs`): mine with an idle pig 5 m behind = no blame (search), knock-down with an
+  unseen pig 5 m behind = no blame, with a pig 1.6 m away = blamed + caught, endless chase in sight = gives up after
+  ~40 s (level 1) and a pig standing 5 m in front during the breather stays ≤ 0.29, a pig he only suspected ducks out
+  and sits still in front of him = no chase, a pig lost in a chase = recognised + caught, the plate → stash + mission.
+  Not run online with 2 browsers (host-only logic).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 30 (new)**: **Bob** — does he still grab / chase a pig that did nothing? Does he give up a long chase
+  now (~30–40 s, then leaves that pig alone ~20 s) — too soon / too late? · **Bob's lunch plate**: take it to the
+  stash (coins) = mission done — clear now?
 - **Session 29 (new)**: the **freeze** — did it happen again? If yes, is there a ⚠ line on screen (screenshot it)?
   · prompts now = icon + a short word at the bottom (Drop / Throw / Hold: throw / Pour / Harvest…) — clear now?
   · LMB click throws, hold LMB turns a crank, the cage lock = hold RMB (or Space) — easier? · end of round: everyone

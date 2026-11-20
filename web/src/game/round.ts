@@ -109,6 +109,8 @@ const MDEF: Partial<Record<MissionId, { props?: string[]; critters?: string[]; t
   snowballBob: { props: ['snowball'], to: 'bob', noArrow: true }, bigSnowball: { props: ['snowboulder'], to: 'bob' }, bigPresent: { props: ['bigPresent'], to: 'stash' },
   cheeseRiver: { props: ['cheeseWheel', 'prizeCheese'], to: 'river' },
   piggyBank: { props: ['piggyBank'], to: 'stash' },
+  // his plate (user s30: "I took it, didn't know where to — banked it, the mission stayed"): to the stash like loot
+  lunchSteal: { props: ['bobLunch'], to: 'stash' },
 };
 type Phase = 'play' | 'escape' | 'end';
 /** Seconds all pigs stand in the sty before the round ends (walk out = cancel, keep playing for the bonus). */
@@ -517,6 +519,7 @@ export class Round {
     if (pr.def === PROPS.tv && !pr.broken) this.done('tvSteal');
     if (pr.def === PROPS.clock) this.done('clockSteal');
     if (pr.def === PROPS.piggyBank) this.done('piggyBank');
+    if (pr.def?.id === 'bobLunch') this.done('lunchSteal');   // his plate in the stash: no lunch for Bob (he'll find it gone)
     G.audio.play('coins', { pos: p, vol: 0.9 });
     G.fx.bits(p, { count: 18, color: 0xffd166, spread: 0.3, speed: 3, up: 4, grav: 8, life: 0.9, size: 0.1, grow: 0, alpha: 1 });
     G.events.push({ type: 'banked', text: pr.label ?? '', why: String(value) });
@@ -616,7 +619,7 @@ export class Round {
     if (x.id === 'cheeseRiver') return IC.grab + IC.water;
     if (x.id === 'peakClimb') return IC.feet + IC.stars;
     if (x.id === 'chairPull') return IC.rmb + IC.chair + IC.bob;
-    if (x.id === 'lunchSteal') return IC.rmb + IC.plate;
+    if (x.id === 'lunchSteal') return IC.rmb + IC.plate + IC.stash;
     if (x.id === 'lunchSpike') {
       const lu = this.game.lunch;
       if (lu && L.held === lu.sauce) return kc('R') + IC.pour + IC.plate;

@@ -42,7 +42,16 @@ export const BOB = {
   cough: 3, loseSight: 3, search: 4, stamina: 14, pant: 2.6, fistGiveUp: 6,
   // hunting a pig he lost: suspicion drains slowly while it stays out of sight; he checks hiding spots near where
   // he lost it and recognises it (even acting natural) when it's this close
-  huntDecay: 0.035, unseenDecay: 0.06, seenDecay: 0.12, huntSpots: 4, lookAround: 2.4, recognise: 9, huntMax: 45,
+  huntDecay: 0.05, unseenDecay: 0.06, seenDecay: 0.12, huntSpots: 4, lookAround: 2.4, recognise: 9, huntMax: 35,
+  // (user s30: "he latches onto a pig that does nothing; even when it did something he must calm down with time")
+  // he doesn't chase one pig forever: after `chaseMax` s of chasing it (+ `chaseMaxLevel` per alert level; the tally
+  // fades `chaseCool` s per s while he isn't chasing it) he's had enough — pants, mutters, back to work, and that pig
+  // gets a breather: for `fedUp` s his suspicion of it stays under `fedCap` (no "?", no chase, no "recognising" it —
+  // only hitting him, a pig in his trap or a fresh catch of it breaks it)
+  chaseMax: 26, chaseMaxLevel: 6, chaseCool: 0.5, fedUp: 20, fedCap: 0.29,
+  // who did that? A hit is pinned on a pig right next to him (≤ blameNear m) or one he saw ≤ blameSeen s ago within
+  // blameR m that was up to something; nobody like that = he looks round where it came from (no pig gets the blame)
+  blameNear: 2.8, blameSeen: 2.5, blameR: 10,
   // farm 5: grip on ice (× accel); hurrying across it (faster than iceSlip m/s) he goes down now and then (per second)
   ice: 0.14, iceSlip: 3.1, iceSlipRate: 0.9,
 };
@@ -56,7 +65,7 @@ export const BOB = {
  */
 export const ALERT = {
   at: [0, 22, 50, 80], drop: 8, decay: 0.7, hold: 7,
-  hear: [1, 1.3, 1.45, 1.6], sight: [1, 1.08, 1.15, 1.22], sus: [1, 1.2, 1.35, 1.5], hunt: [1, 0.8, 0.65, 0.5], run: [1, 1, 1.06, 1.16],
+  hear: [1, 1.3, 1.45, 1.6], sight: [1, 1.08, 1.15, 1.22], sus: [1, 1.2, 1.35, 1.5], hunt: [1, 0.85, 0.75, 0.65], run: [1, 1, 1.06, 1.16],
   gain: { alarm: 22, suspect: 4, noise: 2, lost: 6, escaped: 10, caged: 4, cough: 6, splat: 5, down: 22, stagger: 9, prank: 10, loot: 6, trap: 6, gateOpen: 5, gateBroken: 14 },
   reach: 2.55, catchR: 1.4, catchAt: 1.15,                                                  // pitchfork (level 2+)
   gunMin: 3.2, gunMax: 14, gunAim: 0.8, gunShoot: 0.6, gunCool: 5.5, gunCone: Math.cos(0.27), gunPush: 11,   // shotgun (level 3)
@@ -178,6 +187,11 @@ export class Farmer {
   private lastVel = new THREE.Vector3();
   /** The pig he lost and is looking for (search state), the spots he checks, when each pig was last in sight. */
   hunt: Pig | null = null;
+  /** The hunt is for a pig he chased and lost (he recognises it up close even acting natural) — not one he only
+   * glimpsed being a bit odd, or one the dog barked at. */
+  private huntKnown = false;
+  /** Seconds he has chased each pig (fades while he isn't), and until when a pig he gave up on gets a breather. */
+  private chaseT = new Map<Pig, number>(); private calmUntil = new Map<Pig, number>();
   private spots: THREE.Vector3[] = []; private spotIdx = 0; private lookUntil = 0; private lookStart = 0; private spotBy = 0;
   private seenAt = new Map<Pig, number>(); private seenSince = new Map<Pig, number>();
   /** Stolen loot he spotted lying around and is taking back (tidy state), whether it's in his hands. */
@@ -416,7 +430,7 @@ export class Farmer {
     if (this.gone) this.wake();
     if (this.carrying) this.release(false);
     this.sus.set(p, 0.85); this.lastSeen.copy(p.pos); this.lastVel.copy(p.vel);
-    this.startSearch(p.pos, p, BOB.huntSpots);
+    this.startSearch(p.pos, p, BOB.huntSpots, true);
   }
   /** Was this pig in his sight a moment ago (host)? */
   sees(p: Pig) { return this.now - (this.seenAt.get(p) ?? -10) < 0.15; }
@@ -478,7 +492,7 @@ export class Farmer {
         const t = this.target;
         if (!t) { this.backToWork(); break; }
         const unseen = this.now - (this.seenAt.get(t) ?? -10);
-        if (unseen > 1.6) { this.startSearch(this.lastSeen, t, 3); break; }     // it ducked out of sight: go and look
+        if (unseen > 1.6) { this.startSearch(this.lastSeen, t, 2); break; }     // it ducked out of sight: go and look (it only looked odd: no "recognising" it)
         if (unseen < 0.2) { this.lastSeen.copy(t.pos); this.lastVel.copy(t.vel); }
         this.face(this.lastSeen, dt, 6);
         const d = Math.hypot(this.lastSeen.x - this.pos.x, this.lastSeen.z - this.pos.z);
@@ -516,7 +530,7 @@ export class Farmer {
       case 'taunt':
         if (this.slapped[0]) this.face(this.slapped[0].pos, dt, 4);
         if (this.now - this.stateT > BOB.taunt) {
-          for (const s of this.slapped) this.sus.set(s, 0.4);
+          for (const s of this.slapped) this.breather(s, 0.15, BOB.fedUp * 0.5);   // he's had his satisfaction
           this.slapped = []; this.target = null; this.chaseRun = 0;
           this.backToWork();
         }
@@ -572,7 +586,12 @@ export class Farmer {
         break;
       }
       case 'pant':
-        if (this.now - this.stateT > BOB.pant) { this.chaseRun = 0; this.go(this.target ? 'chase' : 'routine'); }
+        if (this.now - this.stateT > BOB.pant) {
+          this.chaseRun = 0;
+          const t = this.target;
+          if (t && (this.chaseT.get(t) ?? 0) >= this.chaseMax()) this.giveUp(true);   // had enough of this one
+          else this.go(t ? 'chase' : 'routine');
+        }
         break;
       case 'cough': this.moveVel.copy(this.forward).multiplyScalar(0.4); want = -1; break;
       case 'stagger': this.moveVel.copy(this.forward).multiplyScalar(-1.2); want = -1; break;
@@ -773,11 +792,10 @@ export class Farmer {
     let w = 0;
     if (p.held) w = 1;
     if (p.standing) w = Math.max(w, 0.55);
-    if (p.sprinting) w = Math.max(w, 0.3);
+    if (p.sprinting) w = Math.max(w, 0.15);                    // (pigs do run about: only a little odd)
     if (p.smoking) w = Math.max(w, 0.5);                       // a pig smoking a cigarette is NOT normal
     if (p.buzz > 0.3) w = Math.max(w, 0.35);                   // chain modes: a giggling, swaying pig
     if (G.chain?.inShed(p.pos)) w = Math.max(w, 0.6);          // chain modes: a pig in his shed, at his machines
-    if (p.mode === 'ragdoll' && p.vel.length() > 4) w = Math.max(w, 0.5);
     if (this.zones.garden.some((r) => p.pos.x > r.x0 && p.pos.x < r.x1 && p.pos.z > r.z0 && p.pos.z < r.z1)) w = Math.max(w, 0.4);
     if (this.cage.pigs.length && this.cage.contains(p.pos, 2.2)) w = Math.max(w, 0.9);
     if (p.mode === 'wallow' && p.input.wallow) w = 0;        // playing dead
@@ -835,13 +853,18 @@ export class Farmer {
       }
       if ((p === this.target || p === this.hunt) && seen) { this.lastSeen.copy(p.pos); this.lastVel.copy(p.vel); this.lastSeenT = this.now; }
       // only un-piggy behaviour he SEES raises it; out of sight it drains slowly (slowest for the pig he's hunting)
+      const fed = !p.heldBy && (this.calmUntil.get(p) ?? 0) > this.now;   // he gave up on this one a moment ago: he lets it be
       if (w > 0 && seen) s += w * (0.25 + 1.3 * near * near) * dt * (looking ? 1.5 : 1) * ALERT.sus[this.level] * (ADMIN.chill ? 0.6 : 1);
       else if (p !== this.target || !this.chasing) {
         // hunting it: no let-up until he has reached the place he lost it
-        const huntK = this.state === 'search' && this.spotIdx === 0 && !this.lookUntil ? 0 : BOB.huntDecay * ALERT.hunt[this.level];
+        const huntK = this.state === 'search' && this.spotIdx === 0 && !this.lookUntil ? 0
+          : this.huntKnown ? BOB.huntDecay * ALERT.hunt[this.level] : BOB.unseenDecay;
         s -= (seen ? BOB.seenDecay : p === this.hunt ? huntK : BOB.unseenDecay) * dt;
       }
-      s = clamp(s, 0, 1);
+      if (p !== this.target || !this.chasing) {   // his chase tally on it fades while he isn't after it
+        const c = this.chaseT.get(p); if (c) this.chaseT.set(p, Math.max(0, c - BOB.chaseCool * dt));
+      }
+      s = clamp(s, 0, fed ? BOB.fedCap : 1);
       if (p.out || p.cage) s = 0;
       this.sus.set(p, s);
       // reactions
@@ -849,7 +872,7 @@ export class Farmer {
       if (s >= 1) { this.alarmed(p); return; }
       if (['routine', 'investigate', 'search', 'suspect', 'guard'].includes(this.state) && this.danceNear(p, false)) return;
       // the pig he's looking for: recognised up close even when it acts natural
-      if (p === this.hunt && s > 0.25 && this.now - (this.seenSince.get(p) ?? this.now) > 0.35
+      if (p === this.hunt && this.huntKnown && !fed && s > 0.25 && this.now - (this.seenSince.get(p) ?? this.now) > 0.35
         && Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < BOB.recognise) { this.alarmed(p); return; }
       if (s >= 0.3 && w > 0 && this.state !== 'suspect') {
         this.stopRiding();
@@ -926,7 +949,7 @@ export class Farmer {
 
   private alarmed(p: Pig) {
     this.stopRiding();
-    this.hunt = null; this.lookYaw = 0;
+    this.hunt = null; this.huntKnown = false; this.lookYaw = 0; this.calmUntil.delete(p);
     this.target = p; this.sus.set(p, 1);
     this.lastSeen.copy(p.pos); this.lastSeenT = this.now;
     this.doing = false;
@@ -936,18 +959,27 @@ export class Farmer {
     G.events.push({ type: 'alarm', who: p });
   }
 
-  private giveUp() {
-    if (this.target) this.sus.set(this.target, 0.45);
+  /** He stops chasing (the pig's out of reach / gone / he's had enough = `fed`): back to work, and that pig gets a
+   * breather (its suspicion low, what it does barely registers for a while). */
+  private giveUp(fed = false) {
+    const t = this.target;
+    if (t) this.breather(t, fed ? 0 : 0.15, fed ? BOB.fedUp : BOB.fedUp * 0.6);
+    if (t && fed) { this.chaseT.set(t, 0); G.events.push({ type: 'bobGaveUp', who: t }); }
     this.target = null;
     this.voice('mutter');
     this.backToWork();
   }
+  private breather(p: Pig, sus: number, secs: number) {
+    this.sus.set(p, Math.min(this.sus.get(p) ?? 0, sus));
+    this.calmUntil.set(p, Math.max(this.calmUntil.get(p) ?? 0, this.now + secs));
+  }
+  private chaseMax() { return BOB.chaseMax + this.level * BOB.chaseMaxLevel; }
 
   // ================================================================== searching (lost a pig / heard something)
   /** Look around `at` and a few hiding spots near it (bushes, corn, behind things, ahead of where the pig ran). */
-  private startSearch(at: THREE.Vector3, hunt: Pig | null, n: number) {
+  private startSearch(at: THREE.Vector3, hunt: Pig | null, n: number, known = false) {
     this.stopRiding(); this.doing = false;
-    this.hunt = hunt; this.target = null;
+    this.hunt = hunt; this.huntKnown = !!hunt && known; this.target = null;
     this.spots = [at.clone(), ...this.findSpots(at, hunt ? this.lastVel : null, n - 1)];
     this.spotIdx = 0; this.lookUntil = 0; this.path = []; this.spotBy = this.spotDeadline(this.spots[0], hunt);
     this.go('search');
@@ -1006,10 +1038,10 @@ export class Farmer {
   private search(dt: number) {
     const h = this.hunt;
     this.activity = h ? 'bob.search' : 'bob.heard';
-    const over = h ? (this.sus.get(h) ?? 0) < 0.3 || h.out || !!h.cage || this.now - this.stateT > BOB.huntMax * (1 + this.level * 0.25) : this.now - this.stateT > 30;
+    const over = h ? (this.sus.get(h) ?? 0) < (this.huntKnown ? 0.3 : 0.12) || h.out || !!h.cage || this.now - this.stateT > BOB.huntMax * (1 + this.level * 0.2) : this.now - this.stateT > 30;
     const spot = this.spots[this.spotIdx];
     if (!spot || over) {
-      if (h) G.events.push({ type: 'bobGaveUp', who: h });
+      if (h) { this.breather(h, 0.15, BOB.fedUp * 0.5); if (this.huntKnown) G.events.push({ type: 'bobGaveUp', who: h }); }
       this.voice('mutter'); this.backToWork();
       return 0;
     }
@@ -1981,17 +2013,24 @@ export class Farmer {
     G.events.push({ type: 'market', text: 'gone' });
   }
 
-  /** The guard dog barked at a pig: he comes over to look (or wakes up). */
-  tipOff(p: Pig, at: THREE.Vector3) {
+  /** The guard dog barked at a pig: he comes over to look (or wakes up). `known` = he knows who (a hug): he'll
+   * recognise it up close; otherwise it's "a pig over there" — only what it does when he gets there counts. */
+  tipOff(p: Pig, at: THREE.Vector3, known = false) {
     if (this.state === 'away') { this.awayTip = at.clone(); this.awayTipPig = p; return; }   // he'll hear about it later
     if (this.state === 'inLoo') { this.looHeard = at.clone(); this.looUntil = Math.min(this.looUntil, this.now + 1.5); return; }   // he hurries
     if (this.state === 'off' || this.state === 'down' || this.carrying) return;
     if (this.state === 'sleep') { this.wake(at); return; }
     if (!this.calm() || this.state === 'suspect') return;
+    if (this.state === 'search' && this.hunt === p) {                         // already on his way: the dog's latest bark is where he heads
+      if (this.spotIdx === 0 && !this.lookUntil) this.spots[0]?.copy(at);
+      this.sus.set(p, Math.max(this.sus.get(p) ?? 0, 0.55));
+      return;
+    }
+    if (!known && !p.heldBy && (this.calmUntil.get(p) ?? 0) > this.now) return;   // he gave up on that one a moment ago
     this.sus.set(p, Math.max(this.sus.get(p) ?? 0, 0.55));
     this.lastSeen.copy(at); this.lastVel.set(0, 0, 0);
     this.stopRiding(); this.voice('huh');
-    this.startSearch(at, p, 3);
+    this.startSearch(at, p, 3, known);
   }
   /**
    * Chain modes: a high / drunk pig hugs him (or sings to him) — he freezes, "huh?!", hearts pop, then he wants to know
@@ -2005,7 +2044,7 @@ export class Farmer {
     G.fx.bits(v1.copy(this.pos).setY(this.pos.y + 1.9), { count: 8, color: 0xff6fa8, speed: 1.6, up: 2.2, life: 1.1, size: 0.16, grow: 0, drag: 2, alpha: 1 });
     if (this.state !== 'stagger') this.stun('stagger', BOB.staggerTime + 0.6);
     this.raise('suspect');
-    this.tipOff(p, p.pos);
+    this.tipOff(p, p.pos, true);
     return true;
   }
   /** A pig stepped in one of his traps: he heard the snap and knows exactly where to go. */
@@ -2063,13 +2102,14 @@ export class Farmer {
     if (!t || t.out || t.cage || (t.heldBy && t.heldBy !== this && t.heldBy.kind !== 'trap') || ignored(t)) { this.giveUp(); return 0; }
     if (this.now - this.lastSeenT > BOB.loseSight) {        // lost it: hunt for it around where it was last seen
       this.sus.set(t, Math.max(0.85, this.sus.get(t) ?? 0));
-      this.voice('huh'); this.startSearch(this.lastSeen, t, BOB.huntSpots);
+      this.voice('huh'); this.startSearch(this.lastSeen, t, BOB.huntSpots, true);
       this.raise('lost'); this.hot(this.lastSeen);
       G.events.push({ type: 'bobLost', who: t });
       return 0;
     }
     this.chaseRun += dt;
-    if (this.chaseRun > BOB.stamina) { this.go('pant'); this.voice('yawn', 0.6); return 0; }
+    const ct = (this.chaseT.get(t) ?? 0) + dt; this.chaseT.set(t, ct);
+    if (this.chaseRun > BOB.stamina || ct > this.chaseMax()) { this.go('pant'); this.voice('yawn', 0.6); return 0; }
     const dx = t.pos.x - this.pos.x, dz = t.pos.z - this.pos.z, d = Math.hypot(dx, dz), dy = t.pos.y - this.pos.y;
     if (this.level >= 3 && this.now > this.gunReady && this.now - this.lastSeenT < 0.15 && d > ALERT.gunMin && d < ALERT.gunMax
       && Math.abs(dy) < 2.5 && Math.random() < dt * 8) {
@@ -2247,7 +2287,27 @@ export class Farmer {
     this.hit(BOB.ram, dv);
   }
 
-  private hit(dmg: number, dir: THREE.Vector3) {
+  /**
+   * Who did that? A pig right next to him, else one he saw a moment ago (≤ blameR m) that was up to something (holding,
+   * standing, his suspicion of it up). Nobody like that = nobody gets the blame (user s30: "he latches onto a pig that
+   * does nothing" — he used to pin any hit, even his own step on a mine, on the nearest pig within 6–12 m).
+   */
+  private culprit(): Pig | null {
+    let best: Pig | null = null, bd = Infinity;
+    for (const p of this.pigs) {
+      if (p.out || p.cage || p.heldBy || ignored(p)) continue;
+      const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+      if (d > BOB.blameR) continue;
+      const near = d <= BOB.blameNear;
+      const saw = this.now - (this.seenAt.get(p) ?? -10) < BOB.blameSeen && (this.suspicious(p) > 0 || (this.sus.get(p) ?? 0) >= 0.3);
+      if (!near && !saw) continue;
+      const k = near ? d : d + 50;   // the one right there first
+      if (k < bd) { bd = k; best = p; }
+    }
+    return best;
+  }
+
+  private hit(dmg: number, dir: THREE.Vector3, blame = true) {
     if (this.state === 'down') return;
     this.stopRiding();
     const winded = this.state === 'pant' || this.state === 'cough' || this.state === 'dance' ? 1.5 : 1;
@@ -2260,18 +2320,18 @@ export class Farmer {
     // knocked back a little
     const len = Math.hypot(dir.x, dir.z) || 1;
     this.vel.x += (dir.x / len) * 2.5; this.vel.z += (dir.z / len) * 2.5;
-    // he's mad now: the nearest free pig did it
-    let best: Pig | null = null, bd = 12;
-    for (const p of this.pigs) {
-      if (p.out || p.cage || p.heldBy || ignored(p)) continue;
-      const d = p.pos.distanceTo(this.pos);
-      if (d < bd) { bd = d; best = p; }
-    }
+    // he's mad now: at whoever did it (if he can tell) — else he looks round where it came from
+    const best = blame ? this.culprit() : null;
+    const from = this.pos.clone().addScaledVector(v1.set(dir.x, 0, dir.z).normalize(), -4);   // (a clone: stun() reuses the temps)
     const down = this.poise >= BOB.knockdown, stagger = !down && this.poise >= BOB.stagger && this.state !== 'stagger';
     if (down || stagger) {
       this.stun(down ? 'down' : 'stagger', down ? BOB.downTime : BOB.staggerTime);
-      if (best) { this.target = best; this.sus.set(best, 1); this.lastSeen.copy(best.pos); }
-    } else if (best && !this.carrying && !this.chasing && !this.stunUntil && bd < 6) this.alarmed(best);
+      if (best) { this.target = best; this.sus.set(best, 1); this.lastSeen.copy(best.pos); this.calmUntil.delete(best); }
+      else if (!this.target && !this.afterStun) this.afterStun = () => { this.voice('grr'); this.startSearch(from, null, 2); };
+    } else if (best && !this.carrying && !this.chasing && !this.stunUntil) this.alarmed(best);
+    else if (!best && blame && this.calm() && this.state !== 'search' && this.state !== 'suspect' && !this.carrying && !this.stunUntil) {
+      this.voice('huh'); this.startSearch(from, null, 2);
+    }
   }
 
   private stun(kind: 'down' | 'stagger' | 'cough', secs: number) {
@@ -2400,7 +2460,7 @@ export class Farmer {
     this.raise('down');
     G.events.push({ type: 'mineBob' });
     const dir = v2.set(this.pos.x - at.x + (Math.random() - 0.5) * 0.4, 0, this.pos.z - at.z + (Math.random() - 0.5) * 0.4).normalize();
-    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone());
+    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone(), false);
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dir.x * 2, y: 10, z: lv.z + dir.z * 2 }, true);
     this.parts.matchVelocity?.();
@@ -2420,7 +2480,7 @@ export class Farmer {
     this.raise('down');
     G.events.push({ type: 'bobFireball' });
     const dir = v2.set(this.pos.x - at.x + (Math.random() - 0.5) * 0.4, 0, this.pos.z - at.z + (Math.random() - 0.5) * 0.4).normalize();
-    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone());
+    if (this.state !== 'down') this.hit(BOB.knockdown + 30, dir.clone(), false);
     const lv = this.body.linvel();
     this.body.setLinvel({ x: lv.x + dir.x * 4.5, y: 6.5, z: lv.z + dir.z * 4.5 }, true);
     this.parts.matchVelocity?.();
