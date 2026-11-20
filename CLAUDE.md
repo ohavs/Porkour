@@ -126,6 +126,10 @@ Dead by Daylight, Party Animals.
   F5 comes straight back. Host: stale inputs (> 0.5 s, a dropped / alt-tabbed player) = the pig stands still; snapshots
   skipped for a peer whose channel backlog > 96 kB (`online.backlog`) → keyframe once drained (server drops relay past
   256 kB). Player: no snapshot for 2.5 s = "waiting for the host" toast. P2P to the host retried after a mid-game drop.
+  **No clones**: a tab's seat is keyed by its tab id (sessionStorage); a duplicated browser tab (same id copied) is told
+  "taken" over a `BroadcastChannel` and picks a fresh id; a seat taken over sends `replaced` to the old connection (no
+  reconnect war). The 4-browser test checks after every case: N distinct players / seats / pigs on every page, the lobby
+  party shows N, the server counts N.
   Tests: `server/test.js` (grace, rejoin, restart, 2 regroups in a row), scratchpad `mp4.cjs` = 4 browsers (`?draw=0` =
   skip drawing, test only). Measured (farm 1, 4 players): delta ≈ 0.85–1.3 kB / snapshot / player (≈ 30 kB/s each,
   host upload ≈ 0.9 Mbps for 3), keyframe ≈ 16 kB, P2P RTT 6–15 ms locally, interpolation delay 70–90 ms.
@@ -550,7 +554,8 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   relay-only): room of 4, a 5th refused, start, everyone moves and sees the others in place, a P2P player's / the relay
   player's / the host's link drops and comes back (same seat, game goes on), the server restarts (same room, same seats,
   4 s), a player F5 (same seat), leave + late join, kick + come back, end game → room lobby → new round, farm switch,
-  host F5 (room kept, still host), host leaves → players to their lobby. Real-world limits: P2P needs both routers to
+  host F5 (room kept, still host), a double F5, a duplicated tab, host leaves → players to their lobby; after each one:
+  no duplicate player / seat / pig on any page, in the lobby party or on the server. Real-world limits: P2P needs both routers to
   allow it (STUN only, no TURN) — else ☁ relay through Render (Oregon: + ~150–250 ms from Israel); Render free ≈ 5 GB / month
   out (relay ≈ 110 MB / hour per relayed player).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.

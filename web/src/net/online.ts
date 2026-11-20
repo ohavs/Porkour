@@ -15,10 +15,23 @@ type Handler = (m: any) => void;
 export function tabId() {
   try {
     let id = sessionStorage.getItem('porkour.tab');
-    if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('porkour.tab', id); }
+    if (!id) { id = newTabId(); sessionStorage.setItem('porkour.tab', id); }
     return id;
   } catch { return ''; }
 }
+const newTabId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+// "Duplicate tab" copies sessionStorage, id included: two live tabs with one id would keep taking each other's seat.
+// Each tab asks on load; a tab already using that id answers, and the newcomer picks a fresh one.
+try {
+  const bc = new BroadcastChannel('porkour.tab');
+  bc.onmessage = (e) => {
+    const id = sessionStorage.getItem('porkour.tab');
+    if (e.data?.q && e.data.q === id) bc.postMessage({ taken: id });
+    else if (e.data?.taken && e.data.taken === id && !online.room) sessionStorage.setItem('porkour.tab', newTabId());
+  };
+  const mine = sessionStorage.getItem('porkour.tab');
+  if (mine) bc.postMessage({ q: mine });
+} catch { /* no BroadcastChannel: fine */ }
 
 /**
  * Connection to the Porkour server: identity, rooms, chat, and game data.
@@ -95,9 +108,10 @@ export class Online {
         this.control(m);
       };
       ws.onerror = () => fail('unreachable');
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         fail('unreachable');
         if (this.ws !== ws) return;   // an older socket
+        if (ev.code === 4001) this.leaving = true;   // (our seat was taken by this same tab open twice: no reconnect)
         this.ws = null; this.me = null;
         clearInterval(this.pingTimer);
         // in a room and we didn't say goodbye: keep the seat, the game and the direct connections — reconnect
@@ -174,6 +188,8 @@ export class Online {
       case 'peer_away': { const p = this.peers.get(m.id); if (p) p.away = true; break; }
       case 'peer_leave': this.peers.delete(m.id); this.closeRtc(m.id); break;
       case 'closed': case 'kicked': this.room = null; this.peers.clear(); this.closeAllRtc(); break;
+      // this tab's seat was taken by the same tab id elsewhere (the tab duplicated): stop here, no reconnect war
+      case 'replaced': this.leaving = true; this.reconnecting = false; clearTimeout(this.retryTimer); this.room = null; this.peers.clear(); this.closeAllRtc(); break;
       case 'signal': this.onSignal(m.from, m.data); break;
     }
     this.emit(m.op, m);

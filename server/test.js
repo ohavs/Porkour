@@ -77,6 +77,7 @@ try {
   p2.send({ op: 'hello', v: 1, name: 'Pl', tab: 'tabP' }); await p2.next('welcome');
   p2.send({ op: 'join', code: jh.room.code });
   const j2 = await p2.next('joined');
+  assert.equal((await p1.next('replaced')).op, 'replaced', 'the old live connection is told (no reconnect war)');
   assert.equal(j2.peers.length, 2, 'the ghost is gone'); assert.equal(j2.peers.find((x) => x.id === j2.you).slot, 1, 'same seat');
   // the host switches farms: its page reloads, the room waits, it comes back as host in seat 0
   h.send({ op: 'room', farm: 'farm3' });

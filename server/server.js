@@ -85,7 +85,10 @@ function join(ws, r, want = {}, fresh = true) {
   // lingers — it takes its own seat back (same id, same slot, same pig; still the host if it was): no "clone"
   const old = ws.tab ? [...r.peers.values()].find((p) => p !== ws && p.tab === ws.tab) : null;
   if (old) {
-    clearTimeout(old.graceTimer); old.room = null; try { old.terminate(); } catch { /* gone */ }
+    // (if that old connection is still alive — the same tab open twice — it's told so and doesn't fight back)
+    clearTimeout(old.graceTimer); old.room = null; send(old, { op: 'replaced' });
+    try { old.close(4001, 'replaced'); } catch { /* gone */ }
+    setTimeout(() => { try { old.terminate(); } catch { /* gone */ } }, 2000);
     ws.pid = old.pid; ws.slot = old.slot; ws.room = r;
     r.peers.set(ws.pid, ws);
     send(ws, { op: 'joined', room: roomInfo(r), you: ws.pid, host: r.hostId, peers: [...r.peers.values()].map(peerInfo), back: true });

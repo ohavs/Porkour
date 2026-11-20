@@ -159,9 +159,9 @@ export class Lobby {
         this.err = m.code; this.render();
         setTimeout(() => { this.err = ''; if (this.view === 'browse') this.render(); }, 4000);
         break;
-      case 'closed': case 'kicked': case 'disconnected':
-        if (this.preGame && !this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : 'net.closed'), 3); setTimeout(() => { location.href = location.pathname; }, 1500); break; }
-        if (this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : 'net.closed'), 3); setTimeout(() => backToLobby(), 2500); }
+      case 'closed': case 'kicked': case 'disconnected': case 'replaced':
+        if (this.preGame && !this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : m.op === 'replaced' ? 'net.replaced' : 'net.closed'), 3); setTimeout(() => { location.href = location.pathname; }, 1500); break; }
+        if (this.inGame) { g.hud.toast(t(m.op === 'kicked' ? 'net.kicked' : m.op === 'replaced' ? 'net.replaced' : 'net.closed'), 3); setTimeout(() => backToLobby(), 2500); }
         else if (m.op === 'disconnected') { this.view = 'error'; this.err = 'unreachable'; if (this.isOpen) this.render(); }
         else { this.err = m.op === 'kicked' ? 'kicked' : 'closed'; this.browse(); }
         break;

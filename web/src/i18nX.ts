@@ -87,6 +87,7 @@ export const EN_X = {
   'a.lunchChair': "Pull Bob's chair away", 'a.tpKitchen': 'Teleport: the kitchen',
   'net.reconnecting': '📡 Connection lost — reconnecting…', 'net.reconnected': '📡 Back online', 'net.peerAway': '📡 {name} lost connection…',
   'net.hostAway': '📡 The host lost connection — waiting…', 'net.peerBack': '📡 {name} is back', 'net.noHost': '📡 Waiting for the host…',
+  'net.replaced': 'This room is open in another tab of yours',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -167,4 +168,5 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'a.lunchChair': 'Quitarle la silla a Bob', 'a.tpKitchen': 'Teletransporte: la cocina',
   'net.reconnecting': '📡 Conexión perdida: reconectando…', 'net.reconnected': '📡 Conectado de nuevo', 'net.peerAway': '📡 {name} perdió la conexión…',
   'net.hostAway': '📡 El anfitrión perdió la conexión: esperando…', 'net.peerBack': '📡 {name} volvió', 'net.noHost': '📡 Esperando al anfitrión…',
+  'net.replaced': 'Esta sala está abierta en otra pestaña tuya',
 };
