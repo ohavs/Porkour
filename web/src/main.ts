@@ -28,6 +28,7 @@ import { FARM5_MODELS } from './world/farm5';
 import { INTERIOR_MODELS } from './world/interiors';
 import { farmId, FARM_IDS, reloadOnFarm, type FarmId } from './world/farms';
 import { FLAGS } from './game/flags';
+import { gate } from './game/gate';
 
 const MODELS = [
   ...['Barn', 'BigBarn', 'SmallBarn', 'OpenBarn', 'ChickenCoop', 'Silo', 'Silo_House', 'TowerWindmill', 'Windmill', 'WaterTower', 'Well'].map((n) => 'farm/' + n),
@@ -75,6 +76,7 @@ async function precompile(gfx: Gfx) {
 }
 
 async function boot() {
+  await gate();   // early access: a tester code first (net/access.ts)
   const audio = new Audio();
   audio.setMuted(SETTINGS.muted);
   let pModels = 0, pSounds = 0;

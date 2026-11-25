@@ -332,7 +332,7 @@ export class Menu {
   private jailSecs = 60;
   private aTab: 'me' | 'players' | 'bob' | 'world' | 'farm' | 'items' | 'owner' = 'me';
   /** Owner tab: who's online (from the server). */
-  private users: { id: number; name: string; google: boolean; room: string; me: boolean }[] = [];
+  private users: { id: number; name: string; google: boolean; tester?: number; room: string; me: boolean }[] = [];
   private usersHooked = false;
   renderAdmin() {
     const g = this.game, f = g.farm;
@@ -410,7 +410,7 @@ export class Menu {
       case 'owner': {
         // the owner (the user's account): coins / a level for anyone online (they get it in their own wallet)
         if (!this.usersHooked) { this.usersHooked = true; online.on('users', (m) => { this.users = m.users ?? []; if (ADMIN.open && this.aTab === 'owner') this.renderAdmin(); }); }
-        const rows = this.users.filter((u) => !u.me).map((u) => `<div class="prow"><span>${u.google ? '🟢 ' : ''}${u.name.replace(/[<>&]/g, '')}${u.room ? ` · <b>${u.room}</b>` : ''}</span>` +
+        const rows = this.users.filter((u) => !u.me).map((u) => `<div class="prow"><span>${u.google ? '🟢 ' : ''}${u.name.replace(/[<>&]/g, '')}${u.tester ? ` · #${u.tester}` : ''}${u.room ? ` · <b>${u.room}</b>` : ''}</span>` +
           `<div class="grid g3"><button data-gift="${u.id}:1000:0"><b>🪙</b>1K</button><button data-gift="${u.id}:10000:0"><b>💰</b>10K</button><button data-gift="${u.id}:100000:0"><b>🏦</b>100K</button><button data-gift="${u.id}:0:1"><b>⭐</b>+1</button><button data-gift="${u.id}:0:10"><b>🌟</b>+10</button>` +
           `<button data-grant="${u.id}:1" title="${tip('a.grant')}"><b>🛠️</b>✔</button><button data-grant="${u.id}:0" title="${tip('a.ungrant')}"><b>🛠️</b>✖</button></div></div>`).join('');
         body = `<div class="hint">👑 ${t('a.ownerHint')}</div>` + sec('a.users') + (online.connected ? rows || `<div class="hint">—</div>` : `<div class="hint">📡 ✖</div>`) +

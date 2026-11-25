@@ -6,7 +6,8 @@
 //   text frames   JSON control messages {op: ...}
 //   binary frames [u8 target peer id (0 = everyone else)] + payload  →  delivered as [u8 sender id] + payload
 //
-// Env: PORT (8080), GOOGLE_CLIENT_ID (enables verified Google accounts), ALLOWED_ORIGINS (comma list, optional).
+// Env: PORT (8080), GOOGLE_CLIENT_ID (enables verified Google accounts), ALLOWED_ORIGINS (comma list, optional),
+//      EARLY_ACCESS=0 (anyone may play online, no tester code needed).
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
@@ -24,6 +25,29 @@ const VERSION = 1;
 const OWNER_HASHES = new Set(['6b8626b254d97cb0dc01f56029abc7abdef3970048c91128372a16eb24910923',
   ...(process.env.OWNER_EMAIL_SHA256 || '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)]);
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+// Early access (user 2026-11-25): online play only with a tester code (or the owner's Google account). Same list as
+// web/src/net/access.ts (only SHA-256 fingerprints: this repo is public; `npm test` checks both lists match).
+// Take a code back = delete its line in both. EARLY_ACCESS=0 (Render env var) = open to everyone.
+const EARLY_ACCESS = process.env.EARLY_ACCESS !== '0';
+const ACCESS = new Map([
+  ['758eb059da3a18befc77cf934c5442f7283188855975fb2de21597e12b182797', 1],
+  ['045c05787c0f42f26c0b80f17234603211ee2ffcc8c48452836a38c10425edd3', 2],
+  ['1bdb2ac98d442122e83c862f2cd57b2e9905c1f1fd44fad95af4d2f19ca605a1', 3],
+  ['d05272cf4349f7ef094b5e725ab18cffa57137c5c9e461530f15afd4d4f87a46', 4],
+  ['a0b3813afb8d15ab014b939213901433d4438283adee8a848e40452039526041', 5],
+  ['9272aa07e89d84ecca3ed82055b961e441aaa9dbd7b5014bdf50e17876180a82', 6],
+  ['f91209e0ee0b9bb94ff6d57f98db43a08ea408b2f111de445dd56a4db9e953f1', 7],
+  ['c622a3ed9ae63d216f5b4454802d382e6aecbd2585191fda18bdda4e43080667', 8],
+  ['08ee29b0b7da1ed213d0d0649353a2512ef8bc2d21c6260a83b2ce2956b49ca1', 9],
+  ['ce5bc6bf5de4b1fbfc1b092a1b999da06a3e7e722eb15594df19e646ed934622', 10],
+  ['ea16531352d6772005f76219d79ddfcc8384a86b2da0055f935319476c4b0910', 11],
+  ['bb6b033b12273273b6f832101073ebe9fc29e9010ee4da132f25f9d764d85776', 12],
+]);
+/** The tester number of a code (0 = not a code). */
+const testerOf = (code) => {
+  const c = String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24);
+  return c.length >= 8 ? ACCESS.get(sha256('porkour-early-access:' + c)) ?? 0 : 0;
+};
 /** A host switching farms reloads its page: the room waits this long (ms) for it to come back. */
 const SWITCH_GRACE = Number(process.env.SWITCH_MS || 45000);
 /** A connection that drops without saying goodbye (Wi-Fi blip, a laptop lid, a phone switching networks, this server
@@ -170,6 +194,13 @@ async function control(ws, m) {
     ws.outfit = typeof m.outfit === 'string' ? m.outfit.slice(0, 600) : '';
     ws.tab = clean(m.tab, 40);
     ws.user = await identify(m);
+    ws.user.tester = testerOf(m.access);
+    if (EARLY_ACCESS && !ws.user.owner && !ws.user.tester) {
+      ws.user = null;
+      send(ws, { op: 'error', code: 'access' });
+      setTimeout(() => { try { ws.close(4003, 'access'); } catch { /* gone */ } }, 300);
+      return;
+    }
     send(ws, { op: 'welcome', you: { uid: ws.user.uid, name: ws.user.name, picture: ws.user.picture, google: ws.user.google, owner: !!ws.user.owner }, authError: ws.user.error, googleEnabled: !!GOOGLE_CLIENT_ID });
     return;
   }
@@ -241,7 +272,7 @@ async function control(ws, m) {
     // the owner: who's online, and coins / levels for anyone of them
     case 'users': {
       if (!ws.user.owner) return;
-      const users = [...wss.clients].filter((c) => c.user && !c.user.pending).map((c) => ({ id: c.cid, name: c.user.name, google: c.user.google, room: c.room?.code ?? '', me: c === ws }));
+      const users = [...wss.clients].filter((c) => c.user && !c.user.pending).map((c) => ({ id: c.cid, name: c.user.name, google: c.user.google, tester: c.user.tester || 0, room: c.room?.code ?? '', me: c === ws }));
       return send(ws, { op: 'users', users });
     }
     case 'gift': {
@@ -273,7 +304,7 @@ const server = http.createServer((req, res) => {
   if (req.url?.startsWith('/rooms')) { res.writeHead(200, headers); res.end(JSON.stringify(publicRooms())); return; }
   let players = 0; for (const r of rooms.values()) players += r.peers.size;
   res.writeHead(200, headers);
-  res.end(JSON.stringify({ name: 'porkour-server', version: VERSION, rooms: rooms.size, players, google: !!GOOGLE_CLIENT_ID }));
+  res.end(JSON.stringify({ name: 'porkour-server', version: VERSION, rooms: rooms.size, players, google: !!GOOGLE_CLIENT_ID, access: EARLY_ACCESS, at: process.env.RENDER_SERVICE_NAME || '' }));
 });
 
 const wss = new WebSocketServer({
@@ -319,4 +350,4 @@ setInterval(() => {
   }
 }, 15000).unref();
 
-server.listen(PORT, () => console.log(`porkour server on :${PORT} (google sign-in ${GOOGLE_CLIENT_ID ? 'on' : 'off'})`));
+server.listen(PORT, () => console.log(`porkour server on :${PORT} (google sign-in ${GOOGLE_CLIENT_ID ? 'on' : 'off'}, early access ${EARLY_ACCESS ? 'on' : 'off'})`));

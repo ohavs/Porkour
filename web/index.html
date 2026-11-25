@@ -197,6 +197,15 @@
   /* overlays */
   .overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9; background: rgba(20,10,3,.45); }
   .overlay.show { display:flex; }
+  /* early access gate (game/gate.ts) */
+  #gate { z-index: 40; background: radial-gradient(circle at 50% 40%, #4a2e18, #140a03 75%); }
+  #gate .panel { text-align: center; min-width: 0; width: min(420px, 92vw); box-sizing: border-box; }
+  #gate .glock svg { width: 72px; height: 72px; margin: 4px auto 0; display: block; }
+  #gate .lrow .tin { font-size: 22px; letter-spacing: 2px; text-align: center; text-transform: uppercase; padding: 10px; }
+  #gate .chip.big { padding: 6px 14px; line-height: 0; }
+  #gate .gerr { min-height: 22px; margin-top: 10px; color: #ff9a7a; font-size: 17px; }
+  #gate .panel.shake { animation: gshake .4s; }
+  @keyframes gshake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
   .panel { background: linear-gradient(180deg, #5a3820 0%, #3e2614 100%); border: 4px solid #2a170b; outline: 2px solid rgba(255,209,102,.35); outline-offset: -8px;
     box-shadow: 0 10px 0 rgba(0,0,0,.28), 0 18px 40px rgba(0,0,0,.45); border-radius: 24px; padding: 18px 22px; min-width: 340px; max-width: 92vw; max-height: 86vh; overflow:auto;
     box-shadow: 0 10px 40px rgba(0,0,0,.45); }

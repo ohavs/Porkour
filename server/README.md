@@ -27,6 +27,17 @@ The game on `localhost` uses `ws://localhost:8080` automatically (`?server=` ove
    The game needs it as `wss://porkour-server-xxxx.onrender.com` → `BUILT_IN_SERVER` in `web/src/net/config.ts`
    (or the `VITE_SERVER_URL` build variable).
 
+`render.yaml` defines two copies of the server: `porkour-server-eu` (Frankfurt, nearest to the players) and
+`porkour-server` (Oregon). The game tries Frankfurt first and uses Oregon only if Frankfurt refuses at once
+(`BUILT_IN_SERVERS` in `web/src/net/config.ts`). A service's region can't be changed after it's created: to move, add a
+new service with a new name; to delete one, remove its block from `render.yaml` first (or the Blueprint recreates it).
+
+## Early access
+
+Online play needs a tester code (`ACCESS` in `server.js` = the same list as `web/src/net/access.ts`, only SHA-256
+fingerprints; `npm test` checks they match) or the owner's Google account. Set the env var `EARLY_ACCESS=0` to open it to
+everyone (and `EARLY_ACCESS = false` in access.ts for the game's own code screen). Local tests: `EARLY_ACCESS=0 npm start`.
+
 The free plan sleeps after ~15 minutes without players; the first connection then waits up to a minute (the lobby
 says so). Any Node host with WebSockets works the same way (Railway, Fly.io, a VPS: `PORT=80 node server.js`).
 
