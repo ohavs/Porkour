@@ -92,6 +92,9 @@ export const EN_X = {
   'net.reconnecting': '📡 Connection lost — reconnecting…', 'net.reconnected': '📡 Back online', 'net.peerAway': '📡 {name} lost connection…',
   'net.hostAway': '📡 The host lost connection — waiting…', 'net.peerBack': '📡 {name} is back', 'net.noHost': '📡 Waiting for the host…',
   'net.replaced': 'This room is open in another tab of yours',
+  // early access (code screen)
+  'ea.title': 'Early access', 'ea.code': 'Tester code', 'ea.wrong': 'Wrong code',
+  'net.err.access': 'Online play needs a tester code (early access). Open your tester link once in this browser.',
 };
 
 export const ES_X: Record<keyof typeof EN_X, string> = {
@@ -177,4 +180,6 @@ export const ES_X: Record<keyof typeof EN_X, string> = {
   'net.reconnecting': '📡 Conexión perdida: reconectando…', 'net.reconnected': '📡 Conectado de nuevo', 'net.peerAway': '📡 {name} perdió la conexión…',
   'net.hostAway': '📡 El anfitrión perdió la conexión: esperando…', 'net.peerBack': '📡 {name} volvió', 'net.noHost': '📡 Esperando al anfitrión…',
   'net.replaced': 'Esta sala está abierta en otra pestaña tuya',
+  'ea.title': 'Acceso anticipado', 'ea.code': 'Código de tester', 'ea.wrong': 'Código incorrecto',
+  'net.err.access': 'Para jugar en línea necesitas un código de tester (acceso anticipado). Abre tu enlace de tester una vez en este navegador.',
 };

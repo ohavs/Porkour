@@ -4,8 +4,8 @@ import WebSocket from 'ws';
 import assert from 'node:assert/strict';
 
 const PORT = 8099;
-async function startServer() {
-  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(PORT), GRACE_MS: '1500', SWITCH_MS: '1500' }, stdio: ['ignore', 'pipe', 'inherit'] });
+async function startServer(extra = { EARLY_ACCESS: '0' }, port = PORT) {
+  const p = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(port), GRACE_MS: '1500', SWITCH_MS: '1500', ...extra }, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((r) => p.stdout.once('data', r));
   return p;
 }
@@ -14,8 +14,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A connected + greeted client with a tab id. */
 async function hello(name, tab) { const c = client(); await c.open; c.send({ op: 'hello', v: 1, name, tab }); await c.next('welcome'); return c; }
 
-function client() {
-  const ws = new WebSocket(`ws://localhost:${PORT}`);
+function client(port = PORT) {
+  const ws = new WebSocket(`ws://localhost:${port}`);
   const inbox = [];
   const waiters = [];
   ws.on('message', (d, bin) => {
@@ -165,6 +165,28 @@ try {
     const E = await hello('E', 'tE'); E.send({ op: 'rejoin', code: 'QQQQ', pid: 1, slot: 0 }); assert.equal((await E.next('error')).code, 'notfound');
     E.send({ op: 'rejoin', code, pid: 1, slot: 0 }); const je = await E.next('joined'); assert.notEqual(je.you, 1); assert.notEqual(je.peers.find((x) => x.id === je.you).slot, 0);
     for (const c of [H3, A2, E, D, A, B2, H2]) c.ws.close();
+  }
+  // early access: the tester list here = the game's list (web/src/net/access.ts); no code / a wrong code = refused
+  {
+    const { readFileSync } = await import('node:fs');
+    const fp = (txt) => [...txt.matchAll(/\['([0-9a-f]{64})', (\d+)\]/g)].map((x) => x[1] + ':' + x[2]).sort().join();
+    const web = fp(readFileSync(new URL('../web/src/net/access.ts', import.meta.url), 'utf8'));
+    const mine = fp(readFileSync(new URL('./server.js', import.meta.url), 'utf8'));
+    assert.ok(web.length > 64, 'the game has tester codes'); assert.equal(mine, web, 'server.js ACCESS = web/src/net/access.ts CODES');
+    const ea = await startServer({}, PORT + 1);
+    try {
+      for (const access of [undefined, 'AAAA-BBBB-CCCC', '']) {
+        const c = client(PORT + 1); await c.open;
+        c.send({ op: 'hello', v: 1, name: 'NoCode', tab: 'tX', access });
+        assert.equal((await c.next('error')).code, 'access', 'refused without a valid code');
+        const closed = await new Promise((r) => { c.ws.on('close', (code) => r(code)); setTimeout(() => r(0), 2000); });
+        assert.equal(closed, 4003, 'and the connection closes');
+      }
+      const c = client(PORT + 1); await c.open; c.send({ op: 'hello', v: 1, name: 'X' });
+      await c.next('error'); c.send({ op: 'create', name: 'r' });
+      await assert.rejects(c.next('joined'), 'no room without a code');
+      c.ws.close();
+    } finally { ea.kill(); }
   }
   console.log('server test: OK');
 } catch (e) {

@@ -56,6 +56,14 @@ Dead by Daylight, Party Animals.
   `game/saves.ts`, in settings): 💾 chip above the farm card → saves card (load / new game / start over / delete; each
   slot shows its stages, stars, who played, date); a won stage goes into the save in use; results "Next stage ▶" (in a
   room: the whole room reloads onto it); the room shows the host's save label to the players (server `room.save`).
+- **Early access (user 2026-11-25)**: the game opens only with a tester code (`net/access.ts` + `game/gate.ts`, before
+  anything loads) — or the owner's Google account / an admin grant; the server refuses online play without one
+  (`server.js` `ACCESS`, error `access` + close 4003; env `EARLY_ACCESS=0` = open). 12 personal codes `XXXX-XXXX-XXXX`
+  (#1 = the owner's); only SHA-256 fingerprints are in the repo (salt `porkour-early-access:`), the plaintext codes went
+  to the user in chat (never commit them). Testers get `https://ohavs.github.io/Porkour/?code=…` → remembered in that
+  browser, wiped from the address bar. Take one back = delete its line in BOTH lists (`npm test` checks they match);
+  more codes = generate + add both. Owner panel 👑 shows `#n` per player. `EARLY_ACCESS = false` + the env var = public.
+  Not real security (public repo / static site): a "velvet rope" for friends; a real lock = private repo + private host.
 - Admin mode (user request): `` ` `` key / menu button / `?admin=1` — keep it updated with test switches for new features.
   **Tabs (s17, user: "simplify it")**: Me (powers: fly, ghost = Bob / dog / animals / wolves / traps ignore me (`ignored(p)` in
   ctx.ts), teleports) · Players (per pig: jail = sky cell `world/jail.ts`, freeze, launch, knock, bring, go to, ghost) · Bob ·
@@ -75,8 +83,8 @@ Dead by Daylight, Party Animals.
   (`--use-angle=swiftshader`, `?auto=1&q=low`; software GL ≈ 10 fps so the sim runs slower than real time — wait on
   `window.__G.time`, not wall time). Test hooks: `window.__game` (`scripted` input override, `cam`, `local`, `pigs`, `farmer`,
   `daynight`, `adminAction(...)`, `mode` 'lobby' | 'play', `stage`), `window.__G`, `window.__ADMIN`, `window.__wardrobe`, `__online`, `__lobby`, `__lobbyUI`.
-  URL: `?auto=1` (skips the lobby: straight into a round), `?hour=21.5`, `?bob=0`, `?admin=1`, `?draw=0` (no drawing: many browsers), `?pre=0` (no shader precompile).
-  Online tests: `cd server && npm test` (protocol); `DEBUG=1 PORT=8080 node server.js` + two Playwright contexts
+  URL: `?gate=1` (show the early-access gate on localhost too), `?server=a,b` (server list = fallback order), `?auto=1` (skips the lobby: straight into a round), `?hour=21.5`, `?bob=0`, `?admin=1`, `?draw=0` (no drawing: many browsers), `?pre=0` (no shader precompile).
+  Online tests: `cd server && npm test` (protocol + early access); `EARLY_ACCESS=0 DEBUG=1 PORT=8080 node server.js` + two Playwright contexts
   (host: `#tOnline` → `[data-a=create]` (force) → wait `__lobby.inRoom`; player opens `?room=CODE`; host clicks `#lPlay` = start). Software GL is
   very slow with 2 pages (first frame compiles shaders for a minute+): use small viewports and generous timeouts.
 
@@ -109,7 +117,10 @@ Dead by Daylight, Party Animals.
   ram, respawn, ragdoll, carried, divergence > 3 m) → `hostTakes()` window (netState flag 64): the player stops predicting,
   shows the host's pig, then resumes from the latest snapshot. What I hold is drawn relative to my predicted pig (`carryAlong`).
   Transport (`online.ts`): WebRTC data channel host↔player (P2P,
-  STUN only) with fallback through the server relay. Server `server/server.js` (Node, `ws` + `jose`): Google ID-token
+  STUN only) with fallback through the server relay. **Two servers (s31)**: `porkour-server-eu` (Render Frankfurt, ≈ 60 ms from Israel) first, `porkour-server` (Oregon)
+  as the fallback (`config.ts` `BUILT_IN_SERVERS`; render.yaml has both). A page moves to the next only when the first
+  refuses before opening (no such service / down — a sleeping free service holds the connection, so no false
+  fallback); the tab keeps its pick (sessionStorage) and room / invite links carry `&srv=1`. Server `server/server.js` (Node, `ws` + `jose`): Google ID-token
   verification or guest, rooms (4-letter code, public list, quick play, kick, chat, outfit/name), relay; `render.yaml`
   (Render free). Lobby UI `lobby.ts`; Google Identity Services in `auth.ts`; addresses in `config.ts` (`BUILT_IN_SERVER`,
   `BUILT_IN_GOOGLE_CLIENT_ID` (set; origin https://ohavs.github.io), see `server/README.md`). Online never pauses; the host keeps
@@ -338,11 +349,12 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    boosts = a visible temporary "rush mode" on screen (fast run, strong fart…), **loot pockets** (pick up and keep
    cigarettes and other things), snow sleds you ride (a fart = boost), and generally interaction with many more things
    ("one of the main problems").
-   **Next**: **move the online server to Render Frankfurt** (user agreed 2026-11-20, after the s28 game night — not
-   before it: free plan, ~60 ms from Israel instead of ~200 from Oregon; region is set when a service is created → new
-   service `region: frankfurt` in `render.yaml`, new address in `BUILT_IN_SERVER` (config.ts), env vars copied, old one
-   deleted; Claude prepares the code, the user clicks in Render; later: Cloudflare TURN so fewer players go ☁ relay),
-   the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
+   Session 31 (user away from a PC for days: "switch the server as agreed + the early-access code"): ✅ **Frankfurt
+   server** (second Render service in render.yaml, the game tries it first, Oregon = fallback), ✅ **early access**
+   (12 tester codes, gate screen, server check, owner panel shows tester #).
+   **Next**: check the Frankfurt service came up (Render Blueprint auto-sync; if the dashboard shows it didn't: Blueprints
+   → Sync), later Cloudflare TURN so fewer players go ☁ relay; once EU is proven, maybe delete the Oregon service
+   (remove its block from render.yaml FIRST, or the Blueprint recreates it), the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 
 ## Status / next step
@@ -601,10 +613,18 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   ~40 s (level 1) and a pig standing 5 m in front during the breather stays ≤ 0.29, a pig he only suspected ducks out
   and sits still in front of him = no chase, a pig lost in a chase = recognised + caught, the plate → stash + mission.
   Not run online with 2 browsers (host-only logic).
+- 2026-11-25 (session 31): Frankfurt server + early access (see Roadmap s31 and "Early access"). Checked: `npm test`
+  (lists match, no code / wrong code refused + closed), a real code against a local server (lower case / spaces OK),
+  headless: gate (wrong → shake + "Wrong code", right → game builds, remembered after reload, `?code=` link → straight
+  in + wiped from the URL, Spanish, phone width), online: first server refused → second one, room URL gets `srv=1`;
+  no code → "needs a tester code". Not checked from here: the real Render services (onrender.com is blocked here).
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
 Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
+- **Session 31 (new)**: **early access** — hand out the tester links (in the chat); does a friend get in with theirs?
+  Open link #1 once on your own PC too. · **Frankfurt server**: in the online panel a room should feel faster; if
+  online stops working, tell Claude (it falls back to the old server by itself).
 - **Session 30 (new)**: **Bob** — does he still grab / chase a pig that did nothing? Does he give up a long chase
   now (~30–40 s, then leaves that pig alone ~20 s) — too soon / too late? · **Bob's lunch plate**: take it to the
   stash (coins) = mission done — clear now?
@@ -669,8 +689,6 @@ Screenshots for most of these: https://claude.ai/artifact/PbUifXakfmhnc7YtchB6xX
   stage ▶" after a win. Is it clear? Should players' progress count too (now only the host's save)?
 - **Story mode**: stages 1–5 unlocking in order, harder each stage (quota, Bob wary from stage 4) — right pace?
 - New admin panel + game-style menus: better? What else still looks "basic"?
-- **Entry code (early access)**: which option (code screen / server-checked codes / real lock), one shared code or one per
-  tester, and the code itself (set it in Render, not in the chat).
 - **Cannabis farm + wheat & beer (new modes)**: fun? Each step a real game (water / harvest / wheelbarrow / grinder crank /
   rolling / lighter / bong hold / stove stir / oven timing; wheat scythe / stomp to the drum / mill / kettle / barrel /
   tap)? Too long for 10 min? Is "chill Bob" right, or full Bob / no Bob (admin → Bob tab)? The log walk: too hard / easy?

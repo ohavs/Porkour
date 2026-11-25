@@ -1,6 +1,20 @@
 # Render.com blueprint: the Porkour online server (free plan). Dashboard → New → Blueprint → this repo.
-# See server/README.md. Optional env vars: GOOGLE_CLIENT_ID (defaults to the one in server.js), ALLOWED_ORIGINS.
+# See server/README.md. Optional env vars: GOOGLE_CLIENT_ID (defaults to the one in server.js), ALLOWED_ORIGINS,
+# EARLY_ACCESS=0 (online play without a tester code).
+# Two copies of the same server: Frankfurt first (≈ 60 ms from Israel; user 2026-11-20), Oregon as the fallback the game
+# uses only if Frankfurt doesn't answer (web/src/net/config.ts BUILT_IN_SERVERS). A service's region can't change after
+# it's created, hence a second service with its own name. Every push to main redeploys both.
 services:
+  - type: web
+    name: porkour-server-eu
+    region: frankfurt
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
   - type: web
     name: porkour-server
     runtime: node

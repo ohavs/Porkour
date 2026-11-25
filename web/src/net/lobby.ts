@@ -1,7 +1,7 @@
 import { online, type Peer, type RoomInfo } from './online';
 import { ui } from '../game/uiIcons';
 import { profile, onProfile, googleEnabled, renderGoogleButton, refreshToken, setGuestName, signOut } from './auth';
-import { serverUrl } from './config';
+import { serverPick, serverUrl } from './config';
 import { t, lang, onLang, type Key } from '../i18n';
 import { G } from '../game/ctx';
 import { SETTINGS, saveSettings } from '../game/settings';
@@ -191,6 +191,7 @@ export class Lobby {
       const u = new URL(location.href);
       if (online.room && (u.searchParams.get('room') !== online.room.code || u.searchParams.get('farm') !== farmId())) {
         u.searchParams.set('room', online.room.code); u.searchParams.set('farm', farmId()); u.searchParams.delete('lobby');
+        if (serverPick()) u.searchParams.set('srv', String(serverPick())); else u.searchParams.delete('srv');
         history.replaceState(null, '', u.toString());
       }
     } catch { /* */ }
@@ -233,7 +234,7 @@ export class Lobby {
     } else if (this.view === 'switching') {
       body = `<h2>${t('net.title')}</h2><p class="lw">${t('net.farmSwitch')}</p>`;
     } else if (this.view === 'error') {
-      const msg = this.err === 'noserver' ? t('net.noServer') : this.err === 'version' ? t('net.version') : t('net.unreachable');
+      const msg = this.err === 'noserver' ? t('net.noServer') : this.err === 'version' ? t('net.version') : this.err === 'access' ? t('net.err.access') : t('net.unreachable');
       body = `<h2>${t('net.title')}</h2><p class="lw">${msg}</p>
         <div class="field"><span>${t('net.serverAddr')}</span><input class="tin" id="lServer" placeholder="wss://….onrender.com" value="${esc(SETTINGS.server)}"></div>
         <div class="btns"><button class="chip icn" data-a="retry">${ui('retry', 22)}${t('net.retry')}</button>${back}</div>`;
@@ -374,7 +375,8 @@ export class Lobby {
   }
 }
 
-export const inviteLink = () => `${location.origin}${location.pathname}?room=${online.room?.code ?? ''}`;
+/** (+ which server the room is on when it isn't the first one: everyone meets on the same server) */
+export const inviteLink = () => `${location.origin}${location.pathname}?room=${online.room?.code ?? ''}${serverPick() ? `&srv=${serverPick()}` : ''}`;
 
 /** Leave the online game: reload into the lobby (the world is rebuilt fresh). */
 export function backToLobby() {

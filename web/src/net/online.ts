@@ -1,5 +1,6 @@
 import { farmId } from '../world/farms';
-import { ICE_SERVERS, serverUrl } from './config';
+import { ICE_SERVERS, nextServer, serverUrl } from './config';
+import { accessCode } from './access';
 import { profile } from './auth';
 import { ADMIN } from '../game/ctx';
 
@@ -77,7 +78,18 @@ export class Online {
     if (!serverUrl()) return Promise.reject(new Error('noserver'));
     if (this.connected && this.me) return Promise.resolve();
     this.leaving = false;
-    return this.dial(75_000);   // free hosting wakes up slowly
+    return this.dialAny();
+  }
+  /** The nearest server first; the next one only when it refuses at once (doesn't exist / down). */
+  private async dialAny(): Promise<void> {
+    for (;;) {
+      try { await this.dial(75_000); return; }   // free hosting wakes up slowly
+      catch (e) {
+        const m = (e as Error).message;
+        if (m !== 'refused') throw e;
+        if (!nextServer()) throw new Error('unreachable');
+      }
+    }
   }
 
   /** Open the socket + hello; resolves on the welcome. A drop later while in a room = reconnect (seat kept). */
@@ -88,11 +100,12 @@ export class Online {
       try { ws = new WebSocket(url); } catch { reject(new Error('unreachable')); return; }
       ws.binaryType = 'arraybuffer';
       this.ws = ws;
-      let done = false;
+      let done = false, opened = false;
       const fail = (e: string) => { if (done) return; done = true; clearTimeout(timer); reject(new Error(e)); };
       const timer = setTimeout(() => { fail('timeout'); ws.close(); }, timeoutMs);
       ws.onopen = () => {
-        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit: this.outfit, tab: tabId() });
+        opened = true;
+        this.send({ op: 'hello', v: 1, name: profile.name, token: profile.google ? profile.token : undefined, outfit: this.outfit, tab: tabId(), access: accessCode() || undefined });
       };
       ws.onmessage = (ev) => {
         if (this.ws !== ws) return;
@@ -105,12 +118,16 @@ export class Online {
         let m: any; try { m = JSON.parse(ev.data); } catch { return; }
         if (m.op === 'welcome') { done = true; clearTimeout(timer); this.me = m.you; this.googleOnServer = !!m.googleEnabled; resolve(); }
         if (m.op === 'error' && m.code === 'version') { fail('version'); }
+        if (m.op === 'error' && m.code === 'access') { this.leaving = true; fail('access'); }   // early access: no valid code
         this.control(m);
       };
-      ws.onerror = () => fail('unreachable');
+      // (closed before it ever opened = refused: no such server / down — a sleeping one holds the connection instead)
+      ws.onerror = () => fail(opened ? 'unreachable' : 'refused');
       ws.onclose = (ev) => {
-        fail('unreachable');
+        fail(opened ? 'unreachable' : 'refused');
         if (this.ws !== ws) return;   // an older socket
+        // never opened: the promise already says so (the next server may be tried; a reconnect retries by itself)
+        if (!opened) { this.ws = null; this.me = null; clearInterval(this.pingTimer); return; }
         // our seat was taken by this same tab open twice: no reconnect, back to the lobby
         if (ev.code === 4001 && this.room) { this.leaving = true; this.ws = null; this.me = null; clearInterval(this.pingTimer); this.dropAll(); this.emit('replaced', { op: 'replaced' }); return; }
         this.ws = null; this.me = null;
