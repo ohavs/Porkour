@@ -352,8 +352,7 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
    Session 31 (user away from a PC for days: "switch the server as agreed + the early-access code"): ✅ **Frankfurt
    server** (second Render service in render.yaml, the game tries it first, Oregon = fallback), ✅ **early access**
    (12 tester codes, gate screen, server check, owner panel shows tester #).
-   **Next**: check the Frankfurt service came up (Render Blueprint auto-sync; if the dashboard shows it didn't: Blueprints
-   → Sync), later Cloudflare TURN so fewer players go ☁ relay; once EU is proven, maybe delete the Oregon service
+   **Next**: later Cloudflare TURN so fewer players go ☁ relay; once EU is proven, maybe delete the Oregon service
    (remove its block from render.yaml FIRST, or the Blueprint recreates it), the font pick (user), more interior pieces (shower, mirror), test the pad on a real controller (user),
    the early-access entry code (waiting for the user's choice), Bob uses the bathroom / shower in the morning?
 
@@ -617,7 +616,10 @@ The Unity project (`Assets/`, `ProjectSettings/`, …) is kept untouched as refe
   (lists match, no code / wrong code refused + closed), a real code against a local server (lower case / spaces OK),
   headless: gate (wrong → shake + "Wrong code", right → game builds, remembered after reload, `?code=` link → straight
   in + wiped from the URL, Spanish, phone width), online: first server refused → second one, room URL gets `srv=1`;
-  no code → "needs a tester code". Not checked from here: the real Render services (onrender.com is blocked here).
+  no code → "needs a tester code". Render: the Blueprint auto-synced — both services answer over HTTP with the new
+  code (`/` → `at: porkour-server-eu` / `porkour-server`, `access: true`). This session's cloud environment "Porkour"
+  allows those two hosts (HTTP only: the sandbox proxy can't carry WebSocket upgrades, so no real game connection from
+  here). Pages deploy OK.
 - Ideas noted: real oink set is from VoxeLibre/0 A.D. — the user may want more pig variety; Bob voice lines ("Hey!") need a recording.
 
 ## Pending user checks (repeat in every final reply until the user answers; remove answered items)
